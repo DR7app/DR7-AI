@@ -8,6 +8,57 @@ interface CustomerDocumentsProps {
   onClose: () => void
 }
 
+interface CustomerDetails {
+  id: string
+  tipo_cliente: 'persona_fisica' | 'azienda' | 'pubblica_amministrazione'
+  // Global
+  email: string
+  telefono: string
+  nazione: string
+  // Persona Fisica
+  nome?: string
+  cognome?: string
+  codice_fiscale?: string
+  sesso?: string
+  data_nascita?: string
+  citta_nascita?: string
+  provincia_nascita?: string
+  indirizzo?: string
+  numero_civico?: string
+  codice_postale?: string
+  citta_residenza?: string
+  provincia_residenza?: string
+  pec?: string
+  tipo_patente?: string
+  numero_patente?: string
+  emessa_da?: string
+  data_rilascio_patente?: string
+  scadenza_patente?: string
+  // Azienda
+  denominazione?: string
+  partita_iva?: string
+  cf_azienda?: string
+  sede_legale?: string
+  sede_operativa?: string
+  codice_destinatario?: string
+  pec_azienda?: string
+  nome_rappresentante?: string
+  cognome_rappresentante?: string
+  cf_rappresentante?: string
+  ruolo_rappresentante?: string
+  tipo_documento_rappresentante?: string
+  numero_documento_rappresentante?: string
+  data_rilascio_documento?: string
+  luogo_rilascio_documento?: string
+  // Pubblica Amministrazione
+  codice_univoco?: string
+  cf_pa?: string
+  ente_ufficio?: string
+  citta?: string
+  partita_iva_pa?: string
+  pec_pa?: string
+}
+
 interface CustomerDocument {
   id: string
   customer_id: string
@@ -25,6 +76,7 @@ const IDENTITY_DOCS_BUCKET = 'customer-documents'
 
 export default function CustomerDocuments({ customerId, customerName, onClose }: CustomerDocumentsProps) {
   const [documents, setDocuments] = useState<CustomerDocument[]>([])
+  const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<{ [key: string]: boolean }>({})
   const [selectedFiles, setSelectedFiles] = useState<{ [key: string]: File | null }>({
@@ -34,11 +86,53 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
   const [previewUrls, setPreviewUrls] = useState<{ [key: string]: string | null }>({})
 
   useEffect(() => {
-    loadDocuments()
+    loadCustomerData()
   }, [customerId])
 
-  async function loadDocuments() {
+  async function loadCustomerData() {
     setLoading(true)
+    try {
+      // Load customer details
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .eq('id', customerId)
+        .single()
+
+      if (customerError) throw customerError
+      setCustomerDetails(customerData)
+
+      // Load document metadata from database
+      const { data: docsData, error: docsError } = await supabase
+        .from('customer_documents')
+        .select('*')
+        .eq('customer_id', customerId)
+
+      if (docsError) throw docsError
+
+      setDocuments(docsData || [])
+
+      // Load preview URLs for existing documents
+      if (docsData && docsData.length > 0) {
+        const urls: { [key: string]: string | null } = {}
+        for (const doc of docsData) {
+          const { data: urlData } = await supabase.storage
+            .from(doc.bucket_id)
+            .createSignedUrl(doc.file_path, 3600)
+
+          urls[doc.document_type] = urlData?.signedUrl || null
+        }
+        setPreviewUrls(urls)
+      }
+    } catch (error: any) {
+      console.error('Error loading customer data:', error)
+      alert(`Errore nel caricamento dati: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadDocuments() {
     try {
       // Load document metadata from database
       const { data, error } = await supabase
@@ -65,8 +159,6 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     } catch (error: any) {
       console.error('Error loading documents:', error)
       alert(`Errore nel caricamento documenti: ${error.message}`)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -354,6 +446,105 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Customer Details Section */}
+          {customerDetails && (
+            <div className="bg-gradient-to-r from-dr7-gold/10 to-transparent border border-dr7-gold/30 rounded-lg p-6">
+              <h4 className="text-lg font-bold text-dr7-gold mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Dettagli Completi Cliente
+              </h4>
+
+              {/* PERSONA FISICA */}
+              {customerDetails.tipo_cliente === 'persona_fisica' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-2">
+                    <div><span className="text-gray-400">Nome:</span> <span className="text-white font-medium">{customerDetails.nome}</span></div>
+                    <div><span className="text-gray-400">Cognome:</span> <span className="text-white font-medium">{customerDetails.cognome}</span></div>
+                    <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white font-medium">{customerDetails.codice_fiscale}</span></div>
+                    {customerDetails.sesso && <div><span className="text-gray-400">Sesso:</span> <span className="text-white">{customerDetails.sesso === 'M' ? 'Maschio' : 'Femmina'}</span></div>}
+                    {customerDetails.data_nascita && <div><span className="text-gray-400">Data di Nascita:</span> <span className="text-white">{new Date(customerDetails.data_nascita).toLocaleDateString('it-IT')}</span></div>}
+                    {customerDetails.citta_nascita && <div><span className="text-gray-400">Città di Nascita:</span> <span className="text-white">{customerDetails.citta_nascita} {customerDetails.provincia_nascita && `(${customerDetails.provincia_nascita})`}</span></div>}
+                    <div><span className="text-gray-400">Email:</span> <span className="text-white">{customerDetails.email}</span></div>
+                    <div><span className="text-gray-400">Telefono:</span> <span className="text-white">{customerDetails.telefono}</span></div>
+                    {customerDetails.pec && <div><span className="text-gray-400">PEC:</span> <span className="text-white">{customerDetails.pec}</span></div>}
+                  </div>
+                  <div className="space-y-2">
+                    {customerDetails.indirizzo && <div><span className="text-gray-400">Indirizzo:</span> <span className="text-white">{customerDetails.indirizzo} {customerDetails.numero_civico}</span></div>}
+                    {customerDetails.citta_residenza && <div><span className="text-gray-400">Città:</span> <span className="text-white">{customerDetails.citta_residenza} ({customerDetails.provincia_residenza})</span></div>}
+                    {customerDetails.codice_postale && <div><span className="text-gray-400">CAP:</span> <span className="text-white">{customerDetails.codice_postale}</span></div>}
+                    <div><span className="text-gray-400">Nazione:</span> <span className="text-white">{customerDetails.nazione}</span></div>
+
+                    {/* Driving License Info */}
+                    {customerDetails.tipo_patente && (
+                      <div className="mt-4 pt-4 border-t border-gray-700">
+                        <div className="text-dr7-gold font-semibold mb-2">Patente di Guida</div>
+                        <div><span className="text-gray-400">Tipo:</span> <span className="text-white">{customerDetails.tipo_patente}</span></div>
+                        {customerDetails.numero_patente && <div><span className="text-gray-400">Numero:</span> <span className="text-white">{customerDetails.numero_patente}</span></div>}
+                        {customerDetails.emessa_da && <div><span className="text-gray-400">Emessa da:</span> <span className="text-white">{customerDetails.emessa_da}</span></div>}
+                        {customerDetails.data_rilascio_patente && <div><span className="text-gray-400">Rilascio:</span> <span className="text-white">{new Date(customerDetails.data_rilascio_patente).toLocaleDateString('it-IT')}</span></div>}
+                        {customerDetails.scadenza_patente && <div><span className="text-gray-400">Scadenza:</span> <span className="text-white">{new Date(customerDetails.scadenza_patente).toLocaleDateString('it-IT')}</span></div>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* AZIENDA */}
+              {customerDetails.tipo_cliente === 'azienda' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-2">
+                    <div><span className="text-gray-400">Ragione Sociale:</span> <span className="text-white font-medium">{customerDetails.denominazione}</span></div>
+                    <div><span className="text-gray-400">Partita IVA:</span> <span className="text-white font-medium">{customerDetails.partita_iva}</span></div>
+                    {customerDetails.cf_azienda && <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white">{customerDetails.cf_azienda}</span></div>}
+                    {customerDetails.sede_legale && <div><span className="text-gray-400">Sede Legale:</span> <span className="text-white">{customerDetails.sede_legale}</span></div>}
+                    {customerDetails.sede_operativa && <div><span className="text-gray-400">Sede Operativa:</span> <span className="text-white">{customerDetails.sede_operativa}</span></div>}
+                    {customerDetails.codice_destinatario && <div><span className="text-gray-400">Codice SDI:</span> <span className="text-white">{customerDetails.codice_destinatario}</span></div>}
+                    {customerDetails.pec_azienda && <div><span className="text-gray-400">PEC:</span> <span className="text-white">{customerDetails.pec_azienda}</span></div>}
+                    <div><span className="text-gray-400">Email:</span> <span className="text-white">{customerDetails.email}</span></div>
+                    <div><span className="text-gray-400">Telefono:</span> <span className="text-white">{customerDetails.telefono}</span></div>
+                  </div>
+                  <div className="space-y-2">
+                    {/* Legal Representative */}
+                    {customerDetails.nome_rappresentante && (
+                      <div className="mt-0 pt-0 border-t-0 border-gray-700">
+                        <div className="text-dr7-gold font-semibold mb-2">Rappresentante Legale</div>
+                        <div><span className="text-gray-400">Nome:</span> <span className="text-white">{customerDetails.nome_rappresentante} {customerDetails.cognome_rappresentante}</span></div>
+                        {customerDetails.cf_rappresentante && <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white">{customerDetails.cf_rappresentante}</span></div>}
+                        {customerDetails.ruolo_rappresentante && <div><span className="text-gray-400">Ruolo:</span> <span className="text-white">{customerDetails.ruolo_rappresentante}</span></div>}
+                        {customerDetails.tipo_documento_rappresentante && (
+                          <div><span className="text-gray-400">Documento:</span> <span className="text-white">{customerDetails.tipo_documento_rappresentante} {customerDetails.numero_documento_rappresentante}</span></div>
+                        )}
+                        {customerDetails.data_rilascio_documento && (
+                          <div><span className="text-gray-400">Rilasciato:</span> <span className="text-white">{new Date(customerDetails.data_rilascio_documento).toLocaleDateString('it-IT')} - {customerDetails.luogo_rilascio_documento}</span></div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* PUBBLICA AMMINISTRAZIONE */}
+              {customerDetails.tipo_cliente === 'pubblica_amministrazione' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-2">
+                    <div><span className="text-gray-400">Ente/Ufficio:</span> <span className="text-white font-medium">{customerDetails.ente_ufficio}</span></div>
+                    <div><span className="text-gray-400">Codice Univoco:</span> <span className="text-white font-medium">{customerDetails.codice_univoco}</span></div>
+                    {customerDetails.cf_pa && <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white">{customerDetails.cf_pa}</span></div>}
+                    {customerDetails.partita_iva_pa && <div><span className="text-gray-400">Partita IVA:</span> <span className="text-white">{customerDetails.partita_iva_pa}</span></div>}
+                  </div>
+                  <div className="space-y-2">
+                    {customerDetails.citta && <div><span className="text-gray-400">Città:</span> <span className="text-white">{customerDetails.citta}</span></div>}
+                    {customerDetails.pec_pa && <div><span className="text-gray-400">PEC:</span> <span className="text-white">{customerDetails.pec_pa}</span></div>}
+                    <div><span className="text-gray-400">Email:</span> <span className="text-white">{customerDetails.email}</span></div>
+                    <div><span className="text-gray-400">Telefono:</span> <span className="text-white">{customerDetails.telefono}</span></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Info Box */}
           <div className="bg-blue-900/30 border-2 border-blue-500 rounded-lg p-4">
             <div className="flex items-start gap-3">

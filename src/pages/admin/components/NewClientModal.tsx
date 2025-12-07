@@ -20,23 +20,39 @@ interface ClientFormData {
   nome: string
   cognome: string
   codice_fiscale: string
+  sesso: string
   data_nascita: string
-  luogo_nascita: string
+  citta_nascita: string
+  provincia_nascita: string
   indirizzo: string
   numero_civico: string
   codice_postale: string
   citta_residenza: string
   provincia_residenza: string
   pec_persona: string
+  tipo_patente: string
+  numero_patente: string
+  emessa_da: string
+  data_rilascio_patente: string
+  scadenza_patente: string
 
   // Azienda
   denominazione: string
   partita_iva: string
-  codice_destinatario: string
-  indirizzo_azienda: string
   cf_azienda: string
-  indirizzo_ddt: string
+  sede_legale: string
+  sede_operativa: string
+  codice_destinatario: string
   pec_azienda: string
+  nome_rappresentante: string
+  cognome_rappresentante: string
+  cf_rappresentante: string
+  ruolo_rappresentante: string
+  tipo_documento_rappresentante: string
+  numero_documento_rappresentante: string
+  data_rilascio_documento: string
+  luogo_rilascio_documento: string
+  indirizzo_ddt: string
   contatti_cliente: string
 
   // Pubblica Amministrazione
@@ -57,21 +73,37 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
     nome: '',
     cognome: '',
     codice_fiscale: '',
+    sesso: '',
     data_nascita: '',
-    luogo_nascita: '',
+    citta_nascita: '',
+    provincia_nascita: '',
     indirizzo: '',
     numero_civico: '',
     codice_postale: '',
     citta_residenza: '',
     provincia_residenza: '',
     pec_persona: '',
+    tipo_patente: '',
+    numero_patente: '',
+    emessa_da: '',
+    data_rilascio_patente: '',
+    scadenza_patente: '',
     denominazione: '',
     partita_iva: '',
-    codice_destinatario: '',
-    indirizzo_azienda: '',
     cf_azienda: '',
-    indirizzo_ddt: '',
+    sede_legale: '',
+    sede_operativa: '',
+    codice_destinatario: '',
     pec_azienda: '',
+    nome_rappresentante: '',
+    cognome_rappresentante: '',
+    cf_rappresentante: '',
+    ruolo_rappresentante: '',
+    tipo_documento_rappresentante: '',
+    numero_documento_rappresentante: '',
+    data_rilascio_documento: '',
+    luogo_rilascio_documento: '',
+    indirizzo_ddt: '',
     contatti_cliente: '',
     codice_univoco: '',
     cf_pa: '',
@@ -155,11 +187,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
       } else if (!validatePartitaIVA(formData.partita_iva)) {
         newErrors.partita_iva = 'Partita IVA non valida (11 cifre)'
       }
-      if (!formData.indirizzo_azienda) newErrors.indirizzo_azienda = 'Indirizzo obbligatorio'
+      if (!formData.sede_legale) newErrors.sede_legale = 'Sede legale obbligatoria'
 
       // Optional CF validation if provided
       if (formData.cf_azienda && !validateCodiceFiscale(formData.cf_azienda)) {
         newErrors.cf_azienda = 'Codice Fiscale non valido (16 caratteri)'
+      }
+
+      // Legal representative validations
+      if (!formData.nome_rappresentante) newErrors.nome_rappresentante = 'Nome rappresentante obbligatorio'
+      if (!formData.cognome_rappresentante) newErrors.cognome_rappresentante = 'Cognome rappresentante obbligatorio'
+      if (!formData.cf_rappresentante) {
+        newErrors.cf_rappresentante = 'Codice Fiscale rappresentante obbligatorio'
+      } else if (!validateCodiceFiscale(formData.cf_rappresentante)) {
+        newErrors.cf_rappresentante = 'Codice Fiscale non valido (16 caratteri)'
       }
     }
 
@@ -201,21 +242,40 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
         customerData.nome = formData.nome
         customerData.cognome = formData.cognome
         customerData.codice_fiscale = formData.codice_fiscale.toUpperCase()
+        if (formData.sesso) customerData.sesso = formData.sesso
         if (formData.data_nascita) customerData.data_nascita = formData.data_nascita
-        if (formData.luogo_nascita) customerData.luogo_nascita = formData.luogo_nascita
+        if (formData.citta_nascita) customerData.citta_nascita = formData.citta_nascita
+        if (formData.provincia_nascita) customerData.provincia_nascita = formData.provincia_nascita
         customerData.indirizzo = formData.indirizzo
         if (formData.numero_civico) customerData.numero_civico = formData.numero_civico
         if (formData.codice_postale) customerData.codice_postale = formData.codice_postale
         if (formData.citta_residenza) customerData.citta_residenza = formData.citta_residenza
         if (formData.provincia_residenza) customerData.provincia_residenza = formData.provincia_residenza
         if (formData.pec_persona) customerData.pec = formData.pec_persona
+        if (formData.tipo_patente) customerData.tipo_patente = formData.tipo_patente
+        if (formData.numero_patente) customerData.numero_patente = formData.numero_patente
+        if (formData.emessa_da) customerData.emessa_da = formData.emessa_da
+        if (formData.data_rilascio_patente) customerData.data_rilascio_patente = formData.data_rilascio_patente
+        if (formData.scadenza_patente) customerData.scadenza_patente = formData.scadenza_patente
       } else if (formData.tipo_cliente === 'azienda') {
         customerData.ragione_sociale = formData.denominazione
         customerData.partita_iva = formData.partita_iva
-        customerData.indirizzo = formData.indirizzo_azienda
-        if (formData.codice_destinatario) customerData.codice_destinatario = formData.codice_destinatario
         if (formData.cf_azienda) customerData.codice_fiscale = formData.cf_azienda.toUpperCase()
+        customerData.sede_legale = formData.sede_legale
+        if (formData.sede_operativa) customerData.sede_operativa = formData.sede_operativa
+        if (formData.codice_destinatario) customerData.codice_destinatario = formData.codice_destinatario
         if (formData.pec_azienda) customerData.pec = formData.pec_azienda
+
+        // Legal representative information
+        customerData.nome_rappresentante = formData.nome_rappresentante
+        customerData.cognome_rappresentante = formData.cognome_rappresentante
+        customerData.cf_rappresentante = formData.cf_rappresentante.toUpperCase()
+        if (formData.ruolo_rappresentante) customerData.ruolo_rappresentante = formData.ruolo_rappresentante
+        if (formData.tipo_documento_rappresentante) customerData.tipo_documento_rappresentante = formData.tipo_documento_rappresentante
+        if (formData.numero_documento_rappresentante) customerData.numero_documento_rappresentante = formData.numero_documento_rappresentante
+        if (formData.data_rilascio_documento) customerData.data_rilascio_documento = formData.data_rilascio_documento
+        if (formData.luogo_rilascio_documento) customerData.luogo_rilascio_documento = formData.luogo_rilascio_documento
+
         if (formData.indirizzo_ddt || formData.contatti_cliente) {
           customerData.metadata = {
             indirizzo_ddt: formData.indirizzo_ddt,
@@ -263,21 +323,37 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
       nome: '',
       cognome: '',
       codice_fiscale: '',
+      sesso: '',
       data_nascita: '',
-      luogo_nascita: '',
+      citta_nascita: '',
+      provincia_nascita: '',
       indirizzo: '',
       numero_civico: '',
       codice_postale: '',
       citta_residenza: '',
       provincia_residenza: '',
       pec_persona: '',
+      tipo_patente: '',
+      numero_patente: '',
+      emessa_da: '',
+      data_rilascio_patente: '',
+      scadenza_patente: '',
       denominazione: '',
       partita_iva: '',
-      codice_destinatario: '',
-      indirizzo_azienda: '',
       cf_azienda: '',
-      indirizzo_ddt: '',
+      sede_legale: '',
+      sede_operativa: '',
+      codice_destinatario: '',
       pec_azienda: '',
+      nome_rappresentante: '',
+      cognome_rappresentante: '',
+      cf_rappresentante: '',
+      ruolo_rappresentante: '',
+      tipo_documento_rappresentante: '',
+      numero_documento_rappresentante: '',
+      data_rilascio_documento: '',
+      luogo_rilascio_documento: '',
+      indirizzo_ddt: '',
       contatti_cliente: '',
       codice_univoco: '',
       cf_pa: '',
@@ -300,7 +376,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
       return !formData.nome || !formData.cognome || !formData.codice_fiscale || !formData.indirizzo || !formData.citta_residenza || !formData.codice_postale || !formData.provincia_residenza
     }
     if (formData.tipo_cliente === 'azienda') {
-      return !formData.denominazione || !formData.partita_iva || !formData.indirizzo_azienda
+      return !formData.denominazione || !formData.partita_iva || !formData.sede_legale || !formData.nome_rappresentante || !formData.cognome_rappresentante || !formData.cf_rappresentante
     }
     if (formData.tipo_cliente === 'pubblica_amministrazione') {
       return !formData.codice_univoco || !formData.cf_pa || !formData.ente_ufficio || !formData.citta
@@ -401,22 +477,38 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Codice Fiscale *
-                </label>
-                <input
-                  type="text"
-                  value={formData.codice_fiscale}
-                  onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
-                  maxLength={16}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                  placeholder="RSSMRA80A01H501U"
-                />
-                {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Codice Fiscale *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.codice_fiscale}
+                    onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
+                    maxLength={16}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    placeholder="RSSMRA80A01H501U"
+                  />
+                  {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sesso
+                  </label>
+                  <select
+                    value={formData.sesso}
+                    onChange={(e) => setFormData({ ...formData, sesso: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Seleziona</option>
+                    <option value="M">Maschio</option>
+                    <option value="F">Femmina</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Data di Nascita
@@ -430,14 +522,27 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Luogo di Nascita
+                    Città di Nascita
                   </label>
                   <input
                     type="text"
-                    value={formData.luogo_nascita}
-                    onChange={(e) => setFormData({ ...formData, luogo_nascita: e.target.value })}
+                    value={formData.citta_nascita}
+                    onChange={(e) => setFormData({ ...formData, citta_nascita: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Roma"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Provincia
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.provincia_nascita}
+                    onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase() })}
+                    maxLength={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    placeholder="RM"
                   />
                 </div>
               </div>
@@ -525,6 +630,89 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
+
+              {/* Driving License Section */}
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="font-semibold text-gray-900 mb-3">Patente di Guida</h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tipo Patente
+                    </label>
+                    <select
+                      value={formData.tipo_patente}
+                      onChange={(e) => setFormData({ ...formData, tipo_patente: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleziona</option>
+                      <option value="AM">AM</option>
+                      <option value="A1">A1</option>
+                      <option value="A2">A2</option>
+                      <option value="A">A</option>
+                      <option value="B1">B1</option>
+                      <option value="B">B</option>
+                      <option value="BE">BE</option>
+                      <option value="C1">C1</option>
+                      <option value="C">C</option>
+                      <option value="CE">CE</option>
+                      <option value="D1">D1</option>
+                      <option value="D">D</option>
+                      <option value="DE">DE</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Numero Patente
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.numero_patente}
+                      onChange={(e) => setFormData({ ...formData, numero_patente: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                      placeholder="U1AB123456"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Emessa da
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.emessa_da}
+                    onChange={(e) => setFormData({ ...formData, emessa_da: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Motorizzazione Civile di Roma"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Data Rilascio
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.data_rilascio_patente}
+                      onChange={(e) => setFormData({ ...formData, data_rilascio_patente: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Scadenza
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.scadenza_patente}
+                      onChange={(e) => setFormData({ ...formData, scadenza_patente: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -576,28 +764,171 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Codice Destinatario / SDI
+                  Sede Legale *
                 </label>
                 <input
                   type="text"
-                  value={formData.codice_destinatario}
-                  onChange={(e) => setFormData({ ...formData, codice_destinatario: e.target.value.toUpperCase() })}
-                  maxLength={7}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                  value={formData.sede_legale}
+                  onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Via Roma 123, 20100 Milano (MI)"
                 />
+                {errors.sede_legale && <p className="text-red-500 text-xs mt-1">{errors.sede_legale}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Indirizzo *
+                  Sede Operativa (se diversa)
                 </label>
                 <input
                   type="text"
-                  value={formData.indirizzo_azienda}
-                  onChange={(e) => setFormData({ ...formData, indirizzo_azienda: e.target.value })}
+                  value={formData.sede_operativa}
+                  onChange={(e) => setFormData({ ...formData, sede_operativa: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Via Torino 456, 20100 Milano (MI)"
                 />
-                {errors.indirizzo_azienda && <p className="text-red-500 text-xs mt-1">{errors.indirizzo_azienda}</p>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Codice Destinatario / SDI
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.codice_destinatario}
+                    onChange={(e) => setFormData({ ...formData, codice_destinatario: e.target.value.toUpperCase() })}
+                    maxLength={7}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    PEC
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.pec_azienda}
+                    onChange={(e) => setFormData({ ...formData, pec_azienda: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Legal Representative Section */}
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="font-semibold text-gray-900 mb-3">Rappresentante Legale</h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nome *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.nome_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, nome_rappresentante: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    {errors.nome_rappresentante && <p className="text-red-500 text-xs mt-1">{errors.nome_rappresentante}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Cognome *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.cognome_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, cognome_rappresentante: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    {errors.cognome_rappresentante && <p className="text-red-500 text-xs mt-1">{errors.cognome_rappresentante}</p>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Codice Fiscale *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.cf_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, cf_rappresentante: e.target.value.toUpperCase() })}
+                      maxLength={16}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                      placeholder="RSSMRA80A01H501U"
+                    />
+                    {errors.cf_rappresentante && <p className="text-red-500 text-xs mt-1">{errors.cf_rappresentante}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ruolo in Azienda
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.ruolo_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, ruolo_rappresentante: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Amministratore Unico"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tipo Documento
+                    </label>
+                    <select
+                      value={formData.tipo_documento_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, tipo_documento_rappresentante: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleziona</option>
+                      <option value="CI">Carta d'Identità</option>
+                      <option value="Patente">Patente</option>
+                      <option value="Passaporto">Passaporto</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Numero Documento
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.numero_documento_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, numero_documento_rappresentante: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Data Rilascio
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.data_rilascio_documento}
+                      onChange={(e) => setFormData({ ...formData, data_rilascio_documento: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Luogo Rilascio
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.luogo_rilascio_documento}
+                      onChange={(e) => setFormData({ ...formData, luogo_rilascio_documento: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Comune di Roma"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -608,18 +939,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
                   type="text"
                   value={formData.indirizzo_ddt}
                   onChange={(e) => setFormData({ ...formData, indirizzo_ddt: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  PEC
-                </label>
-                <input
-                  type="email"
-                  value={formData.pec_azienda}
-                  onChange={(e) => setFormData({ ...formData, pec_azienda: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
