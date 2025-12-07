@@ -251,6 +251,14 @@ export default function CalendarTab() {
 
       if (!exactMatch && !partialMatch) return false
 
+      // IMPORTANT: Also match by plate if both vehicle and booking have plates
+      // This prevents showing bookings for one vehicle on another vehicle's row
+      if (vehicle.plate && booking.vehicle_plate) {
+        if (vehicle.plate !== booking.vehicle_plate) {
+          return false
+        }
+      }
+
       const pickupDate = new Date(booking.pickup_date)
       const dropoffDate = new Date(booking.dropoff_date)
 
@@ -283,6 +291,14 @@ export default function CalendarTab() {
       )
 
       if (!exactMatch && !partialMatch) return false
+
+      // IMPORTANT: Also match by plate if both vehicle and booking have plates
+      // This prevents showing bookings for one vehicle on another vehicle's row
+      if (vehicle.plate && booking.vehicle_plate) {
+        if (vehicle.plate !== booking.vehicle_plate) {
+          return false
+        }
+      }
 
       const pickupDate = new Date(booking.pickup_date)
       const dropoffDate = new Date(booking.dropoff_date)
