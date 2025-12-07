@@ -169,11 +169,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
     if (formData.tipo_cliente === 'persona_fisica') {
       if (!formData.nome) newErrors.nome = 'Nome obbligatorio'
       if (!formData.cognome) newErrors.cognome = 'Cognome obbligatorio'
-      if (!formData.codice_fiscale) {
-        newErrors.codice_fiscale = 'Codice Fiscale obbligatorio'
-      } else if (!validateCodiceFiscale(formData.codice_fiscale)) {
+
+      // Codice Fiscale is mandatory only for Italian clients
+      if (formData.nazione === 'Italia') {
+        if (!formData.codice_fiscale) {
+          newErrors.codice_fiscale = 'Codice Fiscale obbligatorio per clienti italiani'
+        } else if (!validateCodiceFiscale(formData.codice_fiscale)) {
+          newErrors.codice_fiscale = 'Codice Fiscale non valido (16 caratteri)'
+        }
+      } else if (formData.codice_fiscale && !validateCodiceFiscale(formData.codice_fiscale)) {
+        // Optional validation if CF is provided for non-Italian clients
         newErrors.codice_fiscale = 'Codice Fiscale non valido (16 caratteri)'
       }
+
       if (!formData.indirizzo) newErrors.indirizzo = 'Indirizzo obbligatorio'
       if (!formData.citta_residenza) newErrors.citta_residenza = 'Città obbligatoria'
       if (!formData.codice_postale) newErrors.codice_postale = 'CAP obbligatorio'
@@ -373,7 +381,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
 
     // Check type-specific fields
     if (formData.tipo_cliente === 'persona_fisica') {
-      return !formData.nome || !formData.cognome || !formData.codice_fiscale || !formData.indirizzo || !formData.citta_residenza || !formData.codice_postale || !formData.provincia_residenza
+      // Codice Fiscale is required only for Italian clients
+      const cfRequired = formData.nazione === 'Italia' ? !formData.codice_fiscale : false
+      return !formData.nome || !formData.cognome || cfRequired || !formData.indirizzo || !formData.citta_residenza || !formData.codice_postale || !formData.provincia_residenza
     }
     if (formData.tipo_cliente === 'azienda') {
       return !formData.denominazione || !formData.partita_iva || !formData.sede_legale || !formData.nome_rappresentante || !formData.cognome_rappresentante || !formData.cf_rappresentante
@@ -480,7 +490,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Codice Fiscale *
+                    Codice Fiscale {formData.nazione === 'Italia' ? '*' : '(opzionale)'}
                   </label>
                   <input
                     type="text"
