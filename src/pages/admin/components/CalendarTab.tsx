@@ -46,6 +46,7 @@ export default function CalendarTab() {
   } | null>(null)
   const [selectedUnavailability, setSelectedUnavailability] = useState<Vehicle | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [changingVehicle, setChangingVehicle] = useState<string | null>(null) // booking id being changed
 
   useEffect(() => {
     loadData()
@@ -139,6 +140,66 @@ export default function CalendarTab() {
       console.error('Failed to load data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Get alternative vehicles for a booking (grouped vehicles or similar models)
+  function getAlternativeVehicles(currentVehicleName: string): Vehicle[] {
+    const currentVehicle = vehicles.find(v => v.display_name === currentVehicleName)
+
+    if (!currentVehicle) {
+      return []
+    }
+
+    // If vehicle has a display_group, get all vehicles in that group
+    const displayGroup = currentVehicle.metadata?.display_group
+    if (displayGroup) {
+      return vehicles.filter(v => v.metadata?.display_group === displayGroup)
+    }
+
+    // Otherwise, find vehicles with similar names (for manual grouping)
+    const baseName = currentVehicleName.split('(')[0].trim().toLowerCase()
+    return vehicles.filter(v =>
+      v.display_name.toLowerCase().includes(baseName) ||
+      baseName.includes(v.display_name.toLowerCase())
+    )
+  }
+
+  // Update booking vehicle
+  async function changeBookingVehicle(bookingId: string, newVehicleName: string) {
+    setChangingVehicle(bookingId)
+    try {
+      const newVehicle = vehicles.find(v => v.display_name === newVehicleName)
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          vehicle_name: newVehicleName,
+          vehicle_plate: newVehicle?.plate || null
+        })
+        .eq('id', bookingId)
+
+      if (error) throw error
+
+      // Reload data to reflect changes
+      await loadData()
+
+      // Update selectedCell if it's open
+      if (selectedCell) {
+        const updatedBookings = selectedCell.bookings.map(b =>
+          b.id === bookingId
+            ? { ...b, vehicle_name: newVehicleName, vehicle_plate: newVehicle?.plate || undefined }
+            : b
+        )
+        setSelectedCell({ ...selectedCell, bookings: updatedBookings })
+      }
+
+      alert('✅ Veicolo modificato con successo!')
+    } catch (error) {
+      console.error('Error changing vehicle:', error)
+      alert('❌ Errore durante la modifica del veicolo')
+    } finally {
+      setChangingVehicle(null)
     }
   }
 
@@ -564,58 +625,87 @@ export default function CalendarTab() {
             </div>
 
             <div className="p-6 space-y-4">
-              {selectedCell.bookings.map(booking => (
-                <div key={booking.id} className="bg-gray-800/50 rounded-lg p-5 border border-red-500/30">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <div className="text-white font-bold text-lg mb-1">{booking.customer_name}</div>
-                      <div className="text-gray-400 text-sm">{booking.customer_email}</div>
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
-                      {booking.status}
-                    </span>
-                  </div>
+              {selectedCell.bookings.map(booking => {
+                const alternativeVehicles = getAlternativeVehicles(booking.vehicle_name)
+                const hasAlternatives = alternativeVehicles.length > 1
 
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Ritiro:</span>
-                      <span className="text-white font-medium">
-                        {new Date(booking.pickup_date).toLocaleString('it-IT', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
+                return (
+                  <div key={booking.id} className="bg-gray-800/50 rounded-lg p-5 border border-red-500/30">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <div className="text-white font-bold text-lg mb-1">{booking.customer_name}</div>
+                        <div className="text-gray-400 text-sm">{booking.customer_email}</div>
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                        {booking.status}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Riconsegna:</span>
-                      <span className="text-white font-medium">
-                        {new Date(booking.dropoff_date).toLocaleString('it-IT', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-gray-700">
-                      <span className="text-gray-400">Prezzo Totale:</span>
-                      <span className="text-dr7-gold font-bold text-lg">
-                        €{(booking.price_total / 100).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="mt-3 text-xs text-gray-500">
-                    ID: DR7-{booking.id.toUpperCase().slice(0, 8)}
+                    {/* Vehicle selection dropdown */}
+                    {hasAlternatives && (
+                      <div className="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Veicolo Assegnato (Targa)
+                        </label>
+                        <select
+                          value={booking.vehicle_name}
+                          onChange={(e) => changeBookingVehicle(booking.id, e.target.value)}
+                          disabled={changingVehicle === booking.id}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:border-dr7-gold disabled:opacity-50"
+                        >
+                          {alternativeVehicles.map(vehicle => (
+                            <option key={vehicle.id} value={vehicle.display_name}>
+                              {vehicle.display_name} {vehicle.plate ? `(${vehicle.plate})` : '(Nessuna targa)'}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Cambia il veicolo assegnato per questa prenotazione
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Ritiro:</span>
+                        <span className="text-white font-medium">
+                          {new Date(booking.pickup_date).toLocaleString('it-IT', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Riconsegna:</span>
+                        <span className="text-white font-medium">
+                          {new Date(booking.dropoff_date).toLocaleString('it-IT', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-gray-700">
+                        <span className="text-gray-400">Prezzo Totale:</span>
+                        <span className="text-dr7-gold font-bold text-lg">
+                          €{(booking.price_total / 100).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 text-xs text-gray-500">
+                      ID: DR7-{booking.id.toUpperCase().slice(0, 8)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
