@@ -806,6 +806,10 @@ export default function CustomersTab() {
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.cognome || '-'}</p>
                     </div>
                     <div>
+                      <span className="text-sm text-gray-400">Sesso:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.sesso || '-'}</p>
+                    </div>
+                    <div>
                       <span className="text-sm text-gray-400">Codice Fiscale:</span>
                       <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_fiscale || '-'}</p>
                     </div>
