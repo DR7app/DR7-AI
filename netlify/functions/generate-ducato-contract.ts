@@ -168,7 +168,7 @@ export const handler: Handler = async (event) => {
             .upsert({
                 booking_id: bookingId,
                 contract_number: contractNumber,
-                contract_date: new Date().toISOString(),
+                contract_date: new Date().toISOString().split('T')[0], // Date only (YYYY-MM-DD)
                 customer_name: clientName,
                 customer_email: booking.customer_email || customer?.email,
                 customer_phone: booking.customer_phone || customer?.telefono,
@@ -176,14 +176,14 @@ export const handler: Handler = async (event) => {
                 customer_tax_code: clientVat,
                 customer_license_number: driverLicense,
                 vehicle_name: vehicleModel,
-                rental_start_date: booking.pickup_date,
-                rental_end_date: booking.dropoff_date,
+                rental_start_date: pickupDate.toISOString().split('T')[0], // Date only (YYYY-MM-DD)
+                rental_end_date: dropoffDate.toISOString().split('T')[0], // Date only (YYYY-MM-DD)
                 daily_rate: 0, // Calculate if possible or leave 0
                 total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
                 total_amount: booking.price_total / 100,
                 status: 'active',
-                pdf_url: publicUrl,
-                created_at: new Date().toISOString()
+                pdf_url: publicUrl
+                // created_at has database default, no need to override
             }, { onConflict: 'booking_id' })
 
         if (dbError) {
