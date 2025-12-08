@@ -390,12 +390,24 @@ export default function CustomersTab() {
     if (!confirm('Sei sicuro di voler eliminare questo cliente?')) return
 
     try {
+      // Try deleting from customers_extended first (likely the main table for detailed clients)
+      const { error: extendedError } = await supabase
+        .from('customers_extended')
+        .delete()
+        .eq('id', id)
+
+      if (extendedError) {
+        console.warn('Error deleting from customers_extended (might not exist or be a view):', extendedError)
+      }
+
+      // Also delete from 'customers' table for backward compatibility
       const { error } = await supabase
         .from('customers')
         .delete()
         .eq('id', id)
 
       if (error) throw error
+
       loadCustomers()
     } catch (error) {
       console.error('Failed to delete customer:', error)
