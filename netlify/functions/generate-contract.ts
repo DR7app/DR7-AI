@@ -154,8 +154,23 @@ export const handler: Handler = async (event) => {
             'DropoffLocation': booking.dropoff_location || 'Sede',
             'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
             'TotalHours': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
-            'PlaceOfIssue': 'Cagliari', // Default or configurable
+            'PlaceOfIssue': 'Cagliari',
             'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+
+            // Second Driver Fields (Placeholder or from booking_details)
+            'SecondDriverName': booking.booking_details?.second_driver?.name || '',
+            'SecondDriverBirthDate': booking.booking_details?.second_driver?.birth_date ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT') : '',
+            'SecondDriverBirthCity': booking.booking_details?.second_driver?.birth_city || '',
+            'SecondDriverBirthProvince': booking.booking_details?.second_driver?.birth_province || '',
+            'SecondDriverStatsCode': booking.booking_details?.second_driver?.tax_code || '',
+            'SecondDriverCity': booking.booking_details?.second_driver?.city || '',
+            'SecondDriverProvince': booking.booking_details?.second_driver?.province || '',
+            'SecondDriverGender': booking.booking_details?.second_driver?.gender || '',
+            'SecondDriverLicenseType': booking.booking_details?.second_driver?.license_type || '',
+            'SecondDriverLicenseNumber': booking.booking_details?.second_driver?.license_number || '',
+            'SecondDriverLicenseIssuedBy': booking.booking_details?.second_driver?.license_issued_by || '',
+            'SecondDriverLicenseIssueDate': booking.booking_details?.second_driver?.license_issue_date ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT') : '',
+            'SecondDriverLicenseExpiryDate': booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : '',
         }
 
         let filledFields = 0
