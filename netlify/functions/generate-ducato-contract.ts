@@ -95,7 +95,10 @@ export const handler: Handler = async (event) => {
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
         // 5. Load Pages
-        const siteUrl = process.env.URL || 'http://localhost:5173'
+        // Hardcode production URL to avoid localhost issues in Netlify runtime
+        const siteUrl = 'https://dr7-empire-admin.netlify.app'
+        console.log(`[generate-ducato-contract] Fetching images from: ${siteUrl}`)
+
         const pageUrls = [
             `${siteUrl}/contract_templates/ducato/page_1.png`,
             `${siteUrl}/contract_templates/ducato/page_2.png`,

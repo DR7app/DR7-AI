@@ -367,15 +367,6 @@ export default function AdminDashboard() {
                 Lotteria
               </button>
               <button
-                onClick={() => setActiveTab('contratto')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                  }`}
-              >
-                Contratti
-              </button>
-              <button
                 onClick={() => setActiveTab('fattura')}
                 className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
                   ? 'border-white text-white'
@@ -383,6 +374,15 @@ export default function AdminDashboard() {
                   }`}
               >
                 Fatture
+              </button>
+              <button
+                onClick={() => setActiveTab('contratto')}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
+              >
+                Contratti
               </button>
             </nav>
           </div>
