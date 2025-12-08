@@ -1575,7 +1575,7 @@ export default function ReservationsTab() {
                                 disabled={generatingContract}
                                 className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
                               >
-                                {generatingContract ? '...' : 'Contratto'}
+                                {generatingContract ? '...' : 'Genera Contratto'}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
