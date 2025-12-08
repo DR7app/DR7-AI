@@ -44,20 +44,38 @@ export const handler: Handler = async (event) => {
         // 2. Fetch Customer Data
         const customerId = booking.user_id || booking.booking_details?.customer?.customerId
         let customer = null
+
+        console.log(`[generate-contract] Fetching customer. ID: ${customerId}, Email: ${booking.customer_email}`)
+
         if (customerId) {
-            const { data: cData } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
-            customer = cData
+            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+            if (cError) console.error('[generate-contract] Error fetching by ID:', cError)
+            if (cData) {
+                console.log('[generate-contract] Found customer by ID:', JSON.stringify(cData))
+                customer = cData
+            }
         }
         // Fallbacks
         if (!customer && booking.customer_email) {
-            const { data: cData } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).single()
-            customer = cData
+            console.log('[generate-contract] Fallback: Fetching by email...')
+            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).single()
+            if (cError) console.error('[generate-contract] Error fetching by email (customers_extended):', cError)
+            if (cData) {
+                console.log('[generate-contract] Found customer by Email (extended):', JSON.stringify(cData))
+                customer = cData
+            }
         }
         if (!customer && booking.customer_email) {
+            console.log('[generate-contract] Fallback: Fetching by email (basic customers)...')
             const { data: cData } = await supabase.from('customers').select('*').eq('email', booking.customer_email).single()
             if (cData) {
+                console.log('[generate-contract] Found customer by Email (basic):', JSON.stringify(cData))
                 customer = { ...cData, tipo_cliente: 'persona_fisica', nome: cData.full_name, indirizzo: cData.notes }
             }
+        }
+
+        if (!customer) {
+            console.warn('[generate-contract] WARNING: No customer record found. Contract will be empty.')
         }
 
         // 3. Prepare Data
