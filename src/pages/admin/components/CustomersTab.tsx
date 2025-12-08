@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
-import Input from './Input'
-import TextArea from './TextArea'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
 
@@ -84,8 +82,7 @@ interface Customer {
 export default function CustomersTab() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
+
   const [viewingDocuments, setViewingDocuments] = useState<Customer | null>(null)
   const [documentsUrls, setDocumentsUrls] = useState<{
     licenses: Array<{ url: string; fileName: string }>;
@@ -100,13 +97,7 @@ export default function CustomersTab() {
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [viewingCustomerDetails, setViewingCustomerDetails] = useState<Customer | null>(null)
 
-  const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    driver_license_number: '',
-    notes: ''
-  })
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   useEffect(() => {
     loadCustomers()
@@ -393,56 +384,7 @@ export default function CustomersTab() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    try {
-      if (editingId) {
-        console.log('Updating customer:', editingId, formData)
 
-        // Update customers table
-        const { error: customersError } = await supabase
-          .from('customers')
-          .update(formData)
-          .eq('id', editingId)
-
-        if (customersError) {
-          console.error('Update error (customers):', customersError)
-          throw customersError
-        }
-
-        // Also update customers_extended table if record exists
-        const { error: extendedError } = await supabase
-          .from('customers_extended')
-          .update({ patente: formData.driver_license_number })
-          .eq('id', editingId)
-
-        if (extendedError) {
-          console.warn('Could not update customers_extended (might not exist):', extendedError)
-          // Don't throw error - customers_extended might not have this record
-        }
-      } else {
-        console.log('Creating customer:', formData)
-
-        const { error } = await supabase
-          .from('customers')
-          .insert([formData])
-
-        if (error) {
-          console.error('Insert error:', error)
-          throw error
-        }
-      }
-
-      alert('Cliente salvato con successo!')
-      setShowForm(false)
-      setEditingId(null)
-      resetForm()
-      loadCustomers()
-    } catch (error: any) {
-      console.error('Failed to save customer:', error)
-      alert('Errore nel salvare il cliente: ' + (error.message || JSON.stringify(error)))
-    }
-  }
 
   async function handleDelete(id: string) {
     if (!confirm('Sei sicuro di voler eliminare questo cliente?')) return
@@ -461,26 +403,11 @@ export default function CustomersTab() {
     }
   }
 
-  function resetForm() {
-    setFormData({
-      full_name: '',
-      email: '',
-      phone: '',
-      driver_license_number: '',
-      notes: ''
-    })
-  }
+
 
   function handleEdit(customer: Customer) {
-    setFormData({
-      full_name: customer.full_name,
-      email: customer.email || '',
-      phone: customer.phone || '',
-      driver_license_number: customer.driver_license_number || '',
-      notes: customer.notes || ''
-    })
-    setEditingId(customer.id)
-    setShowForm(true)
+    setSelectedCustomer(customer)
+    setShowNewClientModal(true)
   }
 
   async function fetchCustomerDocuments(userId: string) {
@@ -1399,49 +1326,7 @@ export default function CustomersTab() {
         </div>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-900 p-6 rounded-lg mb-6 border border-gray-700">
-          <h3 className="text-xl font-semibold text-white mb-4">
-            {editingId ? 'Modifica Cliente' : 'Nuovo Cliente'}
-          </h3>
-          <div className="space-y-4">
-            <Input
-              label="Nome Completo"
-              required
-              value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-            <Input
-              label="Telefono"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-            <Input
-              label="Numero Patente"
-              value={formData.driver_license_number}
-              onChange={(e) => setFormData({ ...formData, driver_license_number: e.target.value })}
-            />
-            <TextArea
-              label="Note"
-              rows={3}
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            />
-          </div>
-          <div className="flex gap-3 mt-4">
-            <Button type="submit">Salva</Button>
-            <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); resetForm() }}>
-              Annulla
-            </Button>
-          </div>
-        </form>
-      )}
+
 
       <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
@@ -1543,11 +1428,16 @@ export default function CustomersTab() {
 
       <NewClientModal
         isOpen={showNewClientModal}
-        onClose={() => setShowNewClientModal(false)}
+        onClose={() => {
+          setShowNewClientModal(false)
+          setSelectedCustomer(null)
+        }}
         onClientCreated={() => {
           setShowNewClientModal(false)
+          setSelectedCustomer(null)
           loadCustomers()
         }}
+        initialData={selectedCustomer}
       />
     </div>
   )
