@@ -426,14 +426,10 @@ export default function ReservationsTab() {
       }
 
       if (data.url) {
-        // Open the PDF
-        window.open(data.url, '_blank')
-
-        // Also reload data to show the contract link in the UI if needed
+        // Reload data to show the contract link in the UI
         loadData()
 
-        // Ask if they want to email it immediately
-        if (confirm('Contratto generato con successo! Vuoi inviare l\'email al cliente ora (con PDF allegato)?')) {
+        if (confirm('Contratto generato con successo! 📄\n\nVuoi inviare l\'email al cliente ora (con PDF allegato)?')) {
           try {
             const emailRes = await fetch('/.netlify/functions/send-contract-email', {
               method: 'POST',

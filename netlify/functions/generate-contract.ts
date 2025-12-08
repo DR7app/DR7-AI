@@ -137,15 +137,25 @@ export const handler: Handler = async (event) => {
             'CustomerVAT': clientVat || '',
             'CustomerPhone': booking.customer_phone || '',
             'CustomerEmail': booking.customer_email || '',
-            'DriverLicense': customer?.numero_patente || driverLicense || '', // "numero_patente" is correct column
+            'CustomerAddress': clientAddress || '',
+            'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
+            'CustomerBirthPlace': customer?.luogo_nascita || '',
+            'CustomerCity': customer?.citta_residenza || '',
+            'CustomerProvince': customer?.provincia_residenza || '',
+            'CustomerZipCode': customer?.codice_postale || '',
+
+            'DriverLicense': customer?.numero_patente || driverLicense || '',
+            'DriverLicenseIssuedBy': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
+            'DriverLicenseIssueDate': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || ''),
+            'DriverLicenseExpiryDate': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
 
             // Vehicle Fields
-            'VehicleBrand': booking.vehicle_make || '', // Assuming vehicle_make exists or needs fetch
+            'VehicleBrand': booking.vehicle_make || '',
             'VehicleColor': booking.vehicle_color || '',
             'VehicleFuel': booking.vehicle_fuel || '',
             'VehicleSeats': booking.booking_details?.vehicle?.seats || '',
-            'VehicleFuelLevel': '', // Tacche autonomia - usually filled by hand or at pickup
-            'VehicleKMRange': '',   // KM autonomia
+            'VehicleFuelLevel': '',
+            'VehicleKMRange': '',
 
             // Rental Specifics
             'PickupLocation': booking.pickup_location || 'Sede',
