@@ -119,30 +119,6 @@ export const handler: Handler = async (event) => {
             'CustomerVAT': clientVat || '',
             'CustomerPhone': booking.customer_phone || '',
             'CustomerEmail': booking.customer_email || '',
-            'DriverLicense': driverLicense || '',
-            'VehicleModel': vehicleModel || '',
-            'LicensePlate': booking.vehicle_plate || 'TBD',
-            'PickupDate': pickupDate.toLocaleDateString('it-IT'),
-            'PickupTime': pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-            'DropoffDate': dropoffDate.toLocaleDateString('it-IT'),
-            'DropoffTime': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-            'TotalAmount': `${(booking.price_total / 100).toFixed(2)}`,
-            'CodiceFiscale': customer?.codice_fiscale || '',
-
-            // Expanded Customer Fields
-            'CustomerCity': customer?.citta_residenza || customer?.citta || '', // "citta_residenza" or "citta" (PA/Azienda)
-            'CustomerProvince': customer?.provincia_residenza || customer?.provincia || '', // "provincia_residenza" (2 char) or "provincia"
-            'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
-            'CustomerBirthCity': customer?.luogo_nascita || customer?.citta_nascita || '',
-            'CustomerBirthProvince': customer?.provincia_nascita || '',
-            'CustomerGender': customer?.sesso || '',
-            'CustomerAddress': `${clientAddress} ${customer?.codice_postale || customer?.cap || ''}`.trim(),
-
-            // License Fields - Using exact columns
-            'LicenseType': customer?.tipo_patente || 'B',
-            'LicenseIssuedBy': customer?.emessa_da || customer?.ente_rilascio_patente || '', // "emessa_da" is the correct column
-            'LicenseIssueDate': (customer?.data_rilascio_patente) ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : '',
-            'LicenseExpiryDate': (customer?.scadenza_patente || customer?.data_scadenza_patente) ? new Date(customer.scadenza_patente || customer.data_scadenza_patente).toLocaleDateString('it-IT') : '',
             'DriverLicense': customer?.numero_patente || driverLicense || '', // "numero_patente" is correct column
 
             // Vehicle Fields
