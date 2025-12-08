@@ -129,6 +129,32 @@ export const handler: Handler = async (event) => {
             'DropoffTime': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
             'TotalAmount': `${(booking.price_total / 100).toFixed(2)}`,
             'CodiceFiscale': customer?.codice_fiscale || '',
+
+            // Expanded Customer Fields
+            'CustomerCity': customer?.citta || '',
+            'CustomerProvince': customer?.provincia || '',
+            'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
+            'CustomerBirthCity': customer?.luogo_nascita || '',
+            'CustomerBirthProvince': customer?.provincia_nascita || '',
+            'CustomerGender': customer?.sesso || '',
+
+            // License Fields
+            'LicenseType': customer?.tipo_patente || 'B',
+            'LicenseIssuedBy': customer?.ente_rilascio_patente || '',
+            'LicenseIssueDate': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : '',
+            'LicenseExpiryDate': customer?.data_scadenza_patente ? new Date(customer.data_scadenza_patente).toLocaleDateString('it-IT') : '',
+
+            // Vehicle Fields
+            'VehicleBrand': booking.vehicle_make || '', // Assuming vehicle_make exists or needs fetch
+            'VehicleColor': booking.vehicle_color || '',
+            'VehicleFuel': booking.vehicle_fuel || '',
+
+            // Rental Specifics
+            'PickupLocation': booking.pickup_location || 'Sede',
+            'DropoffLocation': booking.dropoff_location || 'Sede',
+            'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
+            'PlaceOfIssue': 'Cagliari', // Default or configurable
+            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
         }
 
         let filledFields = 0
