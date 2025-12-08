@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import MechanicalBookingForm from './MechanicalBookingForm'
 
 interface MechanicalBooking {
   id: string
@@ -17,6 +18,13 @@ interface MechanicalBooking {
   payment_status: string
   booking_details: any
   created_at: string
+}
+
+interface Customer {
+  id: string
+  full_name: string
+  email: string | null
+  phone: string | null
 }
 
 // Generate time slots for mechanical: 9h-19h, every 30 minutes
@@ -50,6 +58,7 @@ export default function MechanicalCalendarTab() {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
   const [bookings, setBookings] = useState<MechanicalBooking[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedCell, setSelectedCell] = useState<{
@@ -57,6 +66,7 @@ export default function MechanicalCalendarTab() {
     time: string
     bookings: MechanicalBooking[]
   } | null>(null)
+  const [editingBooking, setEditingBooking] = useState<MechanicalBooking | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
@@ -79,6 +89,15 @@ export default function MechanicalCalendarTab() {
   async function loadData() {
     setLoading(true)
     try {
+      // Load customers
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .order('full_name')
+
+      if (customersError) throw customersError
+      setCustomers(customersData || [])
+
       // Load mechanical bookings (exclude cancelled)
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
@@ -161,7 +180,7 @@ export default function MechanicalCalendarTab() {
   // Get today's date for highlighting
   const today = new Date()
   const isCurrentMonth = today.getMonth() === currentDate.getMonth() &&
-                         today.getFullYear() === currentDate.getFullYear()
+    today.getFullYear() === currentDate.getFullYear()
   const todayDay = isCurrentMonth ? today.getDate() : null
 
   if (loading) {
@@ -205,7 +224,7 @@ export default function MechanicalCalendarTab() {
                 {bookings.filter(b => {
                   const bookingDate = new Date(b.appointment_date)
                   return bookingDate.getMonth() === currentDate.getMonth() &&
-                         bookingDate.getFullYear() === currentDate.getFullYear()
+                    bookingDate.getFullYear() === currentDate.getFullYear()
                 }).length} interventi
               </span>
             </div>
@@ -218,7 +237,7 @@ export default function MechanicalCalendarTab() {
                       .filter(b => {
                         const bookingDate = new Date(b.appointment_date)
                         return bookingDate.getMonth() === currentDate.getMonth() &&
-                               bookingDate.getFullYear() === currentDate.getFullYear()
+                          bookingDate.getFullYear() === currentDate.getFullYear()
                       })
                       .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
                   </FinancialData>
@@ -228,11 +247,10 @@ export default function MechanicalCalendarTab() {
             {canViewFinancials && (
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
-                  hideFinancials
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-yellow-600 text-black hover:bg-yellow-700'
-                }`}
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                  }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
               </button>
@@ -288,11 +306,10 @@ export default function MechanicalCalendarTab() {
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="text-white font-bold text-sm">{booking.customer_name}</h4>
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                      booking.status === 'confirmed' ? 'bg-green-600 text-white' :
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
                       booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                      'bg-gray-600 text-white'
-                    }`}>
+                        'bg-gray-600 text-white'
+                      }`}>
                       {booking.status}
                     </span>
                   </div>
@@ -331,9 +348,8 @@ export default function MechanicalCalendarTab() {
                   return (
                     <th
                       key={day}
-                      className={`text-xs font-bold px-2 py-2 border border-gray-700 min-w-[50px] ${
-                        isToday ? 'bg-dr7-gold text-black' : 'bg-gray-800 text-white'
-                      }`}
+                      className={`text-xs font-bold px-2 py-2 border border-gray-700 min-w-[50px] ${isToday ? 'bg-dr7-gold text-black' : 'bg-gray-800 text-white'
+                        }`}
                     >
                       {day}
                     </th>
@@ -355,13 +371,12 @@ export default function MechanicalCalendarTab() {
                     return (
                       <td
                         key={`${day}-${timeSlot}`}
-                        className={`border border-gray-700 p-1 text-center cursor-pointer transition-all hover:opacity-80 ${
-                          isBooked
-                            ? 'bg-red-600 hover:bg-red-700'
-                            : isToday
+                        className={`border border-gray-700 p-1 text-center cursor-pointer transition-all hover:opacity-80 ${isBooked
+                          ? 'bg-red-600 hover:bg-red-700'
+                          : isToday
                             ? 'bg-gray-700 hover:bg-gray-600'
                             : 'bg-gray-800 hover:bg-gray-700'
-                        }`}
+                          }`}
                         onClick={() => {
                           if (isBooked) {
                             const year = currentDate.getFullYear()
@@ -427,7 +442,7 @@ export default function MechanicalCalendarTab() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">
-                 Prenotazioni Meccanica
+                  Prenotazioni Meccanica
                 </h3>
                 <p className="text-gray-400 text-sm">
                   {new Date(selectedCell.date).toLocaleDateString('it-IT', {
@@ -458,18 +473,16 @@ export default function MechanicalCalendarTab() {
                       <p className="text-gray-400 text-sm">ID: {booking.id.substring(0, 8)}</p>
                     </div>
                     <div className="flex gap-2">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        booking.status === 'confirmed' ? 'bg-green-600 text-white' :
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
                         booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                        'bg-gray-600 text-white'
-                      }`}>
+                          'bg-gray-600 text-white'
+                        }`}>
                         {booking.status}
                       </span>
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        booking.payment_status === 'paid' ? 'bg-green-600 text-white' :
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'paid' ? 'bg-green-600 text-white' :
                         booking.payment_status === 'pending' ? 'bg-yellow-600 text-black' :
-                        'bg-red-600 text-white'
-                      }`}>
+                          'bg-red-600 text-white'
+                        }`}>
                         {booking.payment_status}
                       </span>
                     </div>
@@ -510,6 +523,15 @@ export default function MechanicalCalendarTab() {
                       <p className="text-white text-sm mt-1">{booking.booking_details.notes}</p>
                     </div>
                   )}
+
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={() => setEditingBooking(booking)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded transition-colors"
+                    >
+                      Modifica
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -520,6 +542,25 @@ export default function MechanicalCalendarTab() {
             >
               Chiudi
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Editing Modal */}
+      {editingBooking && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+          <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <MechanicalBookingForm
+              initialData={editingBooking}
+              editingId={editingBooking.id}
+              customers={customers}
+              onSave={() => {
+                setEditingBooking(null)
+                setSelectedCell(null)
+                loadData()
+              }}
+              onCancel={() => setEditingBooking(null)}
+            />
           </div>
         </div>
       )}

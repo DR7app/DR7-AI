@@ -15,6 +15,7 @@ interface Vehicle {
     unavailable_from_time?: string
     unavailable_until_time?: string
     unavailable_reason?: string
+    display_group?: string
   }
 }
 
@@ -330,7 +331,7 @@ export default function CalendarTab() {
   // Get today's date for highlighting
   const today = new Date()
   const isCurrentMonth = today.getMonth() === currentDate.getMonth() &&
-                         today.getFullYear() === currentDate.getFullYear()
+    today.getFullYear() === currentDate.getFullYear()
   const todayDay = isCurrentMonth ? today.getDate() : null
 
   if (loading) {
@@ -355,7 +356,7 @@ export default function CalendarTab() {
                 {bookings.filter(b => {
                   const pickupDate = new Date(b.pickup_date)
                   return pickupDate.getMonth() === currentDate.getMonth() &&
-                         pickupDate.getFullYear() === currentDate.getFullYear()
+                    pickupDate.getFullYear() === currentDate.getFullYear()
                 }).length} noleggi
               </span>
             </div>
@@ -368,7 +369,7 @@ export default function CalendarTab() {
                       .filter(b => {
                         const pickupDate = new Date(b.pickup_date)
                         return pickupDate.getMonth() === currentDate.getMonth() &&
-                               pickupDate.getFullYear() === currentDate.getFullYear()
+                          pickupDate.getFullYear() === currentDate.getFullYear()
                       })
                       .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
                   </FinancialData>
@@ -393,11 +394,10 @@ export default function CalendarTab() {
             {canViewFinancials && (
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
-                  hideFinancials
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
                     ? 'bg-green-600 text-white hover:bg-green-700'
                     : 'bg-yellow-600 text-black hover:bg-yellow-700'
-                }`}
+                  }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
               </button>
@@ -475,11 +475,10 @@ export default function CalendarTab() {
                           {new Date(booking.pickup_date).toLocaleDateString('it-IT')} →{' '}
                           {new Date(booking.dropoff_date).toLocaleDateString('it-IT')}
                         </p>
-                        <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${
-                          booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
-                          booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                          'bg-gray-700 text-gray-300'
-                        }`}>
+                        <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
+                            booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
+                              'bg-gray-700 text-gray-300'
+                          }`}>
                           {booking.status}
                         </span>
                       </div>
@@ -512,9 +511,8 @@ export default function CalendarTab() {
                   {daysInMonth.map(day => (
                     <th
                       key={day}
-                      className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] ${
-                        day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
-                      }`}
+                      className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
+                        }`}
                     >
                       {day}
                     </th>
@@ -533,10 +531,10 @@ export default function CalendarTab() {
                     const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
                     const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
                     const vehicleMatches = bookingVehicle === vehicleDisplay ||
-                                          (bookingVehicle && vehicleDisplay && (
-                                            bookingVehicle.includes(vehicleDisplay) ||
-                                            vehicleDisplay.includes(bookingVehicle)
-                                          ))
+                      (bookingVehicle && vehicleDisplay && (
+                        bookingVehicle.includes(vehicleDisplay) ||
+                        vehicleDisplay.includes(bookingVehicle)
+                      ))
                     return vehicleMatches && booking.customer_name.toLowerCase().includes(query)
                   })
                 }).map(vehicle => (
@@ -546,13 +544,12 @@ export default function CalendarTab() {
                         <div className="flex items-center gap-1.5">
                           <span className="truncate">{vehicle.display_name}</span>
                           {vehicle.category && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${
-                              vehicle.category === 'exotic'
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${vehicle.category === 'exotic'
                                 ? 'bg-purple-900 text-purple-200'
                                 : vehicle.category === 'urban'
-                                ? 'bg-cyan-900 text-cyan-200'
-                                : 'bg-orange-900 text-orange-200'
-                            }`}>
+                                  ? 'bg-cyan-900 text-cyan-200'
+                                  : 'bg-orange-900 text-orange-200'
+                              }`}>
                               {vehicle.category}
                             </span>
                           )}
@@ -579,19 +576,18 @@ export default function CalendarTab() {
                               setSelectedUnavailability(vehicle)
                             }
                           }}
-                          className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${
-                            status === 'rented'
+                          className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'
                               ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
                               : status === 'unavailable'
-                              ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
-                              : 'bg-green-500 hover:bg-green-600'
-                          } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
+                                ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
+                                : 'bg-green-500 hover:bg-green-600'
+                            } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
                           title={
                             status === 'rented'
                               ? `${vehicle.display_name} - Noleggiato`
                               : status === 'unavailable'
-                              ? `${vehicle.display_name} - Non Disponibile`
-                              : `${vehicle.display_name} - Disponibile`
+                                ? `${vehicle.display_name} - Non Disponibile`
+                                : `${vehicle.display_name} - Disponibile`
                           }
                         />
                       )

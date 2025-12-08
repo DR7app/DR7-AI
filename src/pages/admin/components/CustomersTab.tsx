@@ -26,9 +26,17 @@ interface Customer {
   nome?: string
   cognome?: string
   codice_fiscale?: string
+  sesso?: string
   patente?: string
   indirizzo?: string
   pec?: string
+  data_nascita?: string
+  luogo_nascita?: string
+  provincia_nascita?: string
+  numero_civico?: string
+  codice_postale?: string
+  citta_residenza?: string
+  provincia_residenza?: string
   // Azienda fields
   ragione_sociale?: string
   denominazione?: string
@@ -46,6 +54,31 @@ interface Customer {
   // Common fields
   nazione?: string
   telefono?: string
+  // Metadata for extended fields
+  metadata?: {
+    sesso?: string
+    provincia_nascita?: string
+    patente?: {
+      numero?: string
+      tipo?: string
+      ente?: string
+      rilascio?: string
+      scadenza?: string
+    }
+    sede_operativa?: string
+    rappresentante?: {
+      nome?: string
+      cognome?: string
+      cf?: string
+      ruolo?: string
+      documento?: {
+        tipo?: string
+        numero?: string
+        rilascio?: string
+        luogo?: string
+      }
+    }
+  }
 }
 
 export default function CustomersTab() {
@@ -216,11 +249,21 @@ export default function CustomersTab() {
             codice_ipa: customer.codice_ipa,
             codice_univoco: customer.codice_univoco,
             codice_fiscale_pa: customer.codice_fiscale_pa,
-            ente_ufficio: customer.ente_ufficio,
+            ente_ufficio: customer.ente_o_ufficio,
             citta: customer.citta,
             // Common
             nazione: customer.nazione,
-            telefono: customer.telefono
+            telefono: customer.telefono,
+            // Additional fields
+            data_nascita: customer.data_nascita,
+            luogo_nascita: customer.luogo_nascita,
+            citta_residenza: customer.citta_residenza,
+            provincia_residenza: customer.provincia_residenza,
+            codice_postale: customer.codice_postale,
+            numero_civico: customer.numero_civico,
+
+            // Metadata (Sesso, Patente Details, Azienda stuff)
+            metadata: customer.metadata || {}
           }
 
           if (!customerMap.has(key)) {
@@ -777,13 +820,12 @@ export default function CustomersTab() {
               {/* Customer Type Badge */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-400">Tipo Cliente:</span>
-                <span className={`px-3 py-1 rounded text-sm font-medium ${
-                  viewingCustomerDetails.tipo_cliente === 'persona_fisica'
-                    ? 'bg-blue-500/20 text-blue-400'
-                    : viewingCustomerDetails.tipo_cliente === 'azienda'
+                <span className={`px-3 py-1 rounded text-sm font-medium ${viewingCustomerDetails.tipo_cliente === 'persona_fisica'
+                  ? 'bg-blue-500/20 text-blue-400'
+                  : viewingCustomerDetails.tipo_cliente === 'azienda'
                     ? 'bg-purple-500/20 text-purple-400'
                     : 'bg-green-500/20 text-green-400'
-                }`}>
+                  }`}>
                   {viewingCustomerDetails.tipo_cliente === 'persona_fisica' && 'Persona Fisica'}
                   {viewingCustomerDetails.tipo_cliente === 'azienda' && 'Azienda'}
                   {viewingCustomerDetails.tipo_cliente === 'pubblica_amministrazione' && 'Pubblica Amministrazione'}
@@ -812,6 +854,20 @@ export default function CustomersTab() {
                     <div>
                       <span className="text-sm text-gray-400">Codice Fiscale:</span>
                       <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_fiscale || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Sesso:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.metadata?.sesso || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Data di Nascita:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.data_nascita || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Luogo di Nascita:</span>
+                      <p className="text-sm text-white font-medium">
+                        {viewingCustomerDetails.luogo_nascita ? `${viewingCustomerDetails.luogo_nascita} (${viewingCustomerDetails.metadata?.provincia_nascita || '-'})` : '-'}
+                      </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">Numero Patente:</span>
@@ -857,8 +913,12 @@ export default function CustomersTab() {
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.pec || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Indirizzo Sede:</span>
+                      <span className="text-sm text-gray-400">Indirizzo Sede Legale:</span>
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.indirizzo_azienda || viewingCustomerDetails.indirizzo || '-'}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="text-sm text-gray-400">Sede Operativa:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.metadata?.sede_operativa || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-sm text-gray-400">Indirizzo DDT:</span>
@@ -867,6 +927,36 @@ export default function CustomersTab() {
                     <div className="md:col-span-2">
                       <span className="text-sm text-gray-400">Contatti Cliente:</span>
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.contatti_cliente || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Rappresentante Legale Info */}
+                  <div className="mt-4 border-t border-gray-700 pt-3">
+                    <h5 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Rappresentante Legale</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-sm text-gray-400">Nome Completo:</span>
+                        <p className="text-sm text-white font-medium">
+                          {viewingCustomerDetails.metadata?.rappresentante?.nome} {viewingCustomerDetails.metadata?.rappresentante?.cognome}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-400">CF Rappresentante:</span>
+                        <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.metadata?.rappresentante?.cf || '-'}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-400">Ruolo:</span>
+                        <p className="text-sm text-white font-medium">{viewingCustomerDetails.metadata?.rappresentante?.ruolo || '-'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-500 mb-1">Documento Identità:</p>
+                      <p className="text-sm text-white">
+                        {viewingCustomerDetails.metadata?.rappresentante?.documento?.tipo} n. {viewingCustomerDetails.metadata?.rappresentante?.documento?.numero}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Rilasciato il {viewingCustomerDetails.metadata?.rappresentante?.documento?.rilascio} a {viewingCustomerDetails.metadata?.rappresentante?.documento?.luogo}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1072,11 +1162,10 @@ export default function CustomersTab() {
                               disabled={uploadingLicense}
                               id="license-upload"
                             />
-                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${
-                              uploadingLicense
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
-                            }`}>
+                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
+                              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                              : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                              }`}>
                               {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
                             </span>
                           </label>
@@ -1150,11 +1239,10 @@ export default function CustomersTab() {
                               disabled={uploadingId}
                               id="id-upload"
                             />
-                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${
-                              uploadingId
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
-                            }`}>
+                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingId
+                              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                              : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                              }`}>
                               {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
                             </span>
                           </label>
@@ -1228,11 +1316,10 @@ export default function CustomersTab() {
                               disabled={uploadingCodiceFiscale}
                               id="codice-fiscale-upload"
                             />
-                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${
-                              uploadingCodiceFiscale
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
-                            }`}>
+                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
+                              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                              : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                              }`}>
                               {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
                             </span>
                           </label>
@@ -1380,61 +1467,60 @@ export default function CustomersTab() {
                   )
                 })
                 .map((customer) => (
-                <tr key={customer.id} className="border-t border-gray-700 hover:bg-gray-800">
-                  <td className="px-4 py-3 text-sm text-white">{customer.full_name}</td>
-                  <td className="px-4 py-3 text-sm">
-                    {customer.tipo_cliente ? (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        customer.tipo_cliente === 'persona_fisica'
+                  <tr key={customer.id} className="border-t border-gray-700 hover:bg-gray-800">
+                    <td className="px-4 py-3 text-sm text-white">{customer.full_name}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {customer.tipo_cliente ? (
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
                           ? 'bg-blue-500/20 text-blue-400'
                           : customer.tipo_cliente === 'azienda'
-                          ? 'bg-purple-500/20 text-purple-400'
-                          : 'bg-green-500/20 text-green-400'
-                      }`}>
-                        {customer.tipo_cliente === 'persona_fisica' && 'Persona Fisica'}
-                        {customer.tipo_cliente === 'azienda' && 'Azienda'}
-                        {customer.tipo_cliente === 'pubblica_amministrazione' && 'PA'}
-                      </span>
-                    ) : (
-                      <span className="text-gray-500">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-white">{customer.email || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-white">{customer.phone || '-'}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex gap-2 flex-wrap">
-                      <Button
-                        onClick={() => setViewingCustomerDetails(customer)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold"
-                      >
-                        Dettagli Completi
-                      </Button>
-                      <Button
-                        onClick={() => handleViewDocuments(customer)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
-                      >
-                        Documenti
-                      </Button>
-                      <Button
-                        onClick={() => handleEdit(customer)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3"
-                      >
-                        Modifica
-                      </Button>
-                      <Button
-                        onClick={() => handleDelete(customer.id)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
-                      >
-                        Elimina
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-green-500/20 text-green-400'
+                          }`}>
+                          {customer.tipo_cliente === 'persona_fisica' && 'Persona Fisica'}
+                          {customer.tipo_cliente === 'azienda' && 'Azienda'}
+                          {customer.tipo_cliente === 'pubblica_amministrazione' && 'PA'}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-white">{customer.email || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-white">{customer.phone || '-'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          onClick={() => setViewingCustomerDetails(customer)}
+                          variant="secondary"
+                          className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold"
+                        >
+                          Dettagli Completi
+                        </Button>
+                        <Button
+                          onClick={() => handleViewDocuments(customer)}
+                          variant="secondary"
+                          className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
+                        >
+                          Documenti
+                        </Button>
+                        <Button
+                          onClick={() => handleEdit(customer)}
+                          variant="secondary"
+                          className="text-xs py-1 px-3"
+                        >
+                          Modifica
+                        </Button>
+                        <Button
+                          onClick={() => handleDelete(customer.id)}
+                          variant="secondary"
+                          className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                        >
+                          Elimina
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               {customers.filter((customer) => {
                 if (!searchQuery) return true
                 const query = searchQuery.toLowerCase()
@@ -1444,12 +1530,12 @@ export default function CustomersTab() {
                   customer.phone?.toLowerCase().includes(query)
                 )
               }).length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                    {searchQuery ? `Nessun cliente trovato per "${searchQuery}"` : 'Nessun cliente trovato'}
-                  </td>
-                </tr>
-              )}
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                      {searchQuery ? `Nessun cliente trovato per "${searchQuery}"` : 'Nessun cliente trovato'}
+                    </td>
+                  </tr>
+                )}
             </tbody>
           </table>
         </div>

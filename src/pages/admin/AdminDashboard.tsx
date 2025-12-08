@@ -80,7 +80,7 @@ export default function AdminDashboard() {
                   className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between text-gray-300 hover:bg-gray-800"
                 >
                   <div className="flex items-center gap-3">
-                    
+
                     <span>Noleggio</span>
                   </div>
                   <span className={`transform transition-transform ${openSubmenu === 'noleggio' ? 'rotate-180' : ''}`}>▼</span>
@@ -92,11 +92,10 @@ export default function AdminDashboard() {
                         setActiveTab('reservations')
                         setMobileMenuOpen(false)
                       }}
-                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${
-                        activeTab === 'reservations'
-                          ? 'bg-dr7-gold text-black font-semibold'
-                          : 'text-gray-300 hover:bg-gray-800'
-                      }`}
+                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${activeTab === 'reservations'
+                        ? 'bg-dr7-gold text-black font-semibold'
+                        : 'text-gray-300 hover:bg-gray-800'
+                        }`}
                     >
                       Prenotazioni
                     </button>
@@ -105,11 +104,10 @@ export default function AdminDashboard() {
                         setActiveTab('calendar')
                         setMobileMenuOpen(false)
                       }}
-                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${
-                        activeTab === 'calendar'
-                          ? 'bg-dr7-gold text-black font-semibold'
-                          : 'text-gray-300 hover:bg-gray-800'
-                      }`}
+                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${activeTab === 'calendar'
+                        ? 'bg-dr7-gold text-black font-semibold'
+                        : 'text-gray-300 hover:bg-gray-800'
+                        }`}
                     >
                       Calendario
                     </button>
@@ -124,7 +122,7 @@ export default function AdminDashboard() {
                   className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between text-gray-300 hover:bg-gray-800"
                 >
                   <div className="flex items-center gap-3">
-                    
+
                     <span>Lavaggio</span>
                   </div>
                   <span className={`transform transition-transform ${openSubmenu === 'lavaggio' ? 'rotate-180' : ''}`}>▼</span>
@@ -136,11 +134,10 @@ export default function AdminDashboard() {
                         setActiveTab('carwash')
                         setMobileMenuOpen(false)
                       }}
-                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${
-                        activeTab === 'carwash'
-                          ? 'bg-dr7-gold text-black font-semibold'
-                          : 'text-gray-300 hover:bg-gray-800'
-                      }`}
+                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${activeTab === 'carwash'
+                        ? 'bg-dr7-gold text-black font-semibold'
+                        : 'text-gray-300 hover:bg-gray-800'
+                        }`}
                     >
                       Prenotazioni
                     </button>
@@ -149,11 +146,10 @@ export default function AdminDashboard() {
                         setActiveTab('carwash-calendar')
                         setMobileMenuOpen(false)
                       }}
-                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${
-                        activeTab === 'carwash-calendar'
-                          ? 'bg-dr7-gold text-black font-semibold'
-                          : 'text-gray-300 hover:bg-gray-800'
-                      }`}
+                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${activeTab === 'carwash-calendar'
+                        ? 'bg-dr7-gold text-black font-semibold'
+                        : 'text-gray-300 hover:bg-gray-800'
+                        }`}
                     >
                       Calendario
                     </button>
@@ -168,7 +164,7 @@ export default function AdminDashboard() {
                   className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between text-gray-300 hover:bg-gray-800"
                 >
                   <div className="flex items-center gap-3">
-                    
+
                     <span>Meccanica</span>
                   </div>
                   <span className={`transform transition-transform ${openSubmenu === 'meccanica' ? 'rotate-180' : ''}`}>▼</span>
@@ -180,11 +176,10 @@ export default function AdminDashboard() {
                         setActiveTab('mechanical')
                         setMobileMenuOpen(false)
                       }}
-                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${
-                        activeTab === 'mechanical'
-                          ? 'bg-dr7-gold text-black font-semibold'
-                          : 'text-gray-300 hover:bg-gray-800'
-                      }`}
+                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${activeTab === 'mechanical'
+                        ? 'bg-dr7-gold text-black font-semibold'
+                        : 'text-gray-300 hover:bg-gray-800'
+                        }`}
                     >
                       Prenotazioni
                     </button>
@@ -193,11 +188,10 @@ export default function AdminDashboard() {
                         setActiveTab('mechanical-calendar')
                         setMobileMenuOpen(false)
                       }}
-                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${
-                        activeTab === 'mechanical-calendar'
-                          ? 'bg-dr7-gold text-black font-semibold'
-                          : 'text-gray-300 hover:bg-gray-800'
-                      }`}
+                      className={`w-full text-left px-4 py-2 rounded-lg mb-1 transition-colors ${activeTab === 'mechanical-calendar'
+                        ? 'bg-dr7-gold text-black font-semibold'
+                        : 'text-gray-300 hover:bg-gray-800'
+                        }`}
                     >
                       Calendario
                     </button>
@@ -221,11 +215,10 @@ export default function AdminDashboard() {
                     setActiveTab(tab.id as TabType)
                     setMobileMenuOpen(false)
                   }}
-                  className={`w-full text-left px-4 py-3 rounded-lg mb-1 transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-dr7-gold text-black font-semibold'
-                      : 'text-gray-300 hover:bg-gray-800'
-                  }`}
+                  className={`w-full text-left px-4 py-3 rounded-lg mb-1 transition-colors ${activeTab === tab.id
+                    ? 'bg-dr7-gold text-black font-semibold'
+                    : 'text-gray-300 hover:bg-gray-800'
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -243,11 +236,10 @@ export default function AdminDashboard() {
               {/* Noleggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${
-                    activeTab === 'reservations' || activeTab === 'calendar'
-                      ? 'border-white text-white'
-                      : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                  }`}
+                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar'
+                    ? 'border-white text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                    }`}
                 >
                   Noleggio
                   <span className="text-xs">▼</span>
@@ -255,17 +247,15 @@ export default function AdminDashboard() {
                 <div className="absolute left-0 mt-0 w-48 bg-gray-900 border border-gray-700 rounded-b-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('reservations')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${
-                      activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
-                    }`}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                      }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-lg ${
-                      activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
-                    }`}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-lg ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                      }`}
                   >
                     Calendario
                   </button>
@@ -275,11 +265,10 @@ export default function AdminDashboard() {
               {/* Lavaggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${
-                    activeTab === 'carwash' || activeTab === 'carwash-calendar'
-                      ? 'border-white text-white'
-                      : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                  }`}
+                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'carwash' || activeTab === 'carwash-calendar'
+                    ? 'border-white text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                    }`}
                 >
                   Lavaggio
                   <span className="text-xs">▼</span>
@@ -287,17 +276,15 @@ export default function AdminDashboard() {
                 <div className="absolute left-0 mt-0 w-48 bg-gray-900 border border-gray-700 rounded-b-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('carwash')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${
-                      activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
-                    }`}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                      }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('carwash-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-lg ${
-                      activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
-                    }`}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-lg ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                      }`}
                   >
                     Calendario
                   </button>
@@ -307,11 +294,10 @@ export default function AdminDashboard() {
               {/* Meccanica Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${
-                    activeTab === 'mechanical' || activeTab === 'mechanical-calendar'
-                      ? 'border-white text-white'
-                      : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                  }`}
+                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'mechanical' || activeTab === 'mechanical-calendar'
+                    ? 'border-white text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                    }`}
                 >
                   Meccanica
                   <span className="text-xs">▼</span>
@@ -319,17 +305,15 @@ export default function AdminDashboard() {
                 <div className="absolute left-0 mt-0 w-48 bg-gray-900 border border-gray-700 rounded-b-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('mechanical')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${
-                      activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
-                    }`}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                      }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('mechanical-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-lg ${
-                      activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
-                    }`}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-lg ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                      }`}
                   >
                     Calendario
                   </button>
@@ -339,71 +323,64 @@ export default function AdminDashboard() {
               {/* Other menu items */}
               <button
                 onClick={() => setActiveTab('unpaid')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === 'unpaid'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                }`}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'unpaid'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
               >
                 Da Saldare
               </button>
               <button
                 onClick={() => setActiveTab('documents-verification')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === 'documents-verification'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                }`}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'documents-verification'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
               >
                 Verifica Documenti
               </button>
               <button
                 onClick={() => setActiveTab('customers')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === 'customers'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                }`}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'customers'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
               >
                 Clienti
               </button>
               <button
                 onClick={() => setActiveTab('vehicles')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === 'vehicles'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                }`}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'vehicles'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
               >
                 Veicoli
               </button>
               <button
                 onClick={() => setActiveTab('lotteria')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === 'lotteria'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                }`}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'lotteria'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
               >
                 Lotteria
               </button>
               <button
                 onClick={() => setActiveTab('contratto')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === 'contratto'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                }`}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
               >
                 Contratti
               </button>
               <button
                 onClick={() => setActiveTab('fattura')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === 'fattura'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
-                }`}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
               >
                 Fatture
               </button>
