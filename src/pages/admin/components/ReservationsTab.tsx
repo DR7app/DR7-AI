@@ -433,11 +433,23 @@ export default function ReservationsTab() {
         loadData()
 
         // Ask if they want to email it immediately
-        if (confirm('Contratto generato con successo! Vuoi inviare l\'email al cliente ora?')) {
-          const subject = `Contratto Noleggio DR7 - ${booking.vehicle_name}`
-          const body = `Gentile ${booking.customer_name},\n\nEcco il link al tuo contratto di noleggio:\n${data.url}\n\nGrazie per aver scelto DR7 Empire.`
-          const mailtoLink = `mailto:${booking.customer_email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-          window.location.href = mailtoLink
+        if (confirm('Contratto generato con successo! Vuoi inviare l\'email al cliente ora (con PDF allegato)?')) {
+          try {
+            const emailRes = await fetch('/.netlify/functions/send-contract-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId: booking.id })
+            })
+            const emailData = await emailRes.json()
+            if (emailRes.ok) {
+              alert('✅ Email inviata con successo!')
+            } else {
+              alert('⚠️ Errore invio email: ' + (emailData.error || 'Errore sconosciuto'))
+            }
+          } catch (e: any) {
+            console.error('Email handling error:', e)
+            alert('Errore invio email: ' + e.message)
+          }
         }
       } else {
         alert('Contratto generato, ma URL non disponibile.')
