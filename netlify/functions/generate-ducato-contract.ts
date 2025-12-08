@@ -7,12 +7,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// Helper to fetch image buffer
-async function fetchImage(url: string): Promise<ArrayBuffer> {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`Failed to fetch image: ${url}`)
-    return await response.arrayBuffer()
-}
+import { contractPages } from './contract-assets'
+
+// 5. Load Pages
+// Use embedded Base64 images to avoid 403/502 Network errors
+const pageUrls = contractPages
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -95,20 +94,9 @@ export const handler: Handler = async (event) => {
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
         // 5. Load Pages
-        // Hardcode production URL to avoid localhost issues in Netlify runtime
-        const siteUrl = 'https://dr7-empire-admin.netlify.app'
-        console.log(`[generate-ducato-contract] Fetching images from: ${siteUrl}`)
-
-        const pageUrls = [
-            `${siteUrl}/contract_templates/ducato/page_1.png`,
-            `${siteUrl}/contract_templates/ducato/page_2.png`,
-            `${siteUrl}/contract_templates/ducato/page_3.png`,
-            `${siteUrl}/contract_templates/ducato/page_4.png`
-        ]
-
         for (let i = 0; i < pageUrls.length; i++) {
-            const imgBuffer = await fetchImage(pageUrls[i])
-            const img = await pdfDoc.embedPng(imgBuffer)
+            // Already Base64, no need to fetch
+            const img = await pdfDoc.embedPng(pageUrls[i])
             const page = pdfDoc.addPage([img.width, img.height])
             const { height } = page.getSize()
 
