@@ -131,18 +131,19 @@ export const handler: Handler = async (event) => {
             'CodiceFiscale': customer?.codice_fiscale || '',
 
             // Expanded Customer Fields
-            'CustomerCity': customer?.citta || '',
-            'CustomerProvince': customer?.provincia || '',
+            'CustomerCity': customer?.citta || customer?.citta_residenza || '',
+            'CustomerProvince': customer?.provincia || customer?.provincia_residenza || '',
             'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
             'CustomerBirthCity': customer?.luogo_nascita || '',
-            'CustomerBirthProvince': customer?.provincia_nascita || '',
-            'CustomerGender': customer?.sesso || '',
+            'CustomerBirthProvince': customer?.provincia_nascita || customer?.metadata?.provincia_nascita || '',
+            'CustomerGender': customer?.sesso || customer?.metadata?.sesso || '',
+            'CustomerAddress': `${clientAddress} ${customer?.codice_postale || ''}`.trim(),
 
             // License Fields
-            'LicenseType': customer?.tipo_patente || 'B',
-            'LicenseIssuedBy': customer?.ente_rilascio_patente || '',
-            'LicenseIssueDate': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : '',
-            'LicenseExpiryDate': customer?.data_scadenza_patente ? new Date(customer.data_scadenza_patente).toLocaleDateString('it-IT') : '',
+            'LicenseType': customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B',
+            'LicenseIssuedBy': customer?.ente_rilascio_patente || customer?.metadata?.patente?.ente || '',
+            'LicenseIssueDate': (customer?.data_rilascio_patente || customer?.metadata?.patente?.rilascio) ? new Date(customer?.data_rilascio_patente || customer?.metadata?.patente?.rilascio).toLocaleDateString('it-IT') : '',
+            'LicenseExpiryDate': (customer?.data_scadenza_patente || customer?.metadata?.patente?.scadenza) ? new Date(customer?.data_scadenza_patente || customer?.metadata?.patente?.scadenza).toLocaleDateString('it-IT') : '',
 
             // Vehicle Fields
             'VehicleBrand': booking.vehicle_make || '', // Assuming vehicle_make exists or needs fetch
