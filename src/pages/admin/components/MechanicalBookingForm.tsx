@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import NewClientModal from './NewClientModal'
 
 interface Customer {
     id: string
@@ -78,7 +79,7 @@ const generateTimeSlots = () => {
 const TIME_SLOTS = generateTimeSlots()
 
 export default function MechanicalBookingForm({ initialData, customers, onSave, onCancel, editingId }: MechanicalBookingFormProps) {
-    const [newCustomerMode, setNewCustomerMode] = useState(false)
+    const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false)
     const [customerSearchQuery, setCustomerSearchQuery] = useState('')
 
     const [formData, setFormData] = useState({
@@ -88,27 +89,9 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
         appointment_date: '',
         appointment_time: '',
         price_total: 0,
+        amount_paid: 0,
         payment_status: 'paid',
         notes: ''
-    })
-
-    const [newCustomerData, setNewCustomerData] = useState({
-        // Global fields
-        nazione: 'Italia',
-        telefono: '',
-        email: '',
-        // Persona Fisica fields
-        nome: '',
-        cognome: '',
-        codice_fiscale: '',
-        data_nascita: '',
-        luogo_nascita: '',
-        indirizzo: '',
-        numero_civico: '',
-        codice_postale: '',
-        citta_residenza: '',
-        provincia_residenza: '',
-        pec: ''
     })
 
     useEffect(() => {
@@ -125,14 +108,11 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     appointment_date: initialData.appointment_date ? initialData.appointment_date.split('T')[0] : '',
                     appointment_time: initialData.appointment_time || '',
                     price_total: initialData.price_total ? initialData.price_total / 100 : 0, // Convert from cents
+                    amount_paid: initialData.booking_details?.amountPaid ? initialData.booking_details.amountPaid / 100 : 0, // Convert from cents
                     payment_status: initialData.payment_status || 'paid',
                     notes: initialData.booking_details?.notes || ''
                 })
 
-                // NOTE: We might not have the customer_id in initialData if it comes from the calendar view 
-                // which might return a subset of fields. However, the calendar view usually fetches * from bookings.
-                // Let's assume initialData has what we need, or we need to be careful about customer_id.
-                // If initialData has customer_id (from booking_details or direct column), use it.
                 if (initialData.booking_details?.customer?.customerId) {
                     setFormData(prev => ({ ...prev, customer_id: initialData.booking_details.customer.customerId }))
                 }
@@ -143,46 +123,9 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         try {
-            let customerId = formData.customer_id
+            const customerId = formData.customer_id
 
-            // Create new customer if needed in customers_extended
-            if (newCustomerMode) {
-                const customerData: any = {
-                    tipo_cliente: 'persona_fisica',
-                    nazione: newCustomerData.nazione,
-                    email: newCustomerData.email || null,
-                    telefono: newCustomerData.telefono || null,
-                    nome: newCustomerData.nome,
-                    cognome: newCustomerData.cognome,
-                    codice_fiscale: newCustomerData.codice_fiscale,
-                    data_nascita: newCustomerData.data_nascita || null,
-                    luogo_nascita: newCustomerData.luogo_nascita || null,
-                    indirizzo: newCustomerData.indirizzo || null,
-                    numero_civico: newCustomerData.numero_civico || null,
-                    codice_postale: newCustomerData.codice_postale,
-                    citta_residenza: newCustomerData.citta_residenza,
-                    provincia_residenza: newCustomerData.provincia_residenza,
-                    pec: newCustomerData.pec || null,
-                    source: 'admin',
-                    created_at: new Date().toISOString()
-                }
-
-                const { data: newCustomer, error: customerError } = await supabase
-                    .from('customers_extended')
-                    .insert([customerData])
-                    .select()
-                    .single()
-
-                if (customerError) throw customerError
-                customerId = newCustomer.id
-            }
-
-            const customerInfo = newCustomerMode ? {
-                ...newCustomerData,
-                id: customerId,
-                full_name: `${newCustomerData.nome} ${newCustomerData.cognome}`,
-                phone: newCustomerData.telefono
-            } : customers.find(c => c.id === customerId)
+            const customerInfo = customers.find(c => c.id === customerId)
 
             const bookingData = {
                 user_id: null,
@@ -213,6 +156,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     },
                     vehicleInfo: formData.vehicle_info,
                     notes: formData.notes || null,
+                    amountPaid: Math.round(formData.amount_paid * 100),
                     source: 'admin_manual'
                 }
             }
@@ -306,6 +250,14 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
         c.phone?.toLowerCase().includes(customerSearchQuery.toLowerCase())
     )
 
+    const handleClientCreated = (newClient: any) => {
+        if (newClient?.id) {
+            setFormData(prev => ({ ...prev, customer_id: newClient.id }))
+            setCustomerSearchQuery(newClient.nome + ' ' + newClient.cognome)
+        }
+        setIsNewClientModalOpen(false)
+    }
+
     return (
         <div className="bg-gray-900 rounded-xl w-full border border-gray-700">
             <div className="p-6 border-b border-gray-800 flex justify-between items-center">
@@ -324,25 +276,9 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 {/* Customer Selection */}
                 <div>
                     <label className="block text-white font-semibold mb-3">Cliente</label>
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                        <button
-                            type="button"
-                            onClick={() => setNewCustomerMode(false)}
-                            className={`px-4 py-2 rounded-lg font-medium ${!newCustomerMode ? 'bg-dr7-gold text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-                        >
-                            Cliente Esistente
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setNewCustomerMode(true)}
-                            className={`px-4 py-2 rounded-lg font-medium ${newCustomerMode ? 'bg-dr7-gold text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-                        >
-                            Nuovo Cliente
-                        </button>
-                    </div>
-
-                    {!newCustomerMode ? (
-                        <div>
+                    <div className="flex gap-4 mb-4 items-end">
+                        <div className="flex-1">
+                            <label className="text-xs text-gray-400 mb-1 block">Cerca e Seleziona Cliente</label>
                             <input
                                 type="text"
                                 placeholder="Cerca cliente..."
@@ -364,173 +300,16 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                                 ))}
                             </select>
                         </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Nome *</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newCustomerData.nome}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, nome: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Cognome *</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newCustomerData.cognome}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Codice Fiscale *</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newCustomerData.codice_fiscale}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                        maxLength={16}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Data di Nascita</label>
-                                    <input
-                                        type="date"
-                                        value={newCustomerData.data_nascita}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Luogo di Nascita</label>
-                                    <input
-                                        type="text"
-                                        value={newCustomerData.luogo_nascita}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Nazione *</label>
-                                    <select
-                                        required
-                                        value={newCustomerData.nazione}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, nazione: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    >
-                                        <option value="Italia">Italia</option>
-                                        <option value="Francia">Francia</option>
-                                        <option value="Germania">Germania</option>
-                                        <option value="Spagna">Spagna</option>
-                                        <option value="Regno Unito">Regno Unito</option>
-                                        <option value="Altro">Altro</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Email *</label>
-                                    <input
-                                        type="email"
-                                        required
-                                        value={newCustomerData.email}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Telefono *</label>
-                                    <input
-                                        type="tel"
-                                        required
-                                        value={newCustomerData.telefono}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, telefono: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Indirizzo</label>
-                                    <input
-                                        type="text"
-                                        value={newCustomerData.indirizzo}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, indirizzo: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Numero Civico</label>
-                                    <input
-                                        type="text"
-                                        value={newCustomerData.numero_civico}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, numero_civico: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Città di Residenza *</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newCustomerData.citta_residenza}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, citta_residenza: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">CAP *</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newCustomerData.codice_postale}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_postale: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                        maxLength={5}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-white font-semibold mb-2">Provincia *</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newCustomerData.provincia_residenza}
-                                        onChange={(e) => setNewCustomerData({ ...newCustomerData, provincia_residenza: e.target.value.toUpperCase() })}
-                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                        maxLength={2}
-                                        placeholder="ES: CA"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-white font-semibold mb-2">PEC (opzionale)</label>
-                                <input
-                                    type="email"
-                                    value={newCustomerData.pec}
-                                    onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })}
-                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                                />
-                            </div>
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setIsNewClientModalOpen(true)}
+                                className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-md transition-colors h-[42px] mb-[1px]"
+                            >
+                                + Nuovo
+                            </button>
                         </div>
-                    )}
+                    </div>
                 </div>
 
                 {/* Service Selection */}
@@ -600,15 +379,25 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 </div>
 
                 {/* Price & Payment Status */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-white font-semibold mb-2">Prezzo (€)</label>
+                        <label className="block text-white font-semibold mb-2">Prezzo Totale (€)</label>
                         <input
                             type="number"
                             step="0.01"
                             required
                             value={formData.price_total}
                             onChange={(e) => setFormData({ ...formData, price_total: parseFloat(e.target.value) })}
+                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white font-bold text-lg"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-white font-semibold mb-2">Importo Pagato (€)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={formData.amount_paid}
+                            onChange={(e) => setFormData({ ...formData, amount_paid: parseFloat(e.target.value) })}
                             className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
                         />
                     </div>
@@ -623,6 +412,12 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             <option value="pending">Da Saldare</option>
                             <option value="unpaid">Non Pagato</option>
                         </select>
+                        <div className="mt-2 text-right">
+                            <span className="text-gray-400 text-sm">Rimanente: </span>
+                            <span className={`font-bold ${formData.price_total - formData.amount_paid > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                €{(formData.price_total - formData.amount_paid).toFixed(2)}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -654,6 +449,12 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     </button>
                 </div>
             </form>
+
+            <NewClientModal
+                isOpen={isNewClientModalOpen}
+                onClose={() => setIsNewClientModalOpen(false)}
+                onClientCreated={handleClientCreated}
+            />
         </div>
     )
 }
