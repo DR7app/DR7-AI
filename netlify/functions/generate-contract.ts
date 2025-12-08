@@ -82,10 +82,19 @@ export const handler: Handler = async (event) => {
 
         if (templateError || !templateData) {
             console.error(`[generate-contract] Template fetch failed:`, templateError)
+
+            // Debug: List files in the bucket to help user debug
+            const { data: fileList, error: listError } = await supabase.storage
+                .from('contracts')
+                .list('templates')
+
+            const filesFound = fileList ? fileList.map(f => f.name).join(', ') : 'None'
+            console.log(`[generate-contract] Files found in 'templates': ${filesFound}`)
+
             return {
                 statusCode: 500,
                 body: JSON.stringify({
-                    error: `Failed to load contract template. Please ensure 'templates/master_contract.pdf' exists in the 'contracts' storage bucket.`
+                    error: `Failed to load contract template. Please ensure 'templates/master_contract.pdf' exists in the 'contracts' storage bucket. Files found in 'templates': ${filesFound}. Supabase Error: ${templateError?.message}`
                 })
             }
         }
