@@ -148,6 +148,9 @@ export const handler: Handler = async (event) => {
             'VehicleBrand': booking.vehicle_make || '', // Assuming vehicle_make exists or needs fetch
             'VehicleColor': booking.vehicle_color || '',
             'VehicleFuel': booking.vehicle_fuel || '',
+            'VehicleSeats': booking.booking_details?.vehicle?.seats || '',
+            'VehicleFuelLevel': '', // Tacche autonomia - usually filled by hand or at pickup
+            'VehicleKMRange': '',   // KM autonomia
 
             // Rental Specifics
             'PickupLocation': booking.pickup_location || 'Sede',
