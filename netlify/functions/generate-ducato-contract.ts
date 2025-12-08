@@ -7,11 +7,30 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-import { contractPages } from './contract-assets'
+// Helper to fetch image buffer with retry logic
+async function fetchImage(url: string): Promise<ArrayBuffer> {
+    console.log(`[generate-ducato-contract] Fetching image: ${url}`)
+    const response = await fetch(url, {
+        headers: {
+            'User-Agent': 'Netlify-Function'
+        }
+    })
+    if (!response.ok) {
+        throw new Error(`Failed to fetch image ${url}: ${response.status} ${response.statusText}`)
+    }
+    return await response.arrayBuffer()
+}
 
 // 5. Load Pages
-// Use embedded Base64 images to avoid 403/502 Network errors
-const pageUrls = contractPages
+// Use deployed URLs for contract pages
+const pageUrls = [
+    'https://assets.ducato.rent/contract-pages/ducato-contract-page-1.png',
+    'https://assets.ducato.rent/contract-pages/ducato-contract-page-2.png',
+    'https://assets.ducato.rent/contract-pages/ducato-contract-page-3.png',
+    'https://assets.ducato.rent/contract-pages/ducato-contract-page-4.png',
+    'https://assets.ducato.rent/contract-pages/ducato-contract-page-5.png',
+    'https://assets.ducato.rent/contract-pages/ducato-contract-page-6.png',
+]
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -113,10 +132,21 @@ export const handler: Handler = async (event) => {
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-        // 5. Load Pages
+
+        // 5. Load Pages from deployed site
+        const siteUrl = process.env.URL || 'https://dr7-empire-admin.netlify.app'
+        console.log(`[generate-ducato-contract] Using site URL: ${siteUrl}`)
+
+        const pageUrls = [
+            `${siteUrl}/contract_templates/ducato/page_1.png`,
+            `${siteUrl}/contract_templates/ducato/page_2.png`,
+            `${siteUrl}/contract_templates/ducato/page_3.png`,
+            `${siteUrl}/contract_templates/ducato/page_4.png`
+        ]
+
         for (let i = 0; i < pageUrls.length; i++) {
-            // Already Base64, no need to fetch
-            const img = await pdfDoc.embedPng(pageUrls[i])
+            const imgBuffer = await fetchImage(pageUrls[i])
+            const img = await pdfDoc.embedPng(imgBuffer)
             const page = pdfDoc.addPage([img.width, img.height])
             const { height } = page.getSize()
 
