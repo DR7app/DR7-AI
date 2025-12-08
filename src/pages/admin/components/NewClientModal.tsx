@@ -154,11 +154,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         pec_persona: initialData.pec || '',
 
         // Patente
-        patente_numero: metadata.patente?.numero || initialData.driver_license_number || initialData.patente || '',
-        patente_tipo: metadata.patente?.tipo || '',
-        patente_ente: metadata.patente?.ente || '',
-        patente_rilascio: metadata.patente?.rilascio || '',
-        patente_scadenza: metadata.patente?.scadenza || '',
+        patente_numero: metadata.patente?.numero || initialData.numero_patente || initialData.driver_license_number || initialData.patente || '',
+        patente_tipo: metadata.patente?.tipo || initialData.tipo_patente || '',
+        patente_ente: metadata.patente?.ente || initialData.emessa_da || '',
+        patente_rilascio: metadata.patente?.rilascio || initialData.data_rilascio_patente || '',
+        patente_scadenza: metadata.patente?.scadenza || initialData.scadenza_patente || '',
 
         // Azienda
         denominazione: initialData.ragione_sociale || initialData.denominazione || '',
@@ -355,6 +355,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.citta_residenza) customerData.citta_residenza = formData.citta_residenza
         if (formData.provincia_residenza) customerData.provincia_residenza = formData.provincia_residenza
         if (formData.pec_persona) customerData.pec = formData.pec_persona
+
+        if (formData.patente_numero) {
+          customerData.patente = formData.patente_numero.toUpperCase()
+          customerData.numero_patente = formData.patente_numero.toUpperCase()
+        }
+        if (formData.patente_rilascio) customerData.data_rilascio_patente = formData.patente_rilascio
+        if (formData.patente_scadenza) customerData.scadenza_patente = formData.patente_scadenza
+        if (formData.patente_ente) customerData.emessa_da = formData.patente_ente
 
         // Metadata
         customerData.metadata = {

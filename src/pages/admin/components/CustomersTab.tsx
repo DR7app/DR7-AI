@@ -226,6 +226,11 @@ export default function CustomersTab() {
             cognome: customer.cognome,
             codice_fiscale: customer.codice_fiscale,
             patente: customer.patente,
+            numero_patente: customer.numero_patente, // Ensure all variants
+            data_rilascio_patente: customer.data_rilascio_patente,
+            scadenza_patente: customer.scadenza_patente,
+            emessa_da: customer.emessa_da,
+            tipo_patente: customer.tipo_patente,
             indirizzo: customer.indirizzo,
             pec: customer.pec,
             // Azienda
