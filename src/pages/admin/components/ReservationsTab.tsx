@@ -73,6 +73,7 @@ interface Booking {
   service_name?: string
   appointment_date?: string
   appointment_time?: string
+  contract_url?: string
 }
 
 // Helper function to calculate car wash end time based on actual service durations
@@ -411,7 +412,8 @@ export default function ReservationsTab() {
 
     setGeneratingContract(true)
     try {
-      const response = await fetch('/.netlify/functions/generate-ducato-contract', {
+      // Use the new generic contract generation function
+      const response = await fetch('/.netlify/functions/generate-contract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id })
@@ -424,13 +426,25 @@ export default function ReservationsTab() {
       }
 
       if (data.url) {
+        // Open the PDF
         window.open(data.url, '_blank')
+
+        // Also reload data to show the contract link in the UI if needed
+        loadData()
+
+        // Ask if they want to email it immediately
+        if (confirm('Contratto generato con successo! Vuoi inviare l\'email al cliente ora?')) {
+          const subject = `Contratto Noleggio DR7 - ${booking.vehicle_name}`
+          const body = `Gentile ${booking.customer_name},\n\nEcco il link al tuo contratto di noleggio:\n${data.url}\n\nGrazie per aver scelto DR7 Empire.`
+          const mailtoLink = `mailto:${booking.customer_email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+          window.location.href = mailtoLink
+        }
       } else {
         alert('Contratto generato, ma URL non disponibile.')
       }
     } catch (error: any) {
       console.error('Error generating contract:', error)
-      alert('Errore nella generazione del contratto: ' + error.message)
+      alert('Errore nella generazione del contratto: ' + error.message + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
     } finally {
       setGeneratingContract(false)
     }
@@ -1496,33 +1510,52 @@ export default function ReservationsTab() {
                     {canViewFinancials ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                   </div>
                   <div className="flex flex-col gap-2">
-                    {booking.status !== 'cancelled' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors whitespace-nowrap"
+                    >
+                      Modifica
+                    </button>
+
+                    {/* Contract Actions */}
+                    {booking.booking_details?.contract_generated_at || booking.contract_url ? (
                       <div className="flex gap-2">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditBooking(booking)
-                          }}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors whitespace-nowrap"
+                          onClick={(e) => { e.stopPropagation(); window.open(booking.contract_url, '_blank') }}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                          title="Visualizza Contratto"
                         >
-                          Modifica
+                          <span>📄</span> PDF
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCancelBooking(booking.id, 'booking')
-                          }}
-                          className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded transition-colors whitespace-nowrap"
+                        <a
+                          href={`mailto:${booking.customer_email || ''}?subject=${encodeURIComponent(`Contratto Noleggio DR7 - ${booking.vehicle_name}`)}&body=${encodeURIComponent(`Gentile Cliente,\n\nEcco il link al tuo contratto di noleggio:\n${booking.contract_url}\n\nGrazie per aver scelto DR7 Empire.`)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                          title="Invia Email"
                         >
-                          Cancella
-                        </button>
+                          <span>✉️</span> Email
+                        </a>
                       </div>
+                    ) : (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
+                        disabled={generatingContract}
+                        className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-gray-300' : 'bg-dr7-gold hover:bg-yellow-600 text-white'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
+                      >
+                        {generatingContract ? 'Generazione...' : '📄 Genera Contratto'}
+                      </button>
+                    )}
+
+                    {booking.status !== 'cancelled' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
+                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded transition-colors whitespace-nowrap"
+                      >
+                        Cancella
+                      </button>
                     )}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteBooking(booking.id, 'booking')
-                      }}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                       className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors whitespace-nowrap w-full"
                     >
                       Elimina

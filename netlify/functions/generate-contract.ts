@@ -1,7 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
-import fetch from 'node-fetch' // Using node-fetch for compatibility
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -20,12 +19,12 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Missing bookingId' }) }
         }
 
-        console.log(`[generate-ducato-contract] Starting for booking ${bookingId}`)
+        console.log(`[generate-contract] Starting for booking ${bookingId}`)
 
         // Check environment variables
         if (!supabaseUrl || !supabaseServiceKey) {
             const error = 'Missing Supabase environment variables'
-            console.error(`[generate-ducato-contract] ${error}`)
+            console.error(`[generate-contract] ${error}`)
             return { statusCode: 500, body: JSON.stringify({ error }) }
         }
 
@@ -38,7 +37,7 @@ export const handler: Handler = async (event) => {
 
         if (bookingError || !booking) {
             const error = `Booking not found: ${bookingError?.message || 'No booking data'}`
-            console.error(`[generate-ducato-contract] ${error}`)
+            console.error(`[generate-contract] ${error}`)
             return { statusCode: 404, body: JSON.stringify({ error }) }
         }
 
@@ -73,39 +72,35 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
-        // 4. Fetch Template
-        // In Netlify functions, we might need to rely on the deployed URL to fetch public assets 
-        // if they are not bundled into the function via specific config.
-        const protocol = event.headers['x-forwarded-proto'] || 'http'
-        const host = event.headers.host
-        const baseUrl = `${protocol}://${host}`
-        const templateUrl = `${baseUrl}/contract_templates/contract_template.pdf`
+        // 4. Fetch Template from Supabase Storage
+        // We look for 'contracts/templates/master_contract.pdf'
+        console.log(`[generate-contract] Fetching template from storage: templates/master_contract.pdf`)
 
-        console.log(`[generate-ducato-contract] Fetching template from ${templateUrl}`)
+        const { data: templateData, error: templateError } = await supabase.storage
+            .from('contracts')
+            .download('templates/master_contract.pdf')
+
+        if (templateError || !templateData) {
+            console.error(`[generate-contract] Template fetch failed:`, templateError)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({
+                    error: `Failed to load contract template. Please ensure 'templates/master_contract.pdf' exists in the 'contracts' storage bucket.`
+                })
+            }
+        }
 
         let pdfDoc: PDFDocument
         try {
-            const templateRes = await fetch(templateUrl)
-            if (!templateRes.ok) {
-                // If template is missing, we could fallback to blank, but better to error so user knows to upload it.
-                throw new Error(`Failed to fetch template: ${templateRes.status} ${templateRes.statusText}`)
-            }
-            const templateBytes = await templateRes.arrayBuffer()
+            const templateBytes = await templateData.arrayBuffer()
             pdfDoc = await PDFDocument.load(templateBytes)
-        } catch (templateError) {
-            console.error(`[generate-ducato-contract] Template fetch/load failed:`, templateError)
-            return { statusCode: 500, body: JSON.stringify({ error: `Failed to load contract template. Please ensure public/contract_templates/contract_template.pdf exists. Detail: ${templateError.message}` }) }
+        } catch (loadError) {
+            console.error(`[generate-contract] PDF Load failed:`, loadError)
+            return { statusCode: 500, body: JSON.stringify({ error: 'Invalid PDF template file.' }) }
         }
 
         // 5. Fill Data
         const form = pdfDoc.getForm()
-        let fields: string[] = []
-        try {
-            fields = form.getFields().map(f => f.getName())
-            console.log(`[generate-ducato-contract] Found fields in PDF:`, fields)
-        } catch (e) {
-            console.log(`[generate-ducato-contract] No form fields found or error reading fields.`)
-        }
 
         // Standardized Data Field Map
         const dataMap: Record<string, string> = {
@@ -126,50 +121,36 @@ export const handler: Handler = async (event) => {
             'TotalAmount': `${(booking.price_total / 100).toFixed(2)}`,
         }
 
-        // 5a. Attempt to fill fields
         let filledFields = 0
         for (const [key, value] of Object.entries(dataMap)) {
             try {
-                const field = form.getTextField(key)
+                // Try to find exact match
+                let field = form.getTextField(key)
+                if (!field) {
+                    // Try lowercase or other variations if needed, but let's stick to exact for now
+                }
+
                 if (field) {
                     field.setText(value)
                     filledFields++
                 }
             } catch (e) {
-                // Field not found in PDF
+                // Field matches might fail if types differ (e.g. checkbox vs text), ignore
             }
         }
 
-        // 5b. Fallback: If no fields matched (or user hasn't added form fields yet),
-        // we write text on the first page as a visual confirmation/fallback.
-        if (filledFields === 0) {
-            const page = pdfDoc.getPages()[0]
-            const { height } = page.getSize()
-            const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-            const drawText = (text: string, x: number, y: number) => {
-                page.drawText(text, { x, y, size: 10, font, color: rgb(0, 0, 0) })
-            }
+        console.log(`[generate-contract] Filled ${filledFields} fields.`)
 
-            // Simple overlay for the placeholder
-            let y = height - 100
-            drawText(`Contract: ${contractNumber}`, 50, y); y -= 15
-            drawText(`Date: ${new Date().toLocaleDateString('it-IT')}`, 50, y); y -= 15
-            drawText(`Customer: ${clientName}`, 50, y); y -= 15
-            drawText(`Vehicle: ${vehicleModel}`, 50, y); y -= 15
-            drawText(`Pickup: ${dataMap.PickupDate} ${dataMap.PickupTime}`, 50, y); y -= 15
-            drawText(`Dropoff: ${dataMap.DropoffDate} ${dataMap.DropoffTime}`, 50, y); y -= 15
-            drawText(`Total: € ${dataMap.TotalAmount}`, 50, y); y -= 15
-            drawText(`(Generated using 9-page template logic)`, 50, y); y -= 15
-        } else {
-            // Flatten if we filled fields
-            try { form.flatten() } catch (e) { }
-        }
+        // If no fields were filled, we might want to warn, but for now we proceed.
+        // We flatten the form to make it read-only
+        try { form.flatten() } catch (e) { }
 
         // 6. Save and Upload
         const pdfBytes = await pdfDoc.save()
-        const fileName = `contratto_${bookingId}_${Date.now()}.pdf`
+        // Save to 'filled' folder to keep things organized
+        const fileName = `filled/contratto_${bookingId}_${Date.now()}.pdf`
 
-        console.log(`[generate-ducato-contract] Uploading PDF to storage: ${fileName}`)
+        console.log(`[generate-contract] Uploading filled PDF to storage: ${fileName}`)
 
         const { error: uploadError } = await supabase.storage
             .from('contracts')
@@ -177,7 +158,7 @@ export const handler: Handler = async (event) => {
 
         if (uploadError) {
             const error = `Storage upload failed: ${uploadError.message}`
-            console.error(`[generate-ducato-contract] ${error}`)
+            console.error(`[generate-contract] ${error}`)
             return { statusCode: 500, body: JSON.stringify({ error }) }
         }
 
@@ -186,7 +167,7 @@ export const handler: Handler = async (event) => {
             .from('contracts')
             .getPublicUrl(fileName)
 
-        // 8. Save to Contracts Table
+        // 8. Save/Update Contracts Table
         const { error: dbError } = await supabase
             .from('contracts')
             .upsert({
@@ -202,7 +183,7 @@ export const handler: Handler = async (event) => {
                 vehicle_name: vehicleModel,
                 rental_start_date: pickupDate.toISOString().split('T')[0],
                 rental_end_date: dropoffDate.toISOString().split('T')[0],
-                daily_rate: 0,
+                daily_rate: 0, // We rely on total amount mostly
                 total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
                 total_amount: booking.price_total / 100,
                 status: 'active',
@@ -210,17 +191,29 @@ export const handler: Handler = async (event) => {
             }, { onConflict: 'booking_id' })
 
         if (dbError) {
-            console.error('[generate-ducato-contract] Failed to sync with contracts table:', dbError)
+            console.error('[generate-contract] Failed to sync with contracts table:', dbError)
         }
 
-        console.log('[generate-ducato-contract] Success:', publicUrl)
+        // 8b. Update Booking with contract URL (optional but good for direct access)
+        await supabase
+            .from('bookings')
+            .update({
+                contract_url: publicUrl,
+                booking_details: {
+                    ...booking.booking_details,
+                    contract_generated_at: new Date().toISOString()
+                }
+            })
+            .eq('id', bookingId)
+
+        console.log('[generate-contract] Success:', publicUrl)
         return {
             statusCode: 200,
             body: JSON.stringify({ success: true, url: publicUrl })
         }
 
     } catch (error: any) {
-        console.error('[generate-ducato-contract] Unexpected error:', error)
+        console.error('[generate-contract] Unexpected error:', error)
         return { statusCode: 500, body: JSON.stringify({ error: error.message, stack: error.stack }) }
     }
 }
