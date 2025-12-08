@@ -27,6 +27,13 @@ export const handler: Handler = async (event) => {
 
         console.log(`[generate-ducato-contract] Starting for booking ${bookingId}`)
 
+        // Check environment variables
+        if (!supabaseUrl || !supabaseServiceKey) {
+            const error = 'Missing Supabase environment variables'
+            console.error(`[generate-ducato-contract] ${error}`)
+            return { statusCode: 500, body: JSON.stringify({ error }) }
+        }
+
         // 1. Fetch Booking Data
         const { data: booking, error: bookingError } = await supabase
             .from('bookings')
@@ -34,12 +41,21 @@ export const handler: Handler = async (event) => {
             .eq('id', bookingId)
             .single()
 
-        if (bookingError || !booking) throw new Error(`Booking not found: ${bookingError?.message}`)
+        if (bookingError || !booking) {
+            const error = `Booking not found: ${bookingError?.message || 'No booking data'}`
+            console.error(`[generate-ducato-contract] ${error}`)
+            return { statusCode: 404, body: JSON.stringify({ error }) }
+        }
+
+        console.log(`[generate-ducato-contract] Booking found:`, booking.vehicle_name)
 
         // 2. Fetch Vehicle Data (for Plate/Model if missing in booking)
         let vehicle = null
         if (booking.vehicle_name) {
-            const { data: vData } = await supabase.from('vehicles').select('*').eq('display_name', booking.vehicle_name).single()
+            const { data: vData, error: vError } = await supabase.from('vehicles').select('*').eq('display_name', booking.vehicle_name).single()
+            if (vError) {
+                console.warn(`[generate-ducato-contract] Vehicle not found: ${vError.message}`)
+            }
             vehicle = vData
         }
 
@@ -68,6 +84,8 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        console.log(`[generate-ducato-contract] Customer found:`, customer ? 'Yes' : 'No')
+
         // Prepare Data Objects
         const clientName = customer?.tipo_cliente === 'azienda' ? customer.denominazione : await (async () => {
             return customer?.nome ? `${customer.nome} ${customer.cognome}` : booking.customer_name
@@ -87,6 +105,8 @@ export const handler: Handler = async (event) => {
 
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
+
+        console.log(`[generate-ducato-contract] Creating PDF for ${clientName}, vehicle ${vehicleModel}`)
 
         // 4. Create PDF
         const pdfDoc = await PDFDocument.create()
@@ -150,16 +170,24 @@ export const handler: Handler = async (event) => {
         const pdfBytes = await pdfDoc.save()
         const fileName = `contratto_${bookingId}_${Date.now()}.pdf`
 
+        console.log(`[generate-ducato-contract] Uploading PDF to storage: ${fileName}`)
+
         const { error: uploadError } = await supabase.storage
             .from('contracts')
             .upload(fileName, pdfBytes, { contentType: 'application/pdf', upsert: true })
 
-        if (uploadError) throw uploadError
+        if (uploadError) {
+            const error = `Storage upload failed: ${uploadError.message}`
+            console.error(`[generate-ducato-contract] ${error}`)
+            return { statusCode: 500, body: JSON.stringify({ error }) }
+        }
 
         // 6. Get Public URL
         const { data: { publicUrl } } = supabase.storage
             .from('contracts')
             .getPublicUrl(fileName)
+
+        console.log(`[generate-ducato-contract] PDF uploaded successfully: ${publicUrl}`)
 
         // 7. Save to Contracts Table (Sync with Admin Panel)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
@@ -187,8 +215,10 @@ export const handler: Handler = async (event) => {
             }, { onConflict: 'booking_id' })
 
         if (dbError) {
+            const error = `Database insert failed: ${dbError.message} (Code: ${dbError.code})`
             console.error('[generate-ducato-contract] Failed to sync with contracts table:', dbError)
-            // Don't fail the request, just log it. The PDF is still valid.
+            console.error('[generate-ducato-contract] Error details:', JSON.stringify(dbError, null, 2))
+            return { statusCode: 500, body: JSON.stringify({ error, details: dbError }) }
         }
 
         console.log('[generate-ducato-contract] PDF generated and synced:', publicUrl)
@@ -198,7 +228,8 @@ export const handler: Handler = async (event) => {
         }
 
     } catch (error: any) {
-        console.error('[generate-ducato-contract] Error:', error)
-        return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+        console.error('[generate-ducato-contract] Unexpected error:', error)
+        console.error('[generate-ducato-contract] Error stack:', error.stack)
+        return { statusCode: 500, body: JSON.stringify({ error: error.message, stack: error.stack }) }
     }
 }
