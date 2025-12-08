@@ -78,6 +78,13 @@ export const handler: Handler = async (event) => {
             console.warn('[generate-contract] WARNING: No customer record found. Contract will be empty.')
         }
 
+        // 2b. Fetch Vehicle Data (to get plate and other details if missing in booking)
+        let vehicleData = null
+        if (booking.vehicle_name) {
+            const { data: vData } = await supabase.from('vehicles').select('*').eq('display_name', booking.vehicle_name).maybeSingle()
+            vehicleData = vData
+        }
+
         // 3. Prepare Data
         const clientName = customer?.tipo_cliente === 'azienda' ? customer.denominazione : await (async () => {
             return customer?.nome ? `${customer.nome} ${customer.cognome}` : booking.customer_name
@@ -85,7 +92,14 @@ export const handler: Handler = async (event) => {
         const clientAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
         const clientVat = customer?.tipo_cliente === 'azienda' ? customer.partita_iva : customer?.codice_fiscale
         const driverLicense = customer?.patente || customer?.driver_license_number || ''
-        const vehicleModel = booking.vehicle_name
+
+        // Vehicle Data Prep
+        const vehicleName = vehicleData?.display_name || booking.vehicle_name || ''
+        const vehiclePlate = vehicleData?.plate || booking.vehicle_plate || ''
+        // Future proofing: check metadata for potential future fields
+        const vehicleColor = vehicleData?.metadata?.color || booking.vehicle_color || ''
+        const vehicleFuel = vehicleData?.metadata?.fuel || booking.vehicle_fuel || ''
+
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
@@ -150,10 +164,12 @@ export const handler: Handler = async (event) => {
             'DriverLicenseExpiryDate': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
 
             // Vehicle Fields
-            'VehicleBrand': booking.vehicle_make || '',
-            'VehicleColor': booking.vehicle_color || '',
-            'VehicleFuel': booking.vehicle_fuel || '',
-            'VehicleSeats': booking.booking_details?.vehicle?.seats || '',
+            'VehicleBrand': vehicleName,
+            'VehicleModel': '', // Name usually includes model
+            'VehiclePlate': vehiclePlate,
+            'VehicleColor': vehicleColor,
+            'VehicleFuel': vehicleFuel,
+            'VehicleSeats': vehicleData?.metadata?.seats || booking.booking_details?.vehicle?.seats || '',
             'VehicleFuelLevel': '',
             'VehicleKMRange': '',
 
