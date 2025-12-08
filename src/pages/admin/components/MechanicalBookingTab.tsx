@@ -80,26 +80,17 @@ export default function MechanicalBookingTab() {
     if (!confirm('Sei sicuro di voler eliminare questa prenotazione?')) return
 
     try {
-      // First, get the booking to check if it has a Google Calendar event ID
-      const { data: booking } = await supabase
-        .from('bookings')
-        .select('google_event_id')
-        .eq('id', id)
-        .single()
-
-      // Try to delete from Google Calendar if event ID exists
-      if (booking?.google_event_id) {
-        try {
-          await fetch('/.netlify/functions/delete-calendar-event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ eventId: booking.google_event_id }),
-          })
-          console.log('Google Calendar event deleted:', booking.google_event_id)
-        } catch (calError) {
-          console.warn('Failed to delete from Google Calendar:', calError)
-          // Continue with database deletion even if Google Calendar deletion fails
-        }
+      // Try to delete from Google Calendar
+      try {
+        await fetch('/.netlify/functions/delete-calendar-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: id }),
+        })
+        console.log('Google Calendar event deletion requested for booking:', id)
+      } catch (calError) {
+        console.warn('Failed to request deletion from Google Calendar:', calError)
+        // Continue with database deletion even if Google Calendar deletion fails
       }
 
       // Delete from database

@@ -234,26 +234,21 @@ export default function CarWashBookingsTab() {
     }
 
     try {
-      // First, get the booking to check if it has a Google Calendar event ID
-      const { data: booking } = await supabase
-        .from('bookings')
-        .select('google_event_id')
-        .eq('id', bookingId)
-        .single()
-
-      // Try to delete from Google Calendar if event ID exists
-      if (booking?.google_event_id) {
-        try {
-          await fetch('/.netlify/functions/delete-calendar-event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ eventId: booking.google_event_id }),
-          })
-          console.log('Google Calendar event deleted:', booking.google_event_id)
-        } catch (calError) {
-          console.warn('Failed to delete from Google Calendar:', calError)
-          // Continue with database deletion even if Google Calendar deletion fails
-        }
+      // Try to delete from Google Calendar
+      try {
+        await fetch('/.netlify/functions/delete-calendar-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: bookingId,
+            customerName: customerName,
+            vehicleName: 'Car Wash'
+          }),
+        })
+        console.log('Google Calendar event deletion requested for booking:', bookingId)
+      } catch (calError) {
+        console.warn('Failed to delete from Google Calendar:', calError)
+        // Continue with database deletion even if Google Calendar deletion fails
       }
 
       // Delete from database
@@ -622,10 +617,10 @@ export default function CarWashBookingsTab() {
 
       // If it's a conflict error even after admin override, show more details
       if (errorMessage.includes('Car wash slot already booked') ||
-          errorMessage.includes('already booked') ||
-          errorMessage.includes('Slot già occupato') ||
-          errorMessage.includes('duplicate') ||
-          errorMessage.includes('constraint')) {
+        errorMessage.includes('already booked') ||
+        errorMessage.includes('Slot già occupato') ||
+        errorMessage.includes('duplicate') ||
+        errorMessage.includes('constraint')) {
         alert(
           `❌ ERRORE: Impossibile creare la prenotazione\n\n` +
           `Dettaglio tecnico: ${errorMessage}\n\n` +
@@ -685,22 +680,20 @@ export default function CarWashBookingsTab() {
                     setNewCustomerMode(false)
                     setCustomerSearchQuery('')
                   }}
-                  className={`px-4 py-2 rounded ${
-                    !newCustomerMode
+                  className={`px-4 py-2 rounded ${!newCustomerMode
                       ? 'bg-dr7-gold text-black font-semibold'
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                    }`}
                 >
                   Seleziona Cliente
                 </button>
                 <button
                   type="button"
                   onClick={() => setNewCustomerMode(true)}
-                  className={`px-4 py-2 rounded ${
-                    newCustomerMode
+                  className={`px-4 py-2 rounded ${newCustomerMode
                       ? 'bg-dr7-gold text-black font-semibold'
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                    }`}
                 >
                   Nuovo Cliente
                 </button>
@@ -1030,11 +1023,10 @@ export default function CarWashBookingsTab() {
               <button
                 type="submit"
                 disabled={submitting}
-                className={`px-4 py-2 font-semibold rounded ${
-                  submitting
+                className={`px-4 py-2 font-semibold rounded ${submitting
                     ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                     : 'bg-dr7-gold hover:bg-yellow-500 text-black'
-                }`}
+                  }`}
               >
                 {submitting ? 'Creazione in corso...' : 'Crea Prenotazione'}
               </button>
@@ -1088,11 +1080,11 @@ export default function CarWashBookingsTab() {
                       <div>
                         {booking.appointment_date
                           ? new Date(booking.appointment_date).toLocaleDateString('it-IT', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              timeZone: 'Europe/Rome'
-                            })
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            timeZone: 'Europe/Rome'
+                          })
                           : '-'}
                       </div>
                       <div className="text-xs text-gray-400">
@@ -1104,11 +1096,10 @@ export default function CarWashBookingsTab() {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          booking.payment_status === 'completed' || booking.payment_status === 'paid'
+                        className={`px-2 py-1 rounded text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid'
                             ? 'bg-green-900 text-green-300'
                             : 'bg-red-900 text-red-300'
-                        }`}
+                          }`}
                       >
                         {booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
                       </span>
@@ -1171,7 +1162,7 @@ export default function CarWashBookingsTab() {
                 <input
                   type="text"
                   value={editingBooking.customer_name}
-                  onChange={(e) => setEditingBooking({...editingBooking, customer_name: e.target.value})}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, customer_name: e.target.value })}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                 />
               </div>
@@ -1182,7 +1173,7 @@ export default function CarWashBookingsTab() {
                   <input
                     type="email"
                     value={editingBooking.customer_email || ''}
-                    onChange={(e) => setEditingBooking({...editingBooking, customer_email: e.target.value})}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, customer_email: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                   />
                 </div>
@@ -1191,7 +1182,7 @@ export default function CarWashBookingsTab() {
                   <input
                     type="tel"
                     value={editingBooking.customer_phone || ''}
-                    onChange={(e) => setEditingBooking({...editingBooking, customer_phone: e.target.value})}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, customer_phone: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                   />
                 </div>
@@ -1202,7 +1193,7 @@ export default function CarWashBookingsTab() {
                 <input
                   type="text"
                   value={editingBooking.service_name}
-                  onChange={(e) => setEditingBooking({...editingBooking, service_name: e.target.value})}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, service_name: e.target.value })}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                 />
               </div>
@@ -1213,7 +1204,7 @@ export default function CarWashBookingsTab() {
                   <input
                     type="date"
                     value={editingBooking.appointment_date}
-                    onChange={(e) => setEditingBooking({...editingBooking, appointment_date: e.target.value})}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                   />
                 </div>
@@ -1222,7 +1213,7 @@ export default function CarWashBookingsTab() {
                   <input
                     type="time"
                     value={editingBooking.appointment_time}
-                    onChange={(e) => setEditingBooking({...editingBooking, appointment_time: e.target.value})}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                   />
                 </div>
@@ -1233,7 +1224,7 @@ export default function CarWashBookingsTab() {
                 <input
                   type="number"
                   value={editingBooking.price_total / 100}
-                  onChange={(e) => setEditingBooking({...editingBooking, price_total: parseFloat(e.target.value) * 100})}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, price_total: parseFloat(e.target.value) * 100 })}
                   step="0.01"
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                 />
@@ -1244,7 +1235,7 @@ export default function CarWashBookingsTab() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">Stato</label>
                   <select
                     value={editingBooking.status}
-                    onChange={(e) => setEditingBooking({...editingBooking, status: e.target.value})}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                   >
                     <option value="pending">In Attesa</option>
@@ -1257,7 +1248,7 @@ export default function CarWashBookingsTab() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">Pagamento</label>
                   <select
                     value={editingBooking.payment_status}
-                    onChange={(e) => setEditingBooking({...editingBooking, payment_status: e.target.value})}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                   >
                     <option value="pending">In Attesa</option>

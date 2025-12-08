@@ -896,6 +896,16 @@ export default function ReservationsTab() {
           console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
           // Don't fail the whole booking if WhatsApp fails
         }
+
+        // Generate Contract PDF automatically
+        try {
+          console.log('Generating contract for booking:', insertedBooking.id)
+          await handleGenerateContract(insertedBooking)
+          console.log('✅ Contract generated successfully')
+        } catch (contractError) {
+          console.error('⚠️ Failed to generate contract:', contractError)
+          // Don't fail, just log
+        }
       }
 
       // Note: Removed duplicate reservation creation - bookings table is the single source of truth

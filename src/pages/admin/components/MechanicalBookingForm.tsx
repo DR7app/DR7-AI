@@ -229,7 +229,8 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             returnTime: endTime,
                             pickupLocation: `DR7 Rapid Service - ${formData.vehicle_info}`,
                             returnLocation: 'DR7 Office',
-                            totalPrice: formData.price_total
+                            totalPrice: formData.price_total,
+                            bookingId: insertedBooking.id
                         })
                     })
                     console.log('✅ Calendar event created')
