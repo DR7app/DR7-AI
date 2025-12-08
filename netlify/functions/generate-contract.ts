@@ -73,28 +73,28 @@ export const handler: Handler = async (event) => {
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
         // 4. Fetch Template from Supabase Storage
-        // We look for 'contracts/templates/master_contract.pdf'
-        console.log(`[generate-contract] Fetching template from storage: templates/master_contract.pdf`)
+        // Based on user URL: .../public/templates/master_contract.pdf -> Bucket: 'templates', File: 'master_contract.pdf'
+        console.log(`[generate-contract] Fetching template from storage: bucket 'templates', file 'master_contract.pdf'`)
 
         const { data: templateData, error: templateError } = await supabase.storage
-            .from('contracts')
-            .download('templates/master_contract.pdf')
+            .from('templates')
+            .download('master_contract.pdf')
 
         if (templateError || !templateData) {
             console.error(`[generate-contract] Template fetch failed:`, templateError)
 
-            // Debug: List files in the bucket to help user debug
-            const { data: fileList, error: listError } = await supabase.storage
-                .from('contracts')
-                .list('templates')
+            // Debug: List files in 'templates' bucket
+            const { data: fileList } = await supabase.storage
+                .from('templates')
+                .list()
 
             const filesFound = fileList ? fileList.map(f => f.name).join(', ') : 'None'
-            console.log(`[generate-contract] Files found in 'templates': ${filesFound}`)
+            console.log(`[generate-contract] Files found in 'templates' bucket: ${filesFound}`)
 
             return {
                 statusCode: 500,
                 body: JSON.stringify({
-                    error: `Failed to load contract template. Please ensure 'templates/master_contract.pdf' exists in the 'contracts' storage bucket. Files found in 'templates': ${filesFound}. Supabase Error: ${templateError?.message}`
+                    error: `Failed to load contract template 'master_contract.pdf' from 'templates' bucket. Files found in bucket: ${filesFound}. Supabase Error: ${templateError?.message}`
                 })
             }
         }
