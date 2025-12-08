@@ -23,6 +23,7 @@ interface UnpaidBooking {
   status: string
   payment_status: string
   payment_method?: string
+  booking_details?: any
   created_at: string
 }
 
@@ -232,7 +233,13 @@ export default function UnpaidBookingsTab() {
     ? bookings
     : bookings.filter(b => b.service_type === filterService)
 
-  const totalUnpaid = filteredBookings.reduce((sum, b) => sum + (b.price_total || 0), 0)
+  const getRemainingAmount = (booking: UnpaidBooking) => {
+    const total = booking.price_total || 0
+    const paid = booking.booking_details?.amountPaid || 0
+    return Math.max(0, total - paid)
+  }
+
+  const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
 
   const getServiceTypeLabel = (serviceType: string) => {
     switch (serviceType) {
@@ -328,41 +335,37 @@ export default function UnpaidBookingsTab() {
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setFilterService('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filterService === 'all'
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'all'
                   ? 'bg-dr7-gold text-black'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+                }`}
             >
               Tutti ({bookings.length})
             </button>
             <button
               onClick={() => setFilterService('rental')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filterService === 'rental'
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'rental'
                   ? 'bg-dr7-gold text-black'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+                }`}
             >
               Noleggio ({bookings.filter(b => b.service_type === 'rental').length})
             </button>
             <button
               onClick={() => setFilterService('car_wash')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filterService === 'car_wash'
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'car_wash'
                   ? 'bg-dr7-gold text-black'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+                }`}
             >
               Lavaggio ({bookings.filter(b => b.service_type === 'car_wash').length})
             </button>
             <button
               onClick={() => setFilterService('mechanical_service')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filterService === 'mechanical_service'
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'mechanical_service'
                   ? 'bg-dr7-gold text-black'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+                }`}
             >
               Meccanica ({bookings.filter(b => b.service_type === 'mechanical_service').length})
             </button>
@@ -374,11 +377,10 @@ export default function UnpaidBookingsTab() {
                 setMultiSelectMode(!multiSelectMode)
                 setSelectedBookings(new Set())
               }}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                multiSelectMode
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${multiSelectMode
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+                }`}
             >
               Selezione Multipla
             </button>
@@ -422,16 +424,15 @@ export default function UnpaidBookingsTab() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Cliente</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Dettagli</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Importo</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Da Saldare</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {filteredBookings.map((booking) => (
-                <tr key={booking.id} className={`border-t border-gray-700 hover:bg-gray-800 ${
-                  selectedBookings.has(booking.id) ? 'bg-blue-900/30' : ''
-                }`}>
+                <tr key={booking.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedBookings.has(booking.id) ? 'bg-blue-900/30' : ''
+                  }`}>
                   {multiSelectMode && (
                     <td className="px-4 py-3 text-sm">
                       <input
@@ -473,15 +474,19 @@ export default function UnpaidBookingsTab() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className="text-red-400 font-bold text-lg">
-                      €{(booking.price_total / 100).toFixed(2)}
+                      €{(getRemainingAmount(booking) / 100).toFixed(2)}
                     </span>
+                    {booking.booking_details?.amountPaid > 0 && (
+                      <div className="text-xs text-gray-400">
+                        su €{(booking.price_total / 100).toFixed(2)}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
-                      booking.payment_status === 'pending'
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'pending'
                         ? 'bg-yellow-600 text-black'
                         : 'bg-red-600 text-white'
-                    }`}>
+                      }`}>
                       {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
                     </span>
                   </td>

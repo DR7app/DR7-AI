@@ -21,6 +21,7 @@ interface Contract {
   status: 'active' | 'completed' | 'cancelled'
   notes?: string
   created_at: string
+  pdf_url?: string
 }
 
 export default function ContrattoTab() {
@@ -441,16 +442,15 @@ export default function ContrattoTab() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-white">{contract.contract_number}</h3>
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
-                      contract.status === 'active' ? 'bg-green-600 text-white' :
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${contract.status === 'active' ? 'bg-green-600 text-white' :
                       contract.status === 'completed' ? 'bg-blue-600 text-white' :
-                      'bg-red-600 text-white'
-                    }`}>
+                        'bg-red-600 text-white'
+                      }`}>
                       {contract.status === 'active' ? 'Attivo' :
-                       contract.status === 'completed' ? 'Completato' : 'Cancellato'}
+                        contract.status === 'completed' ? 'Completato' : 'Cancellato'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
                     <div>
                       <span className="text-gray-400">Cliente:</span>
                       <p className="text-white font-semibold">{contract.customer_name}</p>
@@ -471,19 +471,39 @@ export default function ContrattoTab() {
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-2 ml-4">
-                  <button
-                    onClick={() => handleEdit(contract)}
-                    className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors"
-                  >
-                    Modifica
-                  </button>
-                  <button
-                    onClick={() => handleDelete(contract.id)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                  >
-                    Elimina
-                  </button>
+                <div className="flex flex-col gap-2 ml-4">
+                  {contract.pdf_url && (
+                    <div className="flex gap-2 w-full">
+                      <a
+                        href={contract.pdf_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                      >
+                        <span>📄</span> PDF
+                      </a>
+                      <a
+                        href={`mailto:${contract.customer_email}?subject=Contratto Noleggio ${contract.contract_number}&body=Gentile Cliente,%0D%0A%0D%0AEcco il link al tuo contratto di noleggio:%0D%0A${encodeURIComponent(contract.pdf_url)}%0D%0A%0D%0AGrazie per aver scelto DR7 Empire.`}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                      >
+                        <span>✉️</span> Email
+                      </a>
+                    </div>
+                  )}
+                  <div className="flex gap-2 w-full">
+                    <button
+                      onClick={() => handleEdit(contract)}
+                      className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors flex-1"
+                    >
+                      Modifica
+                    </button>
+                    <button
+                      onClick={() => handleDelete(contract.id)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors flex-1"
+                    >
+                      Elimina
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
