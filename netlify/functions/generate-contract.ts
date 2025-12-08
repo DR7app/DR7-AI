@@ -116,7 +116,6 @@ export const handler: Handler = async (event) => {
             'ContractNumber': contractNumber,
             'Date': new Date().toLocaleDateString('it-IT'),
             'CustomerName': clientName || '',
-            'CustomerAddress': clientAddress || '',
             'CustomerVAT': clientVat || '',
             'CustomerPhone': booking.customer_phone || '',
             'CustomerEmail': booking.customer_email || '',
