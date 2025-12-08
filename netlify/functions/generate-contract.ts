@@ -150,9 +150,22 @@ export const handler: Handler = async (event) => {
 
         console.log(`[generate-contract] Filled ${filledFields} fields.`)
 
-        // If no fields were filled, we might want to warn, but for now we proceed.
-        // We flatten the form to make it read-only
-        try { form.flatten() } catch (e) { }
+        // If no fields were filled, it means field names didn't match or there are no fields.
+        if (filledFields === 0) {
+            const page = pdfDoc.getPages()[0]
+            const { height } = page.getSize()
+            const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+            const red = rgb(1, 0, 0)
+
+            const availableFields = form.getFields().map(f => f.getName()).join(', ') || 'None (The PDF has no form fields)'
+
+            page.drawText(`ERROR: No data filled. Check your PDF form field names.`, { x: 50, y: height - 50, size: 12, font, color: red })
+            page.drawText(`Found fields in PDF: ${availableFields}`, { x: 50, y: height - 70, size: 10, font, color: red })
+            page.drawText(`Expected fields: ${Object.keys(dataMap).join(', ')}`, { x: 50, y: height - 90, size: 8, font, color: red })
+        } else {
+            // Flatten if we filled fields
+            try { form.flatten() } catch (e) { }
+        }
 
         // 6. Save and Upload
         const pdfBytes = await pdfDoc.save()
