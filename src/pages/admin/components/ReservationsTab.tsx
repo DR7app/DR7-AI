@@ -899,12 +899,12 @@ export default function ReservationsTab() {
 
         // Generate Contract PDF automatically
         try {
-          console.log('Generating contract for booking:', insertedBooking.id)
+          console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, new Date().toISOString())
           await handleGenerateContract(insertedBooking)
-          console.log('✅ Contract generated successfully')
+          console.log('[Auto-Gen] ✅ Contract generated successfully')
         } catch (contractError) {
-          console.error('⚠️ Failed to generate contract:', contractError)
-          // Don't fail, just log
+          console.error('[Auto-Gen] ⚠️ Failed to generate contract:', contractError)
+          alert('Errore nella generazione automatica del contratto: ' + (contractError as Error).message)
         }
       }
 
