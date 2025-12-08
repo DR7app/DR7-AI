@@ -1305,9 +1305,20 @@ export default function ReservationsTab() {
                 value={formData.payment_status}
                 onChange={(e) => {
                   const newStatus = e.target.value
+                  let newAmountPaid = formData.amount_paid
+
+                  // Auto-update amount_paid based on status
+                  if (newStatus === 'paid') {
+                    newAmountPaid = formData.total_amount // Full payment
+                  } else if (newStatus === 'unpaid') {
+                    newAmountPaid = '0' // No payment
+                  }
+                  // If 'pending' (Da Saldare), leave amount_paid as is (allows partial)
+
                   setFormData({
                     ...formData,
                     payment_status: newStatus,
+                    amount_paid: newAmountPaid,
                     status: newStatus === 'paid' ? 'confirmed' : 'pending',
                     payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                   })
@@ -1357,7 +1368,12 @@ export default function ReservationsTab() {
                 step="0.01"
                 required
                 value={formData.total_amount}
-                onChange={(e) => setFormData({ ...formData, total_amount: e.target.value })}
+                onChange={(e) => {
+                  const newTotal = e.target.value
+                  // If currently paid, update paid amount to match new total
+                  const newPaid = formData.payment_status === 'paid' ? newTotal : formData.amount_paid
+                  setFormData({ ...formData, total_amount: newTotal, amount_paid: newPaid })
+                }}
               />
               <Input
                 label="Importo Pagato (€)"
@@ -1365,7 +1381,32 @@ export default function ReservationsTab() {
                 step="0.01"
                 required
                 value={formData.amount_paid}
-                onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
+                onChange={(e) => {
+                  const newPaid = parseFloat(e.target.value) || 0
+                  const total = parseFloat(formData.total_amount) || 0
+                  let newStatus = formData.payment_status
+
+                  // Auto-detect status based on amount entered
+                  if (newPaid >= total && total > 0) {
+                    newStatus = 'paid'
+                  } else if (newPaid > 0 && newPaid < total) {
+                    newStatus = 'pending' // Da Saldare (Partial)
+                  } else if (newPaid === 0) {
+                    // Only set to unpaid if it was pending/paid, but maybe user wants pending?
+                    // Let's default to 'pending' (Da Saldare) if 0, unless explicitly unpaid.
+                    // Actually, if they type 0 manually, it's likely they mean 0 paid.
+                    // But 'unpaid' status hides the payment method.
+                    // Let's keep current status unless it strictly becomes paid.
+                    if (newStatus === 'paid') newStatus = 'pending'
+                  }
+
+                  setFormData({
+                    ...formData,
+                    amount_paid: e.target.value,
+                    payment_status: newStatus,
+                    status: newStatus === 'paid' ? 'confirmed' : formData.status // Don't unconfirm if partial
+                  })
+                }}
               />
               <Input
                 label="Valuta"
