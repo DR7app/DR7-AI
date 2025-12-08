@@ -153,6 +153,7 @@ export const handler: Handler = async (event) => {
             'PickupLocation': booking.pickup_location || 'Sede',
             'DropoffLocation': booking.dropoff_location || 'Sede',
             'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
+            'TotalHours': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
             'PlaceOfIssue': 'Cagliari', // Default or configurable
             'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
         }
