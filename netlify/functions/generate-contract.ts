@@ -128,6 +128,7 @@ export const handler: Handler = async (event) => {
             'DropoffDate': dropoffDate.toLocaleDateString('it-IT'),
             'DropoffTime': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
             'TotalAmount': `${(booking.price_total / 100).toFixed(2)}`,
+            'CodiceFiscale': customer?.codice_fiscale || '',
         }
 
         let filledFields = 0
