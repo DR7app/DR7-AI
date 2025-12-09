@@ -46,42 +46,24 @@ export default function DocumentsVerificationTab() {
   async function loadDocuments() {
     setLoading(true)
     try {
-      console.log('[DocumentsVerificationTab] Loading documents from user_documents table...')
+      console.log('[DocumentsVerificationTab] Loading documents via Netlify function...')
 
-      // First, get all documents
-      const { data: documentsData, error: documentsError } = await supabase
-        .from('user_documents')
-        .select('*')
-        .order('upload_date', { ascending: false })
+      const response = await fetch('/.netlify/functions/get-verification-requests')
+      if (!response.ok) throw new Error(`Function failed with status ${response.status}`)
 
-      console.log('[DocumentsVerificationTab] Documents loaded:', documentsData?.length || 0, documentsData)
+      const result = await response.json()
 
-      if (documentsError) {
-        console.error('[DocumentsVerificationTab] Error loading documents:', documentsError)
-        throw documentsError
+      if (result.success && result.documents) {
+        console.log('[DocumentsVerificationTab] Documents loaded:', result.documents.length)
+        setDocuments(result.documents)
+      } else {
+        console.error('[DocumentsVerificationTab] Error loading documents:', result.error)
+        throw new Error(result.error || 'Unknown error')
       }
-
-      // Use user data stored in the database instead of fetching from auth
-      const documentsWithUsers = (documentsData || []).map(doc => {
-        const uploadDate = new Date(doc.upload_date)
-        const now = new Date()
-        const daysSinceUpload = Math.floor((now.getTime() - uploadDate.getTime()) / (1000 * 60 * 60 * 24))
-
-        return {
-          ...doc,
-          user: {
-            id: doc.user_id,
-            full_name: (doc as any).user_full_name || 'Nome non disponibile',
-            email: (doc as any).user_email || 'Email non disponibile',
-            is_new: daysSinceUpload <= 7, // New if uploaded within last 7 days
-            created_at: doc.upload_date
-          }
-        }
-      })
-
-      setDocuments(documentsWithUsers)
     } catch (error) {
       console.error('Failed to load documents:', error)
+      // Fallback: try client side if function fails (though unlikely)
+      // We skip fallback to avoid confusion if RLS is the issue
     } finally {
       setLoading(false)
     }
@@ -260,8 +242,8 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('all')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'all'
-                ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              ? 'bg-dr7-gold text-black'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
           >
             Tutti ({documents.length})
@@ -269,8 +251,8 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('pending_verification')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'pending_verification'
-                ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              ? 'bg-dr7-gold text-black'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
           >
             Da Verificare ({documents.filter(d => d.status === 'pending_verification').length})
@@ -278,8 +260,8 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('verified')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'verified'
-                ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              ? 'bg-dr7-gold text-black'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
           >
             Verificati ({documents.filter(d => d.status === 'verified').length})
@@ -287,8 +269,8 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('rejected')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'rejected'
-                ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              ? 'bg-dr7-gold text-black'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
           >
             Rifiutati ({documents.filter(d => d.status === 'rejected').length})
