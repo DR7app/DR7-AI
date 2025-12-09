@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NewClientModal from './NewClientModal'
+import CustomerAutocomplete from './CustomerAutocomplete'
 
 interface Customer {
     id: string
@@ -80,7 +81,6 @@ const TIME_SLOTS = generateTimeSlots()
 
 export default function MechanicalBookingForm({ initialData, customers, onSave, onCancel, editingId }: MechanicalBookingFormProps) {
     const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false)
-    const [customerSearchQuery, setCustomerSearchQuery] = useState('')
 
     const [formData, setFormData] = useState({
         customer_id: '',
@@ -246,15 +246,9 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
         }
     }
 
-    const filteredCustomers = customers.filter(c =>
-        c.full_name.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
-        c.phone?.toLowerCase().includes(customerSearchQuery.toLowerCase())
-    )
-
     const handleClientCreated = (newClient: any) => {
         if (newClient?.id) {
             setFormData(prev => ({ ...prev, customer_id: newClient.id }))
-            setCustomerSearchQuery(newClient.nome + ' ' + newClient.cognome)
         }
         setIsNewClientModalOpen(false)
     }
@@ -280,26 +274,13 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     <div className="flex gap-4 mb-4 items-end">
                         <div className="flex-1">
                             <label className="text-xs text-gray-400 mb-1 block">Cerca e Seleziona Cliente</label>
-                            <input
-                                type="text"
-                                placeholder="Cerca cliente..."
-                                value={customerSearchQuery}
-                                onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white mb-2"
+                            <CustomerAutocomplete
+                                customers={customers}
+                                selectedCustomerId={formData.customer_id}
+                                onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
+                                placeholder="Inizia a scrivere nome, email o telefono..."
+                                required={true}
                             />
-                            <select
-                                required
-                                value={formData.customer_id}
-                                onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                            >
-                                <option value="">Seleziona cliente...</option>
-                                {filteredCustomers.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.full_name} {c.phone ? `- ${c.phone}` : ''}
-                                    </option>
-                                ))}
-                            </select>
                         </div>
                         <div>
                             <button

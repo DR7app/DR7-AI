@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import CustomerAutocomplete from './CustomerAutocomplete'
 
 interface Customer {
   id: string
@@ -133,7 +134,6 @@ export default function CarWashBookingsTab() {
   const [showForm, setShowForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const [newCustomerMode, setNewCustomerMode] = useState(false)
-  const [customerSearchQuery, setCustomerSearchQuery] = useState('')
 
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -184,28 +184,30 @@ export default function CarWashBookingsTab() {
 
       if (bookingsError) throw bookingsError
 
-      // Load customers
+      // Load customers from customers_extended (includes all customers from all sources)
       const { data: customersData, error: customersError } = await supabase
-        .from('customers')
-        .select('id, full_name, email, phone')
-        .order('full_name')
+        .from('customers_extended')
+        .select('id, nome, cognome, ragione_sociale, email, telefono')
+        .order('cognome')
 
       if (customersError) throw customersError
 
+      // Map customers_extended to Customer interface
+      const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
+        id: c.id,
+        full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),
+        email: c.email,
+        phone: c.telefono
+      }))
+
       setBookings(bookingsData || [])
-      setCustomers(customersData || [])
+      setCustomers(mappedCustomers)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
       setLoading(false)
     }
   }
-
-  const filteredCustomers = customers.filter(c =>
-    c.full_name.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
-    c.email?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
-    c.phone?.includes(customerSearchQuery)
-  )
 
   async function handleCancelBooking(bookingId: string, customerName: string) {
     if (!confirm(`Sei sicuro di voler annullare la prenotazione di ${customerName}?`)) {
@@ -474,7 +476,6 @@ export default function CarWashBookingsTab() {
     alert('✅ Prenotazione creata con successo!')
     setShowForm(false)
     setNewCustomerMode(false)
-    setCustomerSearchQuery('')
     setFormData({
       customer_id: '',
       service_name: '',
@@ -676,13 +677,10 @@ export default function CarWashBookingsTab() {
               <div className="flex items-center gap-4 mb-4">
                 <button
                   type="button"
-                  onClick={() => {
-                    setNewCustomerMode(false)
-                    setCustomerSearchQuery('')
-                  }}
+                  onClick={() => setNewCustomerMode(false)}
                   className={`px-4 py-2 rounded ${!newCustomerMode
-                      ? 'bg-dr7-gold text-black font-semibold'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-dr7-gold text-black font-semibold'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
                   Seleziona Cliente
@@ -691,8 +689,8 @@ export default function CarWashBookingsTab() {
                   type="button"
                   onClick={() => setNewCustomerMode(true)}
                   className={`px-4 py-2 rounded ${newCustomerMode
-                      ? 'bg-dr7-gold text-black font-semibold'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-dr7-gold text-black font-semibold'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
                   Nuovo Cliente
@@ -702,26 +700,13 @@ export default function CarWashBookingsTab() {
               {!newCustomerMode ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente</label>
-                  <input
-                    type="text"
-                    value={customerSearchQuery}
-                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                    placeholder="Nome, email o telefono..."
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white mb-2"
+                  <CustomerAutocomplete
+                    customers={customers}
+                    selectedCustomerId={formData.customer_id}
+                    onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
+                    placeholder="Inizia a scrivere nome, email o telefono..."
+                    required={true}
                   />
-                  <select
-                    required
-                    value={formData.customer_id}
-                    onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                  >
-                    <option value="">Seleziona un cliente</option>
-                    {filteredCustomers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.full_name} - {customer.email || customer.phone || 'N/A'}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1005,13 +990,15 @@ export default function CarWashBookingsTab() {
                 rows={3}
               />
             </div>
-            {formData.price_total > 0 && (
-              <div className="text-right">
-                <span className="text-lg font-bold text-dr7-gold">
-                  Totale: EUR {formData.price_total.toFixed(2)}
-                </span>
-              </div>
-            )}
+            {
+              formData.price_total > 0 && (
+                <div className="text-right">
+                  <span className="text-lg font-bold text-dr7-gold">
+                    Totale: EUR {formData.price_total.toFixed(2)}
+                  </span>
+                </div>
+              )
+            }
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -1024,284 +1011,289 @@ export default function CarWashBookingsTab() {
                 type="submit"
                 disabled={submitting}
                 className={`px-4 py-2 font-semibold rounded ${submitting
-                    ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                    : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                  ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                  : 'bg-dr7-gold hover:bg-yellow-500 text-black'
                   }`}
               >
                 {submitting ? 'Creazione in corso...' : 'Crea Prenotazione'}
               </button>
             </div>
-          </form>
-        </div>
-      )}
+          </form >
+        </div >
+      )
+      }
 
-      {bookings.length === 0 ? (
-        <div className="bg-dr7-dark rounded-lg border border-gray-800 p-8 text-center text-gray-500">
-          Nessuna prenotazione lavaggio trovata
-        </div>
-      ) : (
-        <div className="bg-dr7-dark rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-max">
-              <thead className="bg-dr7-darker">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Cliente</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Servizio</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Data & Ora</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Prezzo</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Pagamento</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.filter(booking => {
+      {
+        bookings.length === 0 ? (
+          <div className="bg-dr7-dark rounded-lg border border-gray-800 p-8 text-center text-gray-500">
+            Nessuna prenotazione lavaggio trovata
+          </div>
+        ) : (
+          <div className="bg-dr7-dark rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-max">
+                <thead className="bg-dr7-darker">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Cliente</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Servizio</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Data & Ora</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Prezzo</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Pagamento</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bookings.filter(booking => {
 
-                  // Search filter
-                  if (!bookingSearchQuery) return true
-                  const query = bookingSearchQuery.toLowerCase()
-                  const customerName = (booking.customer_name || '').toLowerCase()
-                  return customerName.includes(query)
-                }).map((booking) => (
-                  <tr key={booking.id} className="border-t border-gray-800 hover:bg-dr7-darker/50">
-                    <td className="px-4 py-3 text-sm text-white">
-                      <div className="font-medium">{booking.customer_name}</div>
-                      <div className="text-xs text-gray-400">{booking.customer_email}</div>
-                      <div className="text-xs text-gray-400">{booking.customer_phone}</div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white">
-                      <div className="font-medium">{booking.service_name}</div>
-                      {booking.booking_details?.additionalService && (
-                        <div className="text-xs text-gray-400">
-                          + {booking.booking_details.additionalService}
+                    // Search filter
+                    if (!bookingSearchQuery) return true
+                    const query = bookingSearchQuery.toLowerCase()
+                    const customerName = (booking.customer_name || '').toLowerCase()
+                    return customerName.includes(query)
+                  }).map((booking) => (
+                    <tr key={booking.id} className="border-t border-gray-800 hover:bg-dr7-darker/50">
+                      <td className="px-4 py-3 text-sm text-white">
+                        <div className="font-medium">{booking.customer_name}</div>
+                        <div className="text-xs text-gray-400">{booking.customer_email}</div>
+                        <div className="text-xs text-gray-400">{booking.customer_phone}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-white">
+                        <div className="font-medium">{booking.service_name}</div>
+                        {booking.booking_details?.additionalService && (
+                          <div className="text-xs text-gray-400">
+                            + {booking.booking_details.additionalService}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-white">
+                        <div>
+                          {booking.appointment_date
+                            ? new Date(booking.appointment_date).toLocaleDateString('it-IT', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              timeZone: 'Europe/Rome'
+                            })
+                            : '-'}
                         </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white">
-                      <div>
-                        {booking.appointment_date
-                          ? new Date(booking.appointment_date).toLocaleDateString('it-IT', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            timeZone: 'Europe/Rome'
-                          })
-                          : '-'}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {booking.appointment_time || '-'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white font-bold">
-                      EUR {(booking.price_total / 100).toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid'
+                        <div className="text-xs text-gray-400">
+                          {booking.appointment_time || '-'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-white font-bold">
+                        EUR {(booking.price_total / 100).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid'
                             ? 'bg-green-900 text-green-300'
                             : 'bg-red-900 text-red-300'
-                          }`}
-                      >
-                        {booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setEditingBooking(booking)}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
+                            }`}
                         >
-                          Modifica
-                        </button>
-                        {booking.status !== 'cancelled' ? (
+                          {booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
-                            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium transition-colors"
+                            onClick={() => setEditingBooking(booking)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
                           >
-                            Annulla
+                            Modifica
                           </button>
-                        ) : (
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-400">
-                            Annullata
-                          </span>
-                        )}
-                        <button
-                          onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
-                        >
-                          Elimina
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {booking.status !== 'cancelled' ? (
+                            <button
+                              onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
+                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium transition-colors"
+                            >
+                              Annulla
+                            </button>
+                          ) : (
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-400">
+                              Annullata
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
+                          >
+                            Elimina
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Edit Booking Modal */}
-      {editingBooking && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
-            <div className="p-6 border-b border-gray-800">
-              <div className="flex justify-between items-start">
-                <h3 className="text-2xl font-bold text-white">Modifica Prenotazione</h3>
+      {
+        editingBooking && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
+              <div className="p-6 border-b border-gray-800">
+                <div className="flex justify-between items-start">
+                  <h3 className="text-2xl font-bold text-white">Modifica Prenotazione</h3>
+                  <button
+                    onClick={() => setEditingBooking(null)}
+                    className="text-gray-400 hover:text-white text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Cliente</label>
+                  <input
+                    type="text"
+                    value={editingBooking.customer_name}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, customer_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                    <input
+                      type="email"
+                      value={editingBooking.customer_email || ''}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, customer_email: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Telefono</label>
+                    <input
+                      type="tel"
+                      value={editingBooking.customer_phone || ''}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, customer_phone: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Servizio</label>
+                  <input
+                    type="text"
+                    value={editingBooking.service_name}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, service_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Data</label>
+                    <input
+                      type="date"
+                      value={editingBooking.appointment_date}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Ora</label>
+                    <input
+                      type="time"
+                      value={editingBooking.appointment_time}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Prezzo (€)</label>
+                  <input
+                    type="number"
+                    value={editingBooking.price_total / 100}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, price_total: parseFloat(e.target.value) * 100 })}
+                    step="0.01"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Stato</label>
+                    <select
+                      value={editingBooking.status}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    >
+                      <option value="pending">In Attesa</option>
+                      <option value="confirmed">Confermata</option>
+                      <option value="cancelled">Annullata</option>
+                      <option value="completed">Completata</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Pagamento</label>
+                    <select
+                      value={editingBooking.payment_status}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    >
+                      <option value="pending">In Attesa</option>
+                      <option value="paid">Pagato</option>
+                      <option value="completed">Completato</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-800 flex gap-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const { error } = await supabase
+                        .from('bookings')
+                        .update({
+                          customer_name: editingBooking.customer_name,
+                          customer_email: editingBooking.customer_email,
+                          customer_phone: editingBooking.customer_phone,
+                          service_name: editingBooking.service_name,
+                          appointment_date: editingBooking.appointment_date,
+                          appointment_time: editingBooking.appointment_time,
+                          price_total: editingBooking.price_total,
+                          status: editingBooking.status,
+                          payment_status: editingBooking.payment_status,
+                        })
+                        .eq('id', editingBooking.id)
+
+                      if (error) throw error
+
+                      alert('✅ Prenotazione aggiornata!')
+                      setEditingBooking(null)
+                      loadData()
+                    } catch (error) {
+                      console.error('Failed to update booking:', error)
+                      alert('❌ Errore durante l\'aggiornamento')
+                    }
+                  }}
+                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded font-medium transition-colors"
+                >
+                  Salva Modifiche
+                </button>
                 <button
                   onClick={() => setEditingBooking(null)}
-                  className="text-gray-400 hover:text-white text-2xl"
+                  className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors"
                 >
-                  ×
+                  Annulla
                 </button>
               </div>
             </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Cliente</label>
-                <input
-                  type="text"
-                  value={editingBooking.customer_name}
-                  onChange={(e) => setEditingBooking({ ...editingBooking, customer_name: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={editingBooking.customer_email || ''}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, customer_email: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Telefono</label>
-                  <input
-                    type="tel"
-                    value={editingBooking.customer_phone || ''}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, customer_phone: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Servizio</label>
-                <input
-                  type="text"
-                  value={editingBooking.service_name}
-                  onChange={(e) => setEditingBooking({ ...editingBooking, service_name: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Data</label>
-                  <input
-                    type="date"
-                    value={editingBooking.appointment_date}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Ora</label>
-                  <input
-                    type="time"
-                    value={editingBooking.appointment_time}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Prezzo (€)</label>
-                <input
-                  type="number"
-                  value={editingBooking.price_total / 100}
-                  onChange={(e) => setEditingBooking({ ...editingBooking, price_total: parseFloat(e.target.value) * 100 })}
-                  step="0.01"
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Stato</label>
-                  <select
-                    value={editingBooking.status}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                  >
-                    <option value="pending">In Attesa</option>
-                    <option value="confirmed">Confermata</option>
-                    <option value="cancelled">Annullata</option>
-                    <option value="completed">Completata</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Pagamento</label>
-                  <select
-                    value={editingBooking.payment_status}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
-                  >
-                    <option value="pending">In Attesa</option>
-                    <option value="paid">Pagato</option>
-                    <option value="completed">Completato</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-800 flex gap-3">
-              <button
-                onClick={async () => {
-                  try {
-                    const { error } = await supabase
-                      .from('bookings')
-                      .update({
-                        customer_name: editingBooking.customer_name,
-                        customer_email: editingBooking.customer_email,
-                        customer_phone: editingBooking.customer_phone,
-                        service_name: editingBooking.service_name,
-                        appointment_date: editingBooking.appointment_date,
-                        appointment_time: editingBooking.appointment_time,
-                        price_total: editingBooking.price_total,
-                        status: editingBooking.status,
-                        payment_status: editingBooking.payment_status,
-                      })
-                      .eq('id', editingBooking.id)
-
-                    if (error) throw error
-
-                    alert('✅ Prenotazione aggiornata!')
-                    setEditingBooking(null)
-                    loadData()
-                  } catch (error) {
-                    console.error('Failed to update booking:', error)
-                    alert('❌ Errore durante l\'aggiornamento')
-                  }
-                }}
-                className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded font-medium transition-colors"
-              >
-                Salva Modifiche
-              </button>
-              <button
-                onClick={() => setEditingBooking(null)}
-                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors"
-              >
-                Annulla
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   )
 }

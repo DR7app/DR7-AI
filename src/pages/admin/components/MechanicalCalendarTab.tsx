@@ -89,14 +89,23 @@ export default function MechanicalCalendarTab() {
   async function loadData() {
     setLoading(true)
     try {
-      // Load customers
+      // Load customers from customers_extended (includes all customers from all sources)
       const { data: customersData, error: customersError } = await supabase
-        .from('customers')
-        .select('*')
-        .order('full_name')
+        .from('customers_extended')
+        .select('id, nome, cognome, ragione_sociale, email, telefono')
+        .order('cognome')
 
       if (customersError) throw customersError
-      setCustomers(customersData || [])
+
+      // Map customers_extended to Customer interface
+      const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
+        id: c.id,
+        full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),
+        email: c.email,
+        phone: c.telefono
+      }))
+
+      setCustomers(mappedCustomers)
 
       // Load mechanical bookings (exclude cancelled)
       const { data: bookingsData, error: bookingsError } = await supabase
