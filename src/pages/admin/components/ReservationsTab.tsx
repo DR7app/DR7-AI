@@ -21,6 +21,23 @@ export const URBAN_INSURANCE_OPTIONS = [
   { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 25 },
 ];
 
+// UTILITAIRE has only KASKO BASE
+export const UTILITAIRE_INSURANCE_OPTIONS = [
+  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 15 },
+];
+
+// Special pricing for Ducato/Vito (furgone)
+export const FURGONE_INSURANCE_OPTIONS = [
+  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 30 },
+];
+
+// Deposit amounts by vehicle type
+export const DEPOSIT_AMOUNTS = {
+  UTILITAIRE: 1000,
+  FURGONE: 2500, // Ducato, Vito
+  SUPERCAR: 10000,
+};
+
 export const INSURANCE_ELIGIBILITY = {
   KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
@@ -44,6 +61,61 @@ function usesUrbanInsurance(vehicle?: Vehicle): boolean {
   const name = vehicle.display_name.toLowerCase();
   return name.includes('panda') || name.includes('captur') || name.includes('urban') ||
     name.includes('ducato') || name.includes('van') || name.includes('utilitaire');
+}
+
+// Helper function to check if vehicle is a furgone (Ducato/Vito)
+function isFurgone(vehicle?: Vehicle): boolean {
+  if (!vehicle) return false;
+  const name = vehicle.display_name.toLowerCase();
+  return name.includes('ducato') || name.includes('vito') || name.includes('furgone');
+}
+
+// Helper function to get insurance options for vehicle
+function getInsuranceOptions(vehicle?: Vehicle) {
+  if (!vehicle) return INSURANCE_OPTIONS;
+
+  // Check if it's a furgone (Ducato/Vito)
+  if (isFurgone(vehicle)) {
+    return FURGONE_INSURANCE_OPTIONS;
+  }
+
+  // Check category
+  if (vehicle.category === 'UTILITAIRE') {
+    return UTILITAIRE_INSURANCE_OPTIONS;
+  }
+
+  if (vehicle.category === 'URBAN') {
+    return URBAN_INSURANCE_OPTIONS;
+  }
+
+  // Fallback for vehicles without category (legacy)
+  const name = vehicle.display_name.toLowerCase();
+  if (name.includes('panda') || name.includes('captur') || name.includes('urban')) {
+    return URBAN_INSURANCE_OPTIONS;
+  }
+  if (name.includes('van') || name.includes('utilitaire')) {
+    return UTILITAIRE_INSURANCE_OPTIONS;
+  }
+
+  return INSURANCE_OPTIONS; // SUPERCAR
+}
+
+// Helper function to get default deposit amount
+function getDefaultDeposit(vehicle?: Vehicle): number {
+  if (!vehicle) return DEPOSIT_AMOUNTS.SUPERCAR;
+
+  if (isFurgone(vehicle)) return DEPOSIT_AMOUNTS.FURGONE;
+  if (vehicle.category === 'UTILITAIRE') return DEPOSIT_AMOUNTS.UTILITAIRE;
+  if (vehicle.category === 'URBAN') return DEPOSIT_AMOUNTS.UTILITAIRE;
+
+  // Fallback
+  const name = vehicle.display_name.toLowerCase();
+  if (name.includes('panda') || name.includes('captur') || name.includes('urban') ||
+    name.includes('van') || name.includes('utilitaire')) {
+    return DEPOSIT_AMOUNTS.UTILITAIRE;
+  }
+
+  return DEPOSIT_AMOUNTS.SUPERCAR;
 }
 interface Customer {
   id: string
@@ -282,8 +354,7 @@ export default function ReservationsTab() {
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
 
     // Get Kasko daily cost
-    const isUrban = usesUrbanInsurance(selectedVehicle)
-    const kaskoOptions = isUrban ? URBAN_INSURANCE_OPTIONS : INSURANCE_OPTIONS
+    const kaskoOptions = getInsuranceOptions(selectedVehicle)
     const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
     const kaskoDailyCost = selectedKasko?.pricePerDay || 0
 
@@ -1386,9 +1457,8 @@ export default function ReservationsTab() {
                   value={formData.insurance_option}
                   onChange={(e) => setFormData({ ...formData, insurance_option: e.target.value as KaskoTier })}
                   options={
-                    usesUrbanInsurance(vehicles.find(v => v.id === formData.vehicle_id))
-                      ? URBAN_INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
-                      : INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
+                    getInsuranceOptions(vehicles.find(v => v.id === formData.vehicle_id))
+                      .map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
                   }
                 />
                 <Input
