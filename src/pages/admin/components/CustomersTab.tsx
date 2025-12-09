@@ -523,10 +523,10 @@ export default function CustomersTab() {
             status: doc.status
           })
 
-          // Get signed URL from the file_path stored in database
+          // Get signed URL from the file_path stored in database (24 hour expiry)
           const { data: signedUrl, error: urlError } = await supabase.storage
             .from(bucket)
-            .createSignedUrl(doc.file_path, 3600)
+            .createSignedUrl(doc.file_path, 86400) // 24 hours
 
           if (urlError) {
             console.error('[CustomersTab] Error creating signed URL:', urlError)
@@ -573,14 +573,14 @@ export default function CustomersTab() {
       // Get signed URLs for driver licenses not already in database
       for (const licenseFile of actualLicenseFiles) {
         if (!existingFileNames.has(licenseFile.name)) {
-          const { data: signedLicense, error: signError } = await supabase.storage
+          const { data: signedUrlData, error: signError } = await supabase.storage
             .from('driver-licenses')
-            .createSignedUrl(`${userId}/${licenseFile.name}`, 3600)
+            .createSignedUrl(`${userId}/${licenseFile.name}`, 86400) // 24 hours
 
           if (signError) {
             console.error('Error creating signed URL for license:', signError)
-          } else if (signedLicense?.signedUrl) {
-            licenseUrls.push({ url: signedLicense.signedUrl, fileName: licenseFile.name })
+          } else if (signedUrlData?.signedUrl) {
+            licenseUrls.push({ url: signedUrlData.signedUrl, fileName: licenseFile.name })
           }
         }
       }
@@ -588,14 +588,14 @@ export default function CustomersTab() {
       // Get signed URLs for IDs not already in database
       for (const idFile of actualIdFiles) {
         if (!existingFileNames.has(idFile.name)) {
-          const { data: signedId, error: signError } = await supabase.storage
+          const { data: signedUrlData, error: signError } = await supabase.storage
             .from('driver-ids')
-            .createSignedUrl(`${userId}/${idFile.name}`, 3600)
+            .createSignedUrl(`${userId}/${idFile.name}`, 86400) // 24 hours
 
           if (signError) {
             console.error('Error creating signed URL for ID:', signError)
-          } else if (signedId?.signedUrl) {
-            idUrls.push({ url: signedId.signedUrl, fileName: idFile.name })
+          } else if (signedUrlData?.signedUrl) {
+            idUrls.push({ url: signedUrlData.signedUrl, fileName: idFile.name })
           }
         }
       }
@@ -603,14 +603,14 @@ export default function CustomersTab() {
       // Get signed URLs for Codice Fiscale not already in database
       for (const cfFile of actualCodiceFiscaleFiles) {
         if (!existingFileNames.has(cfFile.name)) {
-          const { data: signedCF, error: signError } = await supabase.storage
+          const { data: signedUrlData, error: signError } = await supabase.storage
             .from('codice-fiscale')
-            .createSignedUrl(`${userId}/${cfFile.name}`, 3600)
+            .createSignedUrl(`${userId}/${cfFile.name}`, 86400) // 24 hours
 
           if (signError) {
             console.error('Error creating signed URL for Codice Fiscale:', signError)
-          } else if (signedCF?.signedUrl) {
-            codiceFiscaleUrls.push({ url: signedCF.signedUrl, fileName: cfFile.name })
+          } else if (signedUrlData?.signedUrl) {
+            codiceFiscaleUrls.push({ url: signedUrlData.signedUrl, fileName: cfFile.name })
           }
         }
       }
