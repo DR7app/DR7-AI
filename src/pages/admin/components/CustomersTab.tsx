@@ -819,6 +819,18 @@ export default function CustomersTab() {
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.indirizzo || '-'}</p>
                     </div>
                     <div>
+                      <span className="text-sm text-gray-400">Numero Civico:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.numero_civico || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Città di Residenza:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.citta_residenza || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">CAP:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.codice_postale || '-'}</p>
+                    </div>
+                    <div>
                       <span className="text-sm text-gray-400">PEC:</span>
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.pec || '-'}</p>
                     </div>
