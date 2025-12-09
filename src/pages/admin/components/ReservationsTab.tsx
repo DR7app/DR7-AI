@@ -5,6 +5,43 @@ import Input from './Input'
 import Select from './Select'
 import Button from './Button'
 
+// --- Kasko Constants & Types ---
+type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE';
+
+export const INSURANCE_OPTIONS = [
+  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 100 },
+  { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 150 },
+  { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 200 },
+];
+
+export const URBAN_INSURANCE_OPTIONS = [
+  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 0 },
+  { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 5 },
+  { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 25 },
+];
+
+export const INSURANCE_ELIGIBILITY = {
+  KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
+  KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
+  KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
+};
+
+export const URBAN_INSURANCE_ELIGIBILITY = {
+  KASKO_BASE: { minAge: 18, minLicenseYears: 3 },
+  KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
+  KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
+};
+
+// Helper function to see if a car is 'urban'
+function isUrbanCar(carId: string, vehicleName?: string): boolean {
+  if (carId.startsWith('urban-car-')) return true;
+  if (vehicleName && (
+    vehicleName.toLowerCase().includes('panda') ||
+    vehicleName.toLowerCase().includes('captur') ||
+    vehicleName.toLowerCase().includes('urban')
+  )) return true;
+  return false;
+}
 interface Customer {
   id: string
   full_name: string
@@ -159,7 +196,10 @@ export default function ReservationsTab() {
     second_driver_license_expiry: '',
     second_driver_phone: '',
     second_driver_birth_date: '',
-    second_driver_birth_place: ''
+    second_driver_birth_place: '',
+    // Kasko & Deposit
+    insurance_option: 'KASKO_BASE' as KaskoTier,
+    deposit: '0'
   })
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
@@ -569,7 +609,9 @@ export default function ReservationsTab() {
       second_driver_license_expiry: booking.booking_details?.second_driver?.license_expiry || '',
       second_driver_phone: booking.booking_details?.second_driver?.phone || '',
       second_driver_birth_date: booking.booking_details?.second_driver?.birth_date || '',
-      second_driver_birth_place: booking.booking_details?.second_driver?.birth_place || ''
+      second_driver_birth_place: booking.booking_details?.second_driver?.birth_place || '',
+      insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
+      deposit: booking.booking_details?.deposit || '0'
     })
 
     setEditingId(booking.id)
@@ -783,6 +825,9 @@ export default function ReservationsTab() {
           dropoffLocation: formData.dropoff_location,
           amountPaid: Math.round(parseFloat(formData.amount_paid) * 100), // Store amount paid in cents
           source: 'admin_manual',
+          // Kasko & Deposit
+          insuranceOption: formData.insurance_option,
+          deposit: formData.deposit,
           second_driver: formData.has_second_driver ? {
             name: formData.second_driver_name,
             surname: formData.second_driver_surname,
@@ -970,7 +1015,10 @@ export default function ReservationsTab() {
       second_driver_license_expiry: '',
       second_driver_phone: '',
       second_driver_birth_date: '',
-      second_driver_birth_place: ''
+      second_driver_birth_place: '',
+      // Kasko & Deposit
+      insurance_option: 'KASKO_BASE',
+      deposit: '0'
     })
     setCustomerSearchQuery('')
     setNewCustomerData({
@@ -1318,6 +1366,29 @@ export default function ReservationsTab() {
                   </div>
                 </div>
               )}
+              {/* Kasko Selection & Deposit */}
+              <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-gray-700 mt-4">
+                <h4 className="text-white font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select
+                    label="Opzione Kasko"
+                    value={formData.insurance_option}
+                    onChange={(e) => setFormData({ ...formData, insurance_option: e.target.value as KaskoTier })}
+                    options={
+                      (formData.vehicle_id && isUrbanCar(formData.vehicle_id, vehicles.find(v => v.id === formData.vehicle_id)?.display_name))
+                        ? URBAN_INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
+                        : INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
+                    }
+                  />
+                  <Input
+                    label="Cauzione (€)"
+                    type="number"
+                    value={formData.deposit}
+                    onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
+                  />
+                </div>
+              </div>
+
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1768,6 +1839,8 @@ export default function ReservationsTab() {
                         <div><span className="text-gray-400">Luogo Ritiro:</span> <span className="text-white">{selectedBooking.pickup_location || '-'}</span></div>
                         <div><span className="text-gray-400">Riconsegna:</span> <span className="text-white">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT') : '-'}</span></div>
                         <div><span className="text-gray-400">Luogo Riconsegna:</span> <span className="text-white">{selectedBooking.dropoff_location || '-'}</span></div>
+                        <div><span className="text-gray-400">Assicurazione:</span> <span className="text-dr7-gold">{selectedBooking.booking_details?.insuranceOption || 'N/A'}</span></div>
+                        <div><span className="text-gray-400">Cauzione:</span> <span className="text-white">{selectedBooking.booking_details?.deposit ? `€${selectedBooking.booking_details.deposit}` : 'N/A'}</span></div>
                       </>
                     )}
                   </div>

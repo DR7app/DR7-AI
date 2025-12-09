@@ -248,7 +248,7 @@ export const handler: Handler = async (event) => {
         }
 
         let filledFields = 0
-        for (const [key, value] of Object.entries(commonData)) {
+        for (const [key, value] of Object.entries(dataMap)) {
             try {
                 // Try to find exact match
                 let field = form.getTextField(key)
