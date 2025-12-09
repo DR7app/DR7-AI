@@ -11,3 +11,8 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Scheduled Functions
+[[functions]]
+  name = "check-birthdays"
+  schedule = "0 9 * * *"  # Daily at 9:00 AM (cron format)
