@@ -196,16 +196,7 @@ export default function CustomersTab() {
       // Get customers from customers_extended table
       console.log('[CustomersTab] Fetching customers_extended...')
 
-      // First, get total count
-      const { count, error: countError } = await supabase
-        .from('customers_extended')
-        .select('*', { count: 'exact', head: true })
-
-      if (countError) {
-        console.error('[CustomersTab] ERROR counting customers:', countError)
-      } else {
-        setTotalCustomers(count || 0)
-      }
+      // We'll set total count after loading from all sources
 
       // Fetch all customers (we'll paginate client-side for proper alphabetical sorting)
       const { data: customersExtendedData, error: customersExtendedError } = await supabase
@@ -407,6 +398,9 @@ export default function CustomersTab() {
           return customer
         })
       )
+
+      // Set total count from all sources (before pagination)
+      setTotalCustomers(enrichedCustomers.length)
 
       // Sort alphabetically by full_name (A-Z)
       const sortedCustomers = enrichedCustomers.sort((a, b) => {
