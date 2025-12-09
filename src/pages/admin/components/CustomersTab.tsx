@@ -760,7 +760,7 @@ export default function CustomersTab() {
 
       const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
         newStatus === 'vip' ? 'VIP' :
-          newStatus === 'has_rental' ? 'Ha Noleggiato' : 'Nessuno'
+          newStatus === 'has_rental' ? 'Fidelizzato' : 'Nessuno'
       alert(`✅ Status aggiornato a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer status:', error)
@@ -1505,9 +1505,9 @@ export default function CustomersTab() {
                   <tr
                     key={customer.id}
                     className={`border-t border-gray-700 hover:bg-gray-800 ${customer.status === 'blacklist' ? 'bg-black/20' :
-                        customer.status === 'vip' ? 'bg-yellow-500/10' :
-                          customer.status === 'has_rental' ? 'bg-green-500/10' :
-                            ''
+                      customer.status === 'vip' ? 'bg-yellow-500/10' :
+                        customer.status === 'has_rental' ? 'bg-green-500/10' :
+                          ''
                       }`}
                   >
                     <td className="px-4 py-3">
@@ -1584,7 +1584,7 @@ export default function CustomersTab() {
                         )}
                         {customer.status === 'has_rental' && (
                           <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/30 text-green-200 border border-green-400/30 backdrop-blur-sm">
-                            Cliente
+                            Fidelizzato
                           </span>
                         )}
                         {!customer.status && (
@@ -1606,9 +1606,9 @@ export default function CustomersTab() {
                             <button
                               onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
                               className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-200/70 hover:bg-green-500/30 hover:text-green-200 border border-green-400/20 backdrop-blur-sm transition-all"
-                              title="Cliente"
+                              title="Fidelizzato"
                             >
-                              OK
+                              FID
                             </button>
                           </div>
                         )}
