@@ -338,10 +338,6 @@ export default function ReservationsTab() {
     }))
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles])
 
-  useEffect(() => {
-    calculateTotalPrice()
-  }, [formData.pickup_date, formData.return_date, formData.vehicle_id, formData.insurance_option, calculateTotalPrice])
-
   // Reset insurance option to KASKO_BASE when vehicle changes
   useEffect(() => {
     if (formData.vehicle_id) {
