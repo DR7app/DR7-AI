@@ -1125,118 +1125,119 @@ export default function ReservationsTab() {
             {/* Booking Type Selection - Mobile Optimized */}
             {/* Customer Selection - Mobile Optimized */}
             <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-dr7-darker rounded-lg border border-gray-700">
-              <label className="block text-white font-semibold mb-3 text-sm sm:text-base">Cliente:</label>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <button
-                  type="button"
-                  onClick={() => setNewCustomerMode(false)}
-                  className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${!newCustomerMode ? 'bg-white text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-                >
-                  Esistente
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewCustomerMode(true)}
-                  className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${newCustomerMode ? 'bg-white text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-                >
-                  Nuovo
-                </button>
-              </div>
+              <div className="border-b border-gray-700 pb-4">
+                <div className="flex items-center gap-4 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setNewCustomerMode(false)}
+                    className={`px-4 py-2 rounded ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                  >
+                    Seleziona Cliente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewCustomerMode(true)}
+                    className={`px-4 py-2 rounded ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                  >
+                    Nuovo Cliente
+                  </button>
+                </div>
 
-              {newCustomerMode ? (
-                <div className="space-y-4">
-                  <Select
-                    label="Tipo Cliente"
-                    required
-                    value={newCustomerData.tipo_cliente}
-                    onChange={(e) => setNewCustomerData({ ...newCustomerData, tipo_cliente: e.target.value as any })}
-                    options={[
-                      { value: 'persona_fisica', label: 'Persona Fisica' },
-                      { value: 'azienda', label: 'Azienda' },
-                      { value: 'pubblica_amministrazione', label: 'Pubblica Amministrazione' }
-                    ]}
-                  />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Common fields for ALL types */}
+                {newCustomerMode ? (
+                  <div className="space-y-4">
                     <Select
-                      label="Nazione"
+                      label="Tipo Cliente"
                       required
-                      value={newCustomerData.nazione}
-                      onChange={(e) => setNewCustomerData({ ...newCustomerData, nazione: e.target.value })}
+                      value={newCustomerData.tipo_cliente}
+                      onChange={(e) => setNewCustomerData({ ...newCustomerData, tipo_cliente: e.target.value as any })}
                       options={[
-                        { value: 'Italia', label: 'Italia' },
-                        { value: 'Francia', label: 'Francia' },
-                        { value: 'Germania', label: 'Germania' },
-                        { value: 'Spagna', label: 'Spagna' },
-                        { value: 'Regno Unito', label: 'Regno Unito' },
-                        { value: 'Altro', label: 'Altro' }
+                        { value: 'persona_fisica', label: 'Persona Fisica' },
+                        { value: 'azienda', label: 'Azienda' },
+                        { value: 'pubblica_amministrazione', label: 'Pubblica Amministrazione' }
                       ]}
                     />
 
-                    {/* Type-specific fields */}
-                    {newCustomerData.tipo_cliente === 'persona_fisica' && (
-                      <>
-                        <Input label="Nome *" required value={newCustomerData.nome} onChange={(e) => setNewCustomerData({ ...newCustomerData, nome: e.target.value })} />
-                        <Input label="Cognome *" required value={newCustomerData.cognome} onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })} />
-                        <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })} />
-                        <Input label="Data di Nascita" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />
-                        <Input label="Luogo di Nascita" value={newCustomerData.luogo_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })} />
-                        <Input label="Numero Civico" value={newCustomerData.numero_civico} onChange={(e) => setNewCustomerData({ ...newCustomerData, numero_civico: e.target.value })} />
-                        <Input label="Città di Residenza *" required value={newCustomerData.citta_residenza} onChange={(e) => setNewCustomerData({ ...newCustomerData, citta_residenza: e.target.value })} />
-                        <Input label="CAP *" required value={newCustomerData.codice_postale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_postale: e.target.value })} />
-                        <Input label="Provincia *" required value={newCustomerData.provincia_residenza} onChange={(e) => setNewCustomerData({ ...newCustomerData, provincia_residenza: e.target.value.toUpperCase() })} />
-                        <Input label="PEC" type="email" value={newCustomerData.pec} onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })} />
-                        <Input label="Patente" value={newCustomerData.driver_license_number} onChange={(e) => setNewCustomerData({ ...newCustomerData, driver_license_number: e.target.value })} />
-                      </>
-                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Common fields for ALL types */}
+                      <Select
+                        label="Nazione"
+                        required
+                        value={newCustomerData.nazione}
+                        onChange={(e) => setNewCustomerData({ ...newCustomerData, nazione: e.target.value })}
+                        options={[
+                          { value: 'Italia', label: 'Italia' },
+                          { value: 'Francia', label: 'Francia' },
+                          { value: 'Germania', label: 'Germania' },
+                          { value: 'Spagna', label: 'Spagna' },
+                          { value: 'Regno Unito', label: 'Regno Unito' },
+                          { value: 'Altro', label: 'Altro' }
+                        ]}
+                      />
 
-                    {newCustomerData.tipo_cliente === 'azienda' && (
-                      <>
-                        <Input label="Denominazione *" required value={newCustomerData.denominazione} onChange={(e) => setNewCustomerData({ ...newCustomerData, denominazione: e.target.value })} />
-                        <Input label="Partita IVA *" required value={newCustomerData.partita_iva} onChange={(e) => setNewCustomerData({ ...newCustomerData, partita_iva: e.target.value })} />
-                        <Input label="Codice Fiscale" value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value })} />
-                        <Input label="Codice Destinatario" value={newCustomerData.codice_destinatario} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_destinatario: e.target.value })} />
-                        <Input label="PEC" type="email" value={newCustomerData.pec} onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })} />
-                      </>
-                    )}
+                      {/* Type-specific fields */}
+                      {newCustomerData.tipo_cliente === 'persona_fisica' && (
+                        <>
+                          <Input label="Nome *" required value={newCustomerData.nome} onChange={(e) => setNewCustomerData({ ...newCustomerData, nome: e.target.value })} />
+                          <Input label="Cognome *" required value={newCustomerData.cognome} onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })} />
+                          <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })} />
+                          <Input label="Data di Nascita" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />
+                          <Input label="Luogo di Nascita" value={newCustomerData.luogo_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })} />
+                          <Input label="Numero Civico" value={newCustomerData.numero_civico} onChange={(e) => setNewCustomerData({ ...newCustomerData, numero_civico: e.target.value })} />
+                          <Input label="Città di Residenza *" required value={newCustomerData.citta_residenza} onChange={(e) => setNewCustomerData({ ...newCustomerData, citta_residenza: e.target.value })} />
+                          <Input label="CAP *" required value={newCustomerData.codice_postale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_postale: e.target.value })} />
+                          <Input label="Provincia *" required value={newCustomerData.provincia_residenza} onChange={(e) => setNewCustomerData({ ...newCustomerData, provincia_residenza: e.target.value.toUpperCase() })} />
+                          <Input label="PEC" type="email" value={newCustomerData.pec} onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })} />
+                          <Input label="Patente" value={newCustomerData.driver_license_number} onChange={(e) => setNewCustomerData({ ...newCustomerData, driver_license_number: e.target.value })} />
+                        </>
+                      )}
 
-                    {newCustomerData.tipo_cliente === 'pubblica_amministrazione' && (
-                      <>
-                        <Input label="Codice Univoco *" required value={newCustomerData.codice_univoco_pa} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_univoco_pa: e.target.value })} />
-                        <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale_pa} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale_pa: e.target.value })} />
-                        <Input label="Ente o Ufficio *" required value={newCustomerData.ente_o_ufficio} onChange={(e) => setNewCustomerData({ ...newCustomerData, ente_o_ufficio: e.target.value })} />
-                        <Input label="Città *" required value={newCustomerData.citta} onChange={(e) => setNewCustomerData({ ...newCustomerData, citta: e.target.value })} />
-                        <Input label="PEC" type="email" value={newCustomerData.pec} onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })} />
-                      </>
-                    )}
+                      {newCustomerData.tipo_cliente === 'azienda' && (
+                        <>
+                          <Input label="Denominazione *" required value={newCustomerData.denominazione} onChange={(e) => setNewCustomerData({ ...newCustomerData, denominazione: e.target.value })} />
+                          <Input label="Partita IVA *" required value={newCustomerData.partita_iva} onChange={(e) => setNewCustomerData({ ...newCustomerData, partita_iva: e.target.value })} />
+                          <Input label="Codice Fiscale" value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value })} />
+                          <Input label="Codice Destinatario" value={newCustomerData.codice_destinatario} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_destinatario: e.target.value })} />
+                          <Input label="PEC" type="email" value={newCustomerData.pec} onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })} />
+                        </>
+                      )}
 
-                    {/* Common mandatory fields */}
-                    <Input label="Telefono *" type="tel" required value={newCustomerData.telefono} onChange={(e) => setNewCustomerData({ ...newCustomerData, telefono: e.target.value })} />
-                    <Input label="Email *" type="email" required value={newCustomerData.email} onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })} />
-                    <div className="md:col-span-2">
-                      <Input label="Indirizzo *" required value={newCustomerData.indirizzo} onChange={(e) => setNewCustomerData({ ...newCustomerData, indirizzo: e.target.value })} />
+                      {newCustomerData.tipo_cliente === 'pubblica_amministrazione' && (
+                        <>
+                          <Input label="Codice Univoco *" required value={newCustomerData.codice_univoco_pa} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_univoco_pa: e.target.value })} />
+                          <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale_pa} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale_pa: e.target.value })} />
+                          <Input label="Ente o Ufficio *" required value={newCustomerData.ente_o_ufficio} onChange={(e) => setNewCustomerData({ ...newCustomerData, ente_o_ufficio: e.target.value })} />
+                          <Input label="Città *" required value={newCustomerData.citta} onChange={(e) => setNewCustomerData({ ...newCustomerData, citta: e.target.value })} />
+                          <Input label="PEC" type="email" value={newCustomerData.pec} onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })} />
+                        </>
+                      )}
+
+                      {/* Common mandatory fields */}
+                      <Input label="Telefono *" type="tel" required value={newCustomerData.telefono} onChange={(e) => setNewCustomerData({ ...newCustomerData, telefono: e.target.value })} />
+                      <Input label="Email *" type="email" required value={newCustomerData.email} onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })} />
+                      <div className="md:col-span-2">
+                        <Input label="Indirizzo *" required value={newCustomerData.indirizzo} onChange={(e) => setNewCustomerData({ ...newCustomerData, indirizzo: e.target.value })} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Cerca e Seleziona Cliente</label>
-                  <CustomerAutocomplete
-                    customers={customers}
-                    selectedCustomerId={formData.customer_id}
-                    onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
-                    placeholder="Inizia a scrivere nome, email o telefono..."
-                    required={true}
-                  />
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente</label>
+                    <CustomerAutocomplete
+                      customers={customers}
+                      selectedCustomerId={formData.customer_id}
+                      onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
+                      placeholder="Inizia a scrivere nome, email o telefono..."
+                      required={true}
+                    />
 
-                  {customers.length === 0 && (
-                    <p className="text-sm text-yellow-400 mt-2">
-                      Nessun cliente trovato. Verifica che l'API sia attiva o crea un nuovo cliente.
-                    </p>
-                  )}
-                </div>
-              )}
+                    {customers.length === 0 && (
+                      <p className="text-sm text-yellow-400 mt-2">
+                        Nessun cliente trovato. Verifica che l'API sia attiva o crea un nuovo cliente.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Service Details */}
