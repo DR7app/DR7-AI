@@ -50,19 +50,6 @@ export const URBAN_INSURANCE_ELIGIBILITY = {
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
 };
 
-// Helper function to determine if vehicle uses urban/utilitaire insurance pricing
-function usesUrbanInsurance(vehicle?: Vehicle): boolean {
-  if (!vehicle) return false;
-  // Use category field if available, otherwise fall back to name matching
-  if (vehicle.category) {
-    return vehicle.category === 'URBAN' || vehicle.category === 'UTILITAIRE';
-  }
-  // Fallback for vehicles without category (legacy)
-  const name = vehicle.display_name.toLowerCase();
-  return name.includes('panda') || name.includes('captur') || name.includes('urban') ||
-    name.includes('ducato') || name.includes('van') || name.includes('utilitaire');
-}
-
 // Helper function to check if vehicle is a furgone (Ducato/Vito)
 function isFurgone(vehicle?: Vehicle): boolean {
   if (!vehicle) return false;
@@ -98,24 +85,6 @@ function getInsuranceOptions(vehicle?: Vehicle) {
   }
 
   return INSURANCE_OPTIONS; // SUPERCAR
-}
-
-// Helper function to get default deposit amount
-function getDefaultDeposit(vehicle?: Vehicle): number {
-  if (!vehicle) return DEPOSIT_AMOUNTS.SUPERCAR;
-
-  if (isFurgone(vehicle)) return DEPOSIT_AMOUNTS.FURGONE;
-  if (vehicle.category === 'UTILITAIRE') return DEPOSIT_AMOUNTS.UTILITAIRE;
-  if (vehicle.category === 'URBAN') return DEPOSIT_AMOUNTS.UTILITAIRE;
-
-  // Fallback
-  const name = vehicle.display_name.toLowerCase();
-  if (name.includes('panda') || name.includes('captur') || name.includes('urban') ||
-    name.includes('van') || name.includes('utilitaire')) {
-    return DEPOSIT_AMOUNTS.UTILITAIRE;
-  }
-
-  return DEPOSIT_AMOUNTS.SUPERCAR;
 }
 interface Customer {
   id: string
