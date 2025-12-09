@@ -1484,10 +1484,10 @@ export default function CustomersTab() {
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tipo Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Telefono</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-white">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -1536,59 +1536,6 @@ export default function CustomersTab() {
                         <span className="text-gray-500">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2 items-center">
-                        {customer.status === 'blacklist' && (
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-black text-white border border-white">
-                            Blacklist
-                          </span>
-                        )}
-                        {customer.status === 'vip' && (
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500 text-black">
-                            VIP
-                          </span>
-                        )}
-                        {customer.status === 'has_rental' && (
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-green-500 text-black">
-                            Ha Noleggiato
-                          </span>
-                        )}
-                        {!customer.status && (
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                              className="px-2 py-1 rounded text-xs bg-black text-white hover:bg-gray-800"
-                              title="Blacklist"
-                            >
-                              BL
-                            </button>
-                            <button
-                              onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
-                              className="px-2 py-1 rounded text-xs bg-yellow-500 text-black hover:bg-yellow-600"
-                              title="VIP"
-                            >
-                              VIP
-                            </button>
-                            <button
-                              onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
-                              className="px-2 py-1 rounded text-xs bg-green-500 text-black hover:bg-green-600"
-                              title="Ha Noleggiato"
-                            >
-                              OK
-                            </button>
-                          </div>
-                        )}
-                        {customer.status && (
-                          <button
-                            onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                            className="px-2 py-1 rounded text-xs bg-gray-700 text-white hover:bg-gray-600"
-                            title="Rimuovi Status"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    </td>
                     <td className="px-4 py-3 text-sm text-white">{customer.email || '-'}</td>
                     <td className="px-4 py-3 text-sm text-white">{customer.phone || '-'}</td>
                     <td className="px-4 py-3 text-sm">
@@ -1608,20 +1555,75 @@ export default function CustomersTab() {
                           Documenti
                         </Button>
                         <Button
-                          onClick={() => handleEdit(customer)}
+                          onClick={() => handleEditCustomer(customer)}
                           variant="secondary"
-                          className="text-xs py-1 px-3"
+                          className="text-xs py-1 px-3 bg-green-900 hover:bg-green-800"
                         >
                           Modifica
                         </Button>
-                        <Button
-                          onClick={() => handleDelete(customer.id)}
-                          variant="secondary"
-                          className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
-                        >
-                          Elimina
-                        </Button>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex gap-2 items-center justify-end">
+                        {customer.status === 'blacklist' && (
+                          <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-black/40 text-white border border-white/20 backdrop-blur-sm">
+                            Blacklist
+                          </span>
+                        )}
+                        {customer.status === 'vip' && (
+                          <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-500/30 text-yellow-200 border border-yellow-400/30 backdrop-blur-sm">
+                            VIP
+                          </span>
+                        )}
+                        {customer.status === 'has_rental' && (
+                          <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/30 text-green-200 border border-green-400/30 backdrop-blur-sm">
+                            Cliente
+                          </span>
+                        )}
+                        {!customer.status && (
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-black/20 text-white/70 hover:bg-black/40 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
+                              title="Blacklist"
+                            >
+                              BL
+                            </button>
+                            <button
+                              onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-yellow-500/20 text-yellow-200/70 hover:bg-yellow-500/30 hover:text-yellow-200 border border-yellow-400/20 backdrop-blur-sm transition-all"
+                              title="VIP"
+                            >
+                              VIP
+                            </button>
+                            <button
+                              onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-200/70 hover:bg-green-500/30 hover:text-green-200 border border-green-400/20 backdrop-blur-sm transition-all"
+                              title="Cliente"
+                            >
+                              OK
+                            </button>
+                          </div>
+                        )}
+                        {customer.status && (
+                          <button
+                            onClick={() => handleUpdateCustomerStatus(customer.id, null)}
+                            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-700/30 text-white/60 hover:bg-gray-700/50 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
+                            title="Rimuovi Status"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right">
+                      <Button
+                        onClick={() => handleDelete(customer.id)}
+                        variant="secondary"
+                        className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                      >
+                        Elimina
+                      </Button>
                     </td>
                   </tr>
                 ))}
