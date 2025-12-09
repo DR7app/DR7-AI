@@ -51,6 +51,7 @@ interface Customer {
   codice_fiscale_pa?: string
   ente_ufficio?: string
   indirizzo_pa?: string
+  citta?: string
   // Common fields
   nazione?: string
   telefono?: string
