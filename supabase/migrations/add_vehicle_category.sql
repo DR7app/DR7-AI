@@ -22,6 +22,7 @@ SET category = 'URBAN'
 WHERE category IS NULL
   AND (display_name ILIKE '%panda%' 
    OR display_name ILIKE '%captur%'
+   OR display_name ILIKE '%clio%'
    OR display_name ILIKE '%urban%'
    OR id::text LIKE 'urban-car-%');
 
