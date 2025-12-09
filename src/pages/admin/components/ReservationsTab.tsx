@@ -518,11 +518,13 @@ export default function ReservationsTab() {
             if (emailRes.ok) {
               alert('✅ Email inviata con successo!')
             } else {
-              alert('⚠️ Errore invio email: ' + (emailData.error || 'Errore sconosciuto'))
+              console.error('Email send failed:', emailData)
+              const errorMsg = emailData.error || emailData.details || 'Errore sconosciuto'
+              alert('⚠️ Errore invio email:\n\n' + errorMsg + '\n\nControlla i log di Netlify per maggiori dettagli.')
             }
           } catch (e: any) {
             console.error('Email handling error:', e)
-            alert('Errore invio email: ' + e.message)
+            alert('Errore invio email:\n\n' + e.message + '\n\nControlla i log di Netlify per maggiori dettagli.')
           }
         }
       } else {
