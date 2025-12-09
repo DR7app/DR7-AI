@@ -106,9 +106,14 @@ export default function CustomersTab() {
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
   const [showGiftVoucherModal, setShowGiftVoucherModal] = useState(false)
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCustomers, setTotalCustomers] = useState(0)
+  const CUSTOMERS_PER_PAGE = 30
+
   useEffect(() => {
     loadCustomers()
-  }, [])
+  }, [currentPage])
 
   async function loadCustomers() {
     setLoading(true)
@@ -188,12 +193,30 @@ export default function CustomersTab() {
         console.log('Unique customers:', customerMap.size)
       }
 
-      // Also get customers from customers_extended table
-      console.log('[CustomersTab] Fetching customers_extended...')
+      // Get customers from customers_extended table with pagination
+      console.log('[CustomersTab] Fetching customers_extended with pagination...')
+
+      // First, get total count
+      const { count, error: countError } = await supabase
+        .from('customers_extended')
+        .select('*', { count: 'exact', head: true })
+
+      if (countError) {
+        console.error('[CustomersTab] ERROR counting customers:', countError)
+      } else {
+        setTotalCustomers(count || 0)
+      }
+
+      // Then get paginated data, sorted alphabetically
+      const from = (currentPage - 1) * CUSTOMERS_PER_PAGE
+      const to = from + CUSTOMERS_PER_PAGE - 1
+
       const { data: customersExtendedData, error: customersExtendedError } = await supabase
         .from('customers_extended')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('nome', { ascending: true, nullsFirst: false })
+        .order('ragione_sociale', { ascending: true, nullsFirst: false })
+        .range(from, to)
 
       if (customersExtendedError) {
         console.error('[CustomersTab] ERROR loading customers_extended:', customersExtendedError)
@@ -1720,6 +1743,32 @@ export default function CustomersTab() {
                 )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-700">
+          <div className="text-sm text-gray-400">
+            Mostrando {((currentPage - 1) * CUSTOMERS_PER_PAGE) + 1} - {Math.min(currentPage * CUSTOMERS_PER_PAGE, totalCustomers)} di {totalCustomers} clienti
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              ← Precedente
+            </button>
+            <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg">
+              Pagina {currentPage} di {Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE)}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE), prev + 1))}
+              disabled={currentPage >= Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE)}
+              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Successiva →
+            </button>
+          </div>
         </div>
       </div>
 
