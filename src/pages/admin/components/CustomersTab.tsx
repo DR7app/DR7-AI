@@ -465,155 +465,27 @@ export default function CustomersTab() {
     setDocumentsUrls({ licenses: [], ids: [], codiceFiscale: [] })
 
     try {
-      // FIRST: Check database for existing document records
-      const { data: dbDocuments } = await supabase
-        .from('user_documents')
-        .select('*')
-        .eq('user_id', userId)
+      console.log('[CustomersTab] Fetching documents via Netlify function for:', userId)
+      const response = await fetch('/.netlify/functions/get-customer-documents', {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+        headers: { 'Content-Type': 'application/json' }
+      })
 
-      console.log('Database documents found:', dbDocuments?.length || 0, dbDocuments)
-
-      // SECOND: List files in storage buckets
-      const { data: licenseFiles, error: licenseError } = await supabase.storage
-        .from('driver-licenses')
-        .list(userId, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
-
-      if (licenseError) {
-        console.error('Error listing license files:', licenseError)
+      if (!response.ok) {
+        throw new Error(`Function failed with status ${response.status}`)
       }
 
-      const { data: idFiles, error: idError } = await supabase.storage
-        .from('driver-ids')
-        .list(userId, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
+      const result = await response.json()
 
-      if (idError) {
-        console.error('Error listing ID files:', idError)
+      if (result.success && result.documents) {
+        console.log('[CustomersTab] Documents loaded:', result.documents)
+        setDocumentsUrls(result.documents)
+      } else {
+        console.error('[CustomersTab] Failed to load documents:', result.error)
       }
-
-      const { data: codiceFiscaleFiles, error: codiceFiscaleError } = await supabase.storage
-        .from('codice-fiscale')
-        .list(userId, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
-
-      if (codiceFiscaleError) {
-        console.error('Error listing Codice Fiscale files:', codiceFiscaleError)
-      }
-
-      const licenseUrls: Array<{ url: string; fileName: string }> = []
-      const idUrls: Array<{ url: string; fileName: string }> = []
-      const codiceFiscaleUrls: Array<{ url: string; fileName: string }> = []
-
-      // THIRD: Process database documents if they exist
-      if (dbDocuments && dbDocuments.length > 0) {
-        console.log('[CustomersTab] Processing database documents:', dbDocuments)
-
-        for (const doc of dbDocuments) {
-          // Use the bucket stored in the database record
-          const bucket = (doc as any).bucket || 'driver-ids'
-
-          console.log('[CustomersTab] Processing document:', {
-            document_type: doc.document_type,
-            bucket: bucket,
-            file_path: doc.file_path,
-            status: doc.status
-          })
-
-          // Get signed URL from the file_path stored in database (24 hour expiry)
-          const { data: signedUrl, error: urlError } = await supabase.storage
-            .from(bucket)
-            .createSignedUrl(doc.file_path, 86400) // 24 hours
-
-          if (urlError) {
-            console.error('[CustomersTab] Error creating signed URL:', urlError)
-            continue
-          }
-
-          if (signedUrl?.signedUrl) {
-            const fileName = doc.file_path.split('/').pop() || doc.document_type
-
-            // Map to correct category based on bucket
-            if (bucket === 'driver-licenses') {
-              licenseUrls.push({ url: signedUrl.signedUrl, fileName })
-            } else if (bucket === 'codice-fiscale') {
-              codiceFiscaleUrls.push({ url: signedUrl.signedUrl, fileName })
-            } else if (bucket === 'carta-identita' || bucket === 'driver-ids') {
-              idUrls.push({ url: signedUrl.signedUrl, fileName })
-            }
-          }
-        }
-
-        console.log('[CustomersTab] Processed URLs:', {
-          licenses: licenseUrls.length,
-          ids: idUrls.length,
-          codiceFiscale: codiceFiscaleUrls.length
-        })
-      }
-
-      // FOURTH: Filter and process storage bucket files
-      const actualLicenseFiles = licenseFiles?.filter(file => file.id && !file.name.includes('.emptyFolderPlaceholder')) || []
-      const actualIdFiles = idFiles?.filter(file => file.id && !file.name.includes('.emptyFolderPlaceholder')) || []
-      const actualCodiceFiscaleFiles = codiceFiscaleFiles?.filter(file => file.id && !file.name.includes('.emptyFolderPlaceholder')) || []
-
-      console.log('Storage - License files found:', actualLicenseFiles.length, actualLicenseFiles)
-      console.log('Storage - ID files found:', actualIdFiles.length, actualIdFiles)
-      console.log('Storage - Codice Fiscale files found:', actualCodiceFiscaleFiles.length, actualCodiceFiscaleFiles)
-
-      // FIFTH: Get signed URLs for storage files (avoid duplicates with database files)
-      const existingFileNames = new Set([
-        ...licenseUrls.map(u => u.fileName),
-        ...idUrls.map(u => u.fileName),
-        ...codiceFiscaleUrls.map(u => u.fileName)
-      ])
-
-      // Get signed URLs for driver licenses not already in database
-      for (const licenseFile of actualLicenseFiles) {
-        if (!existingFileNames.has(licenseFile.name)) {
-          const { data: signedUrlData, error: signError } = await supabase.storage
-            .from('driver-licenses')
-            .createSignedUrl(`${userId}/${licenseFile.name}`, 86400) // 24 hours
-
-          if (signError) {
-            console.error('Error creating signed URL for license:', signError)
-          } else if (signedUrlData?.signedUrl) {
-            licenseUrls.push({ url: signedUrlData.signedUrl, fileName: licenseFile.name })
-          }
-        }
-      }
-
-      // Get signed URLs for IDs not already in database
-      for (const idFile of actualIdFiles) {
-        if (!existingFileNames.has(idFile.name)) {
-          const { data: signedUrlData, error: signError } = await supabase.storage
-            .from('driver-ids')
-            .createSignedUrl(`${userId}/${idFile.name}`, 86400) // 24 hours
-
-          if (signError) {
-            console.error('Error creating signed URL for ID:', signError)
-          } else if (signedUrlData?.signedUrl) {
-            idUrls.push({ url: signedUrlData.signedUrl, fileName: idFile.name })
-          }
-        }
-      }
-
-      // Get signed URLs for Codice Fiscale not already in database
-      for (const cfFile of actualCodiceFiscaleFiles) {
-        if (!existingFileNames.has(cfFile.name)) {
-          const { data: signedUrlData, error: signError } = await supabase.storage
-            .from('codice-fiscale')
-            .createSignedUrl(`${userId}/${cfFile.name}`, 86400) // 24 hours
-
-          if (signError) {
-            console.error('Error creating signed URL for Codice Fiscale:', signError)
-          } else if (signedUrlData?.signedUrl) {
-            codiceFiscaleUrls.push({ url: signedUrlData.signedUrl, fileName: cfFile.name })
-          }
-        }
-      }
-
-      console.log('Total documents loaded - Licenses:', licenseUrls.length, 'IDs:', idUrls.length, 'CF:', codiceFiscaleUrls.length)
-
-      setDocumentsUrls({ licenses: licenseUrls, ids: idUrls, codiceFiscale: codiceFiscaleUrls })
     } catch (error) {
-      console.error('Error fetching documents:', error)
+      console.error('[CustomersTab] Error fetching documents:', error)
     } finally {
       setLoadingDocuments(false)
     }
