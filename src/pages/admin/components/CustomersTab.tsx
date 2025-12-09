@@ -13,6 +13,7 @@ interface Customer {
   notes: string | null
   created_at: string
   updated_at: string
+  status?: 'blacklist' | 'has_rental' | 'vip' | null
   verification?: {
     idStatus: 'unverified' | 'pending' | 'verified'
     stripeVerificationSessionId?: string
@@ -49,7 +50,7 @@ interface Customer {
   codice_univoco?: string
   codice_fiscale_pa?: string
   ente_ufficio?: string
-  citta?: string
+  indirizzo_pa?: string
   // Common fields
   nazione?: string
   telefono?: string
@@ -739,6 +740,30 @@ export default function CustomersTab() {
     } catch (error: any) {
       console.error('Error deleting Codice Fiscale:', error)
       alert('❌ Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
+    }
+  }
+
+  async function handleUpdateCustomerStatus(customerId: string, newStatus: 'blacklist' | 'has_rental' | 'vip' | null) {
+    try {
+      const { error } = await supabase
+        .from('customers_extended')
+        .update({ status: newStatus })
+        .eq('id', customerId)
+
+      if (error) throw error
+
+      // Update local state
+      setCustomers(customers.map(c =>
+        c.id === customerId ? { ...c, status: newStatus } : c
+      ))
+
+      const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
+        newStatus === 'vip' ? 'VIP' :
+          newStatus === 'has_rental' ? 'Ha Noleggiato' : 'Nessuno'
+      alert(`✅ Status aggiornato a: ${statusLabel}`)
+    } catch (error: any) {
+      console.error('Error updating customer status:', error)
+      alert('❌ Errore nell\'aggiornamento dello status')
     }
   }
 
@@ -1458,6 +1483,7 @@ export default function CustomersTab() {
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tipo Cliente</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Telefono</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
@@ -1508,6 +1534,59 @@ export default function CustomersTab() {
                       ) : (
                         <span className="text-gray-500">-</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex gap-2 items-center">
+                        {customer.status === 'blacklist' && (
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-black text-white border border-white">
+                            ⛔ Blacklist
+                          </span>
+                        )}
+                        {customer.status === 'vip' && (
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500 text-black">
+                            ⭐ VIP
+                          </span>
+                        )}
+                        {customer.status === 'has_rental' && (
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-green-500 text-black">
+                            ✓ Ha Noleggiato
+                          </span>
+                        )}
+                        {!customer.status && (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
+                              className="px-2 py-1 rounded text-xs bg-black text-white hover:bg-gray-800"
+                              title="Blacklist"
+                            >
+                              ⛔
+                            </button>
+                            <button
+                              onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
+                              className="px-2 py-1 rounded text-xs bg-yellow-500 text-black hover:bg-yellow-600"
+                              title="VIP"
+                            >
+                              ⭐
+                            </button>
+                            <button
+                              onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
+                              className="px-2 py-1 rounded text-xs bg-green-500 text-black hover:bg-green-600"
+                              title="Ha Noleggiato"
+                            >
+                              ✓
+                            </button>
+                          </div>
+                        )}
+                        {customer.status && (
+                          <button
+                            onClick={() => handleUpdateCustomerStatus(customer.id, null)}
+                            className="px-2 py-1 rounded text-xs bg-gray-700 text-white hover:bg-gray-600"
+                            title="Rimuovi Status"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-white">{customer.email || '-'}</td>
                     <td className="px-4 py-3 text-sm text-white">{customer.phone || '-'}</td>
