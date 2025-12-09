@@ -35,12 +35,18 @@ export const URBAN_INSURANCE_ELIGIBILITY = {
 
 // Helper function to see if a car is 'urban'
 function isUrbanCar(carId: string, vehicleName?: string): boolean {
+  // Check if it's an urban car by ID
   if (carId.startsWith('urban-car-')) return true;
-  if (vehicleName && (
-    vehicleName.toLowerCase().includes('panda') ||
-    vehicleName.toLowerCase().includes('captur') ||
-    vehicleName.toLowerCase().includes('urban')
-  )) return true;
+
+  // Check by vehicle name for URBAN and UTILITAIRES vehicles
+  if (vehicleName) {
+    const name = vehicleName.toLowerCase();
+    // URBAN vehicles
+    if (name.includes('panda') || name.includes('captur') || name.includes('urban')) return true;
+    // UTILITAIRES vehicles (vans, utility vehicles)
+    if (name.includes('ducato') || name.includes('van') || name.includes('utilitaire')) return true;
+  }
+
   return false;
 }
 interface Customer {
