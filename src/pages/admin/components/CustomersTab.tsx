@@ -193,8 +193,8 @@ export default function CustomersTab() {
         console.log('Unique customers:', customerMap.size)
       }
 
-      // Get customers from customers_extended table with pagination
-      console.log('[CustomersTab] Fetching customers_extended with pagination...')
+      // Get customers from customers_extended table
+      console.log('[CustomersTab] Fetching customers_extended...')
 
       // First, get total count
       const { count, error: countError } = await supabase
@@ -207,16 +207,10 @@ export default function CustomersTab() {
         setTotalCustomers(count || 0)
       }
 
-      // Then get paginated data, sorted alphabetically
-      const from = (currentPage - 1) * CUSTOMERS_PER_PAGE
-      const to = from + CUSTOMERS_PER_PAGE - 1
-
+      // Fetch all customers (we'll paginate client-side for proper alphabetical sorting)
       const { data: customersExtendedData, error: customersExtendedError } = await supabase
         .from('customers_extended')
         .select('*')
-        .order('nome', { ascending: true, nullsFirst: false })
-        .order('ragione_sociale', { ascending: true, nullsFirst: false })
-        .range(from, to)
 
       if (customersExtendedError) {
         console.error('[CustomersTab] ERROR loading customers_extended:', customersExtendedError)
