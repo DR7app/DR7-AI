@@ -121,17 +121,43 @@ export default function DocumentsVerificationTab() {
 
   async function viewDocument(doc: UserDocument) {
     try {
-      // Use the bucket from the document record, not hardcoded
-      const bucketName = (doc as any).bucket || 'user-documents'
+      // Use secure server-side function to bypass RLS
+      const response = await fetch('/.netlify/functions/get-customer-documents', {
+        method: 'POST',
+        body: JSON.stringify({ userId: doc.user_id }),
+        headers: { 'Content-Type': 'application/json' }
+      })
 
-      const { data } = await supabase.storage
-        .from(bucketName)
-        .createSignedUrl(doc.file_path, 3600)
+      if (!response.ok) throw new Error('Failed to fetch secure URLs')
 
-      if (data?.signedUrl) {
-        setSelectedDoc(doc)
-        setShowDocModal(true)
-        window.open(data.signedUrl, '_blank')
+      const result = await response.json()
+
+      if (result.success && result.documents) {
+        // Flatten all docs to find the one we need
+        const allDocs = [
+          ...result.documents.licenses,
+          ...result.documents.ids,
+          ...result.documents.codiceFiscale
+        ]
+
+        const targetFileName = doc.file_path.split('/').pop()
+        const match = allDocs.find((d: any) => d.fileName === targetFileName)
+
+        if (match?.url) {
+          window.open(match.url, '_blank')
+        } else {
+          // Fallback: try to find by fuzzy match if exact match fails
+          const fuzzyMatch = allDocs.find((d: any) =>
+            doc.file_path.includes(d.fileName) || d.fileName.includes(targetFileName || '___')
+          )
+
+          if (fuzzyMatch?.url) {
+            window.open(fuzzyMatch.url, '_blank')
+          } else {
+            console.error('Document mismatch. Targets:', targetFileName, 'Found:', allDocs.map((d: any) => d.fileName))
+            alert('Impossibile recuperare il file sicuro. Riprova.')
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to get document URL:', error)
@@ -233,41 +259,37 @@ export default function DocumentsVerificationTab() {
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setFilterStatus('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filterStatus === 'all'
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'all'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+              }`}
           >
             Tutti ({documents.length})
           </button>
           <button
             onClick={() => setFilterStatus('pending_verification')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filterStatus === 'pending_verification'
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'pending_verification'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+              }`}
           >
             Da Verificare ({documents.filter(d => d.status === 'pending_verification').length})
           </button>
           <button
             onClick={() => setFilterStatus('verified')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filterStatus === 'verified'
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'verified'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+              }`}
           >
             Verificati ({documents.filter(d => d.status === 'verified').length})
           </button>
           <button
             onClick={() => setFilterStatus('rejected')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filterStatus === 'rejected'
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'rejected'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+              }`}
           >
             Rifiutati ({documents.filter(d => d.status === 'rejected').length})
           </button>
