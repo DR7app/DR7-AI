@@ -816,11 +816,32 @@ export default function CustomersTab() {
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-sm text-gray-400">Indirizzo:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.indirizzo || '-'}</p>
+                      <p className="text-sm text-white font-medium">
+                        {(() => {
+                          const fullAddress = viewingCustomerDetails.indirizzo || '';
+                          const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
+                          if (numberMatch && !viewingCustomerDetails.numero_civico) {
+                            // Extract street name without number
+                            return fullAddress.replace(/\s+\d+[a-zA-Z]?$/, '').trim() || '-';
+                          }
+                          return fullAddress || '-';
+                        })()}
+                      </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">Numero Civico:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.numero_civico || '-'}</p>
+                      <p className="text-sm text-white font-medium">
+                        {(() => {
+                          // First check if numero_civico field has data
+                          if (viewingCustomerDetails.numero_civico) {
+                            return viewingCustomerDetails.numero_civico;
+                          }
+                          // If not, try to extract from indirizzo
+                          const fullAddress = viewingCustomerDetails.indirizzo || '';
+                          const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
+                          return numberMatch ? numberMatch[1] : '-';
+                        })()}
+                      </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">Città di Residenza:</span>
