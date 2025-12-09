@@ -768,6 +768,41 @@ export default function CustomersTab() {
     }
   }
 
+  async function handleBulkStatusUpdate(newStatus: 'blacklist' | 'has_rental' | 'vip' | null) {
+    const count = selectedCustomerIds.size
+    const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
+      newStatus === 'vip' ? 'VIP' :
+        newStatus === 'has_rental' ? 'Fidelizzato' : 'Nessuno'
+
+    if (!confirm(`Vuoi cambiare lo status di ${count} clienti a: ${statusLabel}?`)) return
+
+    try {
+      const updates = Array.from(selectedCustomerIds).map(async (customerId) => {
+        const { error } = await supabase
+          .from('customers_extended')
+          .update({ status: newStatus })
+          .eq('id', customerId)
+
+        if (error) throw error
+      })
+
+      await Promise.all(updates)
+
+      // Update local state
+      setCustomers(customers.map(c =>
+        selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
+      ))
+
+      // Clear selection
+      setSelectedCustomerIds(new Set())
+
+      alert(`✅ Status aggiornato per ${count} clienti a: ${statusLabel}`)
+    } catch (error: any) {
+      console.error('Error updating customer statuses:', error)
+      alert('❌ Errore nell\'aggiornamento degli status')
+    }
+  }
+
   async function handleSendGiftVouchers(data: { subject: string; message: string; image: File | null }) {
     if (!data.image) {
       alert('Immagine richiesta')
@@ -1418,12 +1453,46 @@ export default function CustomersTab() {
           <h2 className="text-2xl font-bold text-white">Clienti</h2>
           <div className="flex gap-3">
             {selectedCustomerIds.size > 0 && (
-              <Button
-                onClick={() => setShowGiftVoucherModal(true)}
-                variant="secondary"
-              >
-                🎁 Invia Buono Regalo ({selectedCustomerIds.size})
-              </Button>
+              <>
+                <Button
+                  onClick={() => setShowGiftVoucherModal(true)}
+                  className="bg-dr7-gold hover:bg-dr7-gold/80 text-black font-semibold"
+                >
+                  🎁 Invia Buono Regalo ({selectedCustomerIds.size})
+                </Button>
+
+                <div className="flex gap-2 items-center border-l border-gray-600 pl-4">
+                  <span className="text-sm text-gray-400">Cambia Status:</span>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('blacklist')}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-black/30 text-white hover:bg-black/50 border border-white/20 backdrop-blur-sm transition-all"
+                    title="Imposta come Blacklist"
+                  >
+                    ⛔ Blacklist
+                  </button>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('vip')}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-yellow-500/20 text-yellow-200 hover:bg-yellow-500/30 border border-yellow-400/20 backdrop-blur-sm transition-all"
+                    title="Imposta come VIP"
+                  >
+                    ⭐ VIP
+                  </button>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('has_rental')}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-green-500/20 text-green-200 hover:bg-green-500/30 border border-green-400/20 backdrop-blur-sm transition-all"
+                    title="Imposta come Fidelizzato"
+                  >
+                    ✓ Fidelizzato
+                  </button>
+                  <button
+                    onClick={() => handleBulkStatusUpdate(null)}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-700/30 text-white/60 hover:bg-gray-700/50 border border-white/10 backdrop-blur-sm transition-all"
+                    title="Rimuovi Status"
+                  >
+                    ✕ Rimuovi
+                  </button>
+                </div>
+              </>
             )}
             <Button onClick={() => setShowNewClientModal(true)}>
               + Nuovo Cliente
