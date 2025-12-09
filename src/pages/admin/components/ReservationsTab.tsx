@@ -338,6 +338,28 @@ export default function ReservationsTab() {
     }))
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles])
 
+  useEffect(() => {
+    calculateTotalPrice()
+  }, [formData.pickup_date, formData.return_date, formData.vehicle_id, formData.insurance_option, calculateTotalPrice])
+
+  // Reset insurance option to KASKO_BASE when vehicle changes
+  useEffect(() => {
+    if (formData.vehicle_id) {
+      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+      if (!selectedVehicle) return; // Ensure a vehicle is found
+
+      const availableOptions = getInsuranceOptions(selectedVehicle)
+
+      // Check if current insurance option is valid for this vehicle
+      const isCurrentOptionValid = availableOptions.some(opt => opt.id === formData.insurance_option)
+
+      // If current option is not available for this vehicle, reset to KASKO_BASE
+      if (!isCurrentOptionValid) {
+        setFormData(prev => ({ ...prev, insurance_option: 'KASKO_BASE' }))
+      }
+    }
+  }, [formData.vehicle_id, vehicles, formData.insurance_option])
+
 
   async function loadData() {
     setLoading(true)
