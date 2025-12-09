@@ -146,8 +146,26 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         data_nascita: initialData.data_nascita || '',
         luogo_nascita: initialData.luogo_nascita || '',
         provincia_nascita: metadata.provincia_nascita || initialData.provincia_nascita || '',
-        indirizzo: initialData.indirizzo || '',
-        numero_civico: initialData.numero_civico || '',
+        // Parse address to separate street number if needed
+        indirizzo: (() => {
+          const fullAddress = initialData.indirizzo || '';
+          const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
+          // If there's a number at the end and no numero_civico, extract just the street
+          if (numberMatch && !initialData.numero_civico) {
+            return fullAddress.replace(/\s+\d+[a-zA-Z]?$/, '').trim();
+          }
+          return fullAddress;
+        })(),
+        numero_civico: (() => {
+          // If numero_civico exists, use it
+          if (initialData.numero_civico) {
+            return initialData.numero_civico;
+          }
+          // Otherwise try to extract from indirizzo
+          const fullAddress = initialData.indirizzo || '';
+          const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
+          return numberMatch ? numberMatch[1] : '';
+        })(),
         codice_postale: initialData.codice_postale || '',
         citta_residenza: initialData.citta_residenza || '',
         provincia_residenza: initialData.provincia_residenza || '',
