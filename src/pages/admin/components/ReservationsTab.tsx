@@ -1366,29 +1366,29 @@ export default function ReservationsTab() {
                   </div>
                 </div>
               )}
-              {/* Kasko Selection & Deposit */}
-              <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-gray-700 mt-4">
-                <h4 className="text-white font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Select
-                    label="Opzione Kasko"
-                    value={formData.insurance_option}
-                    onChange={(e) => setFormData({ ...formData, insurance_option: e.target.value as KaskoTier })}
-                    options={
-                      (formData.vehicle_id && isUrbanCar(formData.vehicle_id, vehicles.find(v => v.id === formData.vehicle_id)?.display_name))
-                        ? URBAN_INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
-                        : INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
-                    }
-                  />
-                  <Input
-                    label="Cauzione (€)"
-                    type="number"
-                    value={formData.deposit}
-                    onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
-                  />
-                </div>
-              </div>
+            </div>
 
+            {/* Kasko Selection & Deposit */}
+            <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-gray-700">
+              <h4 className="text-white font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Opzione Kasko"
+                  value={formData.insurance_option}
+                  onChange={(e) => setFormData({ ...formData, insurance_option: e.target.value as KaskoTier })}
+                  options={
+                    (formData.vehicle_id && isUrbanCar(formData.vehicle_id, vehicles.find(v => v.id === formData.vehicle_id)?.display_name))
+                      ? URBAN_INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
+                      : INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
+                  }
+                />
+                <Input
+                  label="Cauzione (€)"
+                  type="number"
+                  value={formData.deposit}
+                  onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

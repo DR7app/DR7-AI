@@ -228,7 +228,7 @@ export default function CustomersTab() {
             data_nascita: customer.data_nascita,
             luogo_nascita: customer.luogo_nascita,
             provincia_nascita: customer.provincia_nascita,
-            sesso: customer.sesso,
+            sesso: customer.sesso || customer.metadata?.sesso,
             patente: customer.patente,
             numero_patente: customer.numero_patente, // Ensure all variants
             data_rilascio_patente: customer.data_rilascio_patente,
@@ -793,7 +793,7 @@ export default function CustomersTab() {
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">Sesso:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.sesso || '-'}</p>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.sesso || viewingCustomerDetails.metadata?.sesso || '-'}</p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">Codice Fiscale:</span>
