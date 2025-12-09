@@ -135,7 +135,7 @@ function calculateCarWashEndTime(appointmentDate: string, appointmentTime: strin
   endDate.setHours(hours);
   endDate.setMinutes(minutes + totalMinutes);
 
-  return endDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  return endDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 const API_BASE = '/.netlify/functions/admin'
@@ -711,7 +711,7 @@ export default function ReservationsTab() {
                 `Targa: ${vehicleTarga}\n\n` +
                 `PRENOTAZIONE ESISTENTE:\n` +
                 `Cliente: ${conflictingBooking.customer_name}\n` +
-                `Periodo: ${conflictPickup.toLocaleDateString('it-IT')} ${conflictPickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} - ${conflictReturn.toLocaleDateString('it-IT')} ${conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n` +
+                `Periodo: ${conflictPickup.toLocaleDateString('it-IT')} ${conflictPickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} - ${conflictReturn.toLocaleDateString('it-IT')} ${conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}\n` +
                 `ID: DR7-${bookingId}\n\n` +
                 `⚠️ SEI SICURO DI VOLER CREARE UNA DOPPIA PRENOTAZIONE?\n\n` +
                 `✅ Clicca OK per PROCEDERE COMUNQUE\n` +
@@ -723,7 +723,7 @@ export default function ReservationsTab() {
               }
             } else if (isBufferViolation) {
               // Buffer violation - show specific 1h30 warning
-              const returnTimeStr = conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+              const returnTimeStr = conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
               const returnDateStr = conflictReturn.toLocaleDateString('it-IT')
               const bufferMinutesLeft = Math.round(BUFFER_MINUTES - minutesDiff)
 
@@ -735,7 +735,7 @@ export default function ReservationsTab() {
                 `Tempo mancante al buffer di 1h30: ${bufferMinutesLeft} minuti\n\n` +
                 `Cliente precedente: ${conflictingBooking.customer_name}\n` +
                 `ID: DR7-${bookingId}\n\n` +
-                `⚠️ Si consiglia di attendere fino alle ${new Date(conflictReturn.getTime() + BUFFER_MINUTES * 60 * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} per il prossimo ritiro.\n\n` +
+                `⚠️ Si consiglia di attendere fino alle ${new Date(conflictReturn.getTime() + BUFFER_MINUTES * 60 * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} per il prossimo ritiro.\n\n` +
                 `✅ Clicca OK per PROCEDERE COMUNQUE\n` +
                 `❌ Clicca ANNULLA per scegliere un orario diverso`
               )

@@ -60,7 +60,7 @@ const handler: Handler = async (event) => {
     if (ticketNumbersList.length > 0) {
       message += `*Numeri:* ${ticketNumbersList.join(', ')}\n`;
     }
-    message += `*Data:* ${new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}`;
+    message += `*Data:* ${new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })}`;
   }
   // Handle booking notifications
   else if (booking) {
@@ -89,6 +89,7 @@ const handler: Handler = async (event) => {
       const formattedTime = appointmentDate.toLocaleTimeString('it-IT', {
         hour: '2-digit',
         minute: '2-digit',
+        hour12: false,
         timeZone: 'Europe/Rome'
       });
 
@@ -117,9 +118,9 @@ const handler: Handler = async (event) => {
 
       // Format dates and times in Europe/Rome timezone
       const pickupDateFormatted = pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
-      const pickupTimeFormatted = pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+      const pickupTimeFormatted = pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
       const dropoffDateFormatted = dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
-      const dropoffTimeFormatted = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+      const dropoffTimeFormatted = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
 
       message = `🚘 *NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
       message += `*ID:* DR7-${bookingId}\n`;

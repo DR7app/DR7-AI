@@ -120,9 +120,9 @@ export const handler: Handler = async (event) => {
             'VehicleModel': vehicleModel || '',
             'LicensePlate': booking.vehicle_plate || 'TBD',
             'PickupDate': pickupDate.toLocaleDateString('it-IT'),
-            'PickupTime': pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+            'PickupTime': pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
             'DropoffDate': dropoffDate.toLocaleDateString('it-IT'),
-            'DropoffTime': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+            'DropoffTime': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
             'TotalAmount': `${(booking.price_total / 100).toFixed(2)}`,
         }
 

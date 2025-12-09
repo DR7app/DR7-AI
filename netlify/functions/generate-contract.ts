@@ -156,8 +156,8 @@ export const handler: Handler = async (event) => {
             'Data': new Date().toLocaleDateString('it-IT'),
             'PlaceOfIssue': 'Cagliari',
             'LuogoStipula': 'Cagliari',
-            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
 
             // Customer Info
             'CustomerName': clientName || '',
