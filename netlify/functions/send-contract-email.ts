@@ -6,13 +6,12 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Use the same SMTP configuration as the lottery ticket function
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
+    service: 'gmail',
     auth: {
-        user: process.env.GMAIL_USER || process.env.SMTP_USER,
-        pass: process.env.GMAIL_PASS || process.env.SMTP_PASS,
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
     },
 })
 
@@ -79,12 +78,14 @@ export const handler: Handler = async (event) => {
         }
 
         // 4. Verify SMTP credentials
-        const smtpUser = process.env.GMAIL_USER || process.env.SMTP_USER
-        const smtpPass = process.env.GMAIL_PASS || process.env.SMTP_PASS
+        const smtpUser = process.env.GMAIL_USER
+        const smtpPass = process.env.GMAIL_APP_PASSWORD
 
         if (!smtpUser || !smtpPass) {
             console.error('[send-contract-email] Missing SMTP credentials')
-            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP credentials not configured' }) }
+            console.error('[send-contract-email] GMAIL_USER:', smtpUser ? 'SET' : 'NOT SET')
+            console.error('[send-contract-email] GMAIL_APP_PASSWORD:', smtpPass ? 'SET' : 'NOT SET')
+            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP credentials not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD in Netlify environment variables.' }) }
         }
 
         console.log('[send-contract-email] SMTP user configured:', smtpUser)
