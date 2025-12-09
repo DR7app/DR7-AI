@@ -679,7 +679,7 @@ export default function CarWashBookingsTab() {
                   type="button"
                   onClick={() => setNewCustomerMode(false)}
                   className={`px-4 py-2 rounded ${!newCustomerMode
-                    ? 'bg-dr7-gold text-black font-semibold'
+                    ? 'bg-white text-black font-semibold'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
@@ -689,7 +689,7 @@ export default function CarWashBookingsTab() {
                   type="button"
                   onClick={() => setNewCustomerMode(true)}
                   className={`px-4 py-2 rounded ${newCustomerMode
-                    ? 'bg-dr7-gold text-black font-semibold'
+                    ? 'bg-white text-black font-semibold'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
