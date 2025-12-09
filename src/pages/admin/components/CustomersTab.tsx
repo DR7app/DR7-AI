@@ -1470,7 +1470,7 @@ export default function CustomersTab() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-400 mb-1">Totale Clienti</p>
-            <p className="text-4xl font-bold text-dr7-gold">{customers.length}</p>
+            <p className="text-4xl font-bold text-dr7-gold">{totalCustomers}</p>
           </div>
           <div className="text-dr7-gold">
             <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
