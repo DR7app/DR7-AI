@@ -109,7 +109,7 @@ interface Vehicle {
   targa?: string | null
   status: 'available' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
-  category?: 'SUPERCAR' | 'URBAN' | 'UTILITAIRE'
+  category?: 'exotic' | 'urban' | 'aziendali'
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
