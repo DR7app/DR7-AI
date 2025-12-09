@@ -214,7 +214,7 @@ export default function CustomersTab() {
             full_name: fullName,
             email: customer.email,
             phone: customer.telefono,
-            driver_license_number: customer.patente || null,
+            driver_license_number: customer.numero_patente || customer.patente || null,
             notes: null,
             created_at: customer.created_at,
             updated_at: customer.updated_at,
@@ -229,7 +229,6 @@ export default function CustomersTab() {
             luogo_nascita: customer.luogo_nascita,
             provincia_nascita: customer.provincia_nascita,
             sesso: customer.sesso,
-            driver_license_number: customer.numero_patente || customer.patente || null,
             patente: customer.patente,
             numero_patente: customer.numero_patente, // Ensure all variants
             data_rilascio_patente: customer.data_rilascio_patente,
