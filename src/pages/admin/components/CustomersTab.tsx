@@ -296,11 +296,30 @@ export default function CustomersTab() {
               ...existing,
               ...extendedData,
               // Keep earlier created_at if it exists
-              created_at: existing.created_at || extendedData.created_at
+              created_at: existing.created_at || extendedData.created_at,
+              status: customer.status
             })
           }
         })
       }
+
+      // Convert Map to Array
+      const allCustomers = Array.from(customerMap.values())
+      console.log('[CustomersTab] Total customers loaded:', allCustomers.length)
+
+      // Sort alphabetically by full_name (A-Z)
+      const sortedCustomers = allCustomers.sort((a, b) => {
+        const nameA = a.full_name.toLowerCase()
+        const nameB = b.full_name.toLowerCase()
+        return nameA.localeCompare(nameB, 'it')
+      })
+
+      // Apply pagination client-side
+      const from = (currentPage - 1) * CUSTOMERS_PER_PAGE
+      const to = from + CUSTOMERS_PER_PAGE
+      const paginatedCustomers = sortedCustomers.slice(from, to)
+
+      setCustomers(paginatedCustomers)
 
       // Also get customers from customers table if it exists
       const { data: customersData, error: customersError } = await supabase
