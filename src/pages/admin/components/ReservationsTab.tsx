@@ -33,21 +33,17 @@ export const URBAN_INSURANCE_ELIGIBILITY = {
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
 };
 
-// Helper function to see if a car is 'urban'
-function isUrbanCar(carId: string, vehicleName?: string): boolean {
-  // Check if it's an urban car by ID
-  if (carId.startsWith('urban-car-')) return true;
-
-  // Check by vehicle name for URBAN and UTILITAIRES vehicles
-  if (vehicleName) {
-    const name = vehicleName.toLowerCase();
-    // URBAN vehicles
-    if (name.includes('panda') || name.includes('captur') || name.includes('urban')) return true;
-    // UTILITAIRES vehicles (vans, utility vehicles)
-    if (name.includes('ducato') || name.includes('van') || name.includes('utilitaire')) return true;
+// Helper function to determine if vehicle uses urban/utilitaire insurance pricing
+function usesUrbanInsurance(vehicle?: Vehicle): boolean {
+  if (!vehicle) return false;
+  // Use category field if available, otherwise fall back to name matching
+  if (vehicle.category) {
+    return vehicle.category === 'URBAN' || vehicle.category === 'UTILITAIRE';
   }
-
-  return false;
+  // Fallback for vehicles without category (legacy)
+  const name = vehicle.display_name.toLowerCase();
+  return name.includes('panda') || name.includes('captur') || name.includes('urban') ||
+    name.includes('ducato') || name.includes('van') || name.includes('utilitaire');
 }
 interface Customer {
   id: string
@@ -67,6 +63,7 @@ interface Vehicle {
   targa?: string | null
   status: 'available' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
+  category?: 'SUPERCAR' | 'URBAN' | 'UTILITAIRE'
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -285,7 +282,7 @@ export default function ReservationsTab() {
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
 
     // Get Kasko daily cost
-    const isUrban = isUrbanCar(formData.vehicle_id, selectedVehicle.display_name)
+    const isUrban = usesUrbanInsurance(selectedVehicle)
     const kaskoOptions = isUrban ? URBAN_INSURANCE_OPTIONS : INSURANCE_OPTIONS
     const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
     const kaskoDailyCost = selectedKasko?.pricePerDay || 0
@@ -1389,7 +1386,7 @@ export default function ReservationsTab() {
                   value={formData.insurance_option}
                   onChange={(e) => setFormData({ ...formData, insurance_option: e.target.value as KaskoTier })}
                   options={
-                    (formData.vehicle_id && isUrbanCar(formData.vehicle_id, vehicles.find(v => v.id === formData.vehicle_id)?.display_name))
+                    usesUrbanInsurance(vehicles.find(v => v.id === formData.vehicle_id))
                       ? URBAN_INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
                       : INSURANCE_OPTIONS.map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
                   }
