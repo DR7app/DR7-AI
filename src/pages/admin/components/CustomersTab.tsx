@@ -225,6 +225,11 @@ export default function CustomersTab() {
             nome: customer.nome,
             cognome: customer.cognome,
             codice_fiscale: customer.codice_fiscale,
+            data_nascita: customer.data_nascita,
+            luogo_nascita: customer.luogo_nascita,
+            provincia_nascita: customer.provincia_nascita,
+            sesso: customer.sesso,
+            driver_license_number: customer.numero_patente || customer.patente || null,
             patente: customer.patente,
             numero_patente: customer.numero_patente, // Ensure all variants
             data_rilascio_patente: customer.data_rilascio_patente,
@@ -233,6 +238,7 @@ export default function CustomersTab() {
             tipo_patente: customer.tipo_patente,
             indirizzo: customer.indirizzo,
             pec: customer.pec,
+            metadata: customer.metadata,
             // Azienda
             ragione_sociale: customer.ragione_sociale,
             denominazione: customer.denominazione,
@@ -251,15 +257,10 @@ export default function CustomersTab() {
             nazione: customer.nazione,
             telefono: customer.telefono,
             // Additional fields
-            data_nascita: customer.data_nascita,
-            luogo_nascita: customer.luogo_nascita,
             citta_residenza: customer.citta_residenza,
             provincia_residenza: customer.provincia_residenza,
             codice_postale: customer.codice_postale,
             numero_civico: customer.numero_civico,
-
-            // Metadata (Sesso, Patente Details, Azienda stuff)
-            metadata: customer.metadata || {}
           }
 
           if (!customerMap.has(key)) {
@@ -799,10 +800,7 @@ export default function CustomersTab() {
                       <span className="text-sm text-gray-400">Codice Fiscale:</span>
                       <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_fiscale || '-'}</p>
                     </div>
-                    <div>
-                      <span className="text-sm text-gray-400">Sesso:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.metadata?.sesso || '-'}</p>
-                    </div>
+                    {/* Duplicate Sesso removed */}
                     <div>
                       <span className="text-sm text-gray-400">Data di Nascita:</span>
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.data_nascita || '-'}</p>

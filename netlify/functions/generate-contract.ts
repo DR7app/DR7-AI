@@ -148,7 +148,7 @@ export const handler: Handler = async (event) => {
         // The loop below will try to set each key; if the field doesn't exist in the PDF, it will just skip it.
         const vehicleModel = vehicleName.replace(vehicleData?.make || '', '').trim() // Rough attempt to extract model if make is known
 
-        const commonData = {
+        const dataMap = {
             // Contract Info
             'ContractNumber': contractNumber,
             'NumeroContratto': contractNumber,
