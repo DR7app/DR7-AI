@@ -66,13 +66,17 @@ function getInsuranceOptions(vehicle?: Vehicle) {
     return FURGONE_INSURANCE_OPTIONS;
   }
 
-  // Check category
-  if (vehicle.category === 'UTILITAIRE') {
+  // Check vehicle category first (if set)
+  if (vehicle.category === 'aziendali') {
     return UTILITAIRE_INSURANCE_OPTIONS;
   }
 
-  if (vehicle.category === 'URBAN') {
+  if (vehicle.category === 'urban') {
     return URBAN_INSURANCE_OPTIONS;
+  }
+
+  if (vehicle.category === 'exotic') {
+    return INSURANCE_OPTIONS; // SUPERCAR
   }
 
   // Fallback for vehicles without category (legacy)
@@ -81,7 +85,7 @@ function getInsuranceOptions(vehicle?: Vehicle) {
     name.includes('citroen') || name.includes('208') || name.includes('urban')) {
     return URBAN_INSURANCE_OPTIONS;
   }
-  if (name.includes('van') || name.includes('utilitaire')) {
+  if (name.includes('van') || name.includes('utilitaire') || name.includes('ducato') || name.includes('vito')) {
     return UTILITAIRE_INSURANCE_OPTIONS;
   }
 
