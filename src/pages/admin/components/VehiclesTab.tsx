@@ -11,7 +11,7 @@ interface Vehicle {
   plate: string | null
   status: 'available' | 'unavailable' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
-  category: 'exotic' | 'urban' | 'aziendali' | null
+  category: 'SUPERCAR' | 'URBAN' | 'UTILITAIRE' | null
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -32,7 +32,7 @@ export default function VehiclesTab() {
     plate: '',
     status: 'available',
     daily_rate: '0',
-    category: 'exotic',
+    category: 'SUPERCAR',
     unavailable_from: '',
     unavailable_until: '',
     unavailable_from_time: '',
@@ -173,16 +173,65 @@ export default function VehiclesTab() {
     if (!confirm('Sei sicuro di voler eliminare questo veicolo?')) return
 
     try {
+      // First, check if there are any active reservations for this vehicle
+      const { data: reservations, error: checkError } = await supabase
+        .from('reservations')
+        .select('id, start_at, end_at, status')
+        .eq('vehicle_id', id)
+        .in('status', ['pending', 'confirmed', 'active'])
+
+      if (checkError) {
+        console.error('Error checking reservations:', checkError)
+        // Continue with deletion attempt even if check fails
+      }
+
+      if (reservations && reservations.length > 0) {
+        const reservationDetails = reservations.map(r =>
+          `- ${r.status.toUpperCase()}: ${new Date(r.start_at).toLocaleDateString('it-IT')} - ${new Date(r.end_at).toLocaleDateString('it-IT')}`
+        ).join('\n')
+
+        const confirmDelete = confirm(
+          `⚠️ ATTENZIONE: Questo veicolo ha ${reservations.length} prenotazione/i attiva/e:\n\n${reservationDetails}\n\nEliminando il veicolo, verranno eliminate anche tutte le prenotazioni associate.\n\nSei sicuro di voler continuare?`
+        )
+
+        if (!confirmDelete) return
+      }
+
+      // Attempt to delete the vehicle
       const { error } = await supabase
         .from('vehicles')
         .delete()
         .eq('id', id)
 
       if (error) throw error
+
+      alert('✅ Veicolo eliminato con successo!')
       loadVehicles()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete vehicle:', error)
-      alert('Impossibile eliminare il veicolo')
+
+      // Provide detailed error message
+      let errorMessage = 'Impossibile eliminare il veicolo.\n\n'
+
+      if (error.message) {
+        errorMessage += `Errore: ${error.message}\n\n`
+      }
+
+      if (error.code) {
+        errorMessage += `Codice errore: ${error.code}\n\n`
+      }
+
+      if (error.details) {
+        errorMessage += `Dettagli: ${error.details}\n\n`
+      }
+
+      errorMessage += 'Possibili cause:\n'
+      errorMessage += '- Il veicolo ha prenotazioni attive\n'
+      errorMessage += '- Problemi di permessi nel database\n'
+      errorMessage += '- Connessione al database interrotta\n\n'
+      errorMessage += 'Controlla la console del browser per maggiori dettagli.'
+
+      alert(errorMessage)
     }
   }
 
@@ -248,7 +297,7 @@ export default function VehiclesTab() {
       plate: vehicle.plate || '',
       status: vehicle.status,
       daily_rate: vehicle.daily_rate.toString(),
-      category: vehicle.category || 'exotic',
+      category: vehicle.category || 'SUPERCAR',
       unavailable_from: (vehicle.metadata as any)?.unavailable_from || '',
       unavailable_until: (vehicle.metadata as any)?.unavailable_until || '',
       unavailable_from_time: (vehicle.metadata as any)?.unavailable_from_time || '',
@@ -311,13 +360,13 @@ export default function VehiclesTab() {
   }
 
   // Separate vehicles by category
-  const exoticVehicles = vehicles.filter(v => v.category === 'exotic')
-  const urbanVehicles = vehicles.filter(v => v.category === 'urban')
-  const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali')
+  const supercarVehicles = vehicles.filter(v => v.category === 'SUPERCAR')
+  const urbanVehicles = vehicles.filter(v => v.category === 'URBAN')
+  const utilitaireVehicles = vehicles.filter(v => v.category === 'UTILITAIRE')
 
-  const exoticCount = exoticVehicles.length
+  const supercarCount = supercarVehicles.length
   const urbanCount = urbanVehicles.length
-  const aziendaliCount = aziendaliVehicles.length
+  const utilitaireCount = utilitaireVehicles.length
 
   if (loading) {
     return <div className="text-center py-8 text-gray-400">Caricamento...</div>
@@ -329,7 +378,7 @@ export default function VehiclesTab() {
         <div>
           <h2 className="text-2xl font-bold text-white">Veicoli</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Exotic Supercars: {exoticCount} | Urban: {urbanCount} | Aziendali: {aziendaliCount} | Totale: {vehicles.length}
+            Supercars: {supercarCount} | Urban: {urbanCount} | Utilitaire: {utilitaireCount} | Totale: {vehicles.length}
           </p>
         </div>
         <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
@@ -423,9 +472,9 @@ export default function VehiclesTab() {
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               options={[
-                { value: 'exotic', label: 'Exotic Supercars' },
-                { value: 'urban', label: 'Urban' },
-                { value: 'aziendali', label: 'Aziendali' }
+                { value: 'SUPERCAR', label: 'Supercars' },
+                { value: 'URBAN', label: 'Urban' },
+                { value: 'UTILITAIRE', label: 'Utilitaire' }
               ]}
             />
             <Select
@@ -562,17 +611,16 @@ export default function VehiclesTab() {
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                        vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                        'bg-gray-700 text-gray-200'
-                      }`}>
+                          vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                            vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                              'bg-gray-700 text-gray-200'
+                        }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
-                         vehicle.status === 'unavailable' ? 'Non Disponibile' :
-                         vehicle.status === 'rented' ? 'Noleggiato' :
-                         vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
+                          vehicle.status === 'unavailable' ? 'Non Disponibile' :
+                            vehicle.status === 'rented' ? 'Noleggiato' :
+                              vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-white">€{vehicle.daily_rate}</td>
@@ -620,8 +668,8 @@ export default function VehiclesTab() {
         <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
           <div className="bg-purple-900/30 px-4 py-3 border-b border-gray-700">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Exotic Supercars</span>
-              <span className="text-sm text-gray-400">({exoticCount} veicoli)</span>
+              <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Supercars</span>
+              <span className="text-sm text-gray-400">({supercarCount} veicoli)</span>
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -636,22 +684,21 @@ export default function VehiclesTab() {
                 </tr>
               </thead>
               <tbody>
-                {exoticVehicles.map((vehicle) => (
+                {supercarVehicles.map((vehicle) => (
                   <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800">
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                        vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                        'bg-gray-700 text-gray-200'
-                      }`}>
+                          vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                            vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                              'bg-gray-700 text-gray-200'
+                        }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
-                         vehicle.status === 'unavailable' ? 'Non Disponibile' :
-                         vehicle.status === 'rented' ? 'Noleggiato' :
-                         vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
+                          vehicle.status === 'unavailable' ? 'Non Disponibile' :
+                            vehicle.status === 'rented' ? 'Noleggiato' :
+                              vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-white">€{vehicle.daily_rate}</td>
@@ -686,7 +733,7 @@ export default function VehiclesTab() {
                 {exoticVehicles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      Nessun veicolo Exotic trovato
+                      Nessun Supercar trovato
                     </td>
                   </tr>
                 )}
@@ -699,8 +746,8 @@ export default function VehiclesTab() {
         <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
           <div className="bg-orange-900/30 px-4 py-3 border-b border-gray-700">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Aziendali</span>
-              <span className="text-sm text-gray-400">({aziendaliCount} veicoli)</span>
+              <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Utilitaire</span>
+              <span className="text-sm text-gray-400">({utilitaireCount} veicoli)</span>
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -715,22 +762,21 @@ export default function VehiclesTab() {
                 </tr>
               </thead>
               <tbody>
-                {aziendaliVehicles.map((vehicle) => (
+                {utilitaireVehicles.map((vehicle) => (
                   <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800">
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                        vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                        'bg-gray-700 text-gray-200'
-                      }`}>
+                          vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                            vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                              'bg-gray-700 text-gray-200'
+                        }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
-                         vehicle.status === 'unavailable' ? 'Non Disponibile' :
-                         vehicle.status === 'rented' ? 'Noleggiato' :
-                         vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
+                          vehicle.status === 'unavailable' ? 'Non Disponibile' :
+                            vehicle.status === 'rented' ? 'Noleggiato' :
+                              vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-white">€{vehicle.daily_rate}</td>
