@@ -77,7 +77,7 @@ function getInsuranceOptions(vehicle?: Vehicle) {
 
   // Fallback for vehicles without category (legacy)
   const name = vehicle.display_name.toLowerCase();
-  if (name.includes('panda') || name.includes('captur') || name.includes('clio') || name.includes('urban')) {
+  if (name.includes('panda') || name.includes('captur') || name.includes('urban')) {
     return URBAN_INSURANCE_OPTIONS;
   }
   if (name.includes('van') || name.includes('utilitaire')) {
