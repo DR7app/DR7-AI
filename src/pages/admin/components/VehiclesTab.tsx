@@ -730,7 +730,7 @@ export default function VehiclesTab() {
                     </td>
                   </tr>
                 ))}
-                {exoticVehicles.length === 0 && (
+                {supercarVehicles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                       Nessun Supercar trovato
@@ -808,10 +808,10 @@ export default function VehiclesTab() {
                     </td>
                   </tr>
                 ))}
-                {aziendaliVehicles.length === 0 && (
+                {utilitaireVehicles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      Nessun veicolo Aziendale trovato
+                      Nessun veicolo Utilitaire trovato
                     </td>
                   </tr>
                 )}
