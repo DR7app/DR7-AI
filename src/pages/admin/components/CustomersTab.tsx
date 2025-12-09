@@ -1539,17 +1539,17 @@ export default function CustomersTab() {
                       <div className="flex gap-2 items-center">
                         {customer.status === 'blacklist' && (
                           <span className="px-2 py-1 rounded text-xs font-medium bg-black text-white border border-white">
-                            ⛔ Blacklist
+                            Blacklist
                           </span>
                         )}
                         {customer.status === 'vip' && (
                           <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500 text-black">
-                            ⭐ VIP
+                            VIP
                           </span>
                         )}
                         {customer.status === 'has_rental' && (
                           <span className="px-2 py-1 rounded text-xs font-medium bg-green-500 text-black">
-                            ✓ Ha Noleggiato
+                            Ha Noleggiato
                           </span>
                         )}
                         {!customer.status && (
@@ -1559,21 +1559,21 @@ export default function CustomersTab() {
                               className="px-2 py-1 rounded text-xs bg-black text-white hover:bg-gray-800"
                               title="Blacklist"
                             >
-                              ⛔
+                              BL
                             </button>
                             <button
                               onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
                               className="px-2 py-1 rounded text-xs bg-yellow-500 text-black hover:bg-yellow-600"
                               title="VIP"
                             >
-                              ⭐
+                              VIP
                             </button>
                             <button
                               onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
                               className="px-2 py-1 rounded text-xs bg-green-500 text-black hover:bg-green-600"
                               title="Ha Noleggiato"
                             >
-                              ✓
+                              OK
                             </button>
                           </div>
                         )}
