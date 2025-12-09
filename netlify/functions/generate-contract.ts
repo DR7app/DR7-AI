@@ -144,45 +144,94 @@ export const handler: Handler = async (event) => {
         const form = pdfDoc.getForm()
 
         // Standardized Data Field Map
-        const dataMap: Record<string, string> = {
-            'ContractNumber': contractNumber,
-            'Date': new Date().toLocaleDateString('it-IT'),
-            'CustomerName': clientName || '',
-            'CustomerVAT': clientVat || '',
-            'CustomerPhone': booking.customer_phone || '',
-            'CustomerEmail': booking.customer_email || '',
-            'CustomerAddress': clientAddress || '',
-            'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
-            'CustomerBirthPlace': customer?.luogo_nascita || '',
-            'CustomerCity': customer?.citta_residenza || '',
-            'CustomerProvince': customer?.provincia_residenza || '',
-            'CustomerZipCode': customer?.codice_postale || '',
+        // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
+        // The loop below will try to set each key; if the field doesn't exist in the PDF, it will just skip it.
+        const vehicleModel = vehicleName.replace(vehicleData?.make || '', '').trim() // Rough attempt to extract model if make is known
 
+        const commonData = {
+            // Contract Info
+            'ContractNumber': contractNumber,
+            'NumeroContratto': contractNumber,
+            'Date': new Date().toLocaleDateString('it-IT'),
+            'Data': new Date().toLocaleDateString('it-IT'),
+            'PlaceOfIssue': 'Cagliari',
+            'LuogoStipula': 'Cagliari',
+            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+
+            // Customer Info
+            'CustomerName': clientName || '',
+            'NomeCognome': clientName || '',
+            'CustomerVAT': clientVat || '',
+            'CodiceFiscale': clientVat || '',
+            'PartitaIVA': clientVat || '',
+            'CustomerPhone': booking.customer_phone || '',
+            'Telefono': booking.customer_phone || '',
+            'CustomerEmail': booking.customer_email || '',
+            'Email': booking.customer_email || '',
+            'CustomerAddress': clientAddress || '',
+            'Indirizzo': clientAddress || '',
+            'CustomerCity': customer?.citta_residenza || '',
+            'Citta': customer?.citta_residenza || '',
+            'CustomerProvince': customer?.provincia_residenza || '',
+            'Provincia': customer?.provincia_residenza || '',
+            'CustomerZipCode': customer?.codice_postale || '',
+            'CAP': customer?.codice_postale || '',
+
+            // Personal Details (New)
+            'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
+            'DataNascita': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
+            'CustomerBirthPlace': customer?.luogo_nascita || '',
+            'LuogoNascita': customer?.luogo_nascita || '',
+            'CittaNascita': customer?.luogo_nascita || '', // Variance
+            'CustomerSex': customer?.sesso || customer?.metadata?.sesso || '',
+            'Sesso': customer?.sesso || customer?.metadata?.sesso || '',
+
+            // License Details
             'DriverLicense': customer?.numero_patente || driverLicense || '',
+            'NumeroPatente': customer?.numero_patente || driverLicense || '',
             'DriverLicenseIssuedBy': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
+            'PatenteEmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
+            'EmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
             'DriverLicenseIssueDate': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || ''),
+            'DataRilascioPatente': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || ''),
+            'DataRilascio': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || ''),
             'DriverLicenseExpiryDate': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
+            'DataScadenzaPatente': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
+            'ScadenzaPatente': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
+            'Scadenza': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
 
             // Vehicle Fields
             'VehicleBrand': vehicleName,
-            'VehicleModel': '', // Name usually includes model
+            'Marca': vehicleName,
+            'VehicleModel': vehicleModel, // Name usually includes model
+            'Modello': vehicleModel,
             'VehiclePlate': vehiclePlate,
+            'Targa': vehiclePlate,
             'VehicleColor': vehicleColor,
+            'Colore': vehicleColor,
             'VehicleFuel': vehicleFuel,
+            'Alimentazione': vehicleFuel,
             'VehicleSeats': vehicleData?.metadata?.seats || booking.booking_details?.vehicle?.seats || '',
+            'Posti': vehicleData?.metadata?.seats || booking.booking_details?.vehicle?.seats || '',
             'VehicleFuelLevel': '',
+            'LivelloCarburante': '',
             'VehicleKMRange': '',
+            'KMRange': '',
 
             // Rental Specifics
             'PickupLocation': booking.pickup_location || 'Sede',
+            'SedeRitiro': booking.pickup_location || 'Sede',
             'DropoffLocation': booking.dropoff_location || 'Sede',
+            'SedeRiconsegna': booking.dropoff_location || 'Sede',
             'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
+            'Giorni': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
             'TotalHours': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
-            'PlaceOfIssue': 'Cagliari',
-            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+            'Ore': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
 
             // Second Driver Fields (Placeholder or from booking_details)
             'SecondDriverName': booking.booking_details?.second_driver?.name || '',
+            'SecondoGuidatore': booking.booking_details?.second_driver?.name || '',
             'SecondDriverBirthDate': booking.booking_details?.second_driver?.birth_date ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT') : '',
             'SecondDriverBirthCity': booking.booking_details?.second_driver?.birth_city || '',
             'SecondDriverBirthProvince': booking.booking_details?.second_driver?.birth_province || '',
@@ -195,15 +244,17 @@ export const handler: Handler = async (event) => {
             'SecondDriverLicenseIssuedBy': booking.booking_details?.second_driver?.license_issued_by || '',
             'SecondDriverLicenseIssueDate': booking.booking_details?.second_driver?.license_issue_date ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT') : '',
             'SecondDriverLicenseExpiryDate': booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : '',
+            // ... (Add Italian variants for 2nd driver if needed)
         }
 
         let filledFields = 0
-        for (const [key, value] of Object.entries(dataMap)) {
+        for (const [key, value] of Object.entries(commonData)) {
             try {
                 // Try to find exact match
                 let field = form.getTextField(key)
                 if (!field) {
-                    // Try lowercase or other variations if needed, but let's stick to exact for now
+                    // Start of fuzzy fix: try to find field by checking containment if exact match fail? 
+                    // No, for now let's rely on the explicit map above.
                 }
 
                 if (field) {
