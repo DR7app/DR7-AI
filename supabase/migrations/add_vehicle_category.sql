@@ -23,7 +23,7 @@ WHERE category IS NULL
   AND (display_name ILIKE '%panda%' 
    OR display_name ILIKE '%captur%'
    OR display_name ILIKE '%urban%'
-   OR id LIKE 'urban-car-%');
+   OR id::text LIKE 'urban-car-%');
 
 -- UTILITAIRE vehicles  
 UPDATE vehicles
