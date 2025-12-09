@@ -257,6 +257,44 @@ export default function ReservationsTab() {
     loadData()
   }, [])
 
+  // Auto-calculate total price based on vehicle, Kasko, and rental duration
+  useEffect(() => {
+    // Only calculate if we have all required fields
+    if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
+      return
+    }
+
+    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+    if (!selectedVehicle) return
+
+    // Calculate number of rental days
+    const pickupDate = new Date(formData.pickup_date)
+    const returnDate = new Date(formData.return_date)
+    const diffTime = Math.abs(returnDate.getTime() - pickupDate.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+    if (diffDays <= 0) return
+
+    // Get vehicle daily rate (convert from cents to euros)
+    const vehicleDailyRate = selectedVehicle.daily_rate / 100
+
+    // Get Kasko daily cost
+    const isUrban = isUrbanCar(formData.vehicle_id, selectedVehicle.display_name)
+    const kaskoOptions = isUrban ? URBAN_INSURANCE_OPTIONS : INSURANCE_OPTIONS
+    const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
+    const kaskoDailyCost = selectedKasko?.pricePerDay || 0
+
+    // Calculate total: (vehicle rate + kasko) * days
+    const totalAmount = (vehicleDailyRate + kaskoDailyCost) * diffDays
+
+    // Update form data with calculated total
+    setFormData(prev => ({
+      ...prev,
+      total_amount: totalAmount.toFixed(2)
+    }))
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles])
+
+
   async function loadData() {
     setLoading(true)
     try {
