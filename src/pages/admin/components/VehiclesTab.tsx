@@ -11,7 +11,7 @@ interface Vehicle {
   plate: string | null
   status: 'available' | 'unavailable' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
-  category: 'SUPERCAR' | 'URBAN' | 'UTILITAIRE' | null
+  category: 'exotic' | 'urban' | 'aziendali' | null
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -32,7 +32,7 @@ export default function VehiclesTab() {
     plate: '',
     status: 'available',
     daily_rate: '0',
-    category: 'SUPERCAR',
+    category: 'exotic',
     unavailable_from: '',
     unavailable_until: '',
     unavailable_from_time: '',
@@ -297,7 +297,7 @@ export default function VehiclesTab() {
       plate: vehicle.plate || '',
       status: vehicle.status,
       daily_rate: vehicle.daily_rate.toString(),
-      category: vehicle.category || 'SUPERCAR',
+      category: vehicle.category || 'exotic',
       unavailable_from: (vehicle.metadata as any)?.unavailable_from || '',
       unavailable_until: (vehicle.metadata as any)?.unavailable_until || '',
       unavailable_from_time: (vehicle.metadata as any)?.unavailable_from_time || '',
@@ -360,13 +360,13 @@ export default function VehiclesTab() {
   }
 
   // Separate vehicles by category
-  const supercarVehicles = vehicles.filter(v => v.category === 'SUPERCAR')
-  const urbanVehicles = vehicles.filter(v => v.category === 'URBAN')
-  const utilitaireVehicles = vehicles.filter(v => v.category === 'UTILITAIRE')
+  const exoticVehicles = vehicles.filter(v => v.category === 'exotic')
+  const urbanVehicles = vehicles.filter(v => v.category === 'urban')
+  const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali')
 
-  const supercarCount = supercarVehicles.length
+  const exoticCount = exoticVehicles.length
   const urbanCount = urbanVehicles.length
-  const utilitaireCount = utilitaireVehicles.length
+  const aziendaliCount = aziendaliVehicles.length
 
   if (loading) {
     return <div className="text-center py-8 text-gray-400">Caricamento...</div>
@@ -378,7 +378,7 @@ export default function VehiclesTab() {
         <div>
           <h2 className="text-2xl font-bold text-white">Veicoli</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Supercars: {supercarCount} | Urban: {urbanCount} | Utilitaire: {utilitaireCount} | Totale: {vehicles.length}
+            Exotic Supercars: {exoticCount} | Urban: {urbanCount} | Aziendali: {aziendaliCount} | Totale: {vehicles.length}
           </p>
         </div>
         <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
@@ -472,9 +472,9 @@ export default function VehiclesTab() {
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               options={[
-                { value: 'SUPERCAR', label: 'Supercars' },
-                { value: 'URBAN', label: 'Urban' },
-                { value: 'UTILITAIRE', label: 'Utilitaire' }
+                { value: 'exotic', label: 'Exotic Supercars' },
+                { value: 'urban', label: 'Urban' },
+                { value: 'aziendali', label: 'Aziendali' }
               ]}
             />
             <Select
@@ -668,8 +668,8 @@ export default function VehiclesTab() {
         <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
           <div className="bg-purple-900/30 px-4 py-3 border-b border-gray-700">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Supercars</span>
-              <span className="text-sm text-gray-400">({supercarCount} veicoli)</span>
+              <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Exotic Supercars</span>
+              <span className="text-sm text-gray-400">({exoticCount} veicoli)</span>
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -684,7 +684,7 @@ export default function VehiclesTab() {
                 </tr>
               </thead>
               <tbody>
-                {supercarVehicles.map((vehicle) => (
+                {exoticVehicles.map((vehicle) => (
                   <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800">
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
@@ -730,10 +730,10 @@ export default function VehiclesTab() {
                     </td>
                   </tr>
                 ))}
-                {supercarVehicles.length === 0 && (
+                {exoticVehicles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      Nessun Supercar trovato
+                      Nessun veicolo Exotic trovato
                     </td>
                   </tr>
                 )}
@@ -746,8 +746,8 @@ export default function VehiclesTab() {
         <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
           <div className="bg-orange-900/30 px-4 py-3 border-b border-gray-700">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Utilitaire</span>
-              <span className="text-sm text-gray-400">({utilitaireCount} veicoli)</span>
+              <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Aziendali</span>
+              <span className="text-sm text-gray-400">({aziendaliCount} veicoli)</span>
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -762,7 +762,7 @@ export default function VehiclesTab() {
                 </tr>
               </thead>
               <tbody>
-                {utilitaireVehicles.map((vehicle) => (
+                {aziendaliVehicles.map((vehicle) => (
                   <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800">
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
@@ -808,7 +808,7 @@ export default function VehiclesTab() {
                     </td>
                   </tr>
                 ))}
-                {utilitaireVehicles.length === 0 && (
+                {aziendaliVehicles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                       Nessun veicolo Utilitaire trovato
