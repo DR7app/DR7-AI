@@ -269,7 +269,7 @@ export const handler: Handler = async (event) => {
                 customer_address: clientAddress,
                 customer_tax_code: clientVat,
                 customer_license_number: driverLicense,
-                vehicle_name: vehicleModel,
+                vehicle_name: vehicleName,
                 rental_start_date: pickupDate.toISOString().split('T')[0],
                 rental_end_date: dropoffDate.toISOString().split('T')[0],
                 daily_rate: 0, // We rely on total amount mostly
