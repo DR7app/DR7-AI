@@ -4,6 +4,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
+import CustomerAutocomplete from './CustomerAutocomplete'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE';
@@ -203,7 +204,6 @@ export default function ReservationsTab() {
   })
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
-  const [customerSearchQuery, setCustomerSearchQuery] = useState('')
   const [newCustomerData, setNewCustomerData] = useState({
     tipo_cliente: 'persona_fisica' as 'persona_fisica' | 'azienda' | 'pubblica_amministrazione',
     // Persona Fisica fields
@@ -1060,7 +1060,6 @@ export default function ReservationsTab() {
       insurance_option: 'KASKO_BASE',
       deposit: '0'
     })
-    setCustomerSearchQuery('')
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
       nome: '',
@@ -1222,48 +1221,14 @@ export default function ReservationsTab() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {/* Search Input for Mobile */}
-                  <Input
-                    label="Cerca Cliente (nome, email, telefono)"
-                    placeholder="Inizia a scrivere per cercare..."
-                    value={customerSearchQuery}
-                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Cerca e Seleziona Cliente</label>
+                  <CustomerAutocomplete
+                    customers={customers}
+                    selectedCustomerId={formData.customer_id}
+                    onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
+                    placeholder="Inizia a scrivere nome, email o telefono..."
+                    required={true}
                   />
-
-                  <Select
-                    label="Seleziona Cliente"
-                    required
-                    value={formData.customer_id}
-                    onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                    options={[
-                      { value: '', label: 'Seleziona cliente...' },
-                      ...customers
-                        .filter(c => {
-                          if (!customerSearchQuery) return true
-                          const query = customerSearchQuery.toLowerCase()
-                          return (
-                            c.full_name.toLowerCase().includes(query) ||
-                            c.email?.toLowerCase().includes(query) ||
-                            c.phone?.toLowerCase().includes(query)
-                          )
-                        })
-                        .sort((a, b) => a.full_name.localeCompare(b.full_name))
-                        .map(c => ({ value: c.id, label: `${c.full_name} (${c.email || c.phone || 'No contact'})` }))
-                    ]}
-                  />
-
-                  {customerSearchQuery && customers.filter(c => {
-                    const query = customerSearchQuery.toLowerCase()
-                    return (
-                      c.full_name.toLowerCase().includes(query) ||
-                      c.email?.toLowerCase().includes(query) ||
-                      c.phone?.toLowerCase().includes(query)
-                    )
-                  }).length === 0 && (
-                      <p className="text-sm text-yellow-400 mt-2">
-                        Nessun cliente trovato con "{customerSearchQuery}"
-                      </p>
-                    )}
 
                   {customers.length === 0 && (
                     <p className="text-sm text-yellow-400 mt-2">

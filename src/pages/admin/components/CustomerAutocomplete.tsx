@@ -136,7 +136,7 @@ export default function CustomerAutocomplete({
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 required={required}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white"
                 autoComplete="off"
             />
 
@@ -152,8 +152,8 @@ export default function CustomerAutocomplete({
                             onClick={() => selectCustomer(customer)}
                             onMouseEnter={() => setHighlightedIndex(index)}
                             className={`px-3 py-2 cursor-pointer transition-colors ${index === highlightedIndex
-                                    ? 'bg-dr7-gold text-black'
-                                    : 'text-white hover:bg-gray-700'
+                                ? 'bg-white text-black'
+                                : 'text-white hover:bg-gray-700'
                                 }`}
                         >
                             <div className="font-semibold">{customer.full_name}</div>
