@@ -1555,7 +1555,7 @@ export default function CustomersTab() {
                           Documenti
                         </Button>
                         <Button
-                          onClick={() => handleEditCustomer(customer)}
+                          onClick={() => handleEdit(customer)}
                           variant="secondary"
                           className="text-xs py-1 px-3 bg-green-900 hover:bg-green-800"
                         >
