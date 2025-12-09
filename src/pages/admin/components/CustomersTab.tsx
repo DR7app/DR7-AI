@@ -1502,7 +1502,14 @@ export default function CustomersTab() {
                   )
                 })
                 .map((customer) => (
-                  <tr key={customer.id} className="border-t border-gray-700 hover:bg-gray-800">
+                  <tr
+                    key={customer.id}
+                    className={`border-t border-gray-700 hover:bg-gray-800 ${customer.status === 'blacklist' ? 'bg-black/20' :
+                        customer.status === 'vip' ? 'bg-yellow-500/10' :
+                          customer.status === 'has_rental' ? 'bg-green-500/10' :
+                            ''
+                      }`}
+                  >
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
