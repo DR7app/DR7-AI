@@ -269,28 +269,39 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
                 {/* Customer Selection */}
-                <div>
-                    <label className="block text-white font-semibold mb-3">Cliente</label>
-                    <div className="flex gap-4 mb-4 items-end">
-                        <div className="flex-1">
-                            <label className="text-xs text-gray-400 mb-1 block">Cerca e Seleziona Cliente</label>
-                            <CustomerAutocomplete
-                                customers={customers}
-                                selectedCustomerId={formData.customer_id}
-                                onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
-                                placeholder="Inizia a scrivere nome, email o telefono..."
-                                required={true}
-                            />
-                        </div>
-                        <div>
-                            <button
-                                type="button"
-                                onClick={() => setIsNewClientModalOpen(true)}
-                                className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-md transition-colors h-[42px] mb-[1px]"
-                            >
-                                + Nuovo
-                            </button>
-                        </div>
+                <div className="border-b border-gray-700 pb-4">
+                    <div className="flex items-center gap-4 mb-4">
+                        <button
+                            type="button"
+                            onClick={() => setIsNewClientModalOpen(false)}
+                            className={`px-4 py-2 rounded ${!isNewClientModalOpen
+                                ? 'bg-white text-black font-semibold'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                }`}
+                        >
+                            Seleziona Cliente
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsNewClientModalOpen(true)}
+                            className={`px-4 py-2 rounded ${isNewClientModalOpen
+                                ? 'bg-white text-black font-semibold'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                }`}
+                        >
+                            Nuovo Cliente
+                        </button>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente</label>
+                        <CustomerAutocomplete
+                            customers={customers}
+                            selectedCustomerId={formData.customer_id}
+                            onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
+                            placeholder="Inizia a scrivere nome, email o telefono..."
+                            required={true}
+                        />
                     </div>
                 </div>
 
