@@ -9,7 +9,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const GOOGLE_REVIEW_LINK = "https://share.google/Xterp74G4U1dsYb98";
+const GOOGLE_REVIEW_LINK = "https://g.page/r/CQwgJt7OYpsfEBM/review";
 // Placeholder for now: 
 // const GOOGLE_REVIEW_LINK = "https://search.google.com/local/writereview?placeid=YOUR_PLACE_ID";
 
@@ -76,8 +76,7 @@ export const handler: Handler = async (event) => {
               </a>
               
               <p style="color: #888; font-size: 14px; margin-top: 30px;">
-                DR7 S.p.A.<br>
-                <a href="${reviewLink}" style="color: #D4AF37;">${reviewLink}</a>
+                DR7 S.p.A.
               </p>
 
             </div>
