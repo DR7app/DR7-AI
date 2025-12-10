@@ -95,7 +95,7 @@ export default function CalendarTab() {
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type')
-        .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
+        .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
 
