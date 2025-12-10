@@ -125,26 +125,28 @@ export default function UnpaidBookingsTab() {
 
     try {
       // First, get all selected bookings to check for Google Calendar event IDs
-      const { data: bookings } = await supabase
+      const { data: bookingsToDelete } = await supabase
         .from('bookings')
-        .select('id, google_event_id')
+        .select('*')
         .in('id', Array.from(selectedBookings))
 
       // Delete from Google Calendar for each booking that has an event ID
-      if (bookings) {
-        for (const booking of bookings) {
-          if (booking.google_event_id) {
-            try {
-              await fetch('/.netlify/functions/delete-calendar-event', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ eventId: booking.google_event_id }),
-              })
-              console.log('Google Calendar event deleted:', booking.google_event_id)
-            } catch (calError) {
-              console.warn('Failed to delete from Google Calendar:', calError)
-              // Continue with other deletions
-            }
+      if (bookingsToDelete) {
+        for (const booking of bookingsToDelete) {
+          try {
+            await fetch('/.netlify/functions/delete-calendar-event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookingId: booking.id,
+                customerName: booking.customer_name,
+                vehicleName: booking.vehicle_name || booking.service_name || 'Servizio'
+              }),
+            })
+            console.log('Google Calendar event deletion requested for:', booking.id)
+          } catch (calError) {
+            console.warn('Failed to delete from Google Calendar:', calError)
+            // Continue with other deletions
           }
         }
       }
@@ -161,9 +163,9 @@ export default function UnpaidBookingsTab() {
       setSelectedBookings(new Set())
       setMultiSelectMode(false)
       loadUnpaidBookings()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete bookings:', error)
-      alert('Errore durante l\'eliminazione delle prenotazioni')
+      alert('Errore durante l\'eliminazione delle prenotazioni: ' + (error.message || error))
     }
   }
 
@@ -176,19 +178,23 @@ export default function UnpaidBookingsTab() {
       // First, get the booking to check if it has a Google Calendar event ID
       const { data: booking } = await supabase
         .from('bookings')
-        .select('google_event_id')
+        .select('*')
         .eq('id', bookingId)
         .single()
 
       // Try to delete from Google Calendar if event ID exists
-      if (booking?.google_event_id) {
+      if (booking) {
         try {
           await fetch('/.netlify/functions/delete-calendar-event', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ eventId: booking.google_event_id }),
+            body: JSON.stringify({
+              bookingId: booking.id,
+              customerName: booking.customer_name,
+              vehicleName: booking.vehicle_name || booking.service_name || 'Servizio'
+            }),
           })
-          console.log('Google Calendar event deleted:', booking.google_event_id)
+          console.log('Google Calendar event deletion requested for:', booking.id)
         } catch (calError) {
           console.warn('Failed to delete from Google Calendar:', calError)
           // Continue with database deletion even if Google Calendar deletion fails
@@ -205,9 +211,9 @@ export default function UnpaidBookingsTab() {
 
       alert('Prenotazione eliminata con successo!')
       loadUnpaidBookings()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete booking:', error)
-      alert('Errore durante l\'eliminazione della prenotazione')
+      alert('Errore durante l\'eliminazione della prenotazione: ' + (error.message || error))
     }
   }
 
@@ -336,8 +342,8 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('all')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'all'
-                  ? 'bg-dr7-gold text-black'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ? 'bg-dr7-gold text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                 }`}
             >
               Tutti ({bookings.length})
@@ -345,8 +351,8 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('rental')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'rental'
-                  ? 'bg-dr7-gold text-black'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ? 'bg-dr7-gold text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                 }`}
             >
               Noleggio ({bookings.filter(b => b.service_type === 'rental').length})
@@ -354,8 +360,8 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('car_wash')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'car_wash'
-                  ? 'bg-dr7-gold text-black'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ? 'bg-dr7-gold text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                 }`}
             >
               Lavaggio ({bookings.filter(b => b.service_type === 'car_wash').length})
@@ -363,8 +369,8 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('mechanical_service')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'mechanical_service'
-                  ? 'bg-dr7-gold text-black'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ? 'bg-dr7-gold text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                 }`}
             >
               Meccanica ({bookings.filter(b => b.service_type === 'mechanical_service').length})
@@ -378,8 +384,8 @@ export default function UnpaidBookingsTab() {
                 setSelectedBookings(new Set())
               }}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${multiSelectMode
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                 }`}
             >
               Selezione Multipla
@@ -484,8 +490,8 @@ export default function UnpaidBookingsTab() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'pending'
-                        ? 'bg-yellow-600 text-black'
-                        : 'bg-red-600 text-white'
+                      ? 'bg-yellow-600 text-black'
+                      : 'bg-red-600 text-white'
                       }`}>
                       {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
                     </span>

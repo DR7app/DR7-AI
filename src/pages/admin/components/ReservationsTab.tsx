@@ -302,8 +302,16 @@ export default function ReservationsTab() {
     { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)' }
   ]
 
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
   useEffect(() => {
     loadData()
+    // Fetch current user email
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUserEmail(data.user.email || null)
+      }
+    })
   }, [])
 
   // Auto-calculate total price based on vehicle, Kasko, and rental duration
@@ -1642,7 +1650,7 @@ export default function ReservationsTab() {
 
                 <div className="flex justify-between items-start mt-3 gap-2">
                   <div className="text-lg font-bold text-white">
-                    {canViewFinancials ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
+                    {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                   </div>
                   <div className="flex flex-col gap-2">
                     <button
@@ -1773,7 +1781,7 @@ export default function ReservationsTab() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
-                        {canViewFinancials ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
+                        {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                       </td>
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
                         <div className="flex gap-2 items-center">
@@ -1911,7 +1919,7 @@ export default function ReservationsTab() {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Importo:</span>
                       <span className="text-white font-bold text-xl">
-                        {canViewFinancials ? `€${(selectedBooking.price_total / 100).toFixed(2)}` : '***'}
+                        {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(selectedBooking.price_total / 100).toFixed(2)}` : '***'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">

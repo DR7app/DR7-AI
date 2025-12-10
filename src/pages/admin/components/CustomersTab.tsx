@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
-import GiftVoucherModal from './GiftVoucherModal'
 
 interface Customer {
   id: string
@@ -104,7 +103,6 @@ export default function CustomersTab() {
 
   // Gift Voucher feature
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
-  const [showGiftVoucherModal, setShowGiftVoucherModal] = useState(false)
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -748,52 +746,7 @@ export default function CustomersTab() {
     }
   }
 
-  async function handleSendGiftVouchers(data: { subject: string; message: string; image: File | null }) {
-    if (!data.image) {
-      alert('Immagine richiesta')
-      return
-    }
 
-    try {
-      const selectedCustomers = customers.filter(c => selectedCustomerIds.has(c.id))
-
-      const reader = new FileReader()
-      const imageBase64 = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(data.image!)
-      })
-
-      const response = await fetch('/.netlify/functions/send-gift-voucher', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customers: selectedCustomers.map(c => ({
-            id: c.id,
-            nome: c.nome || c.full_name.split(' ')[0],
-            cognome: c.cognome || c.full_name.split(' ').slice(1).join(' '),
-            email: c.email
-          })),
-          subject: data.subject,
-          message: data.message,
-          imageBase64,
-          imageName: data.image.name
-        })
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        alert(`✅ Buoni regalo inviati con successo a ${result.sent} ${result.sent === 1 ? 'cliente' : 'clienti'}!`)
-        setSelectedCustomerIds(new Set())
-      } else {
-        throw new Error(result.error || 'Errore sconosciuto')
-      }
-    } catch (error: any) {
-      console.error('Error sending gift vouchers:', error)
-      alert('❌ Errore nell\'invio dei buoni regalo: ' + (error.message || 'Errore sconosciuto'))
-    }
-  }
 
   if (loading) {
     return <div className="text-center py-8 text-gray-400">Caricamento...</div>
@@ -1399,12 +1352,7 @@ export default function CustomersTab() {
           <div className="flex gap-3">
             {selectedCustomerIds.size > 0 && (
               <>
-                <Button
-                  onClick={() => setShowGiftVoucherModal(true)}
-                  className="bg-dr7-gold hover:bg-dr7-gold/80 text-black font-semibold"
-                >
-                  🎁 Invia Buono Regalo ({selectedCustomerIds.size})
-                </Button>
+
 
                 <div className="flex gap-2 items-center border-l border-gray-600 pl-4">
                   <span className="text-sm text-gray-400">Cambia Status:</span>
@@ -1688,18 +1636,6 @@ export default function CustomersTab() {
           loadCustomers()
         }}
         initialData={selectedCustomer}
-      />
-
-      <GiftVoucherModal
-        isOpen={showGiftVoucherModal}
-        onClose={() => setShowGiftVoucherModal(false)}
-        selectedCustomers={customers.filter(c => selectedCustomerIds.has(c.id)).map(c => ({
-          id: c.id,
-          nome: c.nome,
-          cognome: c.cognome,
-          email: c.email
-        }))}
-        onSend={handleSendGiftVouchers}
       />
     </div>
   )

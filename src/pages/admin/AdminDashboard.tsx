@@ -14,8 +14,9 @@ import MechanicalCalendarTab from './components/MechanicalCalendarTab'
 import LotteriaBoard from './components/LotteriaBoard'
 import UnpaidBookingsTab from './components/UnpaidBookingsTab'
 import DocumentsVerificationTab from './components/DocumentsVerificationTab'
+import MarketingTab from './components/MarketingTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -207,7 +208,8 @@ export default function AdminDashboard() {
                 { id: 'vehicles', label: 'Veicoli' },
                 { id: 'lotteria', label: 'Biglietti Lotteria' },
                 { id: 'fattura', label: 'Fatture' },
-                { id: 'contratto', label: 'Contratti' }
+                { id: 'contratto', label: 'Contratti' },
+                { id: 'marketing', label: 'Marketing' }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -384,6 +386,15 @@ export default function AdminDashboard() {
               >
                 Contratti
               </button>
+              <button
+                onClick={() => setActiveTab('marketing')}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
+              >
+                Marketing
+              </button>
             </nav>
           </div>
         </div>
@@ -404,6 +415,7 @@ export default function AdminDashboard() {
             {activeTab === 'lotteria' && 'Biglietti Lotteria'}
             {activeTab === 'fattura' && 'Fatture'}
             {activeTab === 'contratto' && 'Contratti'}
+            {activeTab === 'marketing' && 'Marketing'}
           </h2>
         </div>
 
@@ -421,6 +433,7 @@ export default function AdminDashboard() {
           {activeTab === 'lotteria' && <LotteriaBoard />}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
+          {activeTab === 'marketing' && <MarketingTab />}
         </div>
       </main>
     </div>

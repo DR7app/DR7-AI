@@ -48,9 +48,16 @@ export default function CalendarTab() {
   const [selectedUnavailability, setSelectedUnavailability] = useState<Vehicle | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [changingVehicle, setChangingVehicle] = useState<string | null>(null) // booking id being changed
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
+    // Fetch current user email
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUserEmail(data.user.email || null)
+      }
+    })
 
     // Real-time subscription
     const subscription = supabase
@@ -368,7 +375,7 @@ export default function CalendarTab() {
                 }).length} noleggi
               </span>
             </div>
-            {canViewFinancials && !hideFinancials && (
+            {canViewFinancials && !hideFinancials && userEmail !== 'dubai.rent7.0srl@gmail.com' && (
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-400">Fatturato:</span>
                 <span className="text-green-400 font-bold text-sm">
@@ -722,7 +729,7 @@ export default function CalendarTab() {
                         <div className="flex justify-between pt-2 border-t border-gray-700">
                           <span className="text-gray-400">Prezzo Totale:</span>
                           <span className="text-dr7-gold font-bold text-lg">
-                            €{(booking.price_total / 100).toFixed(2)}
+                            {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${(booking.price_total / 100).toFixed(2)}`}
                           </span>
                         </div>
                       </div>
