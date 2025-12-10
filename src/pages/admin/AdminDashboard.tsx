@@ -186,7 +186,7 @@ export default function AdminDashboard() {
 
       <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Desktop Tabs */}
-        <div className="mb-6 hidden lg:block">
+        <div className="mb-6 hidden lg:block relative z-50">
           <div className="border-b border-gray-800">
             <nav className="-mb-px flex gap-4">
               {/* Noleggio Dropdown */}
