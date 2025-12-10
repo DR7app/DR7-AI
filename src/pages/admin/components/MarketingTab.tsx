@@ -134,6 +134,28 @@ export default function MarketingTab() {
                 })
             }
 
+            // 3. Get customers from customers table (legacy/main site source)
+            const { data: customersData, error: customersError } = await supabase
+                .from('customers')
+                .select('*')
+                .order('created_at', { ascending: false })
+
+            if (!customersError && customersData) {
+                customersData.forEach((c: any) => {
+                    const key = c.email || c.phone || c.id
+                    if (key && !customerMap.has(key)) {
+                        customerMap.set(key, {
+                            id: c.id,
+                            full_name: c.full_name || 'Cliente',
+                            email: c.email,
+                            phone: c.phone,
+                            created_at: c.created_at,
+                            tipo_cliente: 'persona_fisica', // Default
+                        })
+                    }
+                })
+            }
+
             // Convert map to array
             const allCustomers = Array.from(customerMap.values())
 
