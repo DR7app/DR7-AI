@@ -9,7 +9,7 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-const GOOGLE_REVIEW_LINK = "https://g.page/r/Cb_vMTCs0JcxEBM/review"; // Updated with actual link if found, or keep placeholder if unknown. Ideally user provides it.
+const GOOGLE_REVIEW_LINK = "https://share.google/Xterp74G4U1dsYb98";
 // Placeholder for now: 
 // const GOOGLE_REVIEW_LINK = "https://search.google.com/local/writereview?placeid=YOUR_PLACE_ID";
 
@@ -33,7 +33,7 @@ export const handler: Handler = async (event) => {
 
         // Allow user to pass a custom link if they want, otherwise use default
         // For now hardcoded or env var
-        const reviewLink = process.env.GOOGLE_REVIEW_LINK || "https://g.page/r/Cb_vMTCs0JcxEBM/review"; // Placeholder
+        const reviewLink = process.env.GOOGLE_REVIEW_LINK || GOOGLE_REVIEW_LINK;
 
         for (const booking of bookings) {
             if (!booking.email) {
