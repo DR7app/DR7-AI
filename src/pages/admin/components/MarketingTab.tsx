@@ -304,7 +304,6 @@ export default function MarketingTab() {
                                 <th className="p-4">Cliente</th>
                                 <th className="p-4">Email</th>
                                 <th className="p-4">Telefono</th>
-                                <th className="p-4">Tipo</th>
                                 <th className="p-4 text-right">Data Reg.</th>
                             </tr>
                         </thead>
@@ -326,16 +325,6 @@ export default function MarketingTab() {
                                     <td className="p-4 font-medium text-white">{customer.full_name}</td>
                                     <td className="p-4">{customer.email || '-'}</td>
                                     <td className="p-4">{customer.phone || '-'}</td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-xs ${customer.tipo_cliente === 'persona_fisica' ? 'bg-blue-500/20 text-blue-400' :
-                                            customer.tipo_cliente === 'azienda' ? 'bg-purple-500/20 text-purple-400' :
-                                                'bg-gray-600 text-gray-300'
-                                            }`}>
-                                            {customer.tipo_cliente === 'persona_fisica' ? 'Privato' :
-                                                customer.tipo_cliente === 'azienda' ? 'Azienda' :
-                                                    customer.tipo_cliente === 'pubblica_amministrazione' ? 'PA' : 'N/A'}
-                                        </span>
-                                    </td>
                                     <td className="p-4 text-right">
                                         {new Date(customer.created_at).toLocaleDateString('it-IT')}
                                     </td>
@@ -343,7 +332,7 @@ export default function MarketingTab() {
                             ))}
                             {paginatedCustomers.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-8 text-center text-gray-500">
+                                    <td colSpan={5} className="p-8 text-center text-gray-500">
                                         Nessun cliente trovato
                                     </td>
                                 </tr>
