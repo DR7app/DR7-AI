@@ -45,11 +45,26 @@ export const handler: Handler = async (event) => {
             users.forEach(u => userMap.set(u.id, u))
         }
 
-        // 3. Fallback for missing users: Fetch from Auth Admin which is the source of truth
+        // 3. Fallback for missing users:
+        // First try the 'customers' table (legacy or other source)
+        const missingFromExtended = userIds.filter(id => !userMap.has(id))
+
+        if (missingFromExtended.length > 0) {
+            const { data: legacyUsers, error: legacyError } = await supabase
+                .from('customers')
+                .select('id, full_name, email, created_at')
+                .in('id', missingFromExtended)
+
+            if (legacyUsers) {
+                legacyUsers.forEach(u => userMap.set(u.id, u))
+            }
+        }
+
+        // Then try Auth Admin which is the source of truth
         const missingUserIds = userIds.filter(id => !userMap.has(id))
 
         if (missingUserIds.length > 0) {
-            console.log(`[get-verification-requests] Found ${missingUserIds.length} users missing from customers_extended. Fetching from Auth...`)
+            console.log(`[get-verification-requests] Found ${missingUserIds.length} users missing from DBs. Fetching from Auth...`)
 
             // Fetch missing users in parallel
             await Promise.all(missingUserIds.map(async (userId) => {
@@ -61,10 +76,14 @@ export const handler: Handler = async (event) => {
                         const metadata = user.user_metadata || {}
                         const firstName = metadata.nome || metadata.first_name || metadata.given_name || ''
                         const lastName = metadata.cognome || metadata.last_name || metadata.family_name || ''
-                        let derivedName = metadata.full_name || metadata.name || metadata.display_name || ''
 
-                        if (!derivedName && (firstName || lastName)) {
+                        let derivedName = ''
+                        if (firstName || lastName) {
                             derivedName = `${firstName} ${lastName}`.trim()
+                        }
+
+                        if (!derivedName) {
+                            derivedName = metadata.full_name || metadata.name || metadata.display_name || ''
                         }
 
                         const fallbackUser = {
@@ -72,7 +91,7 @@ export const handler: Handler = async (event) => {
                             email: user.email,
                             nome: firstName,
                             cognome: lastName,
-                            full_name: derivedName, // Store the derived full name
+                            full_name: derivedName,
                             created_at: user.created_at
                         }
                         userMap.set(userId, fallbackUser)
