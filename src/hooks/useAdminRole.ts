@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 
-interface AdminRole {
+export interface AdminRole {
   role: 'superadmin' | 'admin'
   canViewFinancials: boolean
+  canManageFleet: boolean
+  canManageAdmins: boolean
   loading: boolean
 }
 
@@ -49,5 +51,9 @@ export function useAdminRole(): AdminRole {
     loadAdminRole()
   }, [])
 
-  return { role, canViewFinancials, loading }
+  // Superadmins can manage fleet and admins, regular admins cannot
+  const canManageFleet = role === 'superadmin'
+  const canManageAdmins = role === 'superadmin'
+
+  return { role, canViewFinancials, canManageFleet, canManageAdmins, loading }
 }
