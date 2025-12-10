@@ -435,64 +435,91 @@ export default function CalendarTab() {
           </button>
         </div>
       </div>
+    </div>
 
-      {/* Search Results - Show matching bookings */}
-      {searchQuery && (
-        <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-bold text-white mb-3">
-            Risultati ricerca: "{searchQuery}"
-          </h3>
-          {(() => {
-            const matchingBookings = bookings.filter(booking =>
-              booking.customer_name &&
-              booking.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
-            )
+      {/* Diagnostics: Show bookings that are NOT matching any vehicle */ }
+  <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
+    <h4 className="text-red-300 font-bold mb-2">⚠️ Diagnostica Prenotazioni Non Visibili</h4>
+    <div className="space-y-1 max-h-40 overflow-y-auto text-xs font-mono text-gray-300">
+      {bookings.filter(b => {
+        // Check if this booking matches ANY vehicle
+        const hasMatch = vehicles.some(v => {
+          // Replicate matching logic
+          const bookingVehicle = b.vehicle_name?.trim().toLowerCase()
+          const vehicleDisplay = v.display_name?.trim().toLowerCase()
+          const exactMatch = bookingVehicle === vehicleDisplay
+          const partialMatch = bookingVehicle && vehicleDisplay && (
+            bookingVehicle.includes(vehicleDisplay) ||
+            vehicleDisplay.includes(bookingVehicle)
+          )
 
-            if (matchingBookings.length === 0) {
-              return (
-                <p className="text-gray-400 text-sm">Nessuna prenotazione trovata con questo nome cliente.</p>
-              )
-            }
+          if (!exactMatch && !partialMatch) return false
 
+          if (v.plate && b.vehicle_plate) {
+            return v.plate === b.vehicle_plate
+          }
+          return true
+        })
+
+        // Show only if NO match found
+        return !hasMatch
+      }).map(b => (
+        <h3 className="text-lg font-bold text-white mb-3">
+          Risultati ricerca: "{searchQuery}"
+        </h3>
+        {(() => {
+          const matchingBookings = bookings.filter(booking =>
+            booking.customer_name &&
+            booking.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+
+          if (matchingBookings.length === 0) {
             return (
-              <div className="space-y-2">
-                {matchingBookings.map(booking => (
-                  <div
-                    key={booking.id}
-                    className="bg-gray-800 p-3 rounded border border-gray-700 hover:border-dr7-gold transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-white font-semibold">{booking.customer_name}</p>
-                        <p className="text-gray-400 text-sm">{booking.customer_email}</p>
-                        <p className="text-dr7-gold text-sm mt-1">
-                          🚗 {booking.vehicle_name}
-                          {booking.vehicle_plate && <span className="text-gray-400"> ({booking.vehicle_plate})</span>}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-gray-300 text-sm">
-                          {new Date(booking.pickup_date).toLocaleDateString('it-IT')} →{' '}
-                          {new Date(booking.dropoff_date).toLocaleDateString('it-IT')}
-                        </p>
-                        <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
-                          booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                            'bg-gray-700 text-gray-300'
-                          }`}>
-                          {booking.status}
-                        </span>
-                      </div>
+              <p className="text-gray-400 text-sm">Nessuna prenotazione trovata con questo nome cliente.</p>
+            )
+          }
+
+          return (
+            <div className="space-y-2">
+              {matchingBookings.map(booking => (
+                <div
+                  key={booking.id}
+                  className="bg-gray-800 p-3 rounded border border-gray-700 hover:border-dr7-gold transition-colors"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-white font-semibold">{booking.customer_name}</p>
+                      <p className="text-gray-400 text-sm">{booking.customer_email}</p>
+                      <p className="text-dr7-gold text-sm mt-1">
+                        🚗 {booking.vehicle_name}
+                        {booking.vehicle_plate && <span className="text-gray-400"> ({booking.vehicle_plate})</span>}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-gray-300 text-sm">
+                        {new Date(booking.pickup_date).toLocaleDateString('it-IT')} →{' '}
+                        {new Date(booking.dropoff_date).toLocaleDateString('it-IT')}
+                      </p>
+                      <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
+                        booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
+                          'bg-gray-700 text-gray-300'
+                        }`}>
+                        {booking.status}
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            )
-          })()}
-        </div>
-      )}
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+    </div>
+    )
+  }
 
-      {/* All Vehicles Grid - Combined */}
-      {vehicles.length > 0 && (
+    {/* All Vehicles Grid - Combined */}
+    {
+      vehicles.length > 0 && (
         <div className="bg-gray-900 rounded-lg p-4 lg:p-6 overflow-x-auto">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <span className="text-sm text-gray-400">Tutti i Veicoli ({vehicles.length})</span>
@@ -598,16 +625,20 @@ export default function CalendarTab() {
             </table>
           </div>
         </div>
-      )}
+      )
+    }
 
-      {vehicles.length === 0 && (
+    {
+      vehicles.length === 0 && (
         <div className="bg-gray-900 rounded-lg p-8 text-center">
           <p className="text-gray-400">Nessun veicolo trovato</p>
         </div>
-      )}
+      )
+    }
 
-      {/* Booking Details Modal */}
-      {selectedCell && (
+    {/* Booking Details Modal */}
+    {
+      selectedCell && (
         <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedCell(null)}
@@ -721,10 +752,12 @@ export default function CalendarTab() {
             </div>
           </div>
         </div>
-      )}
+      )
+    }
 
-      {/* Unavailability Details Modal */}
-      {selectedUnavailability && (
+    {/* Unavailability Details Modal */}
+    {
+      selectedUnavailability && (
         <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedUnavailability(null)}
@@ -834,7 +867,8 @@ export default function CalendarTab() {
             </div>
           </div>
         </div>
-      )}
-    </div>
+      )
+    }
+  </div >
   )
 }
