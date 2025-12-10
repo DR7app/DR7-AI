@@ -53,38 +53,95 @@ export default function MarketingTab() {
             ))
         }
 
+        // Sort alphabetically
+        result.sort((a, b) => a.full_name.localeCompare(b.full_name))
+
         setFilteredCustomers(result)
     }, [customers, searchQuery])
 
     async function loadCustomers() {
         setLoading(true)
         try {
-            // Reuse logic from CustomersTab to fetch ALL customers efficiently
-            // We focus on fields needed for marketing (name, email)
+            // Fetch customers from BOTH bookings (legacy/simple) and customers_extended (detailed)
+            // This mirrors the logic in CustomersTab to ensure we get the full count (e.g. 523)
 
-            const { data: customersData, error } = await supabase
+            // 1. Get unique customers from bookings table
+            const { data: bookingsData, error: bookingsError } = await supabase
+                .from('bookings')
+                .select('customer_name, customer_email, customer_phone, user_id, booked_at, booking_details')
+                .order('booked_at', { ascending: false })
+
+            if (bookingsError) throw bookingsError
+
+            const customerMap = new Map<string, Customer>()
+
+            // Process bookings data
+            if (bookingsData) {
+                bookingsData.forEach((booking: any) => {
+                    const details = booking.booking_details?.customer || {}
+                    const customerName = booking.customer_name || details.fullName || 'Cliente'
+                    const customerEmail = booking.customer_email || details.email || null
+                    const customerPhone = booking.customer_phone || details.phone || null
+
+                    // Key for uniqueness: email is best, then phone, then user_id
+                    const key = customerEmail || customerPhone || booking.user_id
+
+                    if (key) {
+                        if (!customerMap.has(key)) {
+                            customerMap.set(key, {
+                                id: booking.user_id || key, // Use key as ID if user_id is missing
+                                full_name: customerName,
+                                email: customerEmail,
+                                phone: customerPhone,
+                                created_at: booking.booked_at,
+                                tipo_cliente: 'persona_fisica', // Default to private if unknown
+                                nome: customerName.split(' ')[0],
+                                cognome: customerName.split(' ').slice(1).join(' ')
+                            })
+                        }
+                    }
+                })
+            }
+
+            // 2. Get customers from customers_extended and merge/overwrite
+            const { data: extendedData, error: extendedError } = await supabase
                 .from('customers_extended')
                 .select('id, nome, cognome, email, telefono, created_at, tipo_cliente, ragione_sociale, denominazione')
-                .order('created_at', { ascending: false })
 
-            if (error) throw error
+            if (extendedError && extendedError.code !== '42P01') throw extendedError
 
-            // Transform to match Customer interface if needed, or just use as is
-            const formattedCustomers: Customer[] = (customersData || []).map(c => ({
-                id: c.id,
-                full_name: c.tipo_cliente === 'persona_fisica'
-                    ? `${c.nome || ''} ${c.cognome || ''}`.trim()
-                    : (c.ragione_sociale || c.denominazione || 'Cliente'),
-                email: c.email,
-                phone: c.telefono,
-                created_at: c.created_at,
-                tipo_cliente: c.tipo_cliente,
-                nome: c.nome,
-                cognome: c.cognome
-            }))
+            if (extendedData) {
+                extendedData.forEach((c: any) => {
+                    const key = c.email || c.telefono || c.id
 
-            setCustomers(formattedCustomers)
-            setFilteredCustomers(formattedCustomers)
+                    const fullName = c.tipo_cliente === 'persona_fisica'
+                        ? `${c.nome || ''} ${c.cognome || ''}`.trim()
+                        : (c.ragione_sociale || c.denominazione || 'Cliente')
+
+                    const customerObj: Customer = {
+                        id: c.id,
+                        full_name: fullName || 'Cliente',
+                        email: c.email,
+                        phone: c.telefono,
+                        created_at: c.created_at,
+                        tipo_cliente: c.tipo_cliente,
+                        nome: c.nome,
+                        cognome: c.cognome
+                    }
+
+                    // Overwrite or add
+                    customerMap.set(key, customerObj)
+                })
+            }
+
+            // Convert map to array
+            const allCustomers = Array.from(customerMap.values())
+
+            // Initial Sort by Name
+            allCustomers.sort((a, b) => a.full_name.localeCompare(b.full_name))
+
+            setCustomers(allCustomers)
+            setFilteredCustomers(allCustomers)
         } catch (error) {
             console.error('Error loading customers for marketing:', error)
         } finally {
