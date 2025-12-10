@@ -145,16 +145,16 @@ export default function ReviewsTab() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-white">⭐ Gestione Recensioni</h2>
+                <h2 className="text-2xl font-bold text-white">Gestione Recensioni</h2>
                 <button
                     onClick={handleSendReviews}
                     disabled={selectedIds.size === 0 || sending}
                     className={`px-6 py-2 font-bold rounded flex items-center gap-2 transition-all ${selectedIds.size > 0 && !sending
-                            ? 'bg-dr7-gold hover:bg-yellow-500 text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]'
-                            : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                        ? 'bg-dr7-gold hover:bg-yellow-500 text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]'
+                        : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                         }`}
                 >
-                    {sending ? '⏳ Invio...' : `📧 Invia Richiesta (${selectedIds.size})`}
+                    {sending ? 'Invio...' : `Invia Richiesta (${selectedIds.size})`}
                 </button>
             </div>
 
