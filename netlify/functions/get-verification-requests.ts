@@ -45,14 +45,46 @@ export const handler: Handler = async (event) => {
             users.forEach(u => userMap.set(u.id, u))
         }
 
-        // 3. Merge data
+        // 3. Fallback for missing users: Fetch from Auth Admin which is the source of truth
+        const missingUserIds = userIds.filter(id => !userMap.has(id))
+
+        if (missingUserIds.length > 0) {
+            console.log(`[get-verification-requests] Found ${missingUserIds.length} users missing from customers_extended. Fetching from Auth...`)
+
+            // Fetch missing users in parallel
+            await Promise.all(missingUserIds.map(async (userId) => {
+                try {
+                    const { data: { user }, error } = await supabase.auth.admin.getUserById(userId)
+
+                    if (user && !error) {
+                        // Construct a fallback user object from Auth data
+                        const fallbackUser = {
+                            id: user.id,
+                            email: user.email,
+                            nome: user.user_metadata?.nome || user.user_metadata?.first_name || '',
+                            cognome: user.user_metadata?.cognome || user.user_metadata?.last_name || '',
+                            created_at: user.created_at
+                        }
+                        userMap.set(userId, fallbackUser)
+                    } else {
+                        console.warn(`[get-verification-requests] Could not fetch user ${userId} from Auth:`, error)
+                    }
+                } catch (e) {
+                    console.error(`[get-verification-requests] Exception fetching user ${userId}:`, e)
+                }
+            }))
+        }
+
+        // 4. Merge data
         const enrichedDocuments = documents.map(doc => {
             const user = userMap.get(doc.user_id)
             return {
                 ...doc,
                 user: {
                     id: doc.user_id,
-                    full_name: user ? `${user.nome || ''} ${user.cognome || ''}`.trim() : (doc.user_full_name || 'Utente sconosciuto'),
+                    full_name: user
+                        ? `${user.nome || ''} ${user.cognome || ''}`.trim() || (user.email ? user.email.split('@')[0] : 'Utente Senza Nome')
+                        : (doc.user_full_name || 'Utente sconosciuto'),
                     email: user?.email || doc.user_email || 'Email non disponibile',
                     is_new: user?.created_at ? (new Date().getTime() - new Date(user.created_at).getTime()) < (7 * 24 * 60 * 60 * 1000) : false,
                     created_at: user?.created_at || doc.upload_date
