@@ -111,9 +111,11 @@ export default function CustomersTab() {
   const [totalCustomers, setTotalCustomers] = useState(0)
   const CUSTOMERS_PER_PAGE = 30
 
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([])
+
   useEffect(() => {
     loadCustomers()
-  }, [currentPage, searchQuery])
+  }, [])
 
   // Reset to page 1 when search query changes
   useEffect(() => {
@@ -122,10 +124,59 @@ export default function CustomersTab() {
     }
   }, [searchQuery])
 
+  // Handle filtering and pagination locally
+  useEffect(() => {
+    if (!allCustomers.length) return
+
+    let result = [...allCustomers]
+
+    // 1. Sort alphabetically by full_name (A-Z)
+    result.sort((a, b) => {
+      const nameA = a.full_name.toLowerCase()
+      const nameB = b.full_name.toLowerCase()
+      return nameA.localeCompare(nameB, 'it')
+    })
+
+    // 2. Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      result = result.filter((customer) => (
+        customer.full_name?.toLowerCase().includes(query) ||
+        customer.email?.toLowerCase().includes(query) ||
+        customer.phone?.toLowerCase().includes(query) ||
+        customer.nome?.toLowerCase().includes(query) ||
+        customer.cognome?.toLowerCase().includes(query) ||
+        customer.ragione_sociale?.toLowerCase().includes(query) ||
+        customer.denominazione?.toLowerCase().includes(query) ||
+        customer.telefono?.toLowerCase().includes(query)
+      ))
+    }
+
+    // Update total count
+    setTotalCustomers(result.length)
+
+    // 3. Apply pagination
+    const from = (currentPage - 1) * CUSTOMERS_PER_PAGE
+    const to = from + CUSTOMERS_PER_PAGE
+    const paginatedCustomers = result.slice(from, to)
+
+    setCustomers(paginatedCustomers)
+
+    // Only log if we have data to avoid spamming console on initial render
+    if (paginatedCustomers.length > 0) {
+      console.log('[CustomersTab] Updated view:', {
+        total: result.length,
+        page: currentPage,
+        displayed: paginatedCustomers.length
+      })
+    }
+
+  }, [allCustomers, searchQuery, currentPage])
+
   async function loadCustomers() {
     setLoading(true)
     try {
-      console.log('[CustomersTab] Loading customers...')
+      console.log('[CustomersTab] Loading customers from DB...')
 
       // Check current user
       const { data: { user } } = await supabase.auth.getUser()
@@ -240,7 +291,7 @@ export default function CustomersTab() {
           } else if (customer.tipo_cliente === 'azienda') {
             fullName = customer.ragione_sociale || customer.denominazione || 'Azienda'
           } else if (customer.tipo_cliente === 'pubblica_amministrazione') {
-            fullName = customer.denominazione || customer.ente_ufficio || 'PA'
+            fullName = customer.denominazione || customer.ente_o_ufficio || 'PA'
           }
 
           // Store ALL customer data (create new or update existing)
@@ -314,8 +365,6 @@ export default function CustomersTab() {
         })
       }
 
-      // Don't set customers here - we'll do it after enrichment
-
       // Also get customers from customers table if it exists
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
@@ -331,42 +380,27 @@ export default function CustomersTab() {
         })
       }
 
-      // Get users who have uploaded documents to storage
+      // Check storage for documents
       const usersWithDocuments = new Set<string>()
 
-      // Check driver-licenses bucket
-      try {
-        const { data: licenseFiles, error: licenseError } = await supabase.storage
-          .from('driver-licenses')
-          .list()
-
-        if (!licenseError && licenseFiles) {
-          licenseFiles.forEach(folder => {
-            if (folder.name && folder.name.length > 10) { // Folders are user IDs
-              usersWithDocuments.add(folder.name)
-            }
-          })
+      // Helper function to check bucket
+      const checkBucket = async (bucket: string) => {
+        try {
+          const { data, error } = await supabase.storage.from(bucket).list()
+          if (!error && data) {
+            data.forEach(folder => {
+              if (folder.name && folder.name.length > 10) usersWithDocuments.add(folder.name)
+            })
+          }
+        } catch (e) {
+          console.error(`Error listing ${bucket}:`, e)
         }
-      } catch (e) {
-        console.error('Error listing driver-licenses:', e)
       }
 
-      // Check driver-ids bucket
-      try {
-        const { data: idFiles, error: idError } = await supabase.storage
-          .from('driver-ids')
-          .list()
-
-        if (!idError && idFiles) {
-          idFiles.forEach(folder => {
-            if (folder.name && folder.name.length > 10) { // Folders are user IDs
-              usersWithDocuments.add(folder.name)
-            }
-          })
-        }
-      } catch (e) {
-        console.error('Error listing driver-ids:', e)
-      }
+      await Promise.all([
+        checkBucket('driver-licenses'),
+        checkBucket('driver-ids')
+      ])
 
       // Fetch user data for users with documents who aren't already in customerMap
       for (const userId of usersWithDocuments) {
@@ -395,66 +429,39 @@ export default function CustomersTab() {
 
       console.log('Users with uploaded documents:', usersWithDocuments.size)
 
-      // Get verification status, phone, and documents from auth.users metadata
+      // Initial cleanup of loading state
       const customersArray = Array.from(customerMap.values())
-      const enrichedCustomers = await Promise.all(
-        customersArray.map(async (customer) => {
-          if (customer.id && customer.id.length > 10) { // Valid UUID
-            try {
-              const { data, error } = await supabase.auth.admin.getUserById(customer.id)
-              if (!error && data?.user) {
-                const metadata = data.user.user_metadata || {}
-                return {
-                  ...customer,
-                  // Use phone from user_metadata if customer doesn't have one
-                  phone: customer.phone || metadata.phone || null,
-                  verification: metadata.verification
+
+      // Store all raw customers first so we show something immediately
+      setAllCustomers(customersArray)
+
+      // Then enrich with verification data in background (optimization)
+      // This prevents UI blocking while fetching user metadata
+      setTimeout(async () => {
+        const enrichedCustomers = await Promise.all(
+          customersArray.map(async (customer) => {
+            if (customer.id && customer.id.length > 10) { // Valid UUID
+              try {
+                const { data, error } = await supabase.auth.admin.getUserById(customer.id)
+                if (!error && data?.user) {
+                  const metadata = data.user.user_metadata || {}
+                  return {
+                    ...customer,
+                    // Use phone from user_metadata if customer doesn't have one
+                    phone: customer.phone || metadata.phone || null,
+                    verification: metadata.verification
+                  }
                 }
+              } catch (e) {
+                // Silent catch
               }
-            } catch (e) {
-              console.error('Error fetching verification for user:', customer.id, e)
             }
-          }
-          return customer
-        })
-      )
+            return customer
+          })
+        )
+        setAllCustomers(enrichedCustomers)
+      }, 0)
 
-      // Set total count from all sources (before filtering/pagination)
-      setTotalCustomers(enrichedCustomers.length)
-
-      // Sort alphabetically by full_name (A-Z)
-      const sortedCustomers = enrichedCustomers.sort((a, b) => {
-        const nameA = a.full_name.toLowerCase()
-        const nameB = b.full_name.toLowerCase()
-        return nameA.localeCompare(nameB, 'it')
-      })
-
-      // Apply search filter BEFORE pagination
-      const filteredCustomers = searchQuery
-        ? sortedCustomers.filter((customer) => {
-          const query = searchQuery.toLowerCase()
-          return (
-            customer.full_name?.toLowerCase().includes(query) ||
-            customer.email?.toLowerCase().includes(query) ||
-            customer.phone?.toLowerCase().includes(query) ||
-            customer.nome?.toLowerCase().includes(query) ||
-            customer.cognome?.toLowerCase().includes(query) ||
-            customer.ragione_sociale?.toLowerCase().includes(query) ||
-            customer.denominazione?.toLowerCase().includes(query) ||
-            customer.telefono?.toLowerCase().includes(query)
-          )
-        })
-        : sortedCustomers
-
-      // Apply pagination to filtered results
-      const from = (currentPage - 1) * CUSTOMERS_PER_PAGE
-      const to = from + CUSTOMERS_PER_PAGE
-      const paginatedCustomers = filteredCustomers.slice(from, to)
-
-      setCustomers(paginatedCustomers)
-      console.log('[CustomersTab] ✅ Loaded', paginatedCustomers.length, 'customers for page', currentPage)
-      console.log('[CustomersTab] Total customers across all sources:', enrichedCustomers.length)
-      console.log('[CustomersTab] Filtered customers:', filteredCustomers.length)
     } catch (error) {
       console.error('[CustomersTab] ❌ Failed to load customers:', error)
     } finally {
