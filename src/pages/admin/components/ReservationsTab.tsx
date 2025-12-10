@@ -577,27 +577,7 @@ export default function ReservationsTab() {
       if (data.url) {
         // Reload data to show the contract link in the UI
         loadData()
-
-        if (confirm('Contratto generato con successo! 📄\n\nVuoi inviare l\'email al cliente ora (con PDF allegato)?')) {
-          try {
-            const emailRes = await fetch('/.netlify/functions/send-contract-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bookingId: booking.id })
-            })
-            const emailData = await emailRes.json()
-            if (emailRes.ok) {
-              alert('✅ Email inviata con successo!')
-            } else {
-              console.error('Email send failed:', emailData)
-              const errorMsg = emailData.error || emailData.details || 'Errore sconosciuto'
-              alert('⚠️ Errore invio email:\n\n' + errorMsg + '\n\nControlla i log di Netlify per maggiori dettagli.')
-            }
-          } catch (e: any) {
-            console.error('Email handling error:', e)
-            alert('Errore invio email:\n\n' + e.message + '\n\nControlla i log di Netlify per maggiori dettagli.')
-          }
-        }
+        alert('✅ Contratto generato con successo! 📄')
       } else {
         alert('Contratto generato, ma URL non disponibile.')
       }
