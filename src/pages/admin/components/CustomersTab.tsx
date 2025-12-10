@@ -113,7 +113,14 @@ export default function CustomersTab() {
 
   useEffect(() => {
     loadCustomers()
-  }, [currentPage])
+  }, [currentPage, searchQuery])
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    if (searchQuery) {
+      setCurrentPage(1)
+    }
+  }, [searchQuery])
 
   async function loadCustomers() {
     setLoading(true)
@@ -204,7 +211,20 @@ export default function CustomersTab() {
         .select('*')
 
       if (customersExtendedError) {
-        console.error('[CustomersTab] ERROR loading customers_extended:', customersExtendedError)
+        console.error('[CustomersTab] ❌ ERROR loading customers_extended:', customersExtendedError)
+        console.error('[CustomersTab] Error code:', customersExtendedError.code)
+        console.error('[CustomersTab] Error message:', customersExtendedError.message)
+        console.error('[CustomersTab] Error details:', customersExtendedError.details)
+        console.error('[CustomersTab] Error hint:', customersExtendedError.hint)
+
+        // Show user-friendly error message
+        if (customersExtendedError.code === '42501') {
+          console.warn('[CustomersTab] ⚠️ RLS policy blocking access. Run fix_customers_extended_rls.sql')
+        } else if (customersExtendedError.code === '42P01') {
+          console.warn('[CustomersTab] ⚠️ Table does not exist. Run create-customers-extended-table.sql')
+        }
+      } else {
+        console.log('[CustomersTab] ✅ Successfully loaded customers_extended')
       }
 
       if (!customersExtendedError && customersExtendedData) {
@@ -399,7 +419,7 @@ export default function CustomersTab() {
         })
       )
 
-      // Set total count from all sources (before pagination)
+      // Set total count from all sources (before filtering/pagination)
       setTotalCustomers(enrichedCustomers.length)
 
       // Sort alphabetically by full_name (A-Z)
@@ -409,14 +429,34 @@ export default function CustomersTab() {
         return nameA.localeCompare(nameB, 'it')
       })
 
-      // Apply pagination client-side
+      // Apply search filter BEFORE pagination
+      const filteredCustomers = searchQuery
+        ? sortedCustomers.filter((customer) => {
+          const query = searchQuery.toLowerCase()
+          return (
+            customer.full_name?.toLowerCase().includes(query) ||
+            customer.email?.toLowerCase().includes(query) ||
+            customer.phone?.toLowerCase().includes(query) ||
+            customer.nome?.toLowerCase().includes(query) ||
+            customer.cognome?.toLowerCase().includes(query) ||
+            customer.ragione_sociale?.toLowerCase().includes(query) ||
+            customer.denominazione?.toLowerCase().includes(query) ||
+            customer.telefono?.toLowerCase().includes(query)
+          )
+        })
+        : sortedCustomers
+
+      // Apply pagination to filtered results
       const from = (currentPage - 1) * CUSTOMERS_PER_PAGE
       const to = from + CUSTOMERS_PER_PAGE
-      const paginatedCustomers = sortedCustomers.slice(from, to)
+      const paginatedCustomers = filteredCustomers.slice(from, to)
 
       setCustomers(paginatedCustomers)
+      console.log('[CustomersTab] ✅ Loaded', paginatedCustomers.length, 'customers for page', currentPage)
+      console.log('[CustomersTab] Total customers across all sources:', enrichedCustomers.length)
+      console.log('[CustomersTab] Filtered customers:', filteredCustomers.length)
     } catch (error) {
-      console.error('Failed to load customers:', error)
+      console.error('[CustomersTab] ❌ Failed to load customers:', error)
     } finally {
       setLoading(false)
     }
@@ -1458,164 +1498,146 @@ export default function CustomersTab() {
               </tr>
             </thead>
             <tbody>
-              {customers
-                .filter((customer) => {
-                  if (!searchQuery) return true
-                  const query = searchQuery.toLowerCase()
-                  return (
-                    customer.full_name.toLowerCase().includes(query) ||
-                    customer.email?.toLowerCase().includes(query) ||
-                    customer.phone?.toLowerCase().includes(query)
-                  )
-                })
-                .map((customer) => (
-                  <tr
-                    key={customer.id}
-                    className={`border-t border-gray-700 hover:bg-gray-800 ${customer.status === 'blacklist' ? 'bg-black/20' :
-                      customer.status === 'vip' ? 'bg-yellow-500/10' :
-                        customer.status === 'has_rental' ? 'bg-green-500/10' :
-                          ''
-                      }`}
-                  >
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedCustomerIds.has(customer.id)}
-                        onChange={(e) => {
-                          const newSet = new Set(selectedCustomerIds)
-                          if (e.target.checked) {
-                            newSet.add(customer.id)
-                          } else {
-                            newSet.delete(customer.id)
-                          }
-                          setSelectedCustomerIds(newSet)
-                        }}
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white">{customer.full_name}</td>
-                    <td className="px-4 py-3 text-sm">
-                      {customer.tipo_cliente ? (
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : customer.tipo_cliente === 'azienda'
-                            ? 'bg-purple-500/20 text-purple-400'
-                            : 'bg-green-500/20 text-green-400'
-                          }`}>
-                          {customer.tipo_cliente === 'persona_fisica' && 'Persona Fisica'}
-                          {customer.tipo_cliente === 'azienda' && 'Azienda'}
-                          {customer.tipo_cliente === 'pubblica_amministrazione' && 'PA'}
-                        </span>
-                      ) : (
-                        <span className="text-gray-500">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white">{customer.email || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-white">{customer.phone || '-'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2 flex-wrap">
-                        <Button
-                          onClick={() => setViewingCustomerDetails(customer)}
-                          variant="secondary"
-                          className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold"
-                        >
-                          Dettagli Completi
-                        </Button>
-                        <Button
-                          onClick={() => handleViewDocuments(customer)}
-                          variant="secondary"
-                          className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
-                        >
-                          Documenti
-                        </Button>
-                        <Button
-                          onClick={() => handleEdit(customer)}
-                          variant="secondary"
-                          className="text-xs py-1 px-3 bg-green-900 hover:bg-green-800"
-                        >
-                          Modifica
-                        </Button>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2 items-center justify-end">
-                        {customer.status === 'blacklist' && (
-                          <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-black/40 text-white border border-white/20 backdrop-blur-sm">
-                            Blacklist
-                          </span>
-                        )}
-                        {customer.status === 'vip' && (
-                          <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-500/30 text-yellow-200 border border-yellow-400/30 backdrop-blur-sm">
-                            VIP
-                          </span>
-                        )}
-                        {customer.status === 'has_rental' && (
-                          <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/30 text-green-200 border border-green-400/30 backdrop-blur-sm">
-                            Fidelizzato
-                          </span>
-                        )}
-                        {!customer.status && (
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-black/20 text-white/70 hover:bg-black/40 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
-                              title="Blacklist"
-                            >
-                              BL
-                            </button>
-                            <button
-                              onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-yellow-500/20 text-yellow-200/70 hover:bg-yellow-500/30 hover:text-yellow-200 border border-yellow-400/20 backdrop-blur-sm transition-all"
-                              title="VIP"
-                            >
-                              VIP
-                            </button>
-                            <button
-                              onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-200/70 hover:bg-green-500/30 hover:text-green-200 border border-green-400/20 backdrop-blur-sm transition-all"
-                              title="Fidelizzato"
-                            >
-                              FID
-                            </button>
-                          </div>
-                        )}
-                        {customer.status && (
-                          <button
-                            onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-700/30 text-white/60 hover:bg-gray-700/50 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
-                            title="Rimuovi Status"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right">
+              {customers.map((customer) => (
+                <tr
+                  key={customer.id}
+                  className={`border-t border-gray-700 hover:bg-gray-800 ${customer.status === 'blacklist' ? 'bg-black/20' :
+                    customer.status === 'vip' ? 'bg-yellow-500/10' :
+                      customer.status === 'has_rental' ? 'bg-green-500/10' :
+                        ''
+                    }`}
+                >
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedCustomerIds.has(customer.id)}
+                      onChange={(e) => {
+                        const newSet = new Set(selectedCustomerIds)
+                        if (e.target.checked) {
+                          newSet.add(customer.id)
+                        } else {
+                          newSet.delete(customer.id)
+                        }
+                        setSelectedCustomerIds(newSet)
+                      }}
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-sm text-white">{customer.full_name}</td>
+                  <td className="px-4 py-3 text-sm">
+                    {customer.tipo_cliente ? (
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
+                        ? 'bg-blue-500/20 text-blue-400'
+                        : customer.tipo_cliente === 'azienda'
+                          ? 'bg-purple-500/20 text-purple-400'
+                          : 'bg-green-500/20 text-green-400'
+                        }`}>
+                        {customer.tipo_cliente === 'persona_fisica' && 'Persona Fisica'}
+                        {customer.tipo_cliente === 'azienda' && 'Azienda'}
+                        {customer.tipo_cliente === 'pubblica_amministrazione' && 'PA'}
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-white">{customer.email || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-white">{customer.phone || '-'}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <div className="flex gap-2 flex-wrap">
                       <Button
-                        onClick={() => handleDelete(customer.id)}
+                        onClick={() => setViewingCustomerDetails(customer)}
                         variant="secondary"
-                        className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                        className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold"
                       >
-                        Elimina
+                        Dettagli Completi
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              {customers.filter((customer) => {
-                if (!searchQuery) return true
-                const query = searchQuery.toLowerCase()
-                return (
-                  customer.full_name.toLowerCase().includes(query) ||
-                  customer.email?.toLowerCase().includes(query) ||
-                  customer.phone?.toLowerCase().includes(query)
-                )
-              }).length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      {searchQuery ? `Nessun cliente trovato per "${searchQuery}"` : 'Nessun cliente trovato'}
-                    </td>
-                  </tr>
-                )}
+                      <Button
+                        onClick={() => handleViewDocuments(customer)}
+                        variant="secondary"
+                        className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
+                      >
+                        Documenti
+                      </Button>
+                      <Button
+                        onClick={() => handleEdit(customer)}
+                        variant="secondary"
+                        className="text-xs py-1 px-3 bg-green-900 hover:bg-green-800"
+                      >
+                        Modifica
+                      </Button>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <div className="flex gap-2 items-center justify-end">
+                      {customer.status === 'blacklist' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-black/40 text-white border border-white/20 backdrop-blur-sm">
+                          Blacklist
+                        </span>
+                      )}
+                      {customer.status === 'vip' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-500/30 text-yellow-200 border border-yellow-400/30 backdrop-blur-sm">
+                          VIP
+                        </span>
+                      )}
+                      {customer.status === 'has_rental' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/30 text-green-200 border border-green-400/30 backdrop-blur-sm">
+                          Fidelizzato
+                        </span>
+                      )}
+                      {!customer.status && (
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-black/20 text-white/70 hover:bg-black/40 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
+                            title="Blacklist"
+                          >
+                            BL
+                          </button>
+                          <button
+                            onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-yellow-500/20 text-yellow-200/70 hover:bg-yellow-500/30 hover:text-yellow-200 border border-yellow-400/20 backdrop-blur-sm transition-all"
+                            title="VIP"
+                          >
+                            VIP
+                          </button>
+                          <button
+                            onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-200/70 hover:bg-green-500/30 hover:text-green-200 border border-green-400/20 backdrop-blur-sm transition-all"
+                            title="Fidelizzato"
+                          >
+                            FID
+                          </button>
+                        </div>
+                      )}
+                      {customer.status && (
+                        <button
+                          onClick={() => handleUpdateCustomerStatus(customer.id, null)}
+                          className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-700/30 text-white/60 hover:bg-gray-700/50 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
+                          title="Rimuovi Status"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right">
+                    <Button
+                      onClick={() => handleDelete(customer.id)}
+                      variant="secondary"
+                      className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                    >
+                      Elimina
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {customers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    {searchQuery ? `Nessun cliente trovato per "${searchQuery}"` : 'Nessun cliente trovato'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

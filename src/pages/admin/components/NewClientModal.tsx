@@ -490,8 +490,34 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       handleClose()
 
     } catch (error: any) {
-      console.error('Error saving customer:', error)
-      alert('Errore salvataggio cliente: ' + (error.message || 'Errore sconosciuto'))
+      console.error('❌ Error saving customer:', error)
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      })
+
+      // Provide specific error messages based on error type
+      let errorMessage = 'Errore salvataggio cliente: '
+
+      if (error.code === '42501') {
+        // Permission denied - RLS policy issue
+        errorMessage += 'Permessi insufficienti. Verifica che il tuo account abbia i permessi di amministratore.'
+      } else if (error.code === '42703') {
+        // Column does not exist
+        errorMessage += `Colonna mancante nel database: ${error.message}. Esegui lo script update_customers_extended_schema.sql`
+      } else if (error.message?.includes('duplicate key')) {
+        errorMessage += 'Cliente già esistente con questa email o codice fiscale.'
+      } else if (error.message?.includes('violates check constraint')) {
+        errorMessage += 'Dati non validi. Verifica i campi obbligatori.'
+      } else if (error.message?.includes('network')) {
+        errorMessage += 'Errore di connessione. Verifica la tua connessione internet.'
+      } else {
+        errorMessage += error.message || 'Errore sconosciuto'
+      }
+
+      alert(errorMessage)
     } finally {
       setIsSaving(false)
     }
