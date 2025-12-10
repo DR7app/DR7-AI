@@ -1,0 +1,247 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../../supabaseClient'
+
+interface CompletedBooking {
+    id: string
+    customer_name: string
+    customer_email: string | null
+    customer_phone: string | null
+    service_type: string
+    service_name: string
+    end_date: string // dropoff_date OR appointment_date (for wash/mech)
+    status: string
+    price_total: number
+}
+
+export default function ReviewsTab() {
+    const [bookings, setBookings] = useState<CompletedBooking[]>([])
+    const [loading, setLoading] = useState(true)
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [sending, setSending] = useState(false)
+    const [searchTerm, setSearchTerm] = useState('')
+
+    useEffect(() => {
+        loadCompletedBookings()
+    }, [])
+
+    async function loadCompletedBookings() {
+        setLoading(true)
+        try {
+            // Fetch all bookings
+            // We consider "completed" if status is 'completed' OR 'paid' OR if the date is in the past and status is not 'cancelled'
+            const { data, error } = await supabase
+                .from('bookings')
+                .select('*')
+                .neq('status', 'cancelled')
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+
+            const now = new Date()
+            const completed: CompletedBooking[] = []
+
+            data?.forEach((b: any) => {
+                let endDateStr = b.dropoff_date
+                if (!endDateStr && b.appointment_date) {
+                    endDateStr = b.appointment_date // For mechanical/wash
+                }
+
+                if (endDateStr) {
+                    const endDate = new Date(endDateStr)
+                    // Check if date is in the past OR status is explicitly completed
+                    if (endDate < now || b.status === 'completed') {
+                        // Determine helpful service name
+                        let serviceName = b.vehicle_name || b.service_name || b.service_type
+                        if (b.service_type === 'car_wash') serviceName = `Lavaggio: ${b.service_name}`
+                        if (b.service_type === 'mechanical_service') serviceName = `Meccanica: ${b.service_name}`
+
+                        completed.push({
+                            id: b.id,
+                            customer_name: b.customer_name || 'Cliente',
+                            customer_email: b.customer_email,
+                            customer_phone: b.customer_phone,
+                            service_type: b.service_type,
+                            service_name: serviceName,
+                            end_date: endDateStr,
+                            status: b.status,
+                            price_total: b.price_total,
+                        })
+                    }
+                }
+            })
+
+            // Sort by end date descending (most recent finished first)
+            completed.sort((a, b) => new Date(b.end_date).getTime() - new Date(a.end_date).getTime())
+
+            setBookings(completed)
+        } catch (err) {
+            console.error('Error loading reviews tab data:', err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleSelectAll = () => {
+        if (selectedIds.size === filteredBookings.length) {
+            setSelectedIds(new Set())
+        } else {
+            setSelectedIds(new Set(filteredBookings.map(b => b.id)))
+        }
+    }
+
+    const toggleSelection = (id: string) => {
+        const newSet = new Set(selectedIds)
+        if (newSet.has(id)) {
+            newSet.delete(id)
+        } else {
+            newSet.add(id)
+        }
+        setSelectedIds(newSet)
+    }
+
+    const handleSendReviews = async () => {
+        if (selectedIds.size === 0) return
+        if (!confirm(`Inviare richiesta di recensione a ${selectedIds.size} clienti?`)) return
+
+        setSending(true)
+        try {
+            const selectedBookings = bookings.filter(b => selectedIds.has(b.id))
+
+            // Map to minimal data for email function
+            const payload = selectedBookings.map(b => ({
+                name: b.customer_name,
+                email: b.customer_email,
+                service: b.service_name
+            }))
+
+            const response = await fetch('/.netlify/functions/send-review-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookings: payload })
+            })
+
+            const result = await response.json()
+
+            if (result.success) {
+                alert(`✅ Richieste inviate a ${result.sent} clienti!`)
+                setSelectedIds(new Set())
+            } else {
+                throw new Error(result.error || 'Errore invio')
+            }
+
+        } catch (error: any) {
+            console.error('Error sending review requests:', error)
+            alert('Errore: ' + error.message)
+        } finally {
+            setSending(false)
+        }
+    }
+
+    const filteredBookings = bookings.filter(b =>
+        b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (b.customer_email && b.customer_email.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-white">⭐ Gestione Recensioni</h2>
+                <button
+                    onClick={handleSendReviews}
+                    disabled={selectedIds.size === 0 || sending}
+                    className={`px-6 py-2 font-bold rounded flex items-center gap-2 transition-all ${selectedIds.size > 0 && !sending
+                            ? 'bg-dr7-gold hover:bg-yellow-500 text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]'
+                            : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                        }`}
+                >
+                    {sending ? '⏳ Invio...' : `📧 Invia Richiesta (${selectedIds.size})`}
+                </button>
+            </div>
+
+            {/* Filters */}
+            <div className="bg-gray-900 p-4 rounded-xl border border-gray-700 flex gap-4">
+                <input
+                    type="text"
+                    placeholder="Cerca cliente o email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-gray-800 border border-gray-600 text-white px-4 py-2 rounded w-full max-w-md focus:outline-none focus:border-dr7-gold"
+                />
+            </div>
+
+            <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-black text-white uppercase text-xs tracking-wider">
+                            <tr>
+                                <th className="p-4 w-10">
+                                    <input
+                                        type="checkbox"
+                                        checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.length}
+                                        onChange={handleSelectAll}
+                                        className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                    />
+                                </th>
+                                <th className="p-4">Cliente</th>
+                                <th className="p-4">Servizio</th>
+                                <th className="p-4">Data Fine</th>
+                                <th className="p-4">Contatti</th>
+                                <th className="p-4">Totale</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                                        Caricamento completati...
+                                    </td>
+                                </tr>
+                            ) : filteredBookings.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                                        Nessuna prenotazione completata trovata.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredBookings.map((b) => (
+                                    <tr key={b.id} className={`hover:bg-gray-800/50 transition-colors ${selectedIds.has(b.id) ? 'bg-dr7-gold/10' : ''}`}>
+                                        <td className="p-4">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(b.id)}
+                                                onChange={() => toggleSelection(b.id)}
+                                                className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                            />
+                                        </td>
+                                        <td className="p-4 font-medium text-white">{b.customer_name}</td>
+                                        <td className="p-4 text-gray-300">
+                                            {b.service_type === 'car_wash' && '🚿 '}
+                                            {b.service_type === 'mechanical_service' && '🔧 '}
+                                            {!b.service_type && '🚗 '}
+                                            {b.service_name}
+                                        </td>
+                                        <td className="p-4 text-gray-300">
+                                            {new Date(b.end_date).toLocaleDateString('it-IT')}
+                                        </td>
+                                        <td className="p-4 text-sm text-gray-400">
+                                            <div>{b.customer_email || '-'}</div>
+                                            <div>{b.customer_phone || '-'}</div>
+                                        </td>
+                                        <td className="p-4 text-dr7-gold font-mono">
+                                            €{(b.price_total / 100).toFixed(2)}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="text-gray-500 text-xs text-center flex justify-between px-4">
+                <span>Totale trovati: {bookings.length}</span>
+                <span>Mostrati: {filteredBookings.length}</span>
+            </div>
+        </div>
+    )
+}

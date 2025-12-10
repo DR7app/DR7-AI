@@ -15,8 +15,9 @@ import LotteriaBoard from './components/LotteriaBoard'
 import UnpaidBookingsTab from './components/UnpaidBookingsTab'
 import DocumentsVerificationTab from './components/DocumentsVerificationTab'
 import MarketingTab from './components/MarketingTab'
+import ReviewsTab from './components/ReviewsTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing'
+type TabType = 'overview' | 'rentals' | 'customers' | 'fleet' | 'admins' | 'verify' | 'unpaid' | 'contratti' | 'payments' | 'tickets' | 'marketing' | 'mechanical_bookings' | 'mechanical_calendar' | 'car_wash_bookings' | 'car_wash_calendar' | 'reviews'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -395,6 +396,15 @@ export default function AdminDashboard() {
               >
                 Marketing
               </button>
+              <button
+                onClick={() => setActiveTab('reviews')}
+                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reviews'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
+              >
+                Recensioni
+              </button>
             </nav>
           </div>
         </div>
@@ -416,6 +426,7 @@ export default function AdminDashboard() {
             {activeTab === 'fattura' && 'Fatture'}
             {activeTab === 'contratto' && 'Contratti'}
             {activeTab === 'marketing' && 'Marketing'}
+            {activeTab === 'reviews' && 'Recensioni'}
           </h2>
         </div>
 
