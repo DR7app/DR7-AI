@@ -368,8 +368,13 @@ export default function ReservationsTab() {
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
-        .or('service_type.is.null,service_type.eq.car_rental')
+        .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
         .order('created_at', { ascending: false })
+
+      console.log('[ReservationsTab] Bookings fetched:', bookingsData?.length || 0)
+      if (bookingsData && bookingsData.length > 0) {
+        console.log('[ReservationsTab] First booking sample:', bookingsData[0])
+      }
 
       if (bookingsError) {
         console.error('Failed to load bookings:', bookingsError)
