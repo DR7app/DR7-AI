@@ -58,11 +58,21 @@ export const handler: Handler = async (event) => {
 
                     if (user && !error) {
                         // Construct a fallback user object from Auth data
+                        const metadata = user.user_metadata || {}
+                        const firstName = metadata.nome || metadata.first_name || metadata.given_name || ''
+                        const lastName = metadata.cognome || metadata.last_name || metadata.family_name || ''
+                        let derivedName = metadata.full_name || metadata.name || metadata.display_name || ''
+
+                        if (!derivedName && (firstName || lastName)) {
+                            derivedName = `${firstName} ${lastName}`.trim()
+                        }
+
                         const fallbackUser = {
                             id: user.id,
                             email: user.email,
-                            nome: user.user_metadata?.nome || user.user_metadata?.first_name || '',
-                            cognome: user.user_metadata?.cognome || user.user_metadata?.last_name || '',
+                            nome: firstName,
+                            cognome: lastName,
+                            full_name: derivedName, // Store the derived full name
                             created_at: user.created_at
                         }
                         userMap.set(userId, fallbackUser)
@@ -78,13 +88,27 @@ export const handler: Handler = async (event) => {
         // 4. Merge data
         const enrichedDocuments = documents.map(doc => {
             const user = userMap.get(doc.user_id)
+
+            // Determine the best display name
+            let fullName = 'Utente sconosciuto';
+
+            if (user) {
+                if (user.full_name) {
+                    fullName = user.full_name;
+                } else if (user.nome || user.cognome) {
+                    fullName = `${user.nome || ''} ${user.cognome || ''}`.trim();
+                } else if (user.email) {
+                    fullName = user.email.split('@')[0];
+                }
+            } else if (doc.user_full_name) {
+                fullName = doc.user_full_name;
+            }
+
             return {
                 ...doc,
                 user: {
                     id: doc.user_id,
-                    full_name: user
-                        ? `${user.nome || ''} ${user.cognome || ''}`.trim() || (user.email ? user.email.split('@')[0] : 'Utente Senza Nome')
-                        : (doc.user_full_name || 'Utente sconosciuto'),
+                    full_name: fullName,
                     email: user?.email || doc.user_email || 'Email non disponibile',
                     is_new: user?.created_at ? (new Date().getTime() - new Date(user.created_at).getTime()) < (7 * 24 * 60 * 60 * 1000) : false,
                     created_at: user?.created_at || doc.upload_date
