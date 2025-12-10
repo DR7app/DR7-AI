@@ -47,10 +47,8 @@ export const handler: Handler = async (event) => {
         subject: "Come è stata la tua esperienza con DR7?",
         html: `
           <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #111; color: #fff; padding: 0;">
-            <!-- Header -->
-            <div style="background-color: #000; padding: 20px; text-align: center; border-bottom: 2px solid #D4AF37;">
-              <h1 style="color: #D4AF37; margin: 0; font-size: 24px; letter-spacing: 2px;">DUBAI RENT 7.0</h1>
-            </div>
+            <!-- Header removed as per user request -->
+
 
             <!-- Content -->
             <div style="padding: 40px 20px; text-align: center;">
