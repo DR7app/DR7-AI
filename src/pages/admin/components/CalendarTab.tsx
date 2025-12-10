@@ -487,260 +487,256 @@ export default function CalendarTab() {
               </th>
               <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
                 Targa
-              </th>
-              {daysInMonth.map(day => (
-                <th
-                  key={day}
-          </button>
-          </div>
-      </div>
-
-      {/* Search Results - Show matching bookings */}
-      {
-        searchQuery && (
-          <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-            <h3 className="text-lg font-bold text-white mb-3">
-              Risultati ricerca: "{searchQuery}"
-            </h3>
-            {(() => {
-              const matchingBookings = bookings.filter(booking =>
-                booking.customer_name &&
-                booking.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
-              )
-
-              if (matchingBookings.length === 0) {
-                return (
-                  <p className="text-gray-400 text-sm">Nessuna prenotazione trovata con questo nome cliente.</p>
-                )
-              }
-
-              return (
-                <div className="space-y-2">
-                  {matchingBookings.map(booking => (
-                    <div
-                      key={booking.id}
-                      className="bg-gray-800 p-3 rounded border border-gray-700 hover:border-dr7-gold transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-white font-semibold">{booking.customer_name}</p>
-                          <p className="text-gray-400 text-sm">{booking.customer_email}</p>
-                          <p className="text-dr7-gold text-sm mt-1">
-                            🚗 {booking.vehicle_name}
-                            {booking.vehicle_plate && <span className="text-gray-400"> ({booking.vehicle_plate})</span>}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-gray-300 text-sm">
-                            {new Date(booking.pickup_date).toLocaleDateString('it-IT')} →{' '}
-                            {new Date(booking.dropoff_date).toLocaleDateString('it-IT')}
-                          </p>
-                          <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
-                            booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-gray-700 text-gray-300'
-                            }`}>
-                            {booking.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })()}
-          </div>
-        )
-      }
-
-      {/* All Vehicles Grid - Combined */}
-      {
-        vehicles.length > 0 && (
-          <div className="bg-gray-900 rounded-lg p-4 lg:p-6 overflow-x-auto">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <span className="text-sm text-gray-400">Tutti i Veicoli ({vehicles.length})</span>
-            </h3>
-
-            <div className="min-w-max">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[140px]">
-                      Veicolo
-                    </th>
-                    <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
-                      Targa
-                    </th>
-                    {daysInMonth.map(day => (
-                      <th
-                        key={day}
-                        className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
-                          }`}
-                      >
-                        {day}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {vehicles.filter(vehicle => {
-                    if (!searchQuery) return true
-                    const query = searchQuery.toLowerCase()
-                    // Filter vehicles that have bookings matching the customer name search
-                    return bookings.some(booking => {
-                      // Safely check if customer_name exists
-                      if (!booking.customer_name) return false
-
-                      const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
-                      const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-                      const vehicleMatches = bookingVehicle === vehicleDisplay ||
-                        (bookingVehicle && vehicleDisplay && (
-                          bookingVehicle.includes(vehicleDisplay) ||
-                          vehicleDisplay.includes(bookingVehicle)
-                        ))
-                      return vehicleMatches && booking.customer_name.toLowerCase().includes(query)
-                    })
-                  }).map(vehicle => (
-                    <tr key={vehicle.id}>
-                      <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-white font-semibold text-sm">
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate">{vehicle.display_name}</span>
-                            {vehicle.category && (
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${vehicle.category === 'exotic'
-                                ? 'bg-purple-900 text-purple-200'
-                                : vehicle.category === 'urban'
-                                  ? 'bg-cyan-900 text-cyan-200'
-                                  : 'bg-orange-900 text-orange-200'
-                                }`}>
-                                {vehicle.category}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-gray-300 text-sm font-mono">
-                        {vehicle.plate || '-'}
-                      </td>
-                      {daysInMonth.map(day => {
-                        const status = getCellStatus(vehicle, day)
-                        const cellBookings = getCellBookings(vehicle, day)
-                        return (
-                          <td
-                            key={day}
-                            onClick={() => {
-                              if (cellBookings.length > 0) {
-                                setSelectedCell({
-                                  vehicle: vehicle.display_name,
-                                  date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
-                                  bookings: cellBookings
-                                })
-                              } else if (status === 'unavailable') {
-                                setSelectedUnavailability(vehicle)
-                              }
-                            }}
-                            className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'
-                              ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
-                              : status === 'unavailable'
-                                ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
-                                : 'bg-green-500 hover:bg-green-600'
-                              } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
-                            title={
-                              status === 'rented'
-                                ? `${vehicle.display_name} - Noleggiato`
-                                : status === 'unavailable'
-                                  ? `${vehicle.display_name} - Non Disponibile`
-                                  : `${vehicle.display_name} - Disponibile`
-                            }
-                          />
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              </button>
             </div>
           </div>
-        )
-      }
 
-      {
-        vehicles.length === 0 && (
-          <div className="bg-gray-900 rounded-lg p-8 text-center">
-            <p className="text-gray-400">Nessun veicolo trovato</p>
-          </div>
-        )
-      }
+          {/* Search Results - Show matching bookings */}
+          {
+            searchQuery && (
+              <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
+                <h3 className="text-lg font-bold text-white mb-3">
+                  Risultati ricerca: "{searchQuery}"
+                </h3>
+                {(() => {
+                  const matchingBookings = bookings.filter(booking =>
+                    booking.customer_name &&
+                    booking.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
 
-      {/* Booking Details Modal */}
-      {
-        selectedCell && (
-          <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-            onClick={() => setSelectedCell(null)}
-          >
-            <div
-              className="bg-gray-900 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6 border-b border-gray-800">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-2xl font-bold text-white mb-2">
-                      🚗 {selectedCell.vehicle}
-                      {selectedCell.bookings[0]?.vehicle_plate && (
-                        <span className="text-gray-400 font-normal text-lg"> ({selectedCell.bookings[0].vehicle_plate})</span>
-                      )}
-                    </h3>
-                    <p className="text-gray-400">{selectedCell.date}</p>
-                  </div>
-                  <button
-                    onClick={() => setSelectedCell(null)}
-                    className="text-gray-400 hover:text-white transition-colors text-3xl leading-none"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
-                {selectedCell.bookings.map(booking => {
-                  const alternativeVehicles = getAlternativeVehicles(booking.vehicle_name)
-                  const hasAlternatives = alternativeVehicles.length > 1
+                  if (matchingBookings.length === 0) {
+                    return (
+                      <p className="text-gray-400 text-sm">Nessuna prenotazione trovata con questo nome cliente.</p>
+                    )
+                  }
 
                   return (
-                    <td
-                      key={day}
-                      onClick={() => {
-                        if (cellBookings.length > 0) {
-                          setSelectedCell({
-                            vehicle: vehicle.display_name,
-                            date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
-                            bookings: cellBookings
-                          })
-                        } else if (status === 'unavailable') {
-                          setSelectedUnavailability(vehicle)
-                        }
-                      }}
-                      className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'
-                        ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
-                        : status === 'unavailable'
-                          ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
-                          : 'bg-green-500 hover:bg-green-600'
-                        } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
-                      title={
-                        status === 'rented'
-                          ? `${vehicle.display_name} - Noleggiato`
-                          : status === 'unavailable'
-                            ? `${vehicle.display_name} - Non Disponibile`
-                            : `${vehicle.display_name} - Disponibile`
-                      }
-                    />
+                    <div className="space-y-2">
+                      {matchingBookings.map(booking => (
+                        <div
+                          key={booking.id}
+                          className="bg-gray-800 p-3 rounded border border-gray-700 hover:border-dr7-gold transition-colors"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-white font-semibold">{booking.customer_name}</p>
+                              <p className="text-gray-400 text-sm">{booking.customer_email}</p>
+                              <p className="text-dr7-gold text-sm mt-1">
+                                🚗 {booking.vehicle_name}
+                                {booking.vehicle_plate && <span className="text-gray-400"> ({booking.vehicle_plate})</span>}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-gray-300 text-sm">
+                                {new Date(booking.pickup_date).toLocaleDateString('it-IT')} →{' '}
+                                {new Date(booking.dropoff_date).toLocaleDateString('it-IT')}
+                              </p>
+                              <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
+                                booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
+                                  'bg-gray-700 text-gray-300'
+                                }`}>
+                                {booking.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )
-                })}
-              </tr>
+                })()}
+              </div>
+            )
+          }
+
+          {/* All Vehicles Grid - Combined */}
+          {
+            vehicles.length > 0 && (
+              <div className="bg-gray-900 rounded-lg p-4 lg:p-6 overflow-x-auto">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <span className="text-sm text-gray-400">Tutti i Veicoli ({vehicles.length})</span>
+                </h3>
+
+                <div className="min-w-max">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[140px]">
+                          Veicolo
+                        </th>
+                        <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
+                          Targa
+                        </th>
+                        {daysInMonth.map(day => (
+                          <th
+                            key={day}
+                            className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
+                              }`}
+                          >
+                            {day}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vehicles.filter(vehicle => {
+                        if (!searchQuery) return true
+                        const query = searchQuery.toLowerCase()
+                        // Filter vehicles that have bookings matching the customer name search
+                        return bookings.some(booking => {
+                          // Safely check if customer_name exists
+                          if (!booking.customer_name) return false
+
+                          const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
+                          const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
+                          const vehicleMatches = bookingVehicle === vehicleDisplay ||
+                            (bookingVehicle && vehicleDisplay && (
+                              bookingVehicle.includes(vehicleDisplay) ||
+                              vehicleDisplay.includes(bookingVehicle)
+                            ))
+                          return vehicleMatches && booking.customer_name.toLowerCase().includes(query)
+                        })
+                      }).map(vehicle => (
+                        <tr key={vehicle.id}>
+                          <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-white font-semibold text-sm">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate">{vehicle.display_name}</span>
+                                {vehicle.category && (
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${vehicle.category === 'exotic'
+                                    ? 'bg-purple-900 text-purple-200'
+                                    : vehicle.category === 'urban'
+                                      ? 'bg-cyan-900 text-cyan-200'
+                                      : 'bg-orange-900 text-orange-200'
+                                    }`}>
+                                    {vehicle.category}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-gray-300 text-sm font-mono">
+                            {vehicle.plate || '-'}
+                          </td>
+                          {daysInMonth.map(day => {
+                            const status = getCellStatus(vehicle, day)
+                            const cellBookings = getCellBookings(vehicle, day)
+                            return (
+                              <td
+                                key={day}
+                                onClick={() => {
+                                  if (cellBookings.length > 0) {
+                                    setSelectedCell({
+                                      vehicle: vehicle.display_name,
+                                      date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
+                                      bookings: cellBookings
+                                    })
+                                  } else if (status === 'unavailable') {
+                                    setSelectedUnavailability(vehicle)
+                                  }
+                                }}
+                                className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'
+                                  ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
+                                  : status === 'unavailable'
+                                    ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
+                                    : 'bg-green-500 hover:bg-green-600'
+                                  } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
+                                title={
+                                  status === 'rented'
+                                    ? `${vehicle.display_name} - Noleggiato`
+                                    : status === 'unavailable'
+                                      ? `${vehicle.display_name} - Non Disponibile`
+                                      : `${vehicle.display_name} - Disponibile`
+                                }
+                              />
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          }
+
+          {
+            vehicles.length === 0 && (
+              <div className="bg-gray-900 rounded-lg p-8 text-center">
+                <p className="text-gray-400">Nessun veicolo trovato</p>
+              </div>
+            )
+          }
+
+          {/* Booking Details Modal */}
+          {
+            selectedCell && (
+              <div
+                className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+                onClick={() => setSelectedCell(null)}
+              >
+                <div
+                  className="bg-gray-900 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700 shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-6 border-b border-gray-800">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-2xl font-bold text-white mb-2">
+                          🚗 {selectedCell.vehicle}
+                          {selectedCell.bookings[0]?.vehicle_plate && (
+                            <span className="text-gray-400 font-normal text-lg"> ({selectedCell.bookings[0].vehicle_plate})</span>
+                          )}
+                        </h3>
+                        <p className="text-gray-400">{selectedCell.date}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedCell(null)}
+                        className="text-gray-400 hover:text-white transition-colors text-3xl leading-none"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    {selectedCell.bookings.map(booking => {
+                      const alternativeVehicles = getAlternativeVehicles(booking.vehicle_name)
+                      const hasAlternatives = alternativeVehicles.length > 1
+
+                      return (
+                        <td
+                          key={day}
+                          onClick={() => {
+                            if (cellBookings.length > 0) {
+                              setSelectedCell({
+                                vehicle: vehicle.display_name,
+                                date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
+                                bookings: cellBookings
+                              })
+                            } else if (status === 'unavailable') {
+                              setSelectedUnavailability(vehicle)
+                            }
+                          }}
+                          className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'
+                            ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
+                            : status === 'unavailable'
+                              ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
+                              : 'bg-green-500 hover:bg-green-600'
+                            } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
+                          title={
+                            status === 'rented'
+                              ? `${vehicle.display_name} - Noleggiato`
+                              : status === 'unavailable'
+                                ? `${vehicle.display_name} - Non Disponibile`
+                                : `${vehicle.display_name} - Disponibile`
+                          }
+                        />
+                      )
+                    })}
+                  </tr>
             ))}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
       </div>
     </div >
   )
