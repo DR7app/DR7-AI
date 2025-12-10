@@ -75,18 +75,8 @@ export const handler: Handler = async (event) => {
                 LASCIA UNA RECENSIONE
               </a>
               
-              <p style="color: #888; font-size: 14px; margin-top: 30px;">
-                DR7 S.p.A.
-              </p>
-
             </div>
 
-            <!-- Footer -->
-            <div style="background-color: #000; padding: 20px; text-align: center; border-top: 1px solid #333;">
-              <p style="color: #666; font-size: 12px; margin: 0;">
-                © ${new Date().getFullYear()} Dubai Rent 7.0 Empire. Tutti i diritti riservati.
-              </p>
-            </div>
           </div>
         `,
       };
