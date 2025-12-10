@@ -95,7 +95,7 @@ export default function CalendarTab() {
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type')
-        .or('service_type.is.null,service_type.eq.car_rental')
+        .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
 
@@ -395,8 +395,8 @@ export default function CalendarTab() {
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
                 className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
                   }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -476,8 +476,8 @@ export default function CalendarTab() {
                           {new Date(booking.dropoff_date).toLocaleDateString('it-IT')}
                         </p>
                         <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
-                            booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-gray-700 text-gray-300'
+                          booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
+                            'bg-gray-700 text-gray-300'
                           }`}>
                           {booking.status}
                         </span>
@@ -545,10 +545,10 @@ export default function CalendarTab() {
                           <span className="truncate">{vehicle.display_name}</span>
                           {vehicle.category && (
                             <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${vehicle.category === 'exotic'
-                                ? 'bg-purple-900 text-purple-200'
-                                : vehicle.category === 'urban'
-                                  ? 'bg-cyan-900 text-cyan-200'
-                                  : 'bg-orange-900 text-orange-200'
+                              ? 'bg-purple-900 text-purple-200'
+                              : vehicle.category === 'urban'
+                                ? 'bg-cyan-900 text-cyan-200'
+                                : 'bg-orange-900 text-orange-200'
                               }`}>
                               {vehicle.category}
                             </span>
@@ -577,10 +577,10 @@ export default function CalendarTab() {
                             }
                           }}
                           className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'
-                              ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
-                              : status === 'unavailable'
-                                ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
-                                : 'bg-green-500 hover:bg-green-600'
+                            ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
+                            : status === 'unavailable'
+                              ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
+                              : 'bg-green-500 hover:bg-green-600'
                             } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
                           title={
                             status === 'rented'
