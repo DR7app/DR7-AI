@@ -23,9 +23,14 @@ export default function VehiclesTab() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   // const [selectedCategory, setSelectedCategory] = useState<'all' | 'exotic' | 'urban'>('all')
-  const [selectedVehicle, setSelectedVehicle] = useState<string>('all')
+  // const [selectedVehicle, setSelectedVehicle] = useState<string>('all')
   const [adjustmentPercentage, setAdjustmentPercentage] = useState<string>('10')
   const [isAdjusting, setIsAdjusting] = useState(false)
+  const [selectedVehicle, setSelectedVehicle] = useState<string>('all')
+
+  // Multi-select state
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const [selectedVehicles, setSelectedVehicles] = useState<Set<string>>(new Set())
 
   const [formData, setFormData] = useState({
     display_name: '',
@@ -169,70 +174,123 @@ export default function VehiclesTab() {
     }
   }
 
+  async function deleteVehicleLogic(id: string, vehicleName: string) {
+    // Delete from reservations
+    const { error: resError } = await supabase
+      .from('reservations')
+      .delete()
+      .eq('vehicle_id', id)
+
+    if (resError) console.error('Error deleting reservations:', resError)
+
+    // Delete from bookings (using name as key for legacy/external bookings)
+    const { error: bookError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('vehicle_name', vehicleName)
+
+    if (bookError) console.error('Error deleting bookings:', bookError)
+
+    // Delete vehicle
+    const { error } = await supabase
+      .from('vehicles')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+  }
+
   async function handleDelete(id: string) {
+    const vehicle = vehicles.find(v => v.id === id)
+    if (!vehicle) return
+
     if (!confirm('Sei sicuro di voler eliminare questo veicolo?')) return
 
     try {
-      // First, check if there are any active reservations for this vehicle
-      const { data: reservations, error: checkError } = await supabase
+      // Check dependencies
+      const { count: resCount } = await supabase
         .from('reservations')
-        .select('id, start_at, end_at, status')
+        .select('*', { count: 'exact', head: true })
         .eq('vehicle_id', id)
-        .in('status', ['pending', 'confirmed', 'active'])
 
-      if (checkError) {
-        console.error('Error checking reservations:', checkError)
-        // Continue with deletion attempt even if check fails
+      const { count: bookCount } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('vehicle_name', vehicle.display_name)
+
+      const totalDeps = (resCount || 0) + (bookCount || 0)
+
+      if (totalDeps > 0) {
+        if (!confirm(`⚠️ Questo veicolo ha ${totalDeps} prenotazioni associate (storico incluso).\n\nVerranno eliminate TUTTE le prenotazioni associate.\n\nProcedere con l'eliminazione definitiva?`)) {
+          return
+        }
       }
 
-      if (reservations && reservations.length > 0) {
-        const reservationDetails = reservations.map(r =>
-          `- ${r.status.toUpperCase()}: ${new Date(r.start_at).toLocaleDateString('it-IT')} - ${new Date(r.end_at).toLocaleDateString('it-IT')}`
-        ).join('\n')
-
-        const confirmDelete = confirm(
-          `⚠️ ATTENZIONE: Questo veicolo ha ${reservations.length} prenotazione/i attiva/e:\n\n${reservationDetails}\n\nEliminando il veicolo, verranno eliminate anche tutte le prenotazioni associate.\n\nSei sicuro di voler continuare?`
-        )
-
-        if (!confirmDelete) return
-      }
-
-      // Attempt to delete the vehicle
-      const { error } = await supabase
-        .from('vehicles')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      await deleteVehicleLogic(id, vehicle.display_name)
 
       alert('✅ Veicolo eliminato con successo!')
       loadVehicles()
     } catch (error: any) {
       console.error('Failed to delete vehicle:', error)
-
-      // Provide detailed error message
-      let errorMessage = 'Impossibile eliminare il veicolo.\n\n'
-
-      if (error.message) {
-        errorMessage += `Errore: ${error.message}\n\n`
-      }
-
-      if (error.code) {
-        errorMessage += `Codice errore: ${error.code}\n\n`
-      }
-
-      if (error.details) {
-        errorMessage += `Dettagli: ${error.details}\n\n`
-      }
-
-      errorMessage += 'Possibili cause:\n'
-      errorMessage += '- Il veicolo ha prenotazioni attive\n'
-      errorMessage += '- Problemi di permessi nel database\n'
-      errorMessage += '- Connessione al database interrotta\n\n'
-      errorMessage += 'Controlla la console del browser per maggiori dettagli.'
-
-      alert(errorMessage)
+      alert('Impossibile eliminare il veicolo: ' + error.message)
     }
+  }
+
+  async function deleteSelectedVehicles() {
+    if (selectedVehicles.size === 0) return
+
+    if (!confirm(`Sei sicuro di voler eliminare ${selectedVehicles.size} veicoli selezionati?`)) return
+
+    // Double confirmation for bulk delete
+    if (!confirm(`⚠️ ATTENZIONE: Questa azione eliminerà anche TUTTE le prenotazioni associate a questi ${selectedVehicles.size} veicoli.\n\nSei ASSOLUTAMENTE sicuro?`)) return
+
+    setLoading(true)
+    try {
+      const vehiclesToDelete = vehicles.filter(v => selectedVehicles.has(v.id))
+
+      for (const vehicle of vehiclesToDelete) {
+        try {
+          await deleteVehicleLogic(vehicle.id, vehicle.display_name)
+        } catch (err) {
+          console.error(`Failed to delete vehicle ${vehicle.display_name}:`, err)
+          // Continue with others
+        }
+      }
+
+      alert('✅ Veicoli selezionati eliminati!')
+      setSelectedVehicles(new Set())
+      setMultiSelectMode(false)
+      loadVehicles()
+    } catch (error) {
+      console.error('Error during bulk delete:', error)
+      alert('Errore durante l\'eliminazione multipla')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function toggleVehicleSelection(id: string) {
+    const newSelected = new Set(selectedVehicles)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedVehicles(newSelected)
+  }
+
+  function toggleSelectCategory(categoryVehicles: Vehicle[]) {
+    const allSelected = categoryVehicles.every(v => selectedVehicles.has(v.id))
+    const newSelected = new Set(selectedVehicles)
+
+    if (allSelected) {
+      // Deselect all in this category
+      categoryVehicles.forEach(v => newSelected.delete(v.id))
+    } else {
+      // Select all in this category
+      categoryVehicles.forEach(v => newSelected.add(v.id))
+    }
+    setSelectedVehicles(newSelected)
   }
 
   async function syncToGoogleCalendar(vehicle: Vehicle) {
@@ -374,17 +432,59 @@ export default function VehiclesTab() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white">Veicoli</h2>
           <p className="text-sm text-gray-400 mt-1">
             Exotic Supercars: {exoticCount} | Urban: {urbanCount} | Aziendali: {aziendaliCount} | Totale: {vehicles.length}
           </p>
         </div>
-        <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
-          + Nuovo Veicolo
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => {
+              setMultiSelectMode(!multiSelectMode)
+              setSelectedVehicles(new Set())
+            }}
+            variant={multiSelectMode ? 'secondary' : 'primary'}
+            className={multiSelectMode ? 'bg-blue-600 text-white' : ''}
+          >
+            {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
+          </Button>
+          <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
+            + Nuovo Veicolo
+          </Button>
+        </div>
       </div>
+
+      {multiSelectMode && selectedVehicles.size > 0 && (
+        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4 mb-6 flex items-center justify-between">
+          <div className="text-blue-200">
+            <strong>{selectedVehicles.size}</strong> veicoli selezionati
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                const percentage = prompt('Inserisci percentuale aumento (es. 10):')
+                if (percentage) {
+                  setAdjustmentPercentage(percentage)
+                  // TODO: Implement bulk adjustment for selected
+                  alert('Funzionalità in arrivo...')
+                }
+              }}
+              variant="secondary"
+              className="text-sm"
+            >
+              Modifica Prezzi
+            </Button>
+            <Button
+              onClick={deleteSelectedVehicles}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm"
+            >
+              Elimina Selezionati
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Price Adjustment Section - Compact */}
       <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-6">
@@ -598,6 +698,16 @@ export default function VehiclesTab() {
             <table className="w-full">
               <thead className="bg-black">
                 <tr>
+                  {multiSelectMode && (
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-white w-10">
+                      <input
+                        type="checkbox"
+                        checked={urbanVehicles.length > 0 && urbanVehicles.every(v => selectedVehicles.has(v.id))}
+                        onChange={() => toggleSelectCategory(urbanVehicles)}
+                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Targa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
@@ -607,7 +717,17 @@ export default function VehiclesTab() {
               </thead>
               <tbody>
                 {urbanVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800">
+                  <tr key={vehicle.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
+                    {multiSelectMode && (
+                      <td className="px-4 py-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedVehicles.has(vehicle.id)}
+                          onChange={() => toggleVehicleSelection(vehicle.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
@@ -654,7 +774,7 @@ export default function VehiclesTab() {
                 ))}
                 {urbanVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
                       Nessun veicolo Urban trovato
                     </td>
                   </tr>
@@ -676,6 +796,16 @@ export default function VehiclesTab() {
             <table className="w-full">
               <thead className="bg-black">
                 <tr>
+                  {multiSelectMode && (
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-white w-10">
+                      <input
+                        type="checkbox"
+                        checked={exoticVehicles.length > 0 && exoticVehicles.every(v => selectedVehicles.has(v.id))}
+                        onChange={() => toggleSelectCategory(exoticVehicles)}
+                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Targa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
@@ -685,7 +815,17 @@ export default function VehiclesTab() {
               </thead>
               <tbody>
                 {exoticVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800">
+                  <tr key={vehicle.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
+                    {multiSelectMode && (
+                      <td className="px-4 py-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedVehicles.has(vehicle.id)}
+                          onChange={() => toggleVehicleSelection(vehicle.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
@@ -732,7 +872,7 @@ export default function VehiclesTab() {
                 ))}
                 {exoticVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
                       Nessun veicolo Exotic trovato
                     </td>
                   </tr>
@@ -754,6 +894,16 @@ export default function VehiclesTab() {
             <table className="w-full">
               <thead className="bg-black">
                 <tr>
+                  {multiSelectMode && (
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-white w-10">
+                      <input
+                        type="checkbox"
+                        checked={aziendaliVehicles.length > 0 && aziendaliVehicles.every(v => selectedVehicles.has(v.id))}
+                        onChange={() => toggleSelectCategory(aziendaliVehicles)}
+                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Targa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
@@ -763,7 +913,17 @@ export default function VehiclesTab() {
               </thead>
               <tbody>
                 {aziendaliVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800">
+                  <tr key={vehicle.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
+                    {multiSelectMode && (
+                      <td className="px-4 py-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedVehicles.has(vehicle.id)}
+                          onChange={() => toggleVehicleSelection(vehicle.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
@@ -810,8 +970,8 @@ export default function VehiclesTab() {
                 ))}
                 {aziendaliVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      Nessun veicolo Utilitaire trovato
+                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
+                      Nessun veicolo Aziendali trovato
                     </td>
                   </tr>
                 )}

@@ -175,50 +175,83 @@ export default function MarketingTab() {
         setSelectedCustomerIds(newSelection)
     }
 
-    async function handleSendGiftVouchers(data: { subject: string; message: string; image: File | null }) {
-        if (!data.image) {
-            alert('Immagine richiesta')
+    async function handleSendGiftVouchers(data: { subject: string; message: string; image: File | null; channel?: 'email' | 'whatsapp' }) {
+        const channel = data.channel || 'email' // Default to email for backward compatibility
+
+        if (channel === 'email' && !data.image) {
+            alert('Immagine richiesta per email')
             return
         }
 
         try {
             const selectedCustomersList = customers.filter(c => selectedCustomerIds.has(c.id))
 
-            const reader = new FileReader()
-            const imageBase64 = await new Promise<string>((resolve, reject) => {
-                reader.onloadend = () => resolve(reader.result as string)
-                reader.onerror = reject
-                reader.readAsDataURL(data.image!)
-            })
-
-            const response = await fetch('/.netlify/functions/send-gift-voucher', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    customers: selectedCustomersList.map(c => ({
-                        id: c.id,
-                        nome: c.nome || c.full_name.split(' ')[0],
-                        cognome: c.cognome || c.full_name.split(' ').slice(1).join(' '),
-                        email: c.email
-                    })),
-                    subject: data.subject,
-                    message: data.message,
-                    imageBase64,
-                    imageName: data.image.name
+            if (channel === 'whatsapp') {
+                // WhatsApp Logic
+                const response = await fetch('/.netlify/functions/send-whatsapp-voucher', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customers: selectedCustomersList.map(c => ({
+                            id: c.id,
+                            nome: c.nome || c.full_name.split(' ')[0],
+                            cognome: c.cognome || c.full_name.split(' ').slice(1).join(' '),
+                            phone: c.phone || c.email // Fallback or strict? Function handles cleaning.
+                        })),
+                        message: data.message
+                    })
                 })
-            })
 
-            const result = await response.json()
+                const result = await response.json()
+                if (result.success) {
+                    alert(`✅ Messaggi WhatsApp inviati a ${result.sent} clienti!`)
+                    if (result.errors) {
+                        console.warn('WhatsApp errors:', result.errors)
+                        alert(`⚠️ Alcuni messaggi non inviati: ${result.errors.length}`)
+                    }
+                    setSelectedCustomerIds(new Set())
+                } else {
+                    throw new Error(result.error || 'Errore invio WhatsApp')
+                }
 
-            if (result.success) {
-                alert(`✅ Buoni regalo inviati con successo a ${result.sent} ${result.sent === 1 ? 'cliente' : 'clienti'}!`)
-                setSelectedCustomerIds(new Set())
             } else {
-                throw new Error(result.error || 'Errore sconosciuto')
+                // Email Logic (Existing)
+                const reader = new FileReader()
+                const imageBase64 = await new Promise<string>((resolve, reject) => {
+                    reader.onloadend = () => resolve(reader.result as string)
+                    reader.onerror = reject
+                    reader.readAsDataURL(data.image!)
+                })
+
+                const response = await fetch('/.netlify/functions/send-gift-voucher', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customers: selectedCustomersList.map(c => ({
+                            id: c.id,
+                            nome: c.nome || c.full_name.split(' ')[0],
+                            cognome: c.cognome || c.full_name.split(' ').slice(1).join(' '),
+                            email: c.email
+                        })),
+                        subject: data.subject,
+                        message: data.message,
+                        imageBase64,
+                        imageName: data.image!.name
+                    })
+                })
+
+                const result = await response.json()
+
+                if (result.success) {
+                    alert(`✅ Buoni regalo inviati con successo a ${result.sent} ${result.sent === 1 ? 'cliente' : 'clienti'}!`)
+                    setSelectedCustomerIds(new Set())
+                } else {
+                    throw new Error(result.error || 'Errore sconosciuto')
+                }
             }
         } catch (error: any) {
             console.error('Error sending gift vouchers:', error)
-            alert('❌ Errore nell\'invio dei buoni regalo: ' + (error.message || 'Errore sconosciuto'))
+            alert('❌ Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
         }
     }
 
