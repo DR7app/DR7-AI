@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import Button from './Button'
 
 interface CompletedBooking {
     id: string
@@ -17,6 +18,7 @@ export default function ReviewsTab() {
     const [bookings, setBookings] = useState<CompletedBooking[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [multiSelectMode, setMultiSelectMode] = useState(false)
     const [sending, setSending] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
 
@@ -125,6 +127,7 @@ export default function ReviewsTab() {
             if (result.success) {
                 alert(`✅ Richieste inviate a ${result.sent} clienti!`)
                 setSelectedIds(new Set())
+                setMultiSelectMode(false)
             } else {
                 throw new Error(result.error || 'Errore invio')
             }
@@ -146,16 +149,28 @@ export default function ReviewsTab() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-white">Gestione Recensioni</h2>
-                <button
-                    onClick={handleSendReviews}
-                    disabled={selectedIds.size === 0 || sending}
-                    className={`px-6 py-2 font-bold rounded flex items-center gap-2 transition-all ${selectedIds.size > 0 && !sending
-                        ? 'bg-dr7-gold hover:bg-yellow-500 text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]'
-                        : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                        }`}
-                >
-                    {sending ? 'Invio...' : `Invia Richiesta (${selectedIds.size})`}
-                </button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => {
+                            setMultiSelectMode(!multiSelectMode)
+                            setSelectedIds(new Set())
+                        }}
+                        variant={multiSelectMode ? 'secondary' : 'primary'}
+                        className={multiSelectMode ? 'bg-blue-600 text-white' : ''}
+                    >
+                        {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
+                    </Button>
+                    <Button
+                        onClick={handleSendReviews}
+                        disabled={selectedIds.size === 0 || sending}
+                        className={selectedIds.size > 0 && !sending
+                            ? 'bg-dr7-gold hover:bg-yellow-500 text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]'
+                            : ''
+                        }
+                    >
+                        {sending ? 'Invio...' : `Invia Richiesta (${selectedIds.size})`}
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -174,14 +189,16 @@ export default function ReviewsTab() {
                     <table className="w-full text-left">
                         <thead className="bg-black text-white uppercase text-xs tracking-wider">
                             <tr>
-                                <th className="p-4 w-10">
-                                    <input
-                                        type="checkbox"
-                                        checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.length}
-                                        onChange={handleSelectAll}
-                                        className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
-                                    />
-                                </th>
+                                {multiSelectMode && (
+                                    <th className="p-4 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.length}
+                                            onChange={handleSelectAll}
+                                            className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                        />
+                                    </th>
+                                )}
                                 <th className="p-4">Cliente</th>
                                 <th className="p-4">Servizio</th>
                                 <th className="p-4">Data Fine</th>
@@ -192,27 +209,29 @@ export default function ReviewsTab() {
                         <tbody className="divide-y divide-gray-800">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                                    <td colSpan={multiSelectMode ? 6 : 5} className="p-8 text-center text-gray-400">
                                         Caricamento completati...
                                     </td>
                                 </tr>
                             ) : filteredBookings.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                                    <td colSpan={multiSelectMode ? 6 : 5} className="p-8 text-center text-gray-400">
                                         Nessuna prenotazione completata trovata.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredBookings.map((b) => (
                                     <tr key={b.id} className={`hover:bg-gray-800/50 transition-colors ${selectedIds.has(b.id) ? 'bg-dr7-gold/10' : ''}`}>
-                                        <td className="p-4">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedIds.has(b.id)}
-                                                onChange={() => toggleSelection(b.id)}
-                                                className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
-                                            />
-                                        </td>
+                                        {multiSelectMode && (
+                                            <td className="p-4">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedIds.has(b.id)}
+                                                    onChange={() => toggleSelection(b.id)}
+                                                    className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                                />
+                                            </td>
+                                        )}
                                         <td className="p-4 font-medium text-white">{b.customer_name}</td>
                                         <td className="p-4 text-gray-300">
                                             {b.service_type === 'car_wash' && '🚿 '}
