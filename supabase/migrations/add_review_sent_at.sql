@@ -1,0 +1,2 @@
+ALTER TABLE bookings
+ADD COLUMN review_sent_at TIMESTAMPTZ DEFAULT NULL;

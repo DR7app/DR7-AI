@@ -12,6 +12,7 @@ interface CompletedBooking {
     end_date: string // dropoff_date OR appointment_date (for wash/mech)
     status: string
     price_total: number
+    review_sent_at: string | null
 }
 
 export default function ReviewsTab() {
@@ -67,6 +68,7 @@ export default function ReviewsTab() {
                             end_date: endDateStr,
                             status: b.status,
                             price_total: b.price_total,
+                            review_sent_at: b.review_sent_at || null
                         })
                     }
                 }
@@ -83,11 +85,19 @@ export default function ReviewsTab() {
         }
     }
 
+    const filteredBookings = bookings.filter(b =>
+        b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (b.customer_email && b.customer_email.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+
     const handleSelectAll = () => {
-        if (selectedIds.size === filteredBookings.length) {
+        // Only select those who haven't received a review yet
+        const eligibleBookings = filteredBookings.filter(b => !b.review_sent_at)
+
+        if (selectedIds.size === eligibleBookings.length && eligibleBookings.length > 0) {
             setSelectedIds(new Set())
         } else {
-            setSelectedIds(new Set(filteredBookings.map(b => b.id)))
+            setSelectedIds(new Set(eligibleBookings.map(b => b.id)))
         }
     }
 
@@ -125,9 +135,28 @@ export default function ReviewsTab() {
             const result = await response.json()
 
             if (result.success) {
-                alert(`✅ Richieste inviate a ${result.sent} clienti!`)
-                setSelectedIds(new Set())
-                setMultiSelectMode(false)
+                // Update DB only for successfully sent
+                const sentIds = Array.from(selectedIds)
+                const { error: updateError } = await supabase
+                    .from('bookings')
+                    .update({ review_sent_at: new Date().toISOString() })
+                    .in('id', sentIds)
+
+                if (updateError) {
+                    console.error('Error updating review status in DB:', updateError)
+                    alert('Email inviate ma errore aggiornamento DB. Contatta supporto se persiste.')
+                } else {
+                    alert(`✅ Richieste inviate a ${result.sent} clienti!`)
+                    // Update local state to reflect change immediately
+                    setBookings(bookings.map(b =>
+                        selectedIds.has(b.id)
+                            ? { ...b, review_sent_at: new Date().toISOString() }
+                            : b
+                    ))
+                    setSelectedIds(new Set())
+                    setMultiSelectMode(false)
+                }
+
             } else {
                 throw new Error(result.error || 'Errore invio')
             }
@@ -139,11 +168,6 @@ export default function ReviewsTab() {
             setSending(false)
         }
     }
-
-    const filteredBookings = bookings.filter(b =>
-        b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (b.customer_email && b.customer_email.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
 
     return (
         <div className="space-y-6">
@@ -193,7 +217,7 @@ export default function ReviewsTab() {
                                     <th className="p-4 w-10">
                                         <input
                                             type="checkbox"
-                                            checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.length}
+                                            checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.filter(b => !b.review_sent_at).length}
                                             onChange={handleSelectAll}
                                             className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
                                         />
@@ -221,18 +245,29 @@ export default function ReviewsTab() {
                                 </tr>
                             ) : (
                                 filteredBookings.map((b) => (
-                                    <tr key={b.id} className={`hover:bg-gray-800/50 transition-colors ${selectedIds.has(b.id) ? 'bg-dr7-gold/10' : ''}`}>
+                                    <tr key={b.id} className={`hover:bg-gray-800/50 transition-colors ${selectedIds.has(b.id) ? 'bg-dr7-gold/10' : ''} ${b.review_sent_at ? 'opacity-60 grayscale' : ''}`}>
                                         {multiSelectMode && (
                                             <td className="p-4">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.has(b.id)}
-                                                    onChange={() => toggleSelection(b.id)}
-                                                    className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
-                                                />
+                                                {!b.review_sent_at ? (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.has(b.id)}
+                                                        onChange={() => toggleSelection(b.id)}
+                                                        className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                                    />
+                                                ) : (
+                                                    <span title="Recensione già richiesta" className="text-xs text-green-500">✅</span>
+                                                )}
                                             </td>
                                         )}
-                                        <td className="p-4 font-medium text-white">{b.customer_name}</td>
+                                        <td className="p-4 font-medium text-white">
+                                            {b.customer_name}
+                                            {b.review_sent_at && (
+                                                <span className="block text-xs text-green-400 mt-1">
+                                                    (Recensione inviata: {new Date(b.review_sent_at).toLocaleDateString()})
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="p-4 text-gray-300">
                                             {b.service_type === 'car_wash' && '🚿 '}
                                             {b.service_type === 'mechanical_service' && '🔧 '}
