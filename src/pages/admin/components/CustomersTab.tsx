@@ -1456,7 +1456,7 @@ export default function CustomersTab() {
               {customers.map((customer) => (
                 <tr
                   key={customer.id}
-                  className={`border-t border-gray-700 hover:bg-gray-800 ${customer.status === 'blacklist' ? 'bg-black/20' :
+                  className={`border-t border-gray-700 hover:bg-gray-800 ${customer.status === 'blacklist' ? 'bg-red-900/40' :
                     customer.status === 'vip' ? 'bg-yellow-500/10' :
                       customer.status === 'has_rental' ? 'bg-green-500/10' :
                         ''
@@ -1525,7 +1525,7 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center justify-end">
                       {customer.status === 'blacklist' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-500/30 text-red-200 border border-red-400/30 backdrop-blur-sm">
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600 text-white border border-red-500 backdrop-blur-sm shadow-sm">
                           Blacklist
                         </span>
                       )}
@@ -1543,7 +1543,7 @@ export default function CustomersTab() {
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-200/70 hover:bg-red-500/30 hover:text-red-200 border border-red-400/20 backdrop-blur-sm transition-all"
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-white border border-red-500/30 backdrop-blur-sm transition-all"
                             title="Blacklist"
                           >
                             BL
