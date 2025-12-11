@@ -1358,7 +1358,7 @@ export default function CustomersTab() {
                   <span className="text-sm text-gray-400">Cambia Status:</span>
                   <button
                     onClick={() => handleBulkStatusUpdate('blacklist')}
-                    className="px-3 py-2 rounded-lg text-sm font-medium bg-black/30 text-white hover:bg-black/50 border border-white/20 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 border border-red-400/20 backdrop-blur-sm transition-all"
                     title="Imposta come Blacklist"
                   >
                     ⛔ Blacklist
@@ -1525,7 +1525,7 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center justify-end">
                       {customer.status === 'blacklist' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-black/40 text-white border border-white/20 backdrop-blur-sm">
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-500/30 text-red-200 border border-red-400/30 backdrop-blur-sm">
                           Blacklist
                         </span>
                       )}
@@ -1543,7 +1543,7 @@ export default function CustomersTab() {
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-black/20 text-white/70 hover:bg-black/40 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-200/70 hover:bg-red-500/30 hover:text-red-200 border border-red-400/20 backdrop-blur-sm transition-all"
                             title="Blacklist"
                           >
                             BL
