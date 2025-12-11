@@ -111,16 +111,11 @@ export default function ReviewsTab() {
         setSelectedIds(newSet)
     }
 
-    const handleSendReviews = async () => {
-        if (selectedIds.size === 0) return
-        if (!confirm(`Inviare richiesta di recensione a ${selectedIds.size} clienti?`)) return
-
+    const executeSend = async (bookingsToSend: CompletedBooking[]) => {
         setSending(true)
         try {
-            const selectedBookings = bookings.filter(b => selectedIds.has(b.id))
-
             // Map to minimal data for email function
-            const payload = selectedBookings.map(b => ({
+            const payload = bookingsToSend.map(b => ({
                 name: b.customer_name,
                 email: b.customer_email,
                 service: b.service_name
@@ -136,7 +131,7 @@ export default function ReviewsTab() {
 
             if (result.success) {
                 // Update DB only for successfully sent
-                const sentIds = Array.from(selectedIds)
+                const sentIds = bookingsToSend.map(b => b.id)
                 const { error: updateError } = await supabase
                     .from('bookings')
                     .update({ review_sent_at: new Date().toISOString() })
@@ -148,8 +143,9 @@ export default function ReviewsTab() {
                 } else {
                     alert(`✅ Richieste inviate a ${result.sent} clienti!`)
                     // Update local state to reflect change immediately
+                    const sentIdSet = new Set(sentIds)
                     setBookings(bookings.map(b =>
-                        selectedIds.has(b.id)
+                        sentIdSet.has(b.id)
                             ? { ...b, review_sent_at: new Date().toISOString() }
                             : b
                     ))
@@ -167,6 +163,19 @@ export default function ReviewsTab() {
         } finally {
             setSending(false)
         }
+    }
+
+    const handleSendReviews = async () => {
+        if (selectedIds.size === 0) return
+        if (!confirm(`Inviare richiesta di recensione a ${selectedIds.size} clienti?`)) return
+
+        const selectedBookings = bookings.filter(b => selectedIds.has(b.id))
+        await executeSend(selectedBookings)
+    }
+
+    const handleSendSingle = async (booking: CompletedBooking) => {
+        if (!confirm(`Inviare richiesta di recensione a ${booking.customer_name}?`)) return
+        await executeSend([booking])
     }
 
     return (
@@ -228,18 +237,19 @@ export default function ReviewsTab() {
                                 <th className="p-4">Data Fine</th>
                                 <th className="p-4">Contatti</th>
                                 <th className="p-4">Totale</th>
+                                <th className="p-4 text-right">Azioni</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-800">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={multiSelectMode ? 6 : 5} className="p-8 text-center text-gray-400">
+                                    <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-gray-400">
                                         Caricamento completati...
                                     </td>
                                 </tr>
                             ) : filteredBookings.length === 0 ? (
                                 <tr>
-                                    <td colSpan={multiSelectMode ? 6 : 5} className="p-8 text-center text-gray-400">
+                                    <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-gray-400">
                                         Nessuna prenotazione completata trovata.
                                     </td>
                                 </tr>
@@ -283,6 +293,21 @@ export default function ReviewsTab() {
                                         </td>
                                         <td className="p-4 text-dr7-gold font-mono">
                                             €{(b.price_total / 100).toFixed(2)}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            {!b.review_sent_at && (
+                                                <Button
+                                                    onClick={() => handleSendSingle(b)}
+                                                    variant="secondary"
+                                                    className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold border-dr7-gold/30"
+                                                    disabled={sending}
+                                                >
+                                                    {sending ? '...' : 'Invia'}
+                                                </Button>
+                                            )}
+                                            {b.review_sent_at && (
+                                                <span className="text-xs text-green-500 font-medium border border-green-500/30 px-2 py-1 rounded bg-green-500/10">Inviata</span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))
