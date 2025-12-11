@@ -678,8 +678,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                 <div>
                   <h3 className="text-lg font-medium text-white mb-4 border-t border-gray-700 pt-4">Residenza</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-2">
+                  <div className="flex gap-4">
+                    <div className="flex-1">
                       <label className="block text-sm font-medium text-gray-400 mb-1">Indirizzo *</label>
                       <input
                         type="text"
@@ -689,7 +689,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       />
                       {errors.indirizzo && <p className="text-red-500 text-xs mt-1">{errors.indirizzo}</p>}
                     </div>
-                    <div>
+                    <div className="w-24">
                       <label className="block text-sm font-medium text-gray-400 mb-1">Civico</label>
                       <input
                         type="text"
