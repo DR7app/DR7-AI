@@ -380,11 +380,12 @@ export default function ReservationsTab() {
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
-        // .not('pickup_date', 'is', null) // Temporarily allow null pickup dates to debug
-        .not('service_type', 'eq', 'car_wash') // Exclude car wash bookings
-        .not('service_type', 'eq', 'mechanical_service') // Exclude mechanical service bookings
-        // Explicitly include known rental types to be safe
-        .or('service_type.eq.rental,service_type.eq.car_rental,service_type.is.null,pickup_date.neq.null')
+        // query all bookings that are NOT other specific services
+        // This is robust against missing pickup_dates or varying service_type values
+        .not('service_type', 'eq', 'car_wash')
+        .not('service_type', 'eq', 'mechanical_service')
+        // We removed the strict pickup_date check to ensure we catch all rental bookings
+        // even if they have data issues. Filtering happens on exclusions.
         .order('created_at', { ascending: false })
 
       console.log('[ReservationsTab] Bookings fetched:', bookingsData?.length || 0)
@@ -1167,11 +1168,11 @@ export default function ReservationsTab() {
       <div className="space-y-4">
         {/* Mobile-optimized header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">Car Rental</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">Prenotazioni</h2>
           <div className="flex gap-2 sm:gap-3">
             <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
-              <span className="hidden sm:inline">+ New Rental</span>
-              <span className="sm:hidden">+ New</span>
+              <span className="hidden sm:inline">+ Nuova Prenotazione</span>
+              <span className="sm:hidden">+ Nuovo</span>
             </Button>
           </div>
         </div>
@@ -1189,7 +1190,7 @@ export default function ReservationsTab() {
         {showForm && (
           <form onSubmit={handleSubmit} className="bg-dr7-dark p-4 sm:p-6 rounded-lg mb-6 border border-gray-800">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
-              {editingId ? 'Edit Rental' : 'New Rental'}
+              {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione'}
             </h3>
 
             {/* Booking Type Selection - Mobile Optimized */}
