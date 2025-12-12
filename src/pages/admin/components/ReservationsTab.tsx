@@ -375,29 +375,31 @@ export default function ReservationsTab() {
   async function loadData() {
     setLoading(true)
     try {
-      // Fetch bookings directly from Supabase (only car rentals, not car wash or mechanical)
-      // Include bookings where service_type is NULL, 'rental', 'car_rental', or anything except car_wash/mechanical
-      const { data: bookingsData, error: bookingsError } = await supabase
+      // Fetch ALL bookings to ensure we don't filter out NULLs or unexpected values via SQL
+      // We will filter client-side to be 100% sure we get what we want
+      const { data: allBookings, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
-        // query all bookings that are NOT other specific services
-        // This is robust against missing pickup_dates or varying service_type values
-        .not('service_type', 'eq', 'car_wash')
-        .not('service_type', 'eq', 'mechanical_service')
-        // We removed the strict pickup_date check to ensure we catch all rental bookings
-        // even if they have data issues. Filtering happens on exclusions.
         .order('created_at', { ascending: false })
-
-      console.log('[ReservationsTab] Bookings fetched:', bookingsData?.length || 0)
-      if (bookingsData && bookingsData.length > 0) {
-        console.log('[ReservationsTab] First booking sample:', bookingsData[0])
-      }
 
       if (bookingsError) {
         console.error('Failed to load bookings:', bookingsError)
-      } else {
-        setBookings(bookingsData || [])
       }
+
+      // Client-side filter: 
+      // Keep if service_type is NOT 'car_wash' AND NOT 'mechanical_service'
+      // This automatically keeps: NULL, 'rental', 'car_rental', etc.
+      const filteredBookings = (allBookings || []).filter(b =>
+        b.service_type !== 'car_wash' &&
+        b.service_type !== 'mechanical_service'
+      )
+
+      console.log('[ReservationsTab] Bookings fetched:', filteredBookings.length)
+      if (filteredBookings.length > 0) {
+        console.log('[ReservationsTab] First booking sample:', filteredBookings[0])
+      }
+
+      setBookings(filteredBookings)
 
       // Fetch customers from bookings table (same as CustomersTab)
       const { data: bookingsForCustomers, error: bookingsCustomerError } = await supabase
