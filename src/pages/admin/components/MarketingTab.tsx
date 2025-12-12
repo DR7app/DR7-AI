@@ -197,10 +197,10 @@ export default function MarketingTab() {
         setSelectedCustomerIds(newSelection)
     }
 
-    async function handleSendGiftVouchers(data: { subject: string; message: string; image: File | null; channel?: 'email' | 'whatsapp' }) {
+    async function handleSendGiftVouchers(data: { subject: string; message: string; images: File[]; channel?: 'email' | 'whatsapp' }) {
         const channel = data.channel || 'email' // Default to email for backward compatibility
 
-        if (channel === 'email' && !data.image) {
+        if (channel === 'email' && data.images.length === 0) {
             alert('Immagine richiesta per email')
             return
         }
@@ -237,13 +237,20 @@ export default function MarketingTab() {
                 }
 
             } else {
-                // Email Logic (Existing)
-                const reader = new FileReader()
-                const imageBase64 = await new Promise<string>((resolve, reject) => {
-                    reader.onloadend = () => resolve(reader.result as string)
-                    reader.onerror = reject
-                    reader.readAsDataURL(data.image!)
-                })
+                // Email Logic (Multiple Images)
+                const imagesData = await Promise.all(
+                    data.images.map(async (file) => {
+                        return new Promise<{ filename: string; content: string }>((resolve, reject) => {
+                            const reader = new FileReader()
+                            reader.onloadend = () => resolve({
+                                filename: file.name,
+                                content: reader.result as string
+                            })
+                            reader.onerror = reject
+                            reader.readAsDataURL(file)
+                        })
+                    })
+                )
 
                 const response = await fetch('/.netlify/functions/send-gift-voucher', {
                     method: 'POST',
@@ -257,8 +264,7 @@ export default function MarketingTab() {
                         })),
                         subject: data.subject,
                         message: data.message,
-                        imageBase64,
-                        imageName: data.image!.name
+                        images: imagesData // Array of { filename, content }
                     })
                 })
 

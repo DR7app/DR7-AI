@@ -5,44 +5,55 @@ interface GiftVoucherModalProps {
     isOpen: boolean
     onClose: () => void
     selectedCustomers: Array<{ id: string; nome?: string; cognome?: string; email: string | null }>
-    onSend: (data: { subject: string; message: string; image: File | null; channel?: 'email' | 'whatsapp' }) => Promise<void>
+    onSend: (data: { subject: string; message: string; images: File[]; channel?: 'email' | 'whatsapp' }) => Promise<void>
 }
 
 export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, onSend }: GiftVoucherModalProps) {
     const [channel, setChannel] = useState<'email' | 'whatsapp'>('email')
     const [subject, setSubject] = useState('🎁 Buono Regalo per te!')
-    const [message, setMessage] = useState('Caro/a {nome},\n\nSiamo lieti di inviarti questo buono regalo!\n\nCordiali saluti,\nDR7 Empire')
-    const [image, setImage] = useState<File | null>(null)
-    const [imagePreview, setImagePreview] = useState<string | null>(null)
+    const [message, setMessage] = useState('Gentile Cliente,\nDR7 apre una finestra esclusiva a disponibilità limitata.\nCordiali saluti,\nDR7 S.p.A.')
+    const [images, setImages] = useState<File[]>([])
+    const [imagePreviews, setImagePreviews] = useState<string[]>([])
     const [sending, setSending] = useState(false)
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (file) {
-            // Validate file type
-            if (!file.type.startsWith('image/')) {
-                alert('Per favora seleziona un file immagine (JPEG, PNG)')
+        const files = Array.from(e.target.files || [])
+        if (files.length > 0) {
+            // Validate file types
+            const validFiles = files.filter(file => file.type.startsWith('image/'))
+            if (validFiles.length !== files.length) {
+                alert('Alcuni file non sono immagini e sono stati ignorati.')
+            }
+
+            // Validate total size (max 15MB total to be safe with Netlify)
+            const totalSize = validFiles.reduce((acc, file) => acc + file.size, 0)
+            if (totalSize > 15 * 1024 * 1024) {
+                alert('La dimensione totale delle immagini è troppo grande. Massimo 15MB.')
                 return
             }
-            // Validate file size (max 5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                alert('L\'immagine è troppo grande. Massimo 5MB.')
-                return
-            }
-            setImage(file)
-            // Create preview
-            const reader = new FileReader()
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string)
-            }
-            reader.readAsDataURL(file)
+
+            setImages(prev => [...prev, ...validFiles])
+
+            // Create previews
+            validFiles.forEach(file => {
+                const reader = new FileReader()
+                reader.onloadend = () => {
+                    setImagePreviews(prev => [...prev, reader.result as string])
+                }
+                reader.readAsDataURL(file)
+            })
         }
+    }
+
+    const removeImage = (index: number) => {
+        setImages(prev => prev.filter((_, i) => i !== index))
+        setImagePreviews(prev => prev.filter((_, i) => i !== index))
     }
 
     const handleSend = async () => {
         if (channel === 'email') {
-            if (!image) {
-                alert('Per favore carica un\'immagine del buono regalo')
+            if (images.length === 0) {
+                alert('Per favore carica almeno un\'immagine del buono regalo')
                 return
             }
             if (!subject.trim()) {
@@ -58,13 +69,13 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
 
         setSending(true)
         try {
-            await onSend({ subject, message, image, channel })
+            await onSend({ subject, message, images, channel })
 
             // Reset form
             setSubject('🎁 Buono Regalo per te!')
-            setMessage('Caro/a {nome},\n\nSiamo lieti di inviarti questo buono regalo!\n\nCordiali saluti,\nDR7 Empire')
-            setImage(null)
-            setImagePreview(null)
+            setMessage('Gentile Cliente,\nDR7 apre una finestra esclusiva a disponibilità limitata.\nCordiali saluti,\nDR7 S.p.A.')
+            setImages([])
+            setImagePreviews([])
             onClose()
         } catch (error) {
             console.error('Error sending vouchers:', error)
@@ -146,24 +157,29 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                 Immagine Buono Regalo *
                             </label>
                             <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center">
-                                {imagePreview ? (
-                                    <div className="space-y-3">
-                                        <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded" />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setImage(null)
-                                                setImagePreview(null)
-                                            }}
-                                            className="text-sm text-red-400 hover:text-red-300"
-                                        >
-                                            Rimuovi immagine
-                                        </button>
-                                    </div>
-                                ) : (
+                                <div className="space-y-4">
+                                    {/* Preview Grid */}
+                                    {imagePreviews.length > 0 && (
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                                            {imagePreviews.map((preview, index) => (
+                                                <div key={index} className="relative group">
+                                                    <img src={preview} alt={`Preview ${index}`} className="w-full h-24 object-cover rounded border border-gray-600" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeImage(index)}
+                                                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     <div>
                                         <input
                                             type="file"
+                                            multiple
                                             accept="image/jpeg,image/png,image/jpg"
                                             onChange={handleImageChange}
                                             className="hidden"
@@ -173,11 +189,11 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                             htmlFor="voucher-image"
                                             className="cursor-pointer inline-block px-4 py-2 bg-dr7-gold text-black rounded hover:bg-dr7-gold/90"
                                         >
-                                            📤 Carica Immagine (JPEG/PNG)
+                                            📤 Carica Immagini (JPEG/PNG)
                                         </label>
-                                        <p className="text-xs text-gray-400 mt-2">Massimo 5MB</p>
+                                        <p className="text-xs text-gray-400 mt-2">Massimo 15MB totali</p>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -226,7 +242,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                         </Button>
                         <Button
                             onClick={handleSend}
-                            disabled={sending || (channel === 'email' && !image)}
+                            disabled={sending || (channel === 'email' && images.length === 0)}
                         >
                             {sending ? '⏳ Invio in corso...' :
                                 channel === 'email'

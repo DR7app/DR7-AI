@@ -22,14 +22,49 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { customers, subject, message, imageBase64, imageName } = JSON.parse(event.body || '{}')
+
+        const { customers, subject, message, imageBase64, imageName, images } = JSON.parse(event.body || '{}')
 
         if (!customers || !Array.isArray(customers) || customers.length === 0) {
             return { statusCode: 400, body: JSON.stringify({ error: 'No customers provided' }) }
         }
 
-        if (!subject || !message || !imageBase64) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Missing required fields' }) }
+        if (!subject || !message) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Missing required fields (subject or message)' }) }
+        }
+
+        // Handle Images (Multiple or Legacy Single)
+        const attachments: any[] = []
+        let imagesHtml = ''
+
+        if (images && Array.isArray(images) && images.length > 0) {
+            // New Multi-Image Logic
+            images.forEach((img: { filename: string; content: string }, index: number) => {
+                const cid = `voucher-image-${index}`
+                const contentBuffer = Buffer.from(img.content.split(',')[1], 'base64')
+
+                attachments.push({
+                    filename: img.filename,
+                    content: contentBuffer,
+                    cid: cid
+                })
+
+                imagesHtml += `<img src="cid:${cid}" alt="${img.filename}" style="max-width: 100%; height: auto; margin-top: 10px; display: block;"/><br/>`
+            })
+        } else if (imageBase64) {
+            // Legacy Single Image Logic
+            const contentBuffer = Buffer.from(imageBase64.split(',')[1], 'base64')
+            const cid = 'voucher-image'
+
+            attachments.push({
+                filename: imageName || 'buono-regalo.jpg',
+                content: contentBuffer,
+                cid: cid
+            })
+
+            imagesHtml = `<img src="cid:${cid}" alt="Buono Regalo" style="max-width: 100%; height: auto; display: block;"/>`
+        } else {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Missing image (required for marketing email)' }) }
         }
 
         // Verify SMTP credentials
@@ -40,9 +75,6 @@ export const handler: Handler = async (event) => {
             console.error('[send-gift-voucher] Missing SMTP credentials')
             return { statusCode: 500, body: JSON.stringify({ error: 'SMTP credentials not configured' }) }
         }
-
-        // Convert base64 to buffer for attachment
-        const imageBuffer = Buffer.from(imageBase64.split(',')[1], 'base64')
 
         let sentCount = 0
         const errors: string[] = []
@@ -65,19 +97,15 @@ export const handler: Handler = async (event) => {
                     to: customer.email,
                     subject: subject,
                     html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="white-space: pre-wrap;">${personalizedMessage}</div>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+              <div style="white-space: pre-wrap; font-size: 16px; line-height: 1.5;">${personalizedMessage}</div>
               <br/>
-              <img src="cid:voucher-image" alt="Buono Regalo" style="max-width: 100%; height: auto;"/>
+              <div style="text-align: center;">
+                ${imagesHtml}
+              </div>
             </div>
           `,
-                    attachments: [
-                        {
-                            filename: imageName || 'buono-regalo.jpg',
-                            content: imageBuffer,
-                            cid: 'voucher-image' // Same as in HTML img src
-                        }
-                    ]
+                    attachments: attachments
                 }
 
                 await transporter.sendMail(mailOptions)
