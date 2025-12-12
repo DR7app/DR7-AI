@@ -161,6 +161,7 @@ interface Booking {
   appointment_date?: string
   appointment_time?: string
   contract_url?: string
+  km_overage_fee?: number
 }
 
 // Helper function to calculate car wash end time based on actual service durations
@@ -249,7 +250,9 @@ export default function ReservationsTab() {
     second_driver_birth_place: '',
     // Kasko & Deposit
     insurance_option: 'KASKO_BASE' as KaskoTier,
-    deposit: '0'
+    deposit: '0',
+    // KM Overage Fee
+    km_overage_fee: '0'
   })
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
@@ -377,6 +380,8 @@ export default function ReservationsTab() {
         .from('bookings')
         .select('*')
         .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
+        .neq('service_type', 'car_wash') // Exclude car wash bookings
+        .neq('service_type', 'mechanical_service') // Exclude mechanical service bookings
         .order('created_at', { ascending: false })
 
       console.log('[ReservationsTab] Bookings fetched:', bookingsData?.length || 0)
@@ -710,7 +715,8 @@ export default function ReservationsTab() {
       second_driver_birth_date: booking.booking_details?.second_driver?.birth_date || '',
       second_driver_birth_place: booking.booking_details?.second_driver?.birth_place || '',
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
-      deposit: booking.booking_details?.deposit || '0'
+      deposit: booking.booking_details?.deposit || '0',
+      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0'
     })
 
     setEditingId(booking.id)
@@ -904,6 +910,7 @@ export default function ReservationsTab() {
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
         price_total: Math.round(parseFloat(formData.total_amount) * 100), // Convert to cents
+        km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
         payment_status: formData.payment_status,
@@ -1104,6 +1111,7 @@ export default function ReservationsTab() {
       source: 'admin',
       total_amount: '0',
       amount_paid: '0',
+      km_overage_fee: '0',
       payment_status: 'pending',
       payment_method: 'Contanti',
       currency: 'EUR',
@@ -1531,6 +1539,14 @@ export default function ReservationsTab() {
                   const newPaid = formData.payment_status === 'paid' ? newTotal : formData.amount_paid
                   setFormData({ ...formData, total_amount: newTotal, amount_paid: newPaid })
                 }}
+              />
+              <Input
+                label="Sforo per KM (€)"
+                type="number"
+                step="0.01"
+                value={formData.km_overage_fee}
+                onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
+                placeholder="es. 0.50"
               />
               <Input
                 label="Importo Pagato (€)"

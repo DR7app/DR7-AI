@@ -143,6 +143,172 @@ export const handler: Handler = async (event) => {
         // 5. Fill Data
         const form = pdfDoc.getForm()
 
+        // --- DEBUGGING: LOG ALL AVAILABLE FIELDS IN PDF ---
+        console.log('--- [DEBUG] PDF FORM FIELDS FOUND ---')
+        try {
+            const fields = form.getFields()
+            const fieldNames = fields.map(f => f.getName())
+            console.log('Total fields found:', fieldNames.length)
+            console.log('Field Names List:', JSON.stringify(fieldNames, null, 2))
+        } catch (err) {
+            console.error('Error logging fields:', err)
+        }
+        // --------------------------------------------------
+
+        // 5a. Generate Dynamic Insurance Responsibility Text based on Vehicle Category
+        const vehicleCategory = vehicleData?.category || 'standard'
+        let insuranceResponsibilityText = ''
+
+        if (vehicleCategory === 'supercar' || vehicleCategory === 'luxury') {
+            insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - SUPERCAR:
+
+Copertura assicurativa RCA (BASE): Paga qualsiasi danno subito al 100% del valore. Furto (solo in caso di restituzione chiave) - incendio - distruzione totale: da risarcire il 100% del valore del veicolo.
+
+KASKO: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 30% del danno.
+
+KASKO BLACK: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 10% del danno.
+
+KASKO SIGNATURE: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000.
+
+LA KASKO NON È ATTIVABILE SE AL MOMENTO DEL DANNO IL CLIENTE ERA SOTTO EFFETTO DI STUPEFACENTI O IN STATO DI EBREZZA.`
+        } else if (vehicleCategory === 'urban' || vehicleCategory === 'economy') {
+            insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - UTILITARIE E AZIENDALI:
+
+Copertura assicurativa RCA (BASE): Paga qualsiasi danno subito al 100% del valore. Furto (solo in caso di restituzione chiave) - incendio - distruzione totale: da risarcire il 100% del valore del veicolo.
+
+Copertura assicurativa KASKO: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - distruzione totale: da risarcire €2.000 + 30% del valore del danno è attivabile per qualsiasi danno recato alla vettura anche con oggetti non identificabili per mezzo di targa, previo preventivo in officina ufficiale.
+
+LA KASKO NON È ATTIVABILE SE AL MOMENTO DEL DANNO IL CLIENTE ERA SOTTO EFFETTO DI STUPEFACENTI O IN STATO DI EBREZZA.`
+        } else {
+            // Default for standard vehicles
+            insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - VEICOLI STANDARD:
+
+Il locatario è pienamente responsabile del veicolo durante il periodo di noleggio e si impegna a:
+
+1. UTILIZZO DEL VEICOLO: Utilizzare il veicolo con cura e diligenza, rispettando tutte le norme del codice della strada.
+
+2. DANNI E FRANCHIGIE:
+   - Senza Kasko: Franchigia di €2.000 per danni alla carrozzeria
+   - Con Kasko: Franchigia ridotta a €750
+   - Il cliente è responsabile del pagamento della franchigia in caso di danni
+
+3. FURTO E INCENDIO:
+   - Senza Kasko: Franchigia di €5.000
+   - Con Kasko: Franchigia ridotta a €1.500
+   - Obbligo di denuncia immediata alle autorità competenti
+
+4. PENALITÀ:
+   - Ritardo nella riconsegna: €100 per ogni ora
+   - Pulizia straordinaria: €150
+   - Rifornimento mancante: €4/litro + €40 servizio
+   - Guida non autorizzata: €1.500 + risoluzione immediata del contratto
+   - Violazione limiti velocità: Multa + €150 penale
+   - Mancata restituzione chiavi/documenti: €300 per elemento
+
+5. RESPONSABILITÀ: Il cliente è responsabile di tutti i danni fino al massimale della franchigia. Eventuali danni superiori saranno a carico del cliente.`
+        }
+
+        console.log(`[generate-contract] Using insurance responsibility text for category: ${vehicleCategory}`)
+
+        // 5b. Generate Additional Penalty/Legal Terms (for second large text area)
+        let additionalTermsText = ''
+
+        if (vehicleCategory === 'supercar' || vehicleCategory === 'luxury') {
+            additionalTermsText = `PENALI - SUPERCAR:
+
+Penale fermo del veicolo in caso di incidente o danni 350,00€ al giorno.
+
+Penale per chi fuma dentro l'auto: minima 200€ senza danni solo con odore o residui di cenere, massima di 1500,00€ se oltre all'odore e cenere l'auto presenta danni alla tappezzeria o altro riconducibili ad una sigaretta, costi per la riparazione sempre a carico del cliente.
+
+Penale per guidatore non citato nel contratto 1000,00€ possono guidare solo le persone citate nel contratto.
+
+Penale per benzina mancante pari a 40,00€ x tacca.
+
+Penale per danni a tappezzeria, sedili o interni dell'auto 1000,00€ + costo della riparazione a carico del cliente + fermo del veicolo a carico del cliente.
+
+L'utilizzo della bomboletta sigillante 'gonfia e ripara' in dotazione comporta l'addebito di una penale di €100,00 per pneumatico, salvo maggior danno.
+
+Penale per veicolo riportato in condizioni pessime con sporco su interni (terra/sabbia/ghiaia o altro) o immondizia lasciata in giro nell'auto (esempio tasche delle portiere, vano portaoggetti, vano poggiagomito, tasche dei sedili, tappezzeria, bagagliaio) 30,00€, igienizzazione 100,00€.
+
+Non sono tollerati cani o pelo di cane dentro l'auto: penale 100€.
+
+Penale per chi disattiva completamente i controlli elettronici dell'auto 500,00€.
+
+Per quanto concerne a Multe o sanzioni sono a carico del cliente al 100%.
+
+L'intestatario del contratto dovrà essere presente al momento della consegna e del ritiro dell'auto (in caso di consegna e ritiro a domicilio) penale di 500,00€ + eventuali costi aggiuntivi per ulteriore fermi o per ritardi.
+
+In caso di utilizzo del veicolo su pista o in contesti assimilabili a competizioni, verrà applicata una penale di €5.000, oltre al risarcimento di eventuali danni totali in quanto la kasko non è attivabile.
+
+Dopo 10 minuti di ritardo al check-out scatta la penale minima di 50€ e aumenta di 0,50€ per minuto di ritardo.
+
+Il veicolo non può in alcun modo essere guidato da soggetti neopatentati o comunque non abilitati secondo le restrizioni dell'art. 117 CdS. In caso di violazione, il Cliente risponde integralmente di ogni sanzione, fermo amministrativo e danno derivante.
+
+In caso di Subnoleggio non autorizzato la penale è di €10.000.
+
+Al momento del ritiro dell'auto il cliente deve avere con sé la patente fisica ed è obbligato a consegnarla all'operatore che consegna la vettura.
+
+Non sono accettate denunce di smarrimento della patente. In caso di impossibilità a mostrare la patente fisica al momento del ritiro, il cliente perde la prenotazione e l'importo pagato.`
+        } else if (vehicleCategory === 'urban' || vehicleCategory === 'economy') {
+            additionalTermsText = `PENALI - UTILITARIE E AZIENDALI:
+
+Penale fermo del veicolo in caso di incidente o danni 40,00€ al giorno.
+
+Penale per chi fuma dentro l'auto: minima 200€ senza danni solo con odore o residui di cenere, massima di 1500,00€ se oltre all'odore e cenere l'auto presenta danni alla tappezzeria o altro riconducibili ad una sigaretta, costi per la riparazione sempre a carico del cliente.
+
+Penale per guidatore non citato nel contratto 500,00€ possono guidare solo le persone citate nel contratto.
+
+Penale per benzina mancante pari a 25,00€ x tacca.
+
+Penale per danni a tappezzeria, sedili o interni dell'auto 1000,00€ + costo della riparazione a carico del cliente + fermo del veicolo a carico del cliente.
+
+L'utilizzo della bomboletta sigillante 'gonfia e ripara' in dotazione comporta l'addebito di una penale di €100,00 per pneumatico, salvo maggior danno.
+
+Penale per veicolo riportato in condizioni pessime con sporco su interni (terra/sabbia/ghiaia o altro) o immondizia lasciata in giro nell'auto (esempio tasche delle portiere, vano portaoggetti, vano poggiagomito, tasche dei sedili, tappezzeria, bagagliaio) 30,00€, igienizzazione 100,00€.
+
+Penale per chi disattiva completamente i controlli elettronici dell'auto 500,00€.
+
+Per quanto concerne a Multe o sanzioni sono a carico del cliente al 100%.
+
+L'intestatario del contratto dovrà essere presente al momento della consegna e del ritiro dell'auto (in caso di consegna e ritiro a domicilio) penale di 500,00€ + eventuali costi aggiuntivi per ulteriore fermi o per ritardi da parte dell'intestatario del contratto.
+
+Dopo 10 minuti di ritardo al check-out scatta la penale minima di 20€ e aumenta di 0,50€ per minuto di ritardo.
+
+Il veicolo non può in alcun modo essere guidato da soggetti neopatentati o comunque non abilitati secondo le restrizioni dell'art. 117 CdS. In caso di violazione, il Cliente risponde integralmente di ogni sanzione, fermo amministrativo e danno derivante.
+
+Non sono tollerati cani o pelo di cane dentro l'auto: penale 100€.
+
+In caso di Subnoleggio non autorizzato la penale è di €10.000.
+
+Non sono accettate denunce di smarrimento della patente. In caso di impossibilità a mostrare la patente fisica al momento del ritiro, il cliente perde la prenotazione e l'importo pagato.`
+        } else {
+            // Default for standard vehicles
+            additionalTermsText = `CONDIZIONI AGGIUNTIVE - VEICOLI STANDARD:
+
+OBBLIGHI DEL LOCATARIO:
+- Riconsegnare il veicolo nelle stesse condizioni in cui è stato ritirato
+- Effettuare il pieno di carburante prima della riconsegna
+- Rispettare i limiti di velocità e le norme del codice della strada
+- Non fumare all'interno del veicolo
+- Non trasportare animali senza autorizzazione scritta
+
+LIMITAZIONI D'USO:
+- Vietato l'uso per competizioni o gare
+- Vietato il traino di rimorchi senza autorizzazione
+- Vietato il subaffitto o la cessione a terzi
+- Numero massimo di conducenti: 2 (titolare + eventuale secondo guidatore autorizzato)
+
+DEPOSITO CAUZIONALE:
+- Deposito richiesto: €1.000 (senza Kasko) / €500 (con Kasko)
+- Restituito entro 7 giorni dalla riconsegna se nessun danno
+- Trattenuto in caso di danni, multe o violazioni
+
+ASSICURAZIONE:
+Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti i danni fino alla franchigia indicata. La sottoscrizione della Kasko riduce la franchigia.`
+        }
+
+        console.log(`[generate-contract] Using additional terms for category: ${vehicleCategory}`)
+
         // Standardized Data Field Map
         // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
         // The loop below will try to set each key; if the field doesn't exist in the PDF, it will just skip it.
@@ -218,6 +384,9 @@ export const handler: Handler = async (event) => {
             'LivelloCarburante': '',
             'VehicleKMRange': '',
             'KMRange': '',
+            'KMOverageFee': booking.km_overage_fee ? `€${(booking.km_overage_fee).toFixed(2)}` : '',
+            'SforoPerKM': booking.km_overage_fee ? `€${(booking.km_overage_fee).toFixed(2)}` : '',
+
 
             // Rental Specifics
             'PickupLocation': booking.pickup_location || 'Sede',
@@ -233,8 +402,6 @@ export const handler: Handler = async (event) => {
             'SecondDriverName': booking.booking_details?.second_driver?.name || '',
             'SecondoGuidatore': booking.booking_details?.second_driver?.name || '',
             'SecondDriverBirthDate': booking.booking_details?.second_driver?.birth_date ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT') : '',
-            'SecondDriverBirthCity': booking.booking_details?.second_driver?.birth_city || '',
-            'SecondDriverBirthProvince': booking.booking_details?.second_driver?.birth_province || '',
             'SecondDriverStatsCode': booking.booking_details?.second_driver?.tax_code || '',
             'SecondDriverCity': booking.booking_details?.second_driver?.city || '',
             'SecondDriverProvince': booking.booking_details?.second_driver?.province || '',
@@ -244,7 +411,36 @@ export const handler: Handler = async (event) => {
             'SecondDriverLicenseIssuedBy': booking.booking_details?.second_driver?.license_issued_by || '',
             'SecondDriverLicenseIssueDate': booking.booking_details?.second_driver?.license_issue_date ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT') : '',
             'SecondDriverLicenseExpiryDate': booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : '',
-            // ... (Add Italian variants for 2nd driver if needed)
+            'SecondDriverVAT': booking.booking_details?.second_driver?.tax_code || '',
+            'SecondDriverSex': booking.booking_details?.second_driver?.gender || '',
+            'SecondDriverAddress': booking.booking_details?.second_driver?.address || '',
+            'SecondDriverZipCode': booking.booking_details?.second_driver?.zip_code || '',
+            'SecondDriverBirthPlace': booking.booking_details?.second_driver?.birth_city || '',
+            'SecondDriverBirthProvince': booking.booking_details?.second_driver?.birth_province || '',
+            'SecondDriverPhone': booking.booking_details?.second_driver?.phone || '',
+            'SecondDriverEmail': booking.booking_details?.second_driver?.email || '',
+
+            // Company Data (for business clients)
+            'CompanyName': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',
+            'CompanyEmail': customer?.tipo_cliente === 'azienda' ? customer.email : '',
+            'CompanyAddress': customer?.tipo_cliente === 'azienda' ? customer.indirizzo : '',
+            'CompanyPhone': customer?.tipo_cliente === 'azienda' ? customer.telefono : '',
+            'CompanyVAT': customer?.tipo_cliente === 'azienda' ? customer.partita_iva : '',
+            'CompanyFiscalCode': customer?.tipo_cliente === 'azienda' ? customer.codice_fiscale : '',
+            'CompanyRepresentativeName': customer?.tipo_cliente === 'azienda' ? customer.rappresentante_legale : '',
+            'CompanyRepresentativeID': customer?.metadata?.rappresentante?.tipo_documento || '',
+            'CompanyRepresentativeIDNumber': customer?.metadata?.rappresentante?.numero_documento || '',
+            'CompanyRepresentativeIDIssueDate': customer?.metadata?.rappresentante?.data_rilascio || '',
+            'CompanyRepresentativeIDIssuePlace': customer?.metadata?.rappresentante?.luogo_rilascio || '',
+            // Combined fields for single text boxes
+            'CompanyRepresentativeDocCombined': `${customer?.metadata?.rappresentante?.tipo_documento || ''} ${customer?.metadata?.rappresentante?.numero_documento || ''}`.trim(),
+            'CompanyRepresentativeIssueCombined': `${customer?.metadata?.rappresentante?.data_rilascio || ''} ${customer?.metadata?.rappresentante?.luogo_rilascio ? '- ' + customer.metadata.rappresentante.luogo_rilascio : ''}`.trim(),
+
+            // Penalty Clause (Dynamic based on vehicle category)
+            'PenaltyClause': insuranceResponsibilityText,
+
+            // Additional Terms/Penalties (Second large text area)
+            'AdditionalTerms': additionalTermsText,
         }
 
         let filledFields = 0
