@@ -7,6 +7,41 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Helper function to sanitize text for WinAnsi encoding
+// Transliterates Cyrillic and other non-Latin characters to Latin equivalents
+function sanitizeForPDF(text: string): string {
+    if (!text) return ''
+
+    // Cyrillic to Latin transliteration map (for characters that look similar)
+    const cyrillicToLatin: Record<string, string> = {
+        // Uppercase
+        'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O',
+        'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
+        // Lowercase
+        'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x',
+        // Other common Cyrillic
+        'Б': 'B', 'Г': 'G', 'Д': 'D', 'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y',
+        'Л': 'L', 'П': 'P', 'Ф': 'F', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
+        'Ы': 'Y', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+        'б': 'b', 'г': 'g', 'д': 'd', 'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y',
+        'л': 'l', 'п': 'p', 'ф': 'f', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+        'ы': 'y', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+        'Ё': 'Yo', 'ё': 'yo', 'Ъ': '', 'ъ': '', 'Ь': '', 'ь': ''
+    }
+
+    // Replace Cyrillic characters with Latin equivalents
+    let result = text
+    for (const [cyrillic, latin] of Object.entries(cyrillicToLatin)) {
+        result = result.replace(new RegExp(cyrillic, 'g'), latin)
+    }
+
+    // Remove any remaining non-WinAnsi characters
+    result = result.replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
+
+    // Normalize whitespace
+    return result.replace(/\s+/g, ' ').trim()
+}
+
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' }
@@ -42,7 +77,11 @@ export const handler: Handler = async (event) => {
         }
 
         // 2. Fetch Customer Data
-        const customerId = booking.user_id || booking.booking_details?.customer?.customerId
+        // Priority order:
+        // 1. booking.booking_details.customer.customerId (admin-created bookings)
+        // 2. booking.user_id (website bookings)
+        // 3. Fallback to booking data directly if no customer record found
+        const customerId = booking.booking_details?.customer?.customerId || booking.user_id
         let customer = null
 
         console.log(`[generate-contract] Fetching customer. ID: ${customerId}, Email: ${booking.customer_email}`)
@@ -51,31 +90,53 @@ export const handler: Handler = async (event) => {
             const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
             if (cError) console.error('[generate-contract] Error fetching by ID:', cError)
             if (cData) {
-                console.log('[generate-contract] Found customer by ID:', JSON.stringify(cData))
+                console.log('[generate-contract] ✅ Found customer by ID:', JSON.stringify(cData))
                 customer = cData
             }
         }
-        // Fallbacks
+
+        // Fallback: Try by email in customers_extended
         if (!customer && booking.customer_email) {
-            console.log('[generate-contract] Fallback: Fetching by email...')
+            console.log('[generate-contract] Fallback: Fetching by email from customers_extended...')
             const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).single()
             if (cError) console.error('[generate-contract] Error fetching by email (customers_extended):', cError)
             if (cData) {
-                console.log('[generate-contract] Found customer by Email (extended):', JSON.stringify(cData))
+                console.log('[generate-contract] ✅ Found customer by Email (extended):', JSON.stringify(cData))
                 customer = cData
             }
         }
+
+        // Fallback: Try basic customers table
         if (!customer && booking.customer_email) {
-            console.log('[generate-contract] Fallback: Fetching by email (basic customers)...')
+            console.log('[generate-contract] Fallback: Fetching by email from basic customers...')
             const { data: cData } = await supabase.from('customers').select('*').eq('email', booking.customer_email).single()
             if (cData) {
-                console.log('[generate-contract] Found customer by Email (basic):', JSON.stringify(cData))
+                console.log('[generate-contract] ✅ Found customer by Email (basic):', JSON.stringify(cData))
                 customer = { ...cData, tipo_cliente: 'persona_fisica', nome: cData.full_name, indirizzo: cData.notes }
             }
         }
 
+        // Final fallback: Use booking data directly if no customer record exists
         if (!customer) {
-            console.warn('[generate-contract] WARNING: No customer record found. Contract will be empty.')
+            console.warn('[generate-contract] ⚠️ No customer record found in database. Using booking data as fallback.')
+            // Construct a minimal customer object from booking data
+            customer = {
+                tipo_cliente: 'persona_fisica',
+                nome: booking.customer_name || '',
+                cognome: '',
+                email: booking.customer_email || '',
+                telefono: booking.customer_phone || '',
+                indirizzo: booking.booking_details?.customer?.address || '',
+                codice_fiscale: booking.booking_details?.customer?.taxCode || '',
+                patente: booking.booking_details?.customer?.driverLicense || '',
+                // Additional fields from booking_details if available
+                data_nascita: booking.booking_details?.customer?.birthDate || null,
+                luogo_nascita: booking.booking_details?.customer?.birthPlace || null,
+                citta_residenza: booking.booking_details?.customer?.city || null,
+                provincia_residenza: booking.booking_details?.customer?.province || null,
+                codice_postale: booking.booking_details?.customer?.zipCode || null,
+            }
+            console.log('[generate-contract] Using fallback customer data:', JSON.stringify(customer))
         }
 
         // 2b. Fetch Vehicle Data (to get plate and other details if missing in booking)
@@ -454,11 +515,19 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
                 }
 
                 if (field) {
-                    field.setText(value)
+                    // Sanitize the value to prevent WinAnsi encoding errors
+                    const sanitizedValue = sanitizeForPDF(value)
+                    field.setText(sanitizedValue)
                     filledFields++
+
+                    // Log if we had to sanitize (value changed)
+                    if (sanitizedValue !== value && value) {
+                        console.log(`[generate-contract] Sanitized field '${key}': "${value}" -> "${sanitizedValue}"`)
+                    }
                 }
             } catch (e) {
                 // Field matches might fail if types differ (e.g. checkbox vs text), ignore
+                console.error(`[generate-contract] Error setting field '${key}':`, e)
             }
         }
 
@@ -473,9 +542,9 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
 
             const availableFields = form.getFields().map(f => f.getName()).join(', ') || 'None (The PDF has no form fields)'
 
-            page.drawText(`ERROR: No data filled. Check your PDF form field names.`, { x: 50, y: height - 50, size: 12, font, color: red })
-            page.drawText(`Found fields in PDF: ${availableFields}`, { x: 50, y: height - 70, size: 10, font, color: red })
-            page.drawText(`Expected fields: ${Object.keys(dataMap).join(', ')}`, { x: 50, y: height - 90, size: 8, font, color: red })
+            page.drawText(sanitizeForPDF(`ERROR: No data filled. Check your PDF form field names.`), { x: 50, y: height - 50, size: 12, font, color: red })
+            page.drawText(sanitizeForPDF(`Found fields in PDF: ${availableFields}`), { x: 50, y: height - 70, size: 10, font, color: red })
+            page.drawText(sanitizeForPDF(`Expected fields: ${Object.keys(dataMap).join(', ')}`), { x: 50, y: height - 90, size: 8, font, color: red })
         } else {
             // Flatten if we filled fields
             try { form.flatten() } catch (e) { }

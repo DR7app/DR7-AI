@@ -375,18 +375,16 @@ export default function ReservationsTab() {
   async function loadData() {
     setLoading(true)
     try {
-      // Fetch bookings directly from Supabase (only car rentals, not car wash)
+      // Fetch bookings directly from Supabase (only car rentals, not car wash or mechanical)
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
-        .or('service_type.is.null,service_type.eq.rental') // Explicitly allow NULL or 'rental'
+        .neq('service_type', 'car_wash') // Exclude car wash bookings
+        .neq('service_type', 'mechanical_service') // Exclude mechanical service bookings
         .order('created_at', { ascending: false })
 
-      if (bookingsError) throw bookingsError
-
       console.log('[ReservationsTab] Bookings fetched:', bookingsData?.length || 0)
-      setBookings(bookingsData || [])
       if (bookingsData && bookingsData.length > 0) {
         console.log('[ReservationsTab] First booking sample:', bookingsData[0])
       }

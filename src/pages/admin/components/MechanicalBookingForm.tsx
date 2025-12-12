@@ -132,7 +132,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 guest_name: customerInfo?.full_name || 'N/A',
                 guest_email: customerInfo?.email || null,
                 guest_phone: customerInfo?.phone || null,
-                vehicle_type: 'service',
+                vehicle_type: 'car',
                 vehicle_name: formData.vehicle_info, // Customer's vehicle info
                 service_type: 'mechanical_service',
                 service_name: formData.service_name,
