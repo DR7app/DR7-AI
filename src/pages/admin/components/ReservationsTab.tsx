@@ -388,10 +388,13 @@ export default function ReservationsTab() {
 
       // Client-side filter: 
       // Keep if service_type is NOT 'car_wash' AND NOT 'mechanical_service'
-      // This automatically keeps: NULL, 'rental', 'car_rental', etc.
+      // Also exclude if it looks like a mechanical booking (has service_name)
+      // This ensures we don't show mechanical bookings even if service_type is weird
       const filteredBookings = (allBookings || []).filter(b =>
         b.service_type !== 'car_wash' &&
-        b.service_type !== 'mechanical_service'
+        b.service_type !== 'mechanical_service' &&
+        b.service_type !== 'mechanical' &&
+        !b.service_name // Rentals don't have a service name, mechanical/wash do
       )
 
       console.log('[ReservationsTab] Bookings fetched:', filteredBookings.length)
