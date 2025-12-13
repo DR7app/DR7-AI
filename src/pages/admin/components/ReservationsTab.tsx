@@ -666,15 +666,28 @@ export default function ReservationsTab() {
   }
 
   async function handleSendToYousign(bookingId: string) {
-    if (!confirm('Vuoi inviare il contratto a Yousign per la firma digitale?')) return
+    console.log('[handleSendToYousign] Clicked for booking:', bookingId)
+    // if (!confirm('Vuoi inviare il contratto a Yousign per la firma digitale?')) return // Commented out for debugging speed
 
     try {
+      console.log('[handleSendToYousign] Sending fetch request...')
       const res = await fetch('/.netlify/functions/yousign-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId })
       })
-      const data = await res.json()
+      console.log('[handleSendToYousign] Response status:', res.status)
+
+      const text = await res.text()
+      console.log('[handleSendToYousign] Response body:', text)
+
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (e) {
+        throw new Error('Risposta non valida dal server: ' + text.substring(0, 100))
+      }
+
       if (res.ok) {
         alert('Richiesta di firma inviata con successo! 📩')
         loadData()
