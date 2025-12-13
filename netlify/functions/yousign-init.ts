@@ -5,7 +5,11 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const YOUSIGN_API_KEY = process.env.YOUSIGN_API_KEY
-const YOUSIGN_API_BASE_URL = (process.env.YOUSIGN_API_BASE_URL || 'https://api-sandbox.yousign.app/v3').replace(/\/$/, '')
+let YOUSIGN_API_BASE_URL = process.env.YOUSIGN_API_BASE_URL || 'https://api-sandbox.yousign.app/v3'
+YOUSIGN_API_BASE_URL = YOUSIGN_API_BASE_URL.replace(/\/$/, '')
+if (!YOUSIGN_API_BASE_URL.endsWith('/v3')) {
+    YOUSIGN_API_BASE_URL += '/v3'
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 

@@ -77,7 +77,14 @@ export const handler: Handler = async (event) => {
                 // or use the list of documents provided in the webhook payload if available.
                 // It's safer to fetch fresh data.
 
-                const detailsRes = await fetch(`https://api-sandbox.yousign.app/v3/signature_requests/${signatureRequestId}/documents`, {
+                // Ensure Base URL is correct
+                let baseUrl = process.env.YOUSIGN_API_BASE_URL || 'https://api-sandbox.yousign.app/v3'
+                baseUrl = baseUrl.replace(/\/$/, '')
+                if (!baseUrl.endsWith('/v3')) {
+                    baseUrl += '/v3'
+                }
+
+                const detailsRes = await fetch(`${baseUrl}/signature_requests/${signatureRequestId}/documents`, {
                     headers: { 'Authorization': `Bearer ${YOUSIGN_API_KEY}` }
                 })
 
@@ -91,7 +98,7 @@ export const handler: Handler = async (event) => {
                         console.log(`[yousign-webhook] Downloading Signed PDF (Doc ID: ${documentId})...`)
 
                         // Download PDF
-                        const downloadRes = await fetch(`https://api-sandbox.yousign.app/v3/documents/${documentId}/download`, {
+                        const downloadRes = await fetch(`${baseUrl}/documents/${documentId}/download`, {
                             headers: { 'Authorization': `Bearer ${YOUSIGN_API_KEY}` }
                         })
 
