@@ -409,8 +409,24 @@ export default function ReservationsTab() {
       // We will filter client-side to be 100% sure we get what we want
       const { data: allBookings, error: bookingsError } = await supabase
         .from('bookings')
-        .select('*, contracts(yousign_status, signed_pdf_url, yousign_signature_request_id)')
+        .select('*')
         .order('created_at', { ascending: false })
+
+      // Fetch contracts separately to avoid join issues
+      const { data: contractsData, error: contractsError } = await supabase
+        .from('contracts')
+        .select('booking_id, yousign_status, signed_pdf_url, yousign_signature_request_id')
+
+      const contractsMap = new Map()
+      if (contractsData) {
+        contractsData.forEach(c => {
+          contractsMap.set(c.booking_id, c)
+        })
+      }
+
+      if (contractsError) {
+        console.error('Failed to load contracts:', contractsError)
+      }
 
       if (bookingsError) {
         console.error('Failed to load bookings:', bookingsError)
@@ -422,8 +438,12 @@ export default function ReservationsTab() {
       const filteredBookings = (allBookings || []).filter(b =>
         b.service_type !== 'car_wash' &&
         b.service_type !== 'mechanical_service' &&
+        b.service_type !== 'mechanical_service' &&
         b.service_type !== 'mechanical'
-      )
+      ).map(b => ({
+        ...b,
+        contracts: contractsMap.get(b.id) || null
+      }))
 
       console.log('[ReservationsTab] Bookings fetched (raw):', allBookings?.length)
       console.log('[ReservationsTab] Bookings after filter:', filteredBookings.length)
