@@ -36,6 +36,11 @@ interface Customer {
   codice_postale?: string
   citta_residenza?: string
   provincia_residenza?: string
+  tipo_patente?: string
+  emessa_da?: string
+  data_rilascio_patente?: string
+  scadenza_patente?: string
+  numero_patente?: string
   // Azienda fields
   ragione_sociale?: string
   denominazione?: string
@@ -824,6 +829,22 @@ export default function CustomersTab() {
                     <div>
                       <span className="text-sm text-gray-400">Numero Patente:</span>
                       <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.patente || viewingCustomerDetails.driver_license_number || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Categoria Patente:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.tipo_patente || viewingCustomerDetails.metadata?.patente?.tipo || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Ente Rilascio:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.emessa_da || viewingCustomerDetails.metadata?.patente?.ente || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Data Rilascio:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.data_rilascio_patente || viewingCustomerDetails.metadata?.patente?.rilascio || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Data Scadenza:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-sm text-gray-400">Indirizzo:</span>

@@ -789,7 +789,37 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         <option value="B">B</option>
                         <option value="A">A</option>
                         <option value="C">C</option>
+                        <option value="D">D</option>
+                        <option value="E">E</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Emessa da (Ente)</label>
+                      <input
+                        type="text"
+                        value={formData.patente_ente}
+                        onChange={(e) => setFormData({ ...formData, patente_ente: e.target.value })}
+                        placeholder="es. MIT-UCO o Comune"
+                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Data Rilascio</label>
+                      <input
+                        type="date"
+                        value={formData.patente_rilascio}
+                        onChange={(e) => setFormData({ ...formData, patente_rilascio: e.target.value })}
+                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Scadenza</label>
+                      <input
+                        type="date"
+                        value={formData.patente_scadenza}
+                        onChange={(e) => setFormData({ ...formData, patente_scadenza: e.target.value })}
+                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      />
                     </div>
                   </div>
                 </div>
