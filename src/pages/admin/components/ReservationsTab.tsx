@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import Input from './Input'
@@ -335,6 +336,30 @@ export default function ReservationsTab() {
 
     if (diffDays <= 0) return
 
+    // Check for special pricing rule (e.g. Massimo Runchina)
+    const customerName = customers.find(c => c.id === formData.customer_id)?.full_name
+    const specialRule = getSpecialPricing(customerName)
+
+    if (specialRule) {
+      console.log('[ReservationsTab] Applying special pricing for:', customerName)
+
+      // Calculate special total
+      const specialTotal = calculateSpecialPrice(specialRule, diffDays)
+
+      setFormData(prev => ({
+        ...prev,
+        total_amount: specialTotal.toFixed(2),
+        // Force options if specified in rule
+        insurance_option: specialRule.includesKasko === 'base' ? 'KASKO_BASE' : prev.insurance_option,
+        // We can't easily set "unlimited KM" here as it might be a UI text, but we can store it in metadata if needed
+        // For now, the price includes it.
+      }))
+
+      // Optional: Visual feedback could be added here or in the render
+      return
+    }
+
+    // Standard Calculation
     // Get vehicle daily rate (convert from cents to euros)
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
 
@@ -351,7 +376,7 @@ export default function ReservationsTab() {
       ...prev,
       total_amount: totalAmount.toFixed(2)
     }))
-  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles])
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles, customerId, customers])
 
   // Reset insurance option to KASKO_BASE when vehicle changes
   useEffect(() => {
@@ -388,16 +413,16 @@ export default function ReservationsTab() {
 
       // Client-side filter: 
       // Keep if service_type is NOT 'car_wash' AND NOT 'mechanical_service'
-      // Also exclude if it looks like a mechanical booking (has service_name)
-      // This ensures we don't show mechanical bookings even if service_type is weird
+      // We removed the !b.service_name check because some rental bookings might have it populated now
       const filteredBookings = (allBookings || []).filter(b =>
         b.service_type !== 'car_wash' &&
         b.service_type !== 'mechanical_service' &&
-        b.service_type !== 'mechanical' &&
-        !b.service_name // Rentals don't have a service name, mechanical/wash do
+        b.service_type !== 'mechanical'
       )
 
-      console.log('[ReservationsTab] Bookings fetched:', filteredBookings.length)
+      console.log('[ReservationsTab] Bookings fetched (raw):', allBookings?.length)
+      console.log('[ReservationsTab] Bookings after filter:', filteredBookings.length)
+
       if (filteredBookings.length > 0) {
         console.log('[ReservationsTab] First booking sample:', filteredBookings[0])
       }
@@ -578,7 +603,7 @@ export default function ReservationsTab() {
     }
   }
 
-  async function handleGenerateContract(booking: Booking) {
+  async function handleGenerateContract(booking: Booking, showSuccessAlert = true) {
     if (!booking.id) return
 
     setGeneratingContract(true)
@@ -599,9 +624,13 @@ export default function ReservationsTab() {
       if (data.url) {
         // Reload data to show the contract link in the UI
         loadData()
-        alert('✅ Contratto generato con successo! 📄')
+        if (showSuccessAlert) {
+          alert('✅ Contratto generato con successo! 📄')
+        }
       } else {
-        alert('Contratto generato, ma URL non disponibile.')
+        if (showSuccessAlert) {
+          alert('Contratto generato, ma URL non disponibile.')
+        }
       }
     } catch (error: any) {
       console.error('Error generating contract:', error)
@@ -1082,11 +1111,11 @@ export default function ReservationsTab() {
         // Generate Contract PDF automatically
         try {
           console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, new Date().toISOString())
-          await handleGenerateContract(insertedBooking)
+          await handleGenerateContract(insertedBooking, false)
           console.log('[Auto-Gen] ✅ Contract generated successfully')
         } catch (contractError) {
           console.error('[Auto-Gen] ⚠️ Failed to generate contract:', contractError)
-          alert('Errore nella generazione automatica del contratto: ' + (contractError as Error).message)
+          // Don't alert here to avoid confusion, just log it
         }
       }
 
@@ -1098,6 +1127,7 @@ export default function ReservationsTab() {
       setNewCustomerMode(false)
       resetForm()
       loadData()
+      alert(editingId ? '✅ Prenotazione aggiornata con successo!' : '✅ Prenotazione creata con successo!')
     } catch (error) {
       console.error('Failed to save reservation:', error)
       alert('Failed to save reservation: ' + (error as Error).message)
@@ -1173,11 +1203,11 @@ export default function ReservationsTab() {
       <div className="space-y-4">
         {/* Mobile-optimized header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">Car Rental</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">Noleggio</h2>
           <div className="flex gap-2 sm:gap-3">
             <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
-              <span className="hidden sm:inline">+ New Rental</span>
-              <span className="sm:hidden">+ New</span>
+              <span className="hidden sm:inline">+ Nuova Prenotazione</span>
+              <span className="sm:hidden">+ Nuova</span>
             </Button>
           </div>
         </div>
@@ -1195,7 +1225,7 @@ export default function ReservationsTab() {
         {showForm && (
           <form onSubmit={handleSubmit} className="bg-dr7-dark p-4 sm:p-6 rounded-lg mb-6 border border-gray-800">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
-              {editingId ? 'Edit Rental' : 'New Rental'}
+              {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione'}
             </h3>
 
             {/* Booking Type Selection - Mobile Optimized */}

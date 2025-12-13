@@ -79,7 +79,7 @@ export default function AdminDashboard() {
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
                   }`}
               >
-                Car Rental
+                Noleggio
               </button>
               <button
                 onClick={() => setActiveTab('carwash')}
@@ -206,7 +206,7 @@ export default function AdminDashboard() {
                     className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
-                    Car Rental
+                    Noleggio
                   </button>
                   <button
                     onClick={() => setActiveTab('calendar')}
@@ -365,7 +365,7 @@ export default function AdminDashboard() {
         {/* Mobile Tab Indicator */}
         <div className="mb-4 lg:hidden">
           <h2 className="text-xl font-bold text-white">
-            {activeTab === 'reservations' && 'Car Rental'}
+            {activeTab === 'reservations' && 'Noleggio'}
             {activeTab === 'carwash' && 'Prenotazioni Lavaggio'}
             {activeTab === 'mechanical' && 'Prenotazioni Meccanica'}
             {activeTab === 'unpaid' && 'Da Saldare'}

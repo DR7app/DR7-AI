@@ -157,9 +157,69 @@ export const handler: Handler = async (event) => {
         // Vehicle Data Prep
         const vehicleName = vehicleData?.display_name || booking.vehicle_name || ''
         const vehiclePlate = vehicleData?.plate || booking.vehicle_plate || ''
-        // Future proofing: check metadata for potential future fields
-        const vehicleColor = vehicleData?.metadata?.color || booking.vehicle_color || ''
-        const vehicleFuel = vehicleData?.metadata?.fuel || booking.vehicle_fuel || ''
+
+        // Smart parse vehicle details
+        let parsedColor = vehicleData?.metadata?.color || booking.vehicle_color || ''
+        let parsedFuel = vehicleData?.metadata?.fuel || booking.vehicle_fuel || ''
+        let parsedSeats = vehicleData?.metadata?.seats || booking.booking_details?.vehicle?.seats || ''
+        let parsedBrand = vehicleData?.make || ''
+        let parsedModel = vehicleData?.model || ''
+
+        // 1. Extract Color if missing
+        if (!parsedColor) {
+            const colors = ['White', 'Black', 'Blue', 'Red', 'Silver', 'Grey', 'Gray', 'Orange', 'Green', 'Yellow', 'Bianca', 'Nera', 'Blu', 'Rossa', 'Grigia', 'Arancione', 'Verde', 'Gialla', 'Anthracite', 'Beige', 'Gold', 'Oro'];
+            for (const color of colors) {
+                if (vehicleName.toLowerCase().includes(color.toLowerCase())) {
+                    parsedColor = color;
+                    break;
+                }
+            }
+        }
+
+        // 2. Extract Brand & Model if missing
+        let nameForModel = vehicleName;
+        // Remove color from name for cleaner model extraction
+        if (parsedColor) {
+            const regex = new RegExp(`\\b${parsedColor}\\b`, 'i');
+            nameForModel = nameForModel.replace(regex, '').trim().replace(/\s+/g, ' ');
+        }
+
+        if (!parsedBrand) {
+            parsedBrand = vehicleName.split(' ')[0]; // Assume first word is brand
+        }
+        if (!parsedModel) {
+            const brandRegex = new RegExp(`^${parsedBrand}`, 'i');
+            parsedModel = nameForModel.replace(brandRegex, '').trim().replace(/^[-–]\s*/, '');
+        }
+
+        // 3. Default Fuel if missing
+        if (!parsedFuel) {
+            const lowerName = vehicleName.toLowerCase();
+            if (lowerName.includes('ducato') || lowerName.includes('vito') || lowerName.includes('scudo') || lowerName.includes('talento') || lowerName.includes('trafic') || lowerName.includes('transit') || lowerName.includes('diesel')) {
+                parsedFuel = 'Diesel';
+            } else if (lowerName.includes('hybrid') || lowerName.includes('ibrid')) {
+                parsedFuel = 'Ibrida';
+            } else if (lowerName.includes('electric') || lowerName.includes('elettric')) {
+                parsedFuel = 'Elettrica';
+            } else {
+                parsedFuel = 'Benzina';
+            }
+        }
+
+        // 4. Default Seats if missing
+        if (!parsedSeats) {
+            const lowerName = vehicleName.toLowerCase();
+            if (lowerName.includes('panda') || lowerName.includes('500') || lowerName.includes('smart') || lowerName.includes('twizy') || lowerName.includes('mx-5') || lowerName.includes('124')) {
+                parsedSeats = '4'; // Small cars / roadsters (MX-5 is 2 actually, but let's stick to simple logic or refine)
+                if (lowerName.includes('mx-5') || lowerName.includes('124')) parsedSeats = '2';
+            } else if (lowerName.includes('ducato') || lowerName.includes('vito') || lowerName.includes('van') || lowerName.includes('scudo')) {
+                parsedSeats = '3';
+                if (lowerName.includes('9 posti') || lowerName.includes('passenger') || lowerName.includes('combi')) parsedSeats = '9';
+            } else {
+                parsedSeats = '5'; // Standard
+            }
+        }
+
 
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
@@ -373,7 +433,7 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
         // Standardized Data Field Map
         // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
         // The loop below will try to set each key; if the field doesn't exist in the PDF, it will just skip it.
-        const vehicleModel = vehicleName.replace(vehicleData?.make || '', '').trim() // Rough attempt to extract model if make is known
+        // vehicleModel is now calculated earlier as parsedModel
 
         const dataMap = {
             // Contract Info
@@ -429,18 +489,18 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'Scadenza': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
 
             // Vehicle Fields
-            'VehicleBrand': vehicleName,
-            'Marca': vehicleName,
-            'VehicleModel': vehicleModel, // Name usually includes model
-            'Modello': vehicleModel,
+            'VehicleBrand': parsedBrand,
+            'Marca': parsedBrand,
+            'VehicleModel': parsedModel,
+            'Modello': parsedModel,
             'VehiclePlate': vehiclePlate,
             'Targa': vehiclePlate,
-            'VehicleColor': vehicleColor,
-            'Colore': vehicleColor,
-            'VehicleFuel': vehicleFuel,
-            'Alimentazione': vehicleFuel,
-            'VehicleSeats': vehicleData?.metadata?.seats || booking.booking_details?.vehicle?.seats || '',
-            'Posti': vehicleData?.metadata?.seats || booking.booking_details?.vehicle?.seats || '',
+            'VehicleColor': parsedColor,
+            'Colore': parsedColor,
+            'VehicleFuel': parsedFuel,
+            'Alimentazione': parsedFuel,
+            'VehicleSeats': parsedSeats,
+            'Posti': parsedSeats,
             'VehicleFuelLevel': '',
             'LivelloCarburante': '',
             'VehicleKMRange': '',

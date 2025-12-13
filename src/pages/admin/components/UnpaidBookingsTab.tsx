@@ -151,13 +151,22 @@ export default function UnpaidBookingsTab() {
         }
       }
 
-      // Delete from database
-      const { error } = await supabase
-        .from('bookings')
-        .delete()
-        .in('id', Array.from(selectedBookings))
+      // Delete from database using serverless function to bypass RLS
+      const deletionPromises = Array.from(selectedBookings).map(bookingId =>
+        fetch('/.netlify/functions/delete-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId })
+        }).then(async res => {
+          if (!res.ok) {
+            const data = await res.json()
+            throw new Error(data.error || 'Failed to delete booking')
+          }
+          return res.json()
+        })
+      )
 
-      if (error) throw error
+      await Promise.all(deletionPromises)
 
       alert(`${selectedBookings.size} prenotazioni eliminate con successo!`)
       setSelectedBookings(new Set())
@@ -201,13 +210,17 @@ export default function UnpaidBookingsTab() {
         }
       }
 
-      // Delete from database
-      const { error } = await supabase
-        .from('bookings')
-        .delete()
-        .eq('id', bookingId)
+      // Delete from database using serverless function
+      const res = await fetch('/.netlify/functions/delete-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId })
+      })
 
-      if (error) throw error
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete booking')
+      }
 
       alert('Prenotazione eliminata con successo!')
       loadUnpaidBookings()

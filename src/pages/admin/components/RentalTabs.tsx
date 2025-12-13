@@ -15,7 +15,7 @@ export default function RentalTabs() {
                         : 'text-gray-400 hover:text-white'
                         }`}
                 >
-                    Car Rental
+                    Noleggio
                 </button>
                 <button
                     onClick={() => setActiveSubTab('calendar')}
