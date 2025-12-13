@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import fetch from 'node-fetch'
+// import fetch from 'node-fetch' // Using native fetch in Node 18+
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -55,7 +55,7 @@ export const handler: Handler = async (event) => {
         if (!pdfResponse.ok) {
             throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)
         }
-        const pdfBuffer = await pdfResponse.buffer()
+        const pdfBlob = await pdfResponse.blob()
 
         // 3. Create Signature Request in Yousign
         console.log('[yousign-init] Creating Signature Request...')
@@ -94,19 +94,26 @@ export const handler: Handler = async (event) => {
         // Actually, let's try to trust that 'form-data' is available or we use a boundary string manual approach if needed?
         // Standard approach: import FormData from 'form-data'
 
-        const FormData = require('form-data')
-        const form = new FormData()
-        form.append('file', pdfBuffer, { filename: 'contract.pdf', contentType: 'application/pdf' })
-        form.append('nature', 'signable_document')
-        form.append('parse_anchors', 'true') // If we use anchors later
+        // Use native FormData if available (Node 18+) or import properly if strictly needed.
+        // For multipart/form-data upload with files, using native FormData in Node 18 is possible.
+        // However, 'node-fetch' or native fetch might need specific handling for file uploads from buffers.
+        // Let's use the 'form-data' package but imported correctly for ESM if we added it, OR try native.
+        // Since we didn't add 'form-data' package, let's try to rely on native FormData which accepts Blobs.
+        // But we have a Buffer. We need to convert Buffer to Blob.
+        // actually global Blob is available in Node 18.
+
+        const formData = new FormData()
+        formData.append('file', pdfBlob, 'contract.pdf')
+        formData.append('nature', 'signable_document')
+        formData.append('parse_anchors', 'true')
 
         const uploadRes = await fetch(`${YOUSIGN_API_BASE_URL}/signature_requests/${signatureRequestId}/documents`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${YOUSIGN_API_KEY}`,
-                ...form.getHeaders()
+                // Native fetch with FormData automatically sets the boundary
             },
-            body: form
+            body: formData
         })
 
         if (!uploadRes.ok) {

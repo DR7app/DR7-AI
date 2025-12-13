@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import fetch from 'node-fetch'
+// import fetch from 'node-fetch' // Using native fetch in Node 18+
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -96,7 +96,8 @@ export const handler: Handler = async (event) => {
                         })
 
                         if (downloadRes.ok) {
-                            const pdfBuffer = await downloadRes.buffer()
+                            const pdfArrayBuffer = await downloadRes.arrayBuffer()
+                            const pdfBuffer = Buffer.from(pdfArrayBuffer)
 
                             // Upload to Supabase
                             const fileName = `signed/${contract.contract_number}_signed_${Date.now()}.pdf`
