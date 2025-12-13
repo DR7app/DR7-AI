@@ -163,6 +163,11 @@ interface Booking {
   appointment_time?: string
   contract_url?: string
   km_overage_fee?: number
+  contracts?: {
+    yousign_status: string | null
+    signed_pdf_url: string | null
+    yousign_signature_request_id: string | null
+  } | any
 }
 
 // Helper function to calculate car wash end time based on actual service durations
@@ -404,7 +409,7 @@ export default function ReservationsTab() {
       // We will filter client-side to be 100% sure we get what we want
       const { data: allBookings, error: bookingsError } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, contracts(yousign_status, signed_pdf_url, yousign_signature_request_id)')
         .order('created_at', { ascending: false })
 
       if (bookingsError) {
@@ -637,6 +642,28 @@ export default function ReservationsTab() {
       alert('Errore nella generazione del contratto: ' + error.message + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
     } finally {
       setGeneratingContract(false)
+    }
+  }
+
+  async function handleSendToYousign(bookingId: string) {
+    if (!confirm('Vuoi inviare il contratto a Yousign per la firma digitale?')) return
+
+    try {
+      const res = await fetch('/.netlify/functions/yousign-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert('Richiesta di firma inviata con successo! 📩')
+        loadData()
+      } else {
+        throw new Error(data.error || 'Errore sconosciuto')
+      }
+    } catch (error: any) {
+      console.error('Yousign error:', error)
+      alert('Errore Yousign: ' + error.message)
     }
   }
 
@@ -1734,6 +1761,41 @@ export default function ReservationsTab() {
                         >
                           <span>✉️</span> Email
                         </a>
+
+                        {/* Yousign Button (Mobile) */}
+                        {(() => {
+                          const contract = Array.isArray(booking.contracts) ? booking.contracts[0] : booking.contracts
+                          const status = contract?.yousign_status
+                          const signedUrl = contract?.signed_pdf_url
+
+                          if (status === 'signed' && signedUrl) {
+                            return (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); window.open(signedUrl, '_blank') }}
+                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                                title="Scarica Contratto Firmato"
+                              >
+                                <span>🖊️</span> Firmato
+                              </button>
+                            )
+                          } else if (status === 'ongoing') {
+                            return (
+                              <span className="px-3 py-1 bg-yellow-600 text-white text-sm rounded flex items-center gap-1 opacity-70 cursor-not-allowed">
+                                <span>⏳</span> In Firma
+                              </span>
+                            )
+                          } else {
+                            return (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleSendToYousign(booking.id) }}
+                                className="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                                title="Invia a Yousign"
+                              >
+                                <span>✍️</span> Yousign
+                              </button>
+                            )
+                          }
+                        })()}
                       </div>
                     ) : (
                       <button
@@ -1864,6 +1926,41 @@ export default function ReservationsTab() {
                               </button>
                             </>
                           )}
+
+                          {/* Yousign Button (Desktop) */}
+                          {booking.contract_url && booking.status !== 'cancelled' && (() => {
+                            const contract = Array.isArray(booking.contracts) ? booking.contracts[0] : booking.contracts
+                            const status = contract?.yousign_status
+                            const signedUrl = contract?.signed_pdf_url
+
+                            if (status === 'signed' && signedUrl) {
+                              return (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); window.open(signedUrl, '_blank') }}
+                                  className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                                  title="Scarica Firmato"
+                                >
+                                  🖊️ Firmato
+                                </button>
+                              )
+                            } else if (status === 'ongoing') {
+                              return (
+                                <span className="px-3 py-1 bg-yellow-600 text-white text-xs rounded opacity-70 cursor-not-allowed whitespace-nowrap">
+                                  ⏳ In Firma
+                                </span>
+                              )
+                            } else {
+                              return (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleSendToYousign(booking.id) }}
+                                  className="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                                  title="Invia a Yousign"
+                                >
+                                  ✍️ Yousign
+                                </button>
+                              )
+                            }
+                          })()}
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                             className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors whitespace-nowrap"

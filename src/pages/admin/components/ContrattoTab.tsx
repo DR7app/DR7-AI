@@ -22,6 +22,10 @@ interface Contract {
   notes?: string
   created_at: string
   pdf_url?: string
+  booking_id: string
+  yousign_status?: string
+  signed_pdf_url?: string
+  yousign_signature_request_id?: string
 }
 
 export default function ContrattoTab() {
@@ -29,6 +33,7 @@ export default function ContrattoTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const [formData, setFormData] = useState({
     contract_number: '',
@@ -174,6 +179,34 @@ export default function ContrattoTab() {
     } catch (error) {
       console.error('Failed to delete contract:', error)
       alert('Impossibile eliminare il contratto')
+    }
+  }
+
+
+  async function handleSendToYousign(contract: Contract) {
+    if (!contract.booking_id) {
+      alert('Impossibile inviare: ID prenotazione mancante.')
+      return
+    }
+
+    if (!confirm('Vuoi inviare il contratto a Yousign per la firma digitale?')) return
+
+    try {
+      const res = await fetch('/.netlify/functions/yousign-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: contract.booking_id })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert('Richiesta di firma inviata con successo! 📩')
+        loadContracts()
+      } else {
+        throw new Error(data.error || 'Errore sconosciuto')
+      }
+    } catch (error: any) {
+      console.error('Yousign error:', error)
+      alert('Errore Yousign: ' + error.message)
     }
   }
 
@@ -423,6 +456,17 @@ export default function ContrattoTab() {
         </button>
       </div>
 
+      {/* Search Bar */}
+      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <input
+          type="text"
+          placeholder="Cerca cliente..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+        />
+      </div>
+
       {/* Contracts List */}
       {contracts.length === 0 ? (
         <div className="bg-gray-900 rounded-lg p-12 text-center">
@@ -436,7 +480,15 @@ export default function ContrattoTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {contracts.map((contract) => (
+          {contracts.filter(contract => {
+            if (!searchQuery) return true
+            const query = searchQuery.toLowerCase()
+            return (
+              contract.customer_name.toLowerCase().includes(query) ||
+              contract.contract_number.toLowerCase().includes(query) ||
+              contract.customer_email.toLowerCase().includes(query)
+            )
+          }).map((contract) => (
             <div key={contract.id} className="bg-gray-900 rounded-lg p-4 border border-gray-800">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -489,6 +541,25 @@ export default function ContrattoTab() {
                         <span>✉️</span> Email
                       </a>
                     </div>
+                  )}
+                  {contract.yousign_status === 'signed' && contract.signed_pdf_url ? (
+                    <button
+                      onClick={() => window.open(contract.signed_pdf_url, '_blank')}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      <span>🖊️</span> Contratto Firmato
+                    </button>
+                  ) : contract.yousign_status === 'ongoing' ? (
+                    <div className="w-full bg-yellow-600 text-white px-3 py-1 rounded text-sm text-center opacity-70 cursor-not-allowed">
+                      <span>⏳</span> In Attesa di Firma
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleSendToYousign(contract)}
+                      className="w-full bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      <span>✍️</span> Invia a Yousign
+                    </button>
                   )}
                   <div className="flex gap-2 w-full">
                     <button
