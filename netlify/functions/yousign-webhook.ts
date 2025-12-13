@@ -14,142 +14,149 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        return { statusCode: 200, body: 'Ignored (Invalid Payload)' }
-    }
+        const payload = JSON.parse(event.body || '{}')
+        const eventName = payload.eventName
+        const data = payload.data
 
-            console.log(`[yousign-webhook] Received event: ${eventName}`)
+        // If structure is not what we expect, just ignore it with 200 to satisfy Yousign
+        if (!eventName || !data) {
+            console.log('[yousign-webhook] Invalid Payload structure, ignoring.')
+            return { statusCode: 200, body: 'Ignored (Invalid Payload)' }
+        }
 
-    // Handle ignored events explicitly to avoid logs/noise
-    if (['signer.notified', 'signature_request.activated', 'signer.viewed', 'signer.consented'].includes(eventName)) {
-        console.log(`[yousign-webhook] Event ${eventName} is valid but handled as no-op.`)
-        return { statusCode: 200, body: 'Handled (No-op)' }
-    }
+        console.log(`[yousign-webhook] Received event: ${eventName}`)
 
-    let status = 'draft'
-    const signatureRequestId = data.id || data.signature_request_id
+        // Handle ignored events explicitly to avoid logs/noise
+        if (['signer.notified', 'signature_request.activated', 'signer.viewed', 'signer.consented'].includes(eventName)) {
+            console.log(`[yousign-webhook] Event ${eventName} is valid but handled as no-op.`)
+            return { statusCode: 200, body: 'Handled (No-op)' }
+        }
 
-    if (!signatureRequestId) {
-        console.log('[yousign-webhook] No Signature Request ID found, ignoring.')
-        return { statusCode: 200, body: 'Ignored (No ID)' }
-    }
+        let status = 'draft'
+        const signatureRequestId = data.id || data.signature_request_id
 
-    console.log(`[yousign-webhook] Signature Request ID: ${signatureRequestId}`)
+        if (!signatureRequestId) {
+            console.log('[yousign-webhook] No Signature Request ID found, ignoring.')
+            return { statusCode: 200, body: 'Ignored (No ID)' }
+        }
 
-    if (eventName === 'signature_request.ongoing') {
-        status = 'ongoing'
-    } else if (eventName === 'signature_request.done') {
-        status = 'signed'
-    } else if (eventName === 'signature_request.declined') {
-        status = 'declined'
-    } else {
-        console.log(`[yousign-webhook] Ignoring event ${eventName}`)
-        return { statusCode: 200, body: 'Event Ignored' }
-    }
+        console.log(`[yousign-webhook] Signature Request ID: ${signatureRequestId}`)
 
-    // 1. Update Status in DB
-    // We use the signatureRequestId to identify the contract
-    // Note: data.id comes from signature_request events.
+        if (eventName === 'signature_request.ongoing') {
+            status = 'ongoing'
+        } else if (eventName === 'signature_request.done') {
+            status = 'signed'
+        } else if (eventName === 'signature_request.declined') {
+            status = 'declined'
+        } else {
+            console.log(`[yousign-webhook] Ignoring event ${eventName}`)
+            return { statusCode: 200, body: 'Event Ignored' }
+        }
 
-    let contractId: string | null = null
+        // 1. Update Status in DB
+        // We use the signatureRequestId to identify the contract
+        // Note: data.id comes from signature_request events.
 
-    // Find contract
-    const { data: contract, error: findError } = await supabase
-        .from('contracts')
-        .select('id, contract_number, yousign_status')
-        .eq('yousign_signature_request_id', signatureRequestId)
-        .single()
+        let contractId: string | null = null
 
-    if (findError || !contract) {
-        console.error('[yousign-webhook] Contract not found for request ID:', signatureRequestId)
-        return { statusCode: 404, body: 'Contract not found' }
-    }
+        // Find contract
+        const { data: contract, error: findError } = await supabase
+            .from('contracts')
+            .select('id, contract_number, yousign_status')
+            .eq('yousign_signature_request_id', signatureRequestId)
+            .single()
 
-    contractId = contract.id
-    console.log(`[yousign-webhook] Updating contract ${contract.contract_number} to status: ${status}`)
+        if (findError || !contract) {
+            console.error('[yousign-webhook] Contract not found for request ID:', signatureRequestId)
+            return { statusCode: 404, body: 'Contract not found' }
+        }
 
-    const updateData: any = { yousign_status: status }
+        contractId = contract.id
+        console.log(`[yousign-webhook] Updating contract ${contract.contract_number} to status: ${status}`)
 
-    // 2. If Signed, Download PDF
-    if (status === 'signed') {
-        try {
-            // Fetch the signature request details to get the documents
-            // or use the list of documents provided in the webhook payload if available.
-            // It's safer to fetch fresh data.
+        const updateData: any = { yousign_status: status }
 
-            // Ensure Base URL is correct
-            let baseUrl = process.env.YOUSIGN_API_BASE_URL || 'https://api-sandbox.yousign.app/v3'
-            baseUrl = baseUrl.replace(/\/$/, '')
-            if (!baseUrl.endsWith('/v3')) {
-                baseUrl += '/v3'
-            }
+        // 2. If Signed, Download PDF
+        if (status === 'signed') {
+            try {
+                // Fetch the signature request details to get the documents
+                // or use the list of documents provided in the webhook payload if available.
+                // It's safer to fetch fresh data.
 
-            const detailsRes = await fetch(`${baseUrl}/signature_requests/${signatureRequestId}/documents`, {
-                headers: { 'Authorization': `Bearer ${YOUSIGN_API_KEY}` }
-            })
+                // Ensure Base URL is correct
+                let baseUrl = process.env.YOUSIGN_API_BASE_URL || 'https://api-sandbox.yousign.app/v3'
+                baseUrl = baseUrl.replace(/\/$/, '')
+                if (!baseUrl.endsWith('/v3')) {
+                    baseUrl += '/v3'
+                }
 
-            if (detailsRes.ok) {
-                const documents = await detailsRes.json()
-                // Assume the first signable document is the contract
-                const signableDoc = documents.find((d: any) => d.nature === 'signable_document')
+                const detailsRes = await fetch(`${baseUrl}/signature_requests/${signatureRequestId}/documents`, {
+                    headers: { 'Authorization': `Bearer ${YOUSIGN_API_KEY}` }
+                })
 
-                if (signableDoc) {
-                    const documentId = signableDoc.id
-                    console.log(`[yousign-webhook] Downloading Signed PDF (Doc ID: ${documentId})...`)
+                if (detailsRes.ok) {
+                    const documents = await detailsRes.json()
+                    // Assume the first signable document is the contract
+                    const signableDoc = documents.find((d: any) => d.nature === 'signable_document')
 
-                    // Download PDF
-                    const downloadRes = await fetch(`${baseUrl}/documents/${documentId}/download`, {
-                        headers: { 'Authorization': `Bearer ${YOUSIGN_API_KEY}` }
-                    })
+                    if (signableDoc) {
+                        const documentId = signableDoc.id
+                        console.log(`[yousign-webhook] Downloading Signed PDF (Doc ID: ${documentId})...`)
 
-                    if (downloadRes.ok) {
-                        const pdfArrayBuffer = await downloadRes.arrayBuffer()
-                        const pdfBuffer = Buffer.from(pdfArrayBuffer)
+                        // Download PDF
+                        const downloadRes = await fetch(`${baseUrl}/documents/${documentId}/download`, {
+                            headers: { 'Authorization': `Bearer ${YOUSIGN_API_KEY}` }
+                        })
 
-                        // Upload to Supabase
-                        const fileName = `signed/${contract.contract_number}_signed_${Date.now()}.pdf`
-                        console.log(`[yousign-webhook] Uploading to Supabase: ${fileName}`)
+                        if (downloadRes.ok) {
+                            const pdfArrayBuffer = await downloadRes.arrayBuffer()
+                            const pdfBuffer = Buffer.from(pdfArrayBuffer)
 
-                        const { error: uploadError } = await supabase.storage
-                            .from('contracts')
-                            .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+                            // Upload to Supabase
+                            const fileName = `signed/${contract.contract_number}_signed_${Date.now()}.pdf`
+                            console.log(`[yousign-webhook] Uploading to Supabase: ${fileName}`)
 
-                        if (!uploadError) {
-                            // Get Public URL
-                            const { data: { publicUrl } } = supabase.storage
+                            const { error: uploadError } = await supabase.storage
                                 .from('contracts')
-                                .getPublicUrl(fileName)
+                                .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
 
-                            updateData.signed_pdf_url = publicUrl
-                            console.log(`[yousign-webhook] Signed PDF saved: ${publicUrl}`)
+                            if (!uploadError) {
+                                // Get Public URL
+                                const { data: { publicUrl } } = supabase.storage
+                                    .from('contracts')
+                                    .getPublicUrl(fileName)
+
+                                updateData.signed_pdf_url = publicUrl
+                                console.log(`[yousign-webhook] Signed PDF saved: ${publicUrl}`)
+                            } else {
+                                console.error('[yousign-webhook] Storage Upload Error:', uploadError)
+                            }
                         } else {
-                            console.error('[yousign-webhook] Storage Upload Error:', uploadError)
+                            console.error('[yousign-webhook] PDF Download Failed:', downloadRes.statusText)
                         }
-                    } else {
-                        console.error('[yousign-webhook] PDF Download Failed:', downloadRes.statusText)
                     }
                 }
+
+            } catch (err) {
+                console.error('[yousign-webhook] Error processing signed PDF:', err)
             }
-
-        } catch (err) {
-            console.error('[yousign-webhook] Error processing signed PDF:', err)
         }
+
+        // Apply Update
+        const { error: updateError } = await supabase
+            .from('contracts')
+            .update(updateData)
+            .eq('id', contractId)
+
+        if (updateError) {
+            console.error('[yousign-webhook] DB Update Failed:', updateError)
+            return { statusCode: 500, body: 'DB Update Failed' }
+        }
+
+        return { statusCode: 200, body: 'OK' }
+
+    } catch (error: any) {
+        console.error('[yousign-webhook] Unexpected Error:', error)
+        return { statusCode: 500, body: error.message }
     }
-
-    // Apply Update
-    const { error: updateError } = await supabase
-        .from('contracts')
-        .update(updateData)
-        .eq('id', contractId)
-
-    if (updateError) {
-        console.error('[yousign-webhook] DB Update Failed:', updateError)
-        return { statusCode: 500, body: 'DB Update Failed' }
-    }
-
-    return { statusCode: 200, body: 'OK' }
-
-} catch (error: any) {
-    console.error('[yousign-webhook] Unexpected Error:', error)
-    return { statusCode: 500, body: error.message }
 }
-    }
