@@ -376,7 +376,7 @@ export default function ReservationsTab() {
       ...prev,
       total_amount: totalAmount.toFixed(2)
     }))
-  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles, customerId, customers])
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles, formData.customer_id, customers])
 
   // Reset insurance option to KASKO_BASE when vehicle changes
   useEffect(() => {
@@ -1203,6 +1203,7 @@ export default function ReservationsTab() {
       <div className="space-y-4">
         {/* Mobile-optimized header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+          {/* Main Title - Italian Translation verified */}
           <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">Noleggio</h2>
           <div className="flex gap-2 sm:gap-3">
             <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
