@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
+// import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import Input from './Input'
