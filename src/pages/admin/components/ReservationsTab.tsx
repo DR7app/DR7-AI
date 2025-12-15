@@ -758,6 +758,17 @@ export default function ReservationsTab() {
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
 
+        // First, delete any related contracts to avoid foreign key constraint
+        const { error: contractDeleteError } = await supabase
+          .from('contracts')
+          .delete()
+          .eq('booking_id', bookingId)
+
+        if (contractDeleteError) {
+          console.warn('Failed to delete related contracts:', contractDeleteError)
+          // Don't fail the whole operation, just log it
+        }
+
         // Try server-side deletion first (bypasses RLS)
         try {
           const response = await fetch('/.netlify/functions/delete-booking', {
