@@ -258,7 +258,8 @@ export default function ReservationsTab() {
     insurance_option: 'KASKO_BASE' as KaskoTier,
     deposit: '0',
     // KM Overage Fee
-    km_overage_fee: '0'
+    km_overage_fee: '0',
+    unlimited_km: false
   })
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
@@ -1323,7 +1324,8 @@ export default function ReservationsTab() {
       second_driver_birth_place: '',
       // Kasko & Deposit
       insurance_option: 'KASKO_BASE',
-      deposit: '0'
+      deposit: '0',
+      unlimited_km: false
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
@@ -1746,7 +1748,20 @@ export default function ReservationsTab() {
                 value={formData.km_overage_fee}
                 onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
                 placeholder="es. 0.50"
+                disabled={formData.unlimited_km}
               />
+              <div className="flex items-center gap-2 p-3 bg-dr7-darker rounded-lg border border-gray-700">
+                <input
+                  type="checkbox"
+                  id="unlimited_km"
+                  checked={formData.unlimited_km}
+                  onChange={(e) => setFormData({ ...formData, unlimited_km: e.target.checked, km_overage_fee: e.target.checked ? '0' : formData.km_overage_fee })}
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="unlimited_km" className="text-sm text-gray-300 cursor-pointer">
+                  ✅ KM Illimitati
+                </label>
+              </div>
               <Input
                 label="Importo Pagato (€)"
                 type="number"
