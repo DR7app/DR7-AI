@@ -384,87 +384,15 @@ export default function CustomersTab() {
         })
       }
 
-      // Check storage for documents
-      const usersWithDocuments = new Set<string>()
-
-      // Helper function to check bucket
-      const checkBucket = async (bucket: string) => {
-        try {
-          const { data, error } = await supabase.storage.from(bucket).list()
-          if (!error && data) {
-            data.forEach(folder => {
-              if (folder.name && folder.name.length > 10) usersWithDocuments.add(folder.name)
-            })
-          }
-        } catch (e) {
-          console.error(`Error listing ${bucket}:`, e)
-        }
-      }
-
-      await Promise.all([
-        checkBucket('driver-licenses'),
-        checkBucket('driver-ids')
-      ])
-
-      // Fetch user data for users with documents who aren't already in customerMap
-      for (const userId of usersWithDocuments) {
-        if (!customerMap.has(userId)) {
-          try {
-            const { data, error } = await supabase.auth.admin.getUserById(userId)
-            if (!error && data?.user) {
-              const metadata = data.user.user_metadata || {}
-              customerMap.set(userId, {
-                id: userId,
-                full_name: metadata.full_name || metadata.fullName || data.user.email?.split('@')[0] || 'Cliente',
-                email: data.user.email || metadata.email || null,
-                phone: metadata.phone || null,
-                driver_license_number: null,
-                notes: null,
-                created_at: data.user.created_at || new Date().toISOString(),
-                updated_at: data.user.updated_at || new Date().toISOString(),
-                verification: metadata.verification
-              })
-            }
-          } catch (e) {
-            console.error('Error fetching user with documents:', userId, e)
-          }
-        }
-      }
-
-      console.log('Users with uploaded documents:', usersWithDocuments.size)
+      // Check storage for documents (optimized to just check existence if possible, or skip if too slow)
+      // For now, we'll skip the heavy storage listing and per-user fetching
+      // The verification status should be in customers_extended or handled via specific queries when viewing a customer
 
       // Initial cleanup of loading state
       const customersArray = Array.from(customerMap.values())
 
-      // Store all raw customers first so we show something immediately
+      // Store all customers
       setAllCustomers(customersArray)
-
-      // Then enrich with verification data in background (optimization)
-      // This prevents UI blocking while fetching user metadata
-      setTimeout(async () => {
-        const enrichedCustomers = await Promise.all(
-          customersArray.map(async (customer) => {
-            if (customer.id && customer.id.length > 10) { // Valid UUID
-              try {
-                const { data, error } = await supabase.auth.admin.getUserById(customer.id)
-                if (!error && data?.user) {
-                  const metadata = data.user.user_metadata || {}
-                  return {
-                    ...customer,
-                    // Use phone from user_metadata if customer doesn't have one
-                    phone: customer.phone || metadata.phone || null,
-                    verification: metadata.verification
-                  }
-                }
-              } catch (e) {
-                // Silent catch
-              }
-            }
-            return customer
-          })
-        )
-        setAllCustomers(enrichedCustomers)
-      }, 0)
 
     } catch (error) {
       console.error('[CustomersTab] ❌ Failed to load customers:', error)
