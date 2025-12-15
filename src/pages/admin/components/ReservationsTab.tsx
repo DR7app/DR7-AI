@@ -307,7 +307,7 @@ export default function ReservationsTab() {
   }
 
   const LOCATIONS = [
-    { value: 'dr7_office', label: 'Ufficio DR7 Cagliari' },
+    { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
     { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)' }
   ]
 
@@ -499,6 +499,49 @@ export default function ReservationsTab() {
       }
 
       // Also check customers table if it exists
+      // Also fetch from customers_extended (the main source of truth)
+      const { data: customersExtendedData, error: customersExtendedError } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (customersExtendedError) {
+        console.error('Failed to load customers_extended:', customersExtendedError)
+      } else if (customersExtendedData) {
+        customersExtendedData.forEach((c: any) => {
+          // Map to local Customer interface
+          let fullName = 'N/A'
+          if (c.tipo_cliente === 'azienda') {
+            fullName = c.denominazione || 'N/A'
+          } else if (c.tipo_cliente === 'persona_fisica') {
+            fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
+          } else if (c.tipo_cliente === 'pubblica_amministrazione') {
+            fullName = c.ente_ufficio || 'N/A'
+          }
+
+          const mappedCustomer: Customer = {
+            id: c.id,
+            full_name: fullName,
+            email: c.email || null,
+            phone: c.telefono || null,
+            driver_license_number: null,
+            notes: null,
+            created_at: c.created_at,
+            updated_at: c.created_at
+          }
+
+          // Use ID, email, or phone as key to merge with existing inferred customers
+          const key = c.email || c.telefono || c.id
+          if (key && !customerMap.has(key)) {
+            customerMap.set(key, mappedCustomer)
+          } else if (key && customerMap.has(key)) {
+            // Optional: Upgrade existing inferred customer with real data if needed
+            // But let's keep it simple for now and just fill gaps
+          }
+        })
+      }
+
+      // Also check legacy customers table if it exists (for backward compatibility)
       const { data: customersTableData, error: customersTableError } = await supabase
         .from('customers')
         .select('*')
