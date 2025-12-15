@@ -758,18 +758,38 @@ export default function ReservationsTab() {
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
 
-        // Delete booking via server-side function (bypasses RLS)
-        const response = await fetch('/.netlify/functions/delete-booking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId })
-        })
+        // Try server-side deletion first (bypasses RLS)
+        try {
+          const response = await fetch('/.netlify/functions/delete-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId })
+          })
 
-        const data = await response.json()
+          const data = await response.json()
 
-        if (!response.ok) {
-          console.error('Failed to delete booking:', data.error)
-          throw new Error(data.error || 'Failed to delete booking')
+          if (!response.ok) {
+            console.warn('Server-side deletion failed, attempting client-side fallback...', data.error)
+            throw new Error(data.error || 'Failed to delete booking')
+          }
+        } catch (serverError) {
+          // Fallback to client-side deletion (requires RLS fix)
+          console.log('Attempting client-side deletion fallback...')
+          const { error: clientError } = await supabase
+            .from('bookings')
+            .delete()
+            .eq('id', bookingId)
+
+          if (clientError) {
+            console.error('Client-side deletion also failed:', clientError)
+            // Throw the original server error if client error is about permissions, 
+            // otherwise throw client error
+            throw new Error(
+              clientError.code === '42501'
+                ? 'Permission denied. Please run the fix_bookings_rls.sql script in Supabase.'
+                : clientError.message
+            )
+          }
         }
       } else {
         const reservation = reservations.find(r => r.id === bookingId)
