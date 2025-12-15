@@ -949,7 +949,8 @@ export default function ReservationsTab() {
             const conflictReturn = new Date(conflictingBooking.dropoff_date)
 
             // Check if this is a complete overlap (double booking)
-            const isOverlap = conflictReturn >= pickupDateTime && conflictPickup <= returnDateTime
+            // True overlap: new booking starts BEFORE existing ends AND new booking ends AFTER existing starts
+            const isOverlap = pickupDateTime < conflictReturn && returnDateTime > conflictPickup
 
             // Check if this violates the 1h30 buffer (car returns less than 90 min before new pickup)
             const timeDiff = pickupDateTime.getTime() - conflictReturn.getTime()
