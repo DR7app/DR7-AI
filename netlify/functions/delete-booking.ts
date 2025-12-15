@@ -2,13 +2,16 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('Missing environment variables for delete-booking function')
+}
+
+const supabase = createClient(supabaseUrl!, supabaseServiceKey!)
 
 export const handler: Handler = async (event) => {
-    // Only allow POST
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' }
     }
@@ -20,27 +23,30 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Missing bookingId' }) }
         }
 
-        console.log(`[delete-booking] Deleting booking ${bookingId}`)
+        console.log(`[delete-booking] Attempting to delete booking: ${bookingId}`)
 
-        // Delete from database using service role (bypasses RLS)
         const { error } = await supabase
             .from('bookings')
             .delete()
             .eq('id', bookingId)
 
         if (error) {
-            console.error('[delete-booking] Database deletion failed:', error)
-            return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+            console.error('[delete-booking] Supabase error:', error)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: error.message })
+            }
         }
-
-        console.log(`[delete-booking] Successfully deleted booking ${bookingId}`)
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ success: true })
+            body: JSON.stringify({ message: 'Booking deleted successfully' })
         }
     } catch (error: any) {
-        console.error('[delete-booking] Unexpected error:', error)
-        return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+        console.error('[delete-booking] Server error:', error)
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: error.message })
+        }
     }
 }

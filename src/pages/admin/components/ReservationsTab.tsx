@@ -758,15 +758,18 @@ export default function ReservationsTab() {
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
 
-        // Delete booking from bookings table
-        const { error } = await supabase
-          .from('bookings')
-          .delete()
-          .eq('id', bookingId)
+        // Delete booking via server-side function (bypasses RLS)
+        const response = await fetch('/.netlify/functions/delete-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId })
+        })
 
-        if (error) {
-          console.error('Failed to delete booking:', error)
-          throw new Error('Failed to delete booking')
+        const data = await response.json()
+
+        if (!response.ok) {
+          console.error('Failed to delete booking:', data.error)
+          throw new Error(data.error || 'Failed to delete booking')
         }
       } else {
         const reservation = reservations.find(r => r.id === bookingId)
