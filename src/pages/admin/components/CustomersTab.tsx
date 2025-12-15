@@ -263,6 +263,7 @@ export default function CustomersTab() {
       const { data: customersExtendedData, error: customersExtendedError } = await supabase
         .from('customers_extended')
         .select('*')
+        .order('created_at', { ascending: false })
 
       if (customersExtendedError) {
         console.error('[CustomersTab] ❌ ERROR loading customers_extended:', customersExtendedError)
