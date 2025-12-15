@@ -2,7 +2,7 @@
 -- Fix RLS Policies for legacy 'customers' Table
 -- ============================================
 
--- Drop existing policies to start fresh
+-- Drop existing policies
 DROP POLICY IF EXISTS "Enable read access for all users" ON customers;
 DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON customers;
 DROP POLICY IF EXISTS "Enable update for users based on email" ON customers;
@@ -11,6 +11,7 @@ DROP POLICY IF EXISTS "Allow admins to view all" ON customers;
 DROP POLICY IF EXISTS "Allow admins to insert" ON customers;
 DROP POLICY IF EXISTS "Allow admins to update" ON customers;
 DROP POLICY IF EXISTS "Allow admins to delete" ON customers;
+DROP POLICY IF EXISTS "Service role has full access" ON customers;
 
 -- 1. VIEW (SELECT)
 CREATE POLICY "Allow admins to view all"
@@ -18,8 +19,8 @@ CREATE POLICY "Allow admins to view all"
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM user_profiles
-      WHERE user_id = auth.uid() AND role = 'admin'
+      SELECT 1 FROM admins
+      WHERE user_id = auth.uid() AND (role = 'admin' OR role = 'superadmin')
     )
   );
 
@@ -29,8 +30,8 @@ CREATE POLICY "Allow admins to insert"
   TO authenticated
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM user_profiles
-      WHERE user_id = auth.uid() AND role = 'admin'
+      SELECT 1 FROM admins
+      WHERE user_id = auth.uid() AND (role = 'admin' OR role = 'superadmin')
     )
   );
 
@@ -40,14 +41,14 @@ CREATE POLICY "Allow admins to update"
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM user_profiles
-      WHERE user_id = auth.uid() AND role = 'admin'
+      SELECT 1 FROM admins
+      WHERE user_id = auth.uid() AND (role = 'admin' OR role = 'superadmin')
     )
   )
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM user_profiles
-      WHERE user_id = auth.uid() AND role = 'admin'
+      SELECT 1 FROM admins
+      WHERE user_id = auth.uid() AND (role = 'admin' OR role = 'superadmin')
     )
   );
 
@@ -57,12 +58,12 @@ CREATE POLICY "Allow admins to delete"
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM user_profiles
-      WHERE user_id = auth.uid() AND role = 'admin'
+      SELECT 1 FROM admins
+      WHERE user_id = auth.uid() AND (role = 'admin' OR role = 'superadmin')
     )
   );
 
--- Service Role (Backend) Access
+-- Service Role (Backend) Access (Always good to have)
 CREATE POLICY "Service role has full access"
   ON customers
   TO service_role
