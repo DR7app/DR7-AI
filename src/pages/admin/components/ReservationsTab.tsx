@@ -864,8 +864,13 @@ export default function ReservationsTab() {
     setShowForm(true)
   }
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
     try {
       // Check for existing bookings on the same vehicle and dates (only for new bookings, not edits)
       if (!editingId) {
@@ -878,12 +883,21 @@ export default function ReservationsTab() {
         const pickupWithBuffer = new Date(pickupDateTime.getTime() - BUFFER_MINUTES * 60 * 1000)
 
         // Check for overlapping bookings AND bookings that violate the 1h30 buffer
-        const { data: existingBookings, error: checkError } = await supabase
+        let query = supabase
           .from('bookings')
-          .select('id, customer_name, vehicle_name, pickup_date, dropoff_date, status')
-          .eq('vehicle_name', vehicle?.display_name)
+          .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status')
           .neq('status', 'cancelled')
           .or(`and(pickup_date.lte.${returnDateTime.toISOString()},dropoff_date.gte.${pickupWithBuffer.toISOString()})`)
+
+        if (vehicle?.plate || vehicle?.targa) {
+          // If vehicle has a plate, check availability specifically for that plate
+          query = query.eq('vehicle_plate', vehicle.plate || vehicle.targa)
+        } else {
+          // Fallback to name if no plate is available (legacy behavior)
+          query = query.eq('vehicle_name', vehicle?.display_name)
+        }
+
+        const { data: existingBookings, error: checkError } = await query
 
         if (checkError) {
           console.error('Error checking existing bookings:', checkError)
@@ -925,6 +939,7 @@ export default function ReservationsTab() {
               )
 
               if (!confirmed) {
+                setIsSubmitting(false)
                 return // User cancelled
               }
             } else if (isBufferViolation) {
@@ -947,6 +962,7 @@ export default function ReservationsTab() {
               )
 
               if (!confirmed) {
+                setIsSubmitting(false)
                 return // User cancelled
               }
             }
