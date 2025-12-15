@@ -1285,6 +1285,8 @@ export default function ReservationsTab() {
     } catch (error) {
       console.error('Failed to save reservation:', error)
       alert('Failed to save reservation: ' + (error as Error).message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
