@@ -482,24 +482,28 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         resultData = newClient
 
         // Also insert into basic 'customers' table for backward compatibility
-        const basicData = {
-          id: newClient.id, // Use the same ID
-          full_name: customerData.tipo_cliente === 'persona_fisica'
-            ? `${customerData.nome} ${customerData.cognome}`
-            : (customerData.ragione_sociale || customerData.denominazione),
-          email: customerData.email,
-          phone: customerData.telefono,
-          driver_license_number: customerData.metadata?.patente?.numero || null,
-          tipo_cliente: customerData.tipo_cliente,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+        try {
+          const basicData = {
+            id: newClient.id, // Use the same ID
+            full_name: customerData.tipo_cliente === 'persona_fisica'
+              ? `${customerData.nome} ${customerData.cognome}`
+              : (customerData.ragione_sociale || customerData.denominazione),
+            email: customerData.email,
+            phone: customerData.telefono,
+            driver_license_number: customerData.metadata?.patente?.numero || null,
+            tipo_cliente: customerData.tipo_cliente,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+
+          const { error: basicError } = await supabase
+            .from('customers')
+            .insert([basicData])
+
+          if (basicError) console.warn('Could not insert into basic customers table (non-fatal):', basicError)
+        } catch (legacyError) {
+          console.warn('Silent error saving to legacy customers table:', legacyError)
         }
-
-        const { error: basicError } = await supabase
-          .from('customers')
-          .insert([basicData])
-
-        if (basicError) console.warn('Could not insert into basic customers table:', basicError)
 
         alert('Cliente creato con successo!')
       }

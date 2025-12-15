@@ -1461,7 +1461,7 @@ export default function ReservationsTab() {
                   { value: '', label: 'Seleziona veicolo...' },
                   ...vehicles.map(v => ({
                     value: v.id,
-                    label: v.plate ? `${v.display_name} - Targa: ${v.plate}` : v.display_name
+                    label: v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
                   }))
                 ]}
               />
