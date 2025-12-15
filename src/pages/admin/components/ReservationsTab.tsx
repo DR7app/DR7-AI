@@ -323,7 +323,9 @@ export default function ReservationsTab() {
     })
   }, [])
 
-  // Auto-calculate total price based on vehicle, Kasko, and rental duration
+  // DISABLED: Auto-calculation of total amount
+  // Admins will manually enter the total price
+  /*
   useEffect(() => {
     // Only calculate if we have all required fields
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
@@ -382,6 +384,7 @@ export default function ReservationsTab() {
       total_amount: totalAmount.toFixed(2)
     }))
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles, formData.customer_id, customers])
+  */
 
   // Reset insurance option to KASKO_BASE when vehicle changes
   useEffect(() => {
