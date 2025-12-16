@@ -27,7 +27,22 @@ const SERVICE_DURATIONS: Record<string, number> = {
 }
 
 const getServiceDuration = (serviceName: string): number => {
-  return SERVICE_DURATIONS[serviceName] || 60
+  // Try exact match first
+  if (SERVICE_DURATIONS[serviceName]) {
+    return SERVICE_DURATIONS[serviceName]
+  }
+
+  // Try case-insensitive match
+  const lowerServiceName = serviceName.toLowerCase()
+
+  // Match patterns
+  if (lowerServiceName.includes('completo')) return 45
+  if (lowerServiceName.includes('top')) return 90
+  if (lowerServiceName.includes('vip')) return 120
+  if (lowerServiceName.includes('dr7') || lowerServiceName.includes('luxury')) return 150
+
+  // Default to 60 minutes if no match
+  return 60
 }
 
 const formatDuration = (minutes: number): string => {
@@ -276,8 +291,8 @@ export default function CarWashCalendarTab() {
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
                 className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
                   }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -334,8 +349,8 @@ export default function CarWashCalendarTab() {
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="text-white font-bold text-sm">{booking.customer_name}</h4>
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
-                        booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                          'bg-gray-600 text-white'
+                      booking.status === 'pending' ? 'bg-yellow-600 text-black' :
+                        'bg-gray-600 text-white'
                       }`}>
                       {booking.status}
                     </span>
@@ -401,8 +416,8 @@ export default function CarWashCalendarTab() {
                           bookings: slotBookings
                         })}
                         className={`border border-gray-700 p-0.5 min-w-[28px] h-6 transition-all ${isBooked
-                            ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
-                            : 'bg-green-500 hover:bg-green-600'
+                          ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
+                          : 'bg-green-500 hover:bg-green-600'
                           } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
                         title={isBooked ? `${timeSlot} - Occupato` : `${timeSlot} - Libero`}
                       />
@@ -480,8 +495,8 @@ export default function CarWashCalendarTab() {
                     <div className="flex justify-between">
                       <span className="text-gray-400">Stato Pagamento:</span>
                       <span className={`font-medium ${booking.payment_status === 'paid' || booking.payment_status === 'completed'
-                          ? 'text-green-400'
-                          : 'text-red-400'
+                        ? 'text-green-400'
+                        : 'text-red-400'
                         }`}>
                         {booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'Pagato' : 'Non Pagato'}
                       </span>
