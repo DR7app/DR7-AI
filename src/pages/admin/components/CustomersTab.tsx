@@ -143,16 +143,21 @@ export default function CustomersTab() {
     // 2. Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
-      result = result.filter((customer) => (
-        customer.full_name?.toLowerCase().includes(query) ||
-        customer.email?.toLowerCase().includes(query) ||
-        customer.phone?.toLowerCase().includes(query) ||
-        customer.nome?.toLowerCase().includes(query) ||
-        customer.cognome?.toLowerCase().includes(query) ||
-        customer.ragione_sociale?.toLowerCase().includes(query) ||
-        customer.denominazione?.toLowerCase().includes(query) ||
-        customer.telefono?.toLowerCase().includes(query)
-      ))
+      result = result.filter((customer) => {
+        // Build full name from nome + cognome if full_name doesn't exist
+        const fullName = customer.full_name || `${customer.nome || ''} ${customer.cognome || ''}`.trim()
+
+        return (
+          fullName.toLowerCase().includes(query) ||
+          customer.email?.toLowerCase().includes(query) ||
+          customer.phone?.toLowerCase().includes(query) ||
+          customer.nome?.toLowerCase().includes(query) ||
+          customer.cognome?.toLowerCase().includes(query) ||
+          customer.ragione_sociale?.toLowerCase().includes(query) ||
+          customer.denominazione?.toLowerCase().includes(query) ||
+          customer.telefono?.toLowerCase().includes(query)
+        )
+      })
     }
 
     // Update total count
