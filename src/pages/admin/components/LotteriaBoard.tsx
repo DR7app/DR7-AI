@@ -886,8 +886,22 @@ const LotteriaBoard: React.FC = () => {
     console.log('[TicketClick] Clicked ticket:', ticketNumber);
 
     if (soldTickets.has(ticketNumber)) {
-      console.log('[TicketClick] Ticket already sold, ignoring');
-      return; // Can't select sold tickets
+      console.log('[TicketClick] Ticket already sold, showing details');
+      // Show ticket details with cancel option
+      const ticket = soldTickets.get(ticketNumber);
+      if (ticket) {
+        const confirmMessage = `Biglietto #${String(ticketNumber).padStart(4, '0')}\n\n` +
+          `Cliente: ${ticket.full_name}\n` +
+          `Email: ${ticket.email}\n` +
+          `${ticket.customer_phone ? `Telefono: ${ticket.customer_phone}\n` : ''}` +
+          `Data: ${new Date(ticket.purchase_date).toLocaleDateString('it-IT')}\n\n` +
+          `Vuoi cancellare questo biglietto?`;
+
+        if (confirm(confirmMessage)) {
+          handleCancelTicket(ticketNumber, ticket.email, ticket.full_name);
+        }
+      }
+      return;
     }
 
     if (multiSelectMode) {
@@ -1051,11 +1065,10 @@ const LotteriaBoard: React.FC = () => {
             {canViewFinancials && (
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-4 py-2 rounded font-semibold transition-colors ${
-                  hideFinancials
+                className={`px-4 py-2 rounded font-semibold transition-colors ${hideFinancials
                     ? 'bg-green-600 text-white hover:bg-green-700'
                     : 'bg-yellow-600 text-black hover:bg-yellow-700'
-                }`}
+                  }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
               </button>
@@ -1065,11 +1078,10 @@ const LotteriaBoard: React.FC = () => {
                 setMultiSelectMode(!multiSelectMode)
                 setSelectedTickets([])
               }}
-              className={`px-4 py-2 rounded font-semibold transition-colors ${
-                multiSelectMode
+              className={`px-4 py-2 rounded font-semibold transition-colors ${multiSelectMode
                   ? 'bg-orange-600 text-white hover:bg-orange-700'
                   : 'bg-gray-700 text-white hover:bg-gray-600'
-              }`}
+                }`}
             >
               {multiSelectMode ? '✓ Selezione Multipla ON' : 'Selezione Multipla'}
             </button>
@@ -1095,7 +1107,7 @@ const LotteriaBoard: React.FC = () => {
               onClick={fetchSoldTickets}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-grey-700"
             >
-               Aggiorna
+              Aggiorna
             </button>
           </div>
         </div>
@@ -1117,8 +1129,8 @@ const LotteriaBoard: React.FC = () => {
                   ${isSold
                     ? 'bg-red-500 text-white border-red-700 hover:bg-red-600'
                     : isSelected
-                    ? 'bg-blue-600 text-white border-blue-800 scale-105'
-                    : 'bg-green-500 text-white border-green-700 hover:bg-green-600 hover:scale-110'
+                      ? 'bg-blue-600 text-white border-blue-800 scale-105'
+                      : 'bg-green-500 text-white border-green-700 hover:bg-green-600 hover:scale-110'
                   }
                 `}
                 onMouseEnter={() => setHoveredTicket(ticketNumber)}
