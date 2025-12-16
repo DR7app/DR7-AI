@@ -18,6 +18,26 @@ interface CarWashBooking {
   created_at: string
 }
 
+// Service durations in minutes
+const SERVICE_DURATIONS: Record<string, number> = {
+  'Lavaggio Completo': 45,
+  'Lavaggio Top': 90,
+  'Lavaggio VIP': 120,
+  'Lavaggio DR7 Luxury': 150
+}
+
+const getServiceDuration = (serviceName: string): number => {
+  return SERVICE_DURATIONS[serviceName] || 60
+}
+
+const formatDuration = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (hours === 0) return `${mins} minuti`
+  if (mins === 0) return `${hours} ${hours === 1 ? 'ora' : 'ore'}`
+  return `${hours} ${hours === 1 ? 'ora' : 'ore'} e ${mins} minuti`
+}
+
 // Generate time slots for car wash: 9h-13h and 15h-18h, every 15 minutes
 const generateTimeSlots = () => {
   const slots: string[] = []
@@ -112,9 +132,22 @@ export default function CarWashCalendarTab() {
     // Format date as YYYY-MM-DD in local timezone (no UTC conversion)
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
+    // Convert timeSlot to minutes
+    const [slotHours, slotMinutes] = timeSlot.split(':').map(Number)
+    const slotTimeInMinutes = slotHours * 60 + slotMinutes
+
     return bookings.some(booking => {
       const bookingDate = booking.appointment_date?.split('T')[0]
-      return bookingDate === dateString && booking.appointment_time === timeSlot
+      if (bookingDate !== dateString) return false
+
+      // Get booking start time and duration
+      const [bookingHours, bookingMinutes] = booking.appointment_time.split(':').map(Number)
+      const bookingStartMinutes = bookingHours * 60 + bookingMinutes
+      const duration = getServiceDuration(booking.service_name)
+      const bookingEndMinutes = bookingStartMinutes + duration
+
+      // Check if this slot falls within the booking's time range
+      return slotTimeInMinutes >= bookingStartMinutes && slotTimeInMinutes < bookingEndMinutes
     })
   }
 
@@ -125,9 +158,22 @@ export default function CarWashCalendarTab() {
     // Format date as YYYY-MM-DD in local timezone (no UTC conversion)
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
+    // Convert timeSlot to minutes
+    const [slotHours, slotMinutes] = timeSlot.split(':').map(Number)
+    const slotTimeInMinutes = slotHours * 60 + slotMinutes
+
     return bookings.filter(booking => {
       const bookingDate = booking.appointment_date?.split('T')[0]
-      return bookingDate === dateString && booking.appointment_time === timeSlot
+      if (bookingDate !== dateString) return false
+
+      // Get booking start time and duration
+      const [bookingHours, bookingMinutes] = booking.appointment_time.split(':').map(Number)
+      const bookingStartMinutes = bookingHours * 60 + bookingMinutes
+      const duration = getServiceDuration(booking.service_name)
+      const bookingEndMinutes = bookingStartMinutes + duration
+
+      // Return booking if this slot falls within its time range
+      return slotTimeInMinutes >= bookingStartMinutes && slotTimeInMinutes < bookingEndMinutes
     })
   }
 
@@ -162,7 +208,7 @@ export default function CarWashCalendarTab() {
   // Get today's date for highlighting
   const today = new Date()
   const isCurrentMonth = today.getMonth() === currentDate.getMonth() &&
-                         today.getFullYear() === currentDate.getFullYear()
+    today.getFullYear() === currentDate.getFullYear()
   const todayDay = isCurrentMonth ? today.getDate() : null
 
   if (loading) {
@@ -180,7 +226,7 @@ export default function CarWashCalendarTab() {
       <div className="bg-gray-900 rounded-lg p-3 lg:p-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap flex-1">
-            <h2 className="text-lg font-bold text-white">🧼 Calendario Lavaggi</h2>
+            <h2 className="text-lg font-bold text-white">Calendario Lavaggi</h2>
 
             {/* Search Input */}
             <div className="relative">
@@ -206,7 +252,7 @@ export default function CarWashCalendarTab() {
                 {bookings.filter(b => {
                   const bookingDate = new Date(b.appointment_date)
                   return bookingDate.getMonth() === currentDate.getMonth() &&
-                         bookingDate.getFullYear() === currentDate.getFullYear()
+                    bookingDate.getFullYear() === currentDate.getFullYear()
                 }).length} lavaggi
               </span>
             </div>
@@ -219,7 +265,7 @@ export default function CarWashCalendarTab() {
                       .filter(b => {
                         const bookingDate = new Date(b.appointment_date)
                         return bookingDate.getMonth() === currentDate.getMonth() &&
-                               bookingDate.getFullYear() === currentDate.getFullYear()
+                          bookingDate.getFullYear() === currentDate.getFullYear()
                       })
                       .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
                   </FinancialData>
@@ -229,11 +275,10 @@ export default function CarWashCalendarTab() {
             {canViewFinancials && (
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
-                  hideFinancials
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
                     ? 'bg-green-600 text-white hover:bg-green-700'
                     : 'bg-yellow-600 text-black hover:bg-yellow-700'
-                }`}
+                  }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
               </button>
@@ -288,11 +333,10 @@ export default function CarWashCalendarTab() {
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="text-white font-bold text-sm">{booking.customer_name}</h4>
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                      booking.status === 'confirmed' ? 'bg-green-600 text-white' :
-                      booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                      'bg-gray-600 text-white'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
+                        booking.status === 'pending' ? 'bg-yellow-600 text-black' :
+                          'bg-gray-600 text-white'
+                      }`}>
                       {booking.status}
                     </span>
                   </div>
@@ -331,9 +375,8 @@ export default function CarWashCalendarTab() {
                 {daysInMonth.map(day => (
                   <th
                     key={day}
-                    className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[28px] ${
-                      day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
-                    }`}
+                    className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[28px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
+                      }`}
                   >
                     {day}
                   </th>
@@ -357,11 +400,10 @@ export default function CarWashCalendarTab() {
                           time: timeSlot,
                           bookings: slotBookings
                         })}
-                        className={`border border-gray-700 p-0.5 min-w-[28px] h-6 transition-all ${
-                          isBooked
+                        className={`border border-gray-700 p-0.5 min-w-[28px] h-6 transition-all ${isBooked
                             ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
                             : 'bg-green-500 hover:bg-green-600'
-                        } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
+                          } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
                         title={isBooked ? `${timeSlot} - Occupato` : `${timeSlot} - Libero`}
                       />
                     )
@@ -419,6 +461,10 @@ export default function CarWashCalendarTab() {
                       <span className="text-gray-400">Servizio:</span>
                       <span className="text-white font-medium">{booking.service_name}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Durata:</span>
+                      <span className="text-white font-medium">{formatDuration(getServiceDuration(booking.service_name))}</span>
+                    </div>
                     {booking.booking_details?.additionalService && (
                       <div className="flex justify-between">
                         <span className="text-gray-400">Servizio Aggiuntivo:</span>
@@ -433,11 +479,10 @@ export default function CarWashCalendarTab() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Stato Pagamento:</span>
-                      <span className={`font-medium ${
-                        booking.payment_status === 'paid' || booking.payment_status === 'completed'
+                      <span className={`font-medium ${booking.payment_status === 'paid' || booking.payment_status === 'completed'
                           ? 'text-green-400'
                           : 'text-red-400'
-                      }`}>
+                        }`}>
                         {booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'Pagato' : 'Non Pagato'}
                       </span>
                     </div>
