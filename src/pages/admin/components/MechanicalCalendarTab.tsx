@@ -349,92 +349,49 @@ export default function MechanicalCalendarTab() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th className="sticky left-0 z-20 bg-gray-900 text-white font-bold text-xs px-2 py-2 border border-gray-700 min-w-[60px]">
-                  ORA
+                <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[80px]">
+                  Orario
                 </th>
-                {daysInMonth.map(day => {
-                  const isToday = day === todayDay
-                  return (
-                    <th
-                      key={day}
-                      className={`text-xs font-bold px-2 py-2 border border-gray-700 min-w-[50px] ${isToday ? 'bg-dr7-gold text-black' : 'bg-gray-800 text-white'
-                        }`}
-                    >
-                      {day}
-                    </th>
-                  )
-                })}
+                {daysInMonth.map(day => (
+                  <th
+                    key={day}
+                    className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[28px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
+                      }`}
+                  >
+                    {day}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {TIME_SLOTS.map(timeSlot => (
                 <tr key={timeSlot}>
-                  <td className="sticky left-0 z-10 bg-gray-800 text-white font-semibold text-xs px-2 py-2 border border-gray-700 text-center">
+                  <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-white font-semibold text-xs">
                     {timeSlot}
                   </td>
                   {daysInMonth.map(day => {
                     const isBooked = isSlotBooked(day, timeSlot)
                     const slotBookings = getSlotBookings(day, timeSlot)
-                    const isToday = day === todayDay
-
                     return (
                       <td
-                        key={`${day}-${timeSlot}`}
-                        className={`border border-gray-700 p-1 text-center cursor-pointer transition-all hover:opacity-80 ${isBooked
-                          ? 'bg-red-600 hover:bg-red-700'
-                          : isToday
-                            ? 'bg-gray-700 hover:bg-gray-600'
-                            : 'bg-gray-800 hover:bg-gray-700'
-                          }`}
-                        onClick={() => {
-                          if (isBooked) {
-                            const year = currentDate.getFullYear()
-                            const month = currentDate.getMonth()
-                            const checkDate = new Date(year, month, day)
-                            const dateString = checkDate.toISOString().split('T')[0]
-                            setSelectedCell({
-                              date: dateString,
-                              time: timeSlot,
-                              bookings: slotBookings
-                            })
-                          }
-                        }}
-                      >
-                        {isBooked && (
-                          <div className="text-white font-bold text-xs">
-                            {slotBookings.length}
-                          </div>
-                        )}
-                      </td>
+                        key={day}
+                        onClick={() => slotBookings.length > 0 && setSelectedCell({
+                          date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
+                          time: timeSlot,
+                          bookings: slotBookings
+                        })}
+                        className={`border border-gray-700 p-0.5 min-w-[28px] h-6 transition-all ${isBooked
+                          ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
+                          : 'bg-green-500 hover:bg-green-600'
+                          } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
+                        title={isBooked ? `${timeSlot} - Occupato` : `${timeSlot} - Libero`}
+                      />
                     )
                   })}
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="bg-gray-900 rounded-lg p-3 lg:p-4">
-        <h3 className="text-sm font-bold text-white mb-3">Legenda</h3>
-        <div className="flex flex-wrap gap-4 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-gray-800 border border-gray-700 rounded"></div>
-            <span className="text-gray-300">Libero</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-red-600 border border-gray-700 rounded"></div>
-            <span className="text-gray-300">Occupato</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-gray-700 border border-gray-700 rounded"></div>
-            <span className="text-gray-300">Oggi</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-dr7-gold border border-gray-700 rounded"></div>
-            <span className="text-gray-300">Giorno corrente (header)</span>
-          </div>
         </div>
       </div>
 
