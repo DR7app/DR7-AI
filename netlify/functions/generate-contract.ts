@@ -477,6 +477,8 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             // License Details
             'DriverLicense': customer?.numero_patente || driverLicense || '',
             'NumeroPatente': customer?.numero_patente || driverLicense || '',
+            'DriverLicenseType': customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B',
+            'TipoPatente': customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B',
             'DriverLicenseIssuedBy': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
             'PatenteEmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
             'EmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
@@ -510,14 +512,30 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
 
 
             // Rental Specifics
-            'PickupLocation': booking.pickup_location || 'Sede',
-            'SedeRitiro': booking.pickup_location || 'Sede',
-            'DropoffLocation': booking.dropoff_location || 'Sede',
-            'SedeRiconsegna': booking.dropoff_location || 'Sede',
+            'PickupLocation': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            'SedeRitiro': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            'DropoffLocation': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            'SedeRiconsegna': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            'PickupDate': pickupDate.toLocaleDateString('it-IT'),
+            'DataInizio': pickupDate.toLocaleDateString('it-IT'),
+            'PickupTime': pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'OraInizio': pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'DropoffDate': dropoffDate.toLocaleDateString('it-IT'),
+            'DataFine': dropoffDate.toLocaleDateString('it-IT'),
+            'DropoffTime': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'OraFine': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
             'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
             'Giorni': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
             'TotalHours': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
             'Ore': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
+
+            // Insurance and Financial
+            'Insurance': booking.booking_details?.insurance || booking.booking_details?.kasko || 'RCA Base',
+            'Assicurazione': booking.booking_details?.insurance || booking.booking_details?.kasko || 'RCA Base',
+            'Deposit': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
+            'Cauzione': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
+            'TotalKM': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
+            'KMTotaliNoleggio': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
 
             // Second Driver Fields (Placeholder or from booking_details)
             'SecondDriverName': booking.booking_details?.second_driver?.name || '',
