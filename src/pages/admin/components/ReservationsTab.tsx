@@ -694,10 +694,14 @@ export default function ReservationsTab() {
       }
 
       if (data.url) {
-        // Reload data to show the contract link in the UI
-        loadData()
+        // Automatically open the PDF in a new tab for review
+        window.open(data.url, '_blank')
+
+        // Reload data to show the contract link and Yousign button in the UI
+        await loadData()
+
         if (showSuccessAlert) {
-          alert('✅ Contratto generato con successo! 📄')
+          alert('✅ Contratto generato con successo!\n\n📄 Il PDF si è aperto in una nuova scheda per la revisione.\n\n✍️ Dopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
         }
       } else {
         if (showSuccessAlert) {
