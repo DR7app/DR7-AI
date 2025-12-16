@@ -21,6 +21,7 @@ export default function MarketingTab() {
 
     // Selection
     const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
+    const [multiSelectMode, setMultiSelectMode] = useState(false)
 
     // Modal
     const [showGiftVoucherModal, setShowGiftVoucherModal] = useState(false)
@@ -328,10 +329,28 @@ export default function MarketingTab() {
 
                 {/* Bulk Actions */}
                 <div className="lg:col-span-3 flex gap-2 flex-wrap">
-                    <Button variant="secondary" onClick={handleSelectAll}>Seleziona Tutti ({filteredCustomers.length})</Button>
-                    <Button variant="secondary" onClick={handleSelectFirst500}>Seleziona Primi 500</Button>
-                    {selectedCustomerIds.size > 0 && (
-                        <Button variant="danger" onClick={handleDeselectAll}>Deseleziona Tutti</Button>
+                    <button
+                        onClick={() => {
+                            setMultiSelectMode(!multiSelectMode)
+                            if (multiSelectMode) {
+                                setSelectedCustomerIds(new Set())
+                            }
+                        }}
+                        className={`px-4 py-2 rounded font-semibold transition-colors ${multiSelectMode
+                                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                                : 'bg-gray-700 text-white hover:bg-gray-600'
+                            }`}
+                    >
+                        {multiSelectMode ? '✓ Selezione Multipla ON' : 'Selezione Multipla'}
+                    </button>
+                    {multiSelectMode && (
+                        <>
+                            <Button variant="secondary" onClick={handleSelectAll}>Seleziona Tutti ({filteredCustomers.length})</Button>
+                            <Button variant="secondary" onClick={handleSelectFirst500}>Seleziona Primi 500</Button>
+                            {selectedCustomerIds.size > 0 && (
+                                <Button variant="danger" onClick={handleDeselectAll}>Deseleziona Tutti ({selectedCustomerIds.size})</Button>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
