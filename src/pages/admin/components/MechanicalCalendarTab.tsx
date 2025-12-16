@@ -207,7 +207,7 @@ export default function MechanicalCalendarTab() {
       <div className="bg-gray-900 rounded-lg p-3 lg:p-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap flex-1">
-            <h2 className="text-lg font-bold text-white">🔧 Calendario Meccanica</h2>
+            <h2 className="text-lg font-bold text-white">Calendario Meccanica</h2>
 
             {/* Search Input */}
             <div className="relative">
