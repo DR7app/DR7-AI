@@ -547,6 +547,8 @@ const LotteriaBoard: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingClientData, setPendingClientData] = useState<{ email: string; fullName: string; phone: string } | null>(null);
   const isCreatingClient = useRef(false);
+  const [showTicketDetailsModal, setShowTicketDetailsModal] = useState(false);
+  const [selectedTicketForDetails, setSelectedTicketForDetails] = useState<Ticket | null>(null);
 
   const fetchSoldTickets = async () => {
     try {
@@ -886,20 +888,12 @@ const LotteriaBoard: React.FC = () => {
     console.log('[TicketClick] Clicked ticket:', ticketNumber);
 
     if (soldTickets.has(ticketNumber)) {
-      console.log('[TicketClick] Ticket already sold, showing details');
-      // Show ticket details with cancel option
+      console.log('[TicketClick] Ticket already sold, showing details modal');
+      // Show ticket details modal
       const ticket = soldTickets.get(ticketNumber);
       if (ticket) {
-        const confirmMessage = `Biglietto #${String(ticketNumber).padStart(4, '0')}\n\n` +
-          `Cliente: ${ticket.full_name}\n` +
-          `Email: ${ticket.email}\n` +
-          `${ticket.customer_phone ? `Telefono: ${ticket.customer_phone}\n` : ''}` +
-          `Data: ${new Date(ticket.purchase_date).toLocaleDateString('it-IT')}\n\n` +
-          `Vuoi cancellare questo biglietto?`;
-
-        if (confirm(confirmMessage)) {
-          handleCancelTicket(ticketNumber, ticket.email, ticket.full_name);
-        }
+        setSelectedTicketForDetails(ticket);
+        setShowTicketDetailsModal(true);
       }
       return;
     }
@@ -1066,8 +1060,8 @@ const LotteriaBoard: React.FC = () => {
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
                 className={`px-4 py-2 rounded font-semibold transition-colors ${hideFinancials
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
                   }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -1079,8 +1073,8 @@ const LotteriaBoard: React.FC = () => {
                 setSelectedTickets([])
               }}
               className={`px-4 py-2 rounded font-semibold transition-colors ${multiSelectMode
-                  ? 'bg-orange-600 text-white hover:bg-orange-700'
-                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                : 'bg-gray-700 text-white hover:bg-gray-600'
                 }`}
             >
               {multiSelectMode ? '✓ Selezione Multipla ON' : 'Selezione Multipla'}
@@ -1430,6 +1424,85 @@ const LotteriaBoard: React.FC = () => {
                 className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
               >
                 Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ticket Details Modal */}
+      {showTicketDetailsModal && selectedTicketForDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">
+                Biglietto #{String(selectedTicketForDetails.ticket_number).padStart(4, '0')}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowTicketDetailsModal(false);
+                  setSelectedTicketForDetails(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="text-sm text-gray-600">Cliente</div>
+                <div className="font-semibold text-gray-900">{selectedTicketForDetails.full_name}</div>
+              </div>
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="text-sm text-gray-600">Email</div>
+                <div className="font-semibold text-gray-900">{selectedTicketForDetails.email}</div>
+              </div>
+              {selectedTicketForDetails.customer_phone && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Telefono</div>
+                  <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_phone}</div>
+                </div>
+              )}
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="text-sm text-gray-600">Data Acquisto</div>
+                <div className="font-semibold text-gray-900">
+                  {new Date(selectedTicketForDetails.purchase_date).toLocaleString('it-IT')}
+                </div>
+              </div>
+              {(selectedTicketForDetails as any).payment_method && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Metodo Pagamento</div>
+                  <div className="font-semibold text-gray-900">{(selectedTicketForDetails as any).payment_method}</div>
+                </div>
+              )}
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="text-sm text-gray-600">ID Pagamento</div>
+                <div className="font-mono text-xs text-gray-700">{selectedTicketForDetails.payment_intent_id}</div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowTicketDetailsModal(false);
+                  setSelectedTicketForDetails(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 font-semibold"
+              >
+                Chiudi
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm(`Sei sicuro di voler cancellare il biglietto #${String(selectedTicketForDetails.ticket_number).padStart(4, '0')} di ${selectedTicketForDetails.full_name}?`)) {
+                    handleCancelTicket(selectedTicketForDetails.ticket_number, selectedTicketForDetails.email, selectedTicketForDetails.full_name);
+                    setShowTicketDetailsModal(false);
+                    setSelectedTicketForDetails(null);
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold"
+              >
+                🗑️ Cancella Biglietto
               </button>
             </div>
           </div>
