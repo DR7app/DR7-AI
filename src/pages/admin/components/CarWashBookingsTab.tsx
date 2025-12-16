@@ -36,8 +36,8 @@ const CAR_WASH_SERVICES = [
     id: 'full-clean',
     name: 'Lavaggio Completo',
     price: 25,
-    duration: '1 ora',
-    durationMinutes: 60,
+    duration: '45 minuti',
+    durationMinutes: 45,
     allowedTimeRanges: [
       { start: '09:00', end: '12:00' },
       { start: '15:00', end: '18:00' }
@@ -47,6 +47,17 @@ const CAR_WASH_SERVICES = [
     id: 'top-shine',
     name: 'Lavaggio Top',
     price: 49,
+    duration: '1 ora e 30 minuti',
+    durationMinutes: 90,
+    allowedTimeRanges: [
+      { start: '09:00', end: '11:30' },
+      { start: '15:00', end: '17:30' }
+    ]
+  },
+  {
+    id: 'vip',
+    name: 'Lavaggio VIP',
+    price: 75,
     duration: '2 ore',
     durationMinutes: 120,
     allowedTimeRanges: [
@@ -55,25 +66,14 @@ const CAR_WASH_SERVICES = [
     ]
   },
   {
-    id: 'vip',
-    name: 'Lavaggio VIP',
-    price: 75,
-    duration: '3 ore',
-    durationMinutes: 180,
-    allowedTimeRanges: [
-      { start: '09:00', end: '10:00' },
-      { start: '15:00', end: '16:00' }
-    ]
-  },
-  {
     id: 'dr7-luxury',
     name: 'Lavaggio DR7 Luxury',
     price: 99,
-    duration: '4 ore',
-    durationMinutes: 240,
+    duration: '2 ore e 30 minuti',
+    durationMinutes: 150,
     allowedTimeRanges: [
-      { start: '09:00', end: '09:00' },
-      { start: '15:00', end: '15:00' }
+      { start: '09:00', end: '10:30' },
+      { start: '15:00', end: '16:30' }
     ]
   }
 ]
