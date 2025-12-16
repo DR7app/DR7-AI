@@ -473,6 +473,7 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'CittaNascita': customer?.luogo_nascita || '', // Variance
             'CustomerSex': customer?.sesso || customer?.metadata?.sesso || '',
             'Sesso': customer?.sesso || customer?.metadata?.sesso || '',
+            'DriverSex': customer?.sesso || customer?.metadata?.sesso || '',
 
             // License Details
             'DriverLicense': customer?.numero_patente || driverLicense || '',
