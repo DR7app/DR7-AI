@@ -70,7 +70,7 @@ export const handler: Handler = async (event) => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                name: `Contract ${contract.contract_number} - ${contract.customer_name}`,
+                name: `Contract ${contract.contract_number} - ${contract.customer_name}`.trim(),
                 delivery_mode: 'email',
                 timezone: 'Europe/Rome'
             })
@@ -148,9 +148,9 @@ export const handler: Handler = async (event) => {
             },
             body: JSON.stringify({
                 info: {
-                    first_name: contract.customer_name.split(' ')[0] || 'Cliente',
-                    last_name: contract.customer_name.split(' ').slice(1).join(' ') || '.',
-                    email: contract.customer_email,
+                    first_name: (contract.customer_name?.split(' ')[0] || 'Cliente').trim(),
+                    last_name: (contract.customer_name?.split(' ').slice(1).join(' ') || '.').trim(),
+                    email: contract.customer_email?.trim(),
                     phone_number: contract.customer_phone?.startsWith('+') ? contract.customer_phone : `+39${contract.customer_phone}`, // Basic normalization
                     locale: 'it'
                 },
