@@ -343,14 +343,10 @@ export default function MarketingTab() {
                     >
                         {multiSelectMode ? '✓ Selezione Multipla ON' : 'Selezione Multipla'}
                     </button>
-                    {multiSelectMode && (
-                        <>
-                            <Button variant="secondary" onClick={handleSelectAll}>Seleziona Tutti ({filteredCustomers.length})</Button>
-                            <Button variant="secondary" onClick={handleSelectFirst500}>Seleziona Primi 500</Button>
-                            {selectedCustomerIds.size > 0 && (
-                                <Button variant="danger" onClick={handleDeselectAll}>Deseleziona Tutti ({selectedCustomerIds.size})</Button>
-                            )}
-                        </>
+                    <Button variant="secondary" onClick={handleSelectAll}>Seleziona Tutti ({filteredCustomers.length})</Button>
+                    <Button variant="secondary" onClick={handleSelectFirst500}>Seleziona Primi 500</Button>
+                    {selectedCustomerIds.size > 0 && (
+                        <Button variant="danger" onClick={handleDeselectAll}>Deseleziona Tutti ({selectedCustomerIds.size})</Button>
                     )}
                 </div>
             </div>
