@@ -694,14 +694,23 @@ export default function ReservationsTab() {
       }
 
       if (data.url) {
-        // Automatically open the PDF in a new tab for review
-        window.open(data.url, '_blank')
+        // Try to open the PDF in a new tab
+        const pdfWindow = window.open(data.url, '_blank')
 
         // Reload data to show the contract link and Yousign button in the UI
         await loadData()
 
         if (showSuccessAlert) {
-          alert('✅ Contratto generato con successo!\n\n📄 Il PDF si è aperto in una nuova scheda per la revisione.\n\n✍️ Dopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
+          // Check if popup was blocked
+          if (!pdfWindow || pdfWindow.closed || typeof pdfWindow.closed === 'undefined') {
+            // Popup was blocked - show alert with manual link
+            if (confirm('✅ Contratto generato con successo!\n\n⚠️ Il browser ha bloccato l\'apertura automatica del PDF.\n\nClicca OK per aprire il contratto in una nuova scheda.')) {
+              window.location.href = data.url
+            }
+          } else {
+            // Popup opened successfully
+            alert('✅ Contratto generato con successo!\n\n📄 Il PDF si è aperto in una nuova scheda per la revisione.\n\n✍️ Dopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
+          }
         }
       } else {
         if (showSuccessAlert) {
