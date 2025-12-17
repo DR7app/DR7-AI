@@ -464,6 +464,7 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'Provincia': customer?.provincia_residenza || '',
             'CustomerZipCode': customer?.codice_postale || '',
             'CAP': customer?.codice_postale || '',
+            'DriverZipCode': customer?.codice_postale || '',
 
             // Personal Details (New)
             'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
