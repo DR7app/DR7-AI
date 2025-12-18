@@ -541,27 +541,39 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'TotalKM': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
             'KMTotaliNoleggio': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
 
-            // Second Driver Fields (Placeholder or from booking_details)
-            'SecondDriverName': booking.booking_details?.second_driver?.name || '',
-            'SecondoGuidatore': booking.booking_details?.second_driver?.name || '',
-            'SecondDriverBirthDate': booking.booking_details?.second_driver?.birth_date ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT') : '',
-            'SecondDriverStatsCode': booking.booking_details?.second_driver?.tax_code || '',
-            'SecondDriverCity': booking.booking_details?.second_driver?.city || '',
-            'SecondDriverProvince': booking.booking_details?.second_driver?.province || '',
-            'SecondDriverGender': booking.booking_details?.second_driver?.gender || '',
-            'SecondDriverLicenseType': booking.booking_details?.second_driver?.license_type || '',
-            'SecondDriverLicenseNumber': booking.booking_details?.second_driver?.license_number || '',
-            'SecondDriverLicenseIssuedBy': booking.booking_details?.second_driver?.license_issued_by || '',
-            'SecondDriverLicenseIssueDate': booking.booking_details?.second_driver?.license_issue_date ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT') : '',
-            'SecondDriverLicenseExpiryDate': booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : '',
-            'SecondDriverVAT': booking.booking_details?.second_driver?.tax_code || '',
-            'SecondDriverSex': booking.booking_details?.second_driver?.gender || '',
-            'SecondDriverAddress': booking.booking_details?.second_driver?.address || '',
-            'SecondDriverZipCode': booking.booking_details?.second_driver?.zip_code || '',
-            'SecondDriverBirthPlace': booking.booking_details?.second_driver?.birth_city || '',
-            'SecondDriverBirthProvince': booking.booking_details?.second_driver?.birth_province || '',
-            'SecondDriverPhone': booking.booking_details?.second_driver?.phone || '',
-            'SecondDriverEmail': booking.booking_details?.second_driver?.email || '',
+            // Second Driver Fields (Only if second driver exists)
+            'SecondDriverName': (booking.booking_details?.second_driver?.name && booking.booking_details?.second_driver?.surname)
+                ? `${booking.booking_details.second_driver.name} ${booking.booking_details.second_driver.surname}`
+                : '',
+            'SecondoGuidatore': (booking.booking_details?.second_driver?.name && booking.booking_details?.second_driver?.surname)
+                ? `${booking.booking_details.second_driver.name} ${booking.booking_details.second_driver.surname}`
+                : '',
+            'SecondDriverBirthDate': (booking.booking_details?.second_driver?.birth_date && booking.booking_details?.second_driver?.name)
+                ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT')
+                : '',
+            'SecondDriverStatsCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || '') : '',
+            'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || '') : '',
+            'SecondDriverProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || '') : '',
+            'SecondDriverGender': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || '') : '',
+            'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || '') : '',
+            'SecondDriverLicenseNumber': (booking.booking_details?.second_driver?.license_number && booking.booking_details?.second_driver?.name)
+                ? booking.booking_details.second_driver.license_number
+                : '',
+            'SecondDriverLicenseIssuedBy': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_issued_by || '') : '',
+            'SecondDriverLicenseIssueDate': (booking.booking_details?.second_driver?.license_issue_date && booking.booking_details?.second_driver?.name)
+                ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT')
+                : '',
+            'SecondDriverLicenseExpiryDate': (booking.booking_details?.second_driver?.license_expiry_date && booking.booking_details?.second_driver?.name)
+                ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT')
+                : '',
+            'SecondDriverVAT': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || '') : '',
+            'SecondDriverSex': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || '') : '',
+            'SecondDriverAddress': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.address || '') : '',
+            'SecondDriverZipCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.zip_code || '') : '',
+            'SecondDriverBirthPlace': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.birth_city || '') : '',
+            'SecondDriverBirthProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.birth_province || '') : '',
+            'SecondDriverPhone': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || '') : '',
+            'SecondDriverEmail': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || '') : '',
 
             // Company Data (for business clients)
             'CompanyName': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',
