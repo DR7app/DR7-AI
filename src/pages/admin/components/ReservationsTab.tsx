@@ -259,7 +259,8 @@ export default function ReservationsTab() {
     deposit: '0',
     // KM Overage Fee
     km_overage_fee: '0',
-    unlimited_km: false
+    unlimited_km: false,
+    km_limit: '300', // Default KM limit when not unlimited
   })
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
@@ -1160,6 +1161,9 @@ export default function ReservationsTab() {
           // Kasko & Deposit
           insuranceOption: formData.insurance_option,
           deposit: formData.deposit,
+          // KM Limit
+          km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
+          unlimited_km: formData.unlimited_km,
           second_driver: formData.has_second_driver ? {
             name: formData.second_driver_name,
             surname: formData.second_driver_surname,
@@ -1384,7 +1388,8 @@ export default function ReservationsTab() {
       // Kasko & Deposit
       insurance_option: 'KASKO_BASE',
       deposit: '0',
-      unlimited_km: false
+      unlimited_km: false,
+      km_limit: '300'
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
@@ -1807,6 +1812,14 @@ export default function ReservationsTab() {
                 value={formData.km_overage_fee}
                 onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
                 placeholder="es. 0.50"
+                disabled={formData.unlimited_km}
+              />
+              <Input
+                label="Limite KM"
+                type="number"
+                value={formData.km_limit}
+                onChange={(e) => setFormData({ ...formData, km_limit: e.target.value })}
+                placeholder="es. 300"
                 disabled={formData.unlimited_km}
               />
               <div className="flex items-center gap-2 p-3 bg-dr7-darker rounded-lg border border-gray-700">
