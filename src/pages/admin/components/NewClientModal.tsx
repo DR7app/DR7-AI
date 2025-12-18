@@ -436,41 +436,63 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       let resultData;
 
       if (initialData?.id) {
-        // UPDATE Existing
-        console.log('Updating existing customer:', initialData.id)
+        // Validate that the ID is a proper UUID
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        const isValidUUID = uuidRegex.test(initialData.id)
 
-        // 1. Update customers_extended (Upsert is safer as it might not exist there yet)
-        const { data: updatedExtended, error: extendedError } = await supabase
-          .from('customers_extended')
-          .upsert({ ...customerData, id: initialData.id })
-          .select()
-          .single()
+        if (!isValidUUID) {
+          // The ID is not a valid UUID (probably an email or phone)
+          // Treat this as a new customer creation instead of an update
+          console.warn('⚠️ Invalid UUID detected for customer ID:', initialData.id)
+          console.warn('Creating new customer instead of updating')
 
-        if (extendedError) throw extendedError
-        resultData = updatedExtended
+          // Fall through to CREATE logic by setting initialData to null
+          // This will trigger the else block below
+        } else {
+          // UPDATE Existing - ID is a valid UUID
+          console.log('Updating existing customer:', initialData.id)
 
-        // 2. Also update basic 'customers' table to keep sync
-        const basicData = {
-          full_name: customerData.tipo_cliente === 'persona_fisica'
-            ? `${customerData.nome} ${customerData.cognome}`
-            : (customerData.ragione_sociale || customerData.denominazione),
-          email: customerData.email,
-          phone: customerData.telefono,
-          driver_license_number: customerData.metadata?.patente?.numero || null,
-          tipo_cliente: customerData.tipo_cliente,
-          updated_at: new Date().toISOString()
+          // 1. Update customers_extended (Upsert is safer as it might not exist there yet)
+          const { data: updatedExtended, error: extendedError } = await supabase
+            .from('customers_extended')
+            .upsert({ ...customerData, id: initialData.id })
+            .select()
+            .single()
+
+          if (extendedError) throw extendedError
+          resultData = updatedExtended
+
+          // 2. Also update basic 'customers' table to keep sync
+          const basicData = {
+            full_name: customerData.tipo_cliente === 'persona_fisica'
+              ? `${customerData.nome} ${customerData.cognome}`
+              : (customerData.ragione_sociale || customerData.denominazione),
+            email: customerData.email,
+            phone: customerData.telefono,
+            driver_license_number: customerData.metadata?.patente?.numero || null,
+            tipo_cliente: customerData.tipo_cliente,
+            updated_at: new Date().toISOString()
+          }
+
+          const { error: basicError } = await supabase
+            .from('customers')
+            .update(basicData)
+            .eq('id', initialData.id)
+
+          if (basicError) console.warn('Could not update basic customers table:', basicError)
+
+          alert('Cliente aggiornato con successo!')
+
+          if (onClientCreated && resultData) {
+            onClientCreated(resultData.id)
+          }
+          handleClose()
+          return // Exit early to avoid falling through to CREATE
         }
+      }
 
-        const { error: basicError } = await supabase
-          .from('customers')
-          .update(basicData)
-          .eq('id', initialData.id)
-
-        if (basicError) console.warn('Could not update basic customers table:', basicError)
-
-        alert('Cliente aggiornato con successo!')
-
-      } else {
+      // CREATE New Customer (or customer with invalid UUID)
+      if (!initialData?.id || !(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(initialData.id))) {
         // CREATE New
         const { data: newClient, error } = await supabase
           .from('customers_extended')

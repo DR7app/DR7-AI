@@ -481,6 +481,16 @@ export default function ReservationsTab() {
           const key = customerEmail || customerPhone || booking.user_id
 
           if (key) {
+            // Only create customer entry if we have a valid UUID for user_id
+            // Otherwise, skip it - the customer will be loaded from customers_extended table
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            const hasValidUserId = booking.user_id && uuidRegex.test(booking.user_id)
+
+            if (!hasValidUserId) {
+              // Skip customers without valid UUID - they'll come from customers_extended
+              return
+            }
+
             const existing = customerMap.get(key)
             if (existing) {
               if (!existing.phone && customerPhone) existing.phone = customerPhone
@@ -488,7 +498,7 @@ export default function ReservationsTab() {
               if (existing.full_name === 'Cliente' && customerName) existing.full_name = customerName
             } else {
               customerMap.set(key, {
-                id: booking.user_id || key,
+                id: booking.user_id, // Always a valid UUID at this point
                 full_name: customerName,
                 email: customerEmail,
                 phone: customerPhone,
