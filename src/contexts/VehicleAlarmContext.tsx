@@ -43,18 +43,45 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     )
 
     // Enable audio alerts
-    const enableAudio = () => {
-        // Play silent audio to unlock browser audio
-        const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA')
-        silentAudio.play().then(() => {
+    const enableAudio = async () => {
+        // Prevent multiple simultaneous attempts
+        if (alarmState.audioEnabled) {
+            alert('✅ Sound alerts are already enabled!')
+            return
+        }
+
+        try {
+            // Simple approach: just enable it
             localStorage.setItem('audioAlertsEnabled', 'true')
             setAlarmState(prev => ({ ...prev, audioEnabled: true }))
-            // Show success feedback to user
-            alert('✅ Sound alerts enabled! You will now receive audio notifications when vehicles are due for return.')
-        }).catch(err => {
+
+            // Try to unlock audio with AudioContext
+            try {
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume()
+                }
+
+                // Play a very short, quiet beep
+                const oscillator = audioContext.createOscillator()
+                const gainNode = audioContext.createGain()
+                oscillator.connect(gainNode)
+                gainNode.connect(audioContext.destination)
+                gainNode.gain.value = 0.01
+                oscillator.frequency.value = 440
+                oscillator.start(audioContext.currentTime)
+                oscillator.stop(audioContext.currentTime + 0.01)
+            } catch (audioErr) {
+                // Ignore unlock errors
+                console.log('Audio unlock:', audioErr)
+            }
+
+            alert('✅ Sound alerts enabled! You will hear an alarm when vehicles are due for return.')
+            console.log('✅ Audio alerts enabled')
+        } catch (err) {
             console.error('Failed to enable audio:', err)
-            alert('❌ Failed to enable sound alerts. Please try again or check your browser permissions.')
-        })
+            alert('❌ Failed to enable sound alerts. Please try again.')
+        }
     }
 
     // Stop alarm
