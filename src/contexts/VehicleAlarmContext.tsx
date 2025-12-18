@@ -112,19 +112,51 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
     // Play alarm sound
     const playAlarm = (booking: AlarmBooking) => {
-        if (!alarmState.audioEnabled) {
-            console.warn('Audio not enabled, showing visual notification only')
-        } else {
-            if (!audioRef.current) {
-                audioRef.current = new Audio('/alarm.mp3')
-                audioRef.current.loop = true
-            }
+        console.log('🚨 TRIGGERING ALARM for booking:', booking.bookingId)
 
-            audioRef.current.play().catch(err => {
-                console.error('Failed to play alarm:', err)
-            })
+        if (!alarmState.audioEnabled) {
+            console.warn('⚠️ Audio not enabled, showing visual notification only')
+        } else {
+            try {
+                // Create or reuse audio element
+                if (!audioRef.current) {
+                    console.log('Creating new Audio element for alarm')
+                    audioRef.current = new Audio('/alarm.mp3')
+                    audioRef.current.loop = true
+                    audioRef.current.volume = 0.8 // Set volume to 80%
+
+                    // Add event listeners for debugging
+                    audioRef.current.addEventListener('canplay', () => {
+                        console.log('✅ Alarm audio ready to play')
+                    })
+                    audioRef.current.addEventListener('error', (e) => {
+                        console.error('❌ Alarm audio error:', e)
+                    })
+                }
+
+                // Reset and play
+                audioRef.current.currentTime = 0
+                audioRef.current.play()
+                    .then(() => {
+                        console.log('✅ Alarm sound playing!')
+                    })
+                    .catch(err => {
+                        console.error('❌ Failed to play alarm:', err)
+                        // Try to resume AudioContext if suspended
+                        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+                        if (audioContext.state === 'suspended') {
+                            audioContext.resume().then(() => {
+                                console.log('Resumed AudioContext, retrying alarm...')
+                                audioRef.current?.play().catch(e => console.error('Retry failed:', e))
+                            })
+                        }
+                    })
+            } catch (error) {
+                console.error('❌ Error setting up alarm audio:', error)
+            }
         }
 
+        // Always show visual notification
         setAlarmState(prev => ({
             ...prev,
             activeAlarm: booking,
