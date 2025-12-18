@@ -49,8 +49,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         silentAudio.play().then(() => {
             localStorage.setItem('audioAlertsEnabled', 'true')
             setAlarmState(prev => ({ ...prev, audioEnabled: true }))
+            // Show success feedback to user
+            alert('✅ Sound alerts enabled! You will now receive audio notifications when vehicles are due for return.')
         }).catch(err => {
             console.error('Failed to enable audio:', err)
+            alert('❌ Failed to enable sound alerts. Please try again or check your browser permissions.')
         })
     }
 
