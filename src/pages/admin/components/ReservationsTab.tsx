@@ -1111,9 +1111,16 @@ export default function ReservationsTab() {
       const pickupLocationLabel = LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
       const dropoffLocationLabel = LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
 
-      // Combine date and time
-      const pickupDateTime = `${formData.pickup_date}T${formData.pickup_time}:00`
-      const returnDateTime = `${formData.return_date}T${formData.return_time}:00`
+      // Combine date and time - Create as local time to preserve exact hours entered
+      // Parse the date and time components
+      const [pickupYear, pickupMonth, pickupDay] = formData.pickup_date.split('-').map(Number)
+      const [pickupHour, pickupMinute] = formData.pickup_time.split(':').map(Number)
+      const [returnYear, returnMonth, returnDay] = formData.return_date.split('-').map(Number)
+      const [returnHour, returnMinute] = formData.return_time.split(':').map(Number)
+
+      // Create Date objects in local timezone (Europe/Rome)
+      const pickupDate = new Date(pickupYear, pickupMonth - 1, pickupDay, pickupHour, pickupMinute, 0)
+      const returnDate = new Date(returnYear, returnMonth - 1, returnDay, returnHour, returnMinute, 0)
 
       const bookingData = {
         user_id: null, // Set to null for admin-created bookings
@@ -1124,8 +1131,8 @@ export default function ReservationsTab() {
         vehicle_name: vehicle?.display_name || 'N/A',
         vehicle_plate: vehicle?.plate || null,
         vehicle_image_url: null,
-        pickup_date: new Date(pickupDateTime).toISOString(),
-        dropoff_date: new Date(returnDateTime).toISOString(),
+        pickup_date: pickupDate.toISOString(),
+        dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
         price_total: Math.round(parseFloat(formData.total_amount) * 100), // Convert to cents
@@ -1173,8 +1180,8 @@ export default function ReservationsTab() {
         // This avoids the trigger that blocks modifications
         const { data: rpcData, error: rpcError } = await supabase.rpc('admin_update_booking', {
           p_booking_id: editingId,
-          p_pickup_date: new Date(pickupDateTime).toISOString(),
-          p_dropoff_date: new Date(returnDateTime).toISOString(),
+          p_pickup_date: pickupDate.toISOString(),
+          p_dropoff_date: returnDate.toISOString(),
           p_vehicle_plate: vehicle?.plate || null,
           p_status: formData.status,
           p_payment_status: formData.payment_status
