@@ -8,23 +8,29 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 
 // --- Kasko Constants & Types ---
-type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE';
+type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
+// SUPERCARS (Exotic) - RCA + existing KASKO options + DR7
 export const INSURANCE_OPTIONS = [
+  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 100 },
   { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 150 },
   { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 200 },
+  { id: 'DR7', label: 'DR7', pricePerDay: 300 },
 ];
 
+// URBAN - RCA + Kasko Base + Kasko DR7
 export const URBAN_INSURANCE_OPTIONS = [
-  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 0 },
-  { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 5 },
-  { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 25 },
+  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
+  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
 ];
 
-// UTILITAIRE has only KASKO BASE
+// UTILITAIRE - RCA + Kasko Base + Kasko DR7
 export const UTILITAIRE_INSURANCE_OPTIONS = [
-  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 15 },
+  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
+  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
 ];
 
 // Special pricing for Ducato/Vito (furgone)
@@ -40,15 +46,19 @@ export const DEPOSIT_AMOUNTS = {
 };
 
 export const INSURANCE_ELIGIBILITY = {
+  RCA: { minAge: 18, minLicenseYears: 1 },
   KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
+  DR7: { minAge: 25, minLicenseYears: 3 },
 };
 
 export const URBAN_INSURANCE_ELIGIBILITY = {
+  RCA: { minAge: 18, minLicenseYears: 1 },
   KASKO_BASE: { minAge: 18, minLicenseYears: 3 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
+  DR7: { minAge: 21, minLicenseYears: 2 },
 };
 
 // Helper function to check if vehicle is a furgone (Ducato/Vito)
