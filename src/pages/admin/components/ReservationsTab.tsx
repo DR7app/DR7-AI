@@ -26,16 +26,18 @@ export const URBAN_INSURANCE_OPTIONS = [
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
 ];
 
-// UTILITAIRE - RCA + Kasko Base + Kasko DR7
+// UTILITAIRE - RCA + Kasko Base + Kasko DR7 (same as Ducato/Vito)
 export const UTILITAIRE_INSURANCE_OPTIONS = [
   { id: 'RCA', label: 'RCA', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
+  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
-// Special pricing for Ducato/Vito (furgone)
+// FURGONE (Ducato/Vito/Tourer) - RCA + Kasko Base + Kasko DR7
 export const FURGONE_INSURANCE_OPTIONS = [
-  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 30 },
+  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
+  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
 // Deposit amounts by vehicle type
