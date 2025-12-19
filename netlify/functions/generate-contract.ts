@@ -430,6 +430,17 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
 
         console.log(`[generate-contract] Using additional terms for category: ${vehicleCategory}`)
 
+        // Map insurance option ID to readable label
+        const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'RCA'
+        const insuranceLabels: Record<string, string> = {
+            'RCA': 'RCA',
+            'KASKO_BASE': 'Kasko Base',
+            'KASKO_BLACK': 'Kasko Black',
+            'KASKO_SIGNATURE': 'Kasko Signature',
+            'DR7': 'Kasko DR7'
+        }
+        const insuranceLabel = insuranceLabels[insuranceOptionId] || insuranceOptionId
+
         // Standardized Data Field Map
         // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
         // The loop below will try to set each key; if the field doesn't exist in the PDF, it will just skip it.
@@ -534,8 +545,8 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'Ore': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
 
             // Insurance and Financial
-            'Insurance': booking.booking_details?.insurance || booking.booking_details?.kasko || 'RCA Base',
-            'Assicurazione': booking.booking_details?.insurance || booking.booking_details?.kasko || 'RCA Base',
+            'Insurance': insuranceLabel,
+            'Assicurazione': insuranceLabel,
             'Deposit': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
             'Cauzione': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
             'TotalKM': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
