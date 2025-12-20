@@ -350,9 +350,20 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && fullName && phone && paymentMethod) {
-      onConfirm(tickets, email, fullName, phone, paymentMethod);
+    // Validate all required fields
+    const missingFields: string[] = [];
+    if (!email || email.trim() === '') missingFields.push('Email');
+    if (!fullName || fullName.trim() === '') missingFields.push('Nome completo');
+    if (!phone || phone.trim() === '') missingFields.push('Telefono');
+    if (!paymentMethod) missingFields.push('Metodo di pagamento');
+
+    if (missingFields.length > 0) {
+      alert(`❌ DATI MANCANTI!\n\nPer completare la vendita del biglietto, devi inserire:\n\n${missingFields.map(f => `• ${f}`).join('\n')}\n\nCompila tutti i campi richiesti o seleziona un cliente esistente.`);
+      return;
     }
+
+    // All fields are valid, proceed with sale
+    onConfirm(tickets, email, fullName, phone, paymentMethod);
   };
 
   return (
