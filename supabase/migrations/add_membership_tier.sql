@@ -17,10 +17,9 @@ COMMENT ON COLUMN customers_extended.membership_expires_at IS 'Membership expira
 -- Set Massimo Runchina as Argento member
 UPDATE customers_extended
 SET membership_tier = 'Argento'
-WHERE full_name = 'Massimo Runchina'
-  OR (nome = 'Massimo' AND cognome = 'Runchina');
+WHERE email = 'massimorunchina69@gmail.com';
 
 -- Verify the update
-SELECT id, full_name, nome, cognome, membership_tier, membership_expires_at
+SELECT id, nome, cognome, email, membership_tier, membership_expires_at
 FROM customers_extended
 WHERE membership_tier IS NOT NULL;
