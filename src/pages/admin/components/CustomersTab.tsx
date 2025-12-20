@@ -59,6 +59,9 @@ interface Customer {
   // Common fields
   nazione?: string
   telefono?: string
+  // Membership fields
+  membership_tier?: 'Argento' | 'Oro' | 'Platino' | null
+  membership_expires_at?: string | null
   // Metadata for extended fields
   metadata?: {
     sesso?: string
@@ -365,6 +368,9 @@ export default function CustomersTab() {
             provincia_residenza: customer.provincia_residenza,
             codice_postale: customer.codice_postale,
             numero_civico: customer.numero_civico,
+            // Membership
+            membership_tier: customer.membership_tier,
+            membership_expires_at: customer.membership_expires_at,
           }
 
           if (!customerMap.has(key)) {
@@ -1443,7 +1449,21 @@ export default function CustomersTab() {
                       className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm text-white">{customer.full_name}</td>
+                  <td className="px-4 py-3 text-sm text-white">
+                    <div className="flex items-center gap-2">
+                      <span>{customer.full_name}</span>
+                      {customer.membership_tier && (
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${customer.membership_tier === 'Argento'
+                            ? 'bg-gray-400/20 text-gray-300 border border-gray-400/30'
+                            : customer.membership_tier === 'Oro'
+                              ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                              : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                          }`}>
+                          ⭐ {customer.membership_tier}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     {customer.tipo_cliente ? (
                       <span className={`px-2 py-1 rounded text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
