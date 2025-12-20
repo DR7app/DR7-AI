@@ -246,31 +246,29 @@ export default function CalendarTab() {
 
     // Find bookings for this vehicle on this day
     const vehicleBookings = bookings.filter(booking => {
-      // 1. PRIORITY: Match by License Plate (Targa)
-      if (vehicle.plate && booking.vehicle_plate) {
+      // 1. STRICT PRIORITY: If booking has a plate, ONLY match by plate
+      if (booking.vehicle_plate) {
+        // Booking has a plate - only match if vehicle plate matches exactly
         if (vehicle.plate === booking.vehicle_plate) {
-          // If plates match, we verify the dates
+          // Exact plate match - check dates
           const pickupDate = new Date(booking.pickup_date)
           const dropoffDate = new Date(booking.dropoff_date)
           pickupDate.setHours(0, 0, 0, 0)
           dropoffDate.setHours(0, 0, 0, 0)
           return checkDate >= pickupDate && checkDate < dropoffDate
         }
-        // If plates are both present but different, it's NOT this vehicle
+        // Plate doesn't match or vehicle has no plate - NOT a match
         return false
       }
 
-      // 2. Fallback: Match by Name (if plates are missing)
+      // 2. Fallback: Match by Name ONLY if booking has NO plate
       const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
       const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
 
+      // Require exact match to prevent fuzzy matching issues
       const exactMatch = bookingVehicle === vehicleDisplay
-      const partialMatch = bookingVehicle && vehicleDisplay && (
-        bookingVehicle.includes(vehicleDisplay) ||
-        vehicleDisplay.includes(bookingVehicle)
-      )
 
-      if (!exactMatch && !partialMatch) return false
+      if (!exactMatch) return false
 
       const pickupDate = new Date(booking.pickup_date)
       const dropoffDate = new Date(booking.dropoff_date)
@@ -291,30 +289,29 @@ export default function CalendarTab() {
     checkDate.setHours(0, 0, 0, 0)
 
     return bookings.filter(booking => {
-      // 1. PRIORITY: Match by License Plate (Targa)
-      if (vehicle.plate && booking.vehicle_plate) {
+      // 1. STRICT PRIORITY: If booking has a plate, ONLY match by plate
+      if (booking.vehicle_plate) {
+        // Booking has a plate - only match if vehicle plate matches exactly
         if (vehicle.plate === booking.vehicle_plate) {
-          // If plates match, check dates
+          // Exact plate match - check dates
           const pickupDate = new Date(booking.pickup_date)
           const dropoffDate = new Date(booking.dropoff_date)
           pickupDate.setHours(0, 0, 0, 0)
           dropoffDate.setHours(0, 0, 0, 0)
           return checkDate >= pickupDate && checkDate < dropoffDate
         }
+        // Plate doesn't match or vehicle has no plate - NOT a match
         return false
       }
 
-      // 2. Fallback: Match by Name
+      // 2. Fallback: Match by Name ONLY if booking has NO plate
       const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
       const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
 
+      // Require exact match to prevent fuzzy matching issues
       const exactMatch = bookingVehicle === vehicleDisplay
-      const partialMatch = bookingVehicle && vehicleDisplay && (
-        bookingVehicle.includes(vehicleDisplay) ||
-        vehicleDisplay.includes(bookingVehicle)
-      )
 
-      if (!exactMatch && !partialMatch) return false
+      if (!exactMatch) return false
 
       const pickupDate = new Date(booking.pickup_date)
       const dropoffDate = new Date(booking.dropoff_date)

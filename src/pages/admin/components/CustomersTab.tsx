@@ -1454,12 +1454,12 @@ export default function CustomersTab() {
                       <span>{customer.full_name}</span>
                       {customer.membership_tier && (
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${customer.membership_tier === 'Argento'
-                            ? 'bg-gray-400/20 text-gray-300 border border-gray-400/30'
-                            : customer.membership_tier === 'Oro'
-                              ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                              : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                          ? 'bg-gray-400/20 text-gray-300 border border-gray-400/30'
+                          : customer.membership_tier === 'Oro'
+                            ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                            : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                           }`}>
-                          ⭐ {customer.membership_tier}
+                          {customer.membership_tier}
                         </span>
                       )}
                     </div>
