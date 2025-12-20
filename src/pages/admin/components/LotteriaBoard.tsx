@@ -962,10 +962,31 @@ const LotteriaBoard: React.FC = () => {
 
       alert(`Biglietto #${String(ticketNumber).padStart(4, '0')} cancellato con successo!`);
 
-      // Refresh tickets and search results
+      // Refresh tickets
       await fetchSoldTickets();
-      if (searchResults.length > 0) {
-        handleSearchTickets();
+
+      // Close ticket details modal if open
+      setShowTicketDetailsModal(false);
+      setSelectedTicketForDetails(null);
+
+      // Refresh search results if search modal is open
+      if (showSearchModal && searchResults.length > 0) {
+        // Re-run the search to get updated results
+        const searchTerm = searchEmail.trim().toLowerCase();
+        const { data } = await supabase
+          .from('commercial_operation_tickets')
+          .select('*')
+          .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
+          .order('ticket_number', { ascending: true });
+
+        if (data && data.length > 0) {
+          setSearchResults(data);
+        } else {
+          // No more tickets for this customer, close search modal
+          setShowSearchModal(false);
+          setSearchResults([]);
+          setSearchEmail('');
+        }
       }
     } catch (error: any) {
       console.error('Error canceling ticket:', error);
