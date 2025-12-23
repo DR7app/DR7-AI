@@ -1401,7 +1401,7 @@ export default function ReservationsTab() {
       insurance_option: 'KASKO_BASE',
       deposit: '0',
       unlimited_km: false,
-      km_limit: '300'
+      km_limit: '0'
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
