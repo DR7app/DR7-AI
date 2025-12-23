@@ -640,9 +640,6 @@ export default function CalendarTab() {
                   <div>
                     <h3 className="text-2xl font-bold text-white mb-2">
                       🚗 {selectedCell.vehicle}
-                      {selectedCell.bookings[0]?.vehicle_plate && (
-                        <span className="text-gray-400 font-normal text-lg"> ({selectedCell.bookings[0].vehicle_plate})</span>
-                      )}
                     </h3>
                     <p className="text-gray-400">{selectedCell.date}</p>
                   </div>

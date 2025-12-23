@@ -548,6 +548,7 @@ const LotteriaBoard: React.FC = () => {
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [searchEmail, setSearchEmail] = useState('');
+  const [sendingEmails, setSendingEmails] = useState(false);
   const [searchResults, setSearchResults] = useState<Ticket[]>([]);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [hideFinancials, setHideFinancials] = useState(false);
@@ -1005,6 +1006,36 @@ const LotteriaBoard: React.FC = () => {
     }
   };
 
+  const handleSendPostponementEmails = async () => {
+    if (!confirm('Sei sicuro di voler mandare l\'email di rinvio a TUTTI i clienti che hanno comprato biglietti?\n\nQuesta azione invierà un\'email a tutti gli acquirenti informandoli che l\'estrazione è stata rinviata al 24 gennaio.')) {
+      return;
+    }
+
+    setSendingEmails(true);
+    try {
+      console.log('[LotteriaBoard] Sending postponement emails...');
+
+      const response = await fetch('/.netlify/functions/send-lottery-postponement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        alert(`✅ Email inviate con successo!\n\nInviate: ${result.sent}\nFallite: ${result.failed}\nTotale clienti: ${result.total}`);
+      } else {
+        throw new Error(result.error || 'Errore sconosciuto');
+      }
+    } catch (error: any) {
+      console.error('[LotteriaBoard] Error sending emails:', error);
+      alert(`❌ Errore nell\'invio delle email:\n${error.message}`);
+    } finally {
+      setSendingEmails(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1131,9 +1162,16 @@ const LotteriaBoard: React.FC = () => {
             )}
             <button
               onClick={fetchSoldTickets}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-grey-700"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Aggiorna
+            </button>
+            <button
+              onClick={handleSendPostponementEmails}
+              disabled={sendingEmails}
+              className="px-4 py-2 bg-yellow-600 text-black rounded hover:bg-yellow-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendingEmails ? '📧 Invio in corso...' : '📧 Manda Email Rinvio'}
             </button>
           </div>
         </div>
