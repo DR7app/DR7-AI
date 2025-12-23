@@ -64,7 +64,7 @@ export const handler: Handler = async (event) => {
                 const mailOptions = {
                     from: `"DR7 Empire - Lotteria" <${smtpUser}>`,
                     to: customer.email,
-                    subject: '🎟️ Importante: Estrazione Lotteria DR7 Rinviata al 24 Gennaio',
+                    subject: '🎟️ Importante: Estrazione Lotteria DR7 Rinviata al 24 Gennaio - ULTIMI BIGLIETTI',
                     html: `
                         <!DOCTYPE html>
                         <html>
@@ -84,16 +84,17 @@ export const handler: Handler = async (event) => {
                             <div class="container">
                                 <div class="header">
                                     <h1 style="margin: 0;">🎟️ DR7 EMPIRE LOTTERIA</h1>
-                                    <p style="margin: 10px 0 0 0; font-size: 16px;">Comunicazione Importante</p>
+                                    <p style="margin: 10px 0 0 0; font-size: 16px;">Comunicazione Importante - ULTIMI BIGLIETTI</p>
                                 </div>
                                 <div class="content">
-                                    <p>Gentile <strong>${customer.full_name}</strong>,</p>
+                                    <p>Gentile,</p>
                                     
-                                    <p>Ti scriviamo per informarti di un importante aggiornamento riguardo alla <strong>Lotteria DR7 Empire</strong>.</p>
+                                    <p>Ti scriviamo per informarti di un importante aggiornamento riguardo alla <strong>Lotteria DR7 Empire. ULTIMI BIGLIETTI.</strong></p>
                                     
                                     <div class="highlight">
                                         📅 L'estrazione è stata RINVIATA al<br>
-                                        <span style="font-size: 24px;">24 GENNAIO 2025</span>
+                                        <span style="font-size: 24px;">24 GENNAIO 2025</span><br>
+                                        <span style="font-size: 14px; font-weight: normal;">TEMPO MASSIMO COME DA REGOLAMENTO</span>
                                     </div>
                                     
                                     <p><strong>Il tuo biglietto rimane valido!</strong></p>
@@ -132,11 +133,12 @@ export const handler: Handler = async (event) => {
                         </html>
                     `,
                     text: `
-Gentile ${customer.full_name},
+Gentile,
 
-Ti scriviamo per informarti di un importante aggiornamento riguardo alla Lotteria DR7 Empire.
+Ti scriviamo per informarti di un importante aggiornamento riguardo alla Lotteria DR7 Empire. ULTIMI BIGLIETTI.
 
 📅 L'ESTRAZIONE È STATA RINVIATA AL 24 GENNAIO 2025
+TEMPO MASSIMO COME DA REGOLAMENTO
 
 Il tuo biglietto rimane valido!
 
