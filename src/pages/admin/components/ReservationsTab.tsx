@@ -272,7 +272,7 @@ export default function ReservationsTab() {
     // KM Overage Fee
     km_overage_fee: '0',
     unlimited_km: false,
-    km_limit: '300', // Default KM limit when not unlimited
+    km_limit: '0', // Default KM limit when not unlimited
   })
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
