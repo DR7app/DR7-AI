@@ -1856,6 +1856,16 @@ export default function ReservationsTab() {
                   ))}
                 </div>
               </div>
+
+              {/* Manual KM Input - Fallback if not using presets */}
+              <Input
+                label="Limite KM Personale"
+                type="number"
+                value={formData.km_limit}
+                onChange={(e) => setFormData({ ...formData, km_limit: e.target.value })}
+                placeholder="es. 150 (Lascia vuoto se Illimitati)"
+                disabled={formData.unlimited_km}
+              />
               <div className="flex items-center gap-2 p-3 bg-dr7-darker rounded-lg border border-gray-700">
                 <input
                   type="checkbox"
