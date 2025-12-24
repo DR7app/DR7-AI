@@ -536,12 +536,7 @@ export default function CalendarTab() {
                           }`}
                         title={holiday ? holiday.name : isSundayDay ? 'Domenica' : ''}
                       >
-                        {(holiday || isSundayDay) && (
-                          <div className="absolute top-0 left-0 right-0 bg-red-600 text-white text-[8px] px-1 py-0.5 rounded-t-lg text-center font-semibold truncate">
-                            {holiday ? holiday.name : 'Domenica'}
-                          </div>
-                        )}
-                        <div className={`${holiday || isSundayDay ? 'mt-4' : ''}`}>{day}</div>
+                        <div>{day}</div>
                       </th>
                     )
                   })}
