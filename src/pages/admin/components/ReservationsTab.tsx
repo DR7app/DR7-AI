@@ -1840,7 +1840,6 @@ export default function ReservationsTab() {
                       onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: kmLimit.toString() }))}
                     >
                       <span className="text-white font-bold text-xs">{kmLimit} km</span>
-                      <span className="text-[10px] text-gray-400">€{(kmLimit * 0.50).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
