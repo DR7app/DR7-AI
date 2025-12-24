@@ -538,7 +538,9 @@ export default function CalendarTab() {
                         <div className="flex flex-col items-center justify-center h-full">
                           <span>{day}</span>
                           {holiday ? (
-                            <span className="text-[10px] leading-none mt-0.5">{holiday.emoji}</span>
+                            <span className="text-[8px] leading-none mt-0.5 font-bold uppercase tracking-tighter text-white opacity-90">
+                              {holiday.name.substring(0, 2)}
+                            </span>
                           ) : isSundayDay && (
                             <div className="w-1.5 h-1.5 rounded-full bg-white mt-0.5 shadow-sm"></div>
                           )}
@@ -547,7 +549,7 @@ export default function CalendarTab() {
                         {/* Custom Tooltip */}
                         {(holiday || isSundayDay) && (
                           <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg border border-gray-700 whitespace-nowrap z-50 pointer-events-none">
-                            {holiday ? `${holiday.emoji} ${holiday.name}` : 'Domenica'}
+                            {holiday ? holiday.name : 'Domenica'}
                             {/* Arrow */}
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                           </div>
