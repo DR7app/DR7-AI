@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import { VehicleAlarmProvider } from './contexts/VehicleAlarmContext'
 import AlarmNotification from './components/AlarmNotification'
+import LateReturnAlarm from './components/admin/LateReturnAlarm'
 
 const Login = lazy(() => import('./pages/Login'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
@@ -12,6 +13,7 @@ function App() {
     <VehicleAlarmProvider>
       <BrowserRouter>
         <AlarmNotification />
+        <LateReturnAlarm />
         <Suspense fallback={
           <div style={{ backgroundColor: 'black', color: 'white', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div>Loading...</div>

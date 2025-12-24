@@ -1766,9 +1766,10 @@ export default function ReservationsTab() {
                   })
                 }}
                 options={[
-                  { value: 'paid', label: 'Pagato' },
                   { value: 'pending', label: 'Da Saldare' },
-                  { value: 'unpaid', label: 'Non Pagato' }
+                  { value: 'paid', label: 'Pagato' },
+                  { value: 'unpaid', label: 'Non Pagato' },
+                  { value: 'returned', label: 'Returned' }
                 ]}
               />
               {formData.payment_status !== 'unpaid' && (
@@ -1826,14 +1827,35 @@ export default function ReservationsTab() {
                 placeholder="es. 0.50"
                 disabled={formData.unlimited_km}
               />
-              <Input
-                label="Limite KM"
-                type="number"
-                value={formData.km_limit}
-                onChange={(e) => setFormData({ ...formData, km_limit: e.target.value })}
-                placeholder="es. 300"
-                disabled={formData.unlimited_km}
-              />
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-gray-300 mb-2">LIMITE KM (Da inserire):</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {[100, 180, 240, 280, 300].map((kmLimit) => (
+                    <div
+                      key={kmLimit}
+                      className={`p-3 rounded-md border cursor-pointer transition-all ${parseInt(formData.km_limit) === kmLimit
+                        ? 'border-white bg-white/5'
+                        : 'border-gray-700 hover:border-gray-500'
+                        }`}
+                      onClick={() => setFormData(p => ({ ...p, km_limit: kmLimit.toString() }))}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={parseInt(formData.km_limit) === kmLimit}
+                            onChange={() => setFormData(p => ({ ...p, km_limit: kmLimit.toString() }))}
+                            className="w-4 h-4 text-white"
+                            disabled={formData.unlimited_km}
+                          />
+                          <label className="ml-2 text-white font-semibold">{kmLimit} km</label>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400 ml-6">€{(kmLimit * 0.50).toFixed(2)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="flex items-center gap-2 p-3 bg-dr7-darker rounded-lg border border-gray-700">
                 <input
                   type="checkbox"

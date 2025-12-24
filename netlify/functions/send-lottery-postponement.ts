@@ -64,7 +64,7 @@ export const handler: Handler = async (event) => {
                 const mailOptions = {
                     from: `"DR7 Empire - Lotteria" <${smtpUser}>`,
                     to: customer.email,
-                    subject: '🎟️ Importante: Estrazione Lotteria DR7 Rinviata al 24 Gennaio - ULTIMI BIGLIETTI',
+                    subject: '🎟️ Importante: Estrazione Lotteria DR7 Rinviata al 24 Gennaio 2026 - ULTIMI BIGLIETTI',
                     html: `
                         <!DOCTYPE html>
                         <html>
@@ -93,7 +93,7 @@ export const handler: Handler = async (event) => {
                                     
                                     <div class="highlight">
                                         📅 L'estrazione è stata RINVIATA al<br>
-                                        <span style="font-size: 24px;">24 GENNAIO 2025</span><br>
+                                        <span style="font-size: 24px;">24 GENNAIO 2026</span><br>
                                         <span style="font-size: 14px; font-weight: normal;">TEMPO MASSIMO COME DA REGOLAMENTO</span>
                                     </div>
                                     
@@ -105,7 +105,7 @@ export const handler: Handler = async (event) => {
                                     <ul>
                                         <li>✅ Il tuo biglietto è confermato e valido</li>
                                         <li>✅ Hai più tempo per acquistare biglietti aggiuntivi</li>
-                                        <li>✅ L'estrazione si terrà il 24 gennaio 2025</li>
+                                        <li>✅ L'estrazione si terrà il 24 gennaio 2026</li>
                                         <li>✅ I premi rimangono invariati</li>
                                     </ul>
                                     
@@ -137,7 +137,7 @@ Gentile,
 
 Ti scriviamo per informarti di un importante aggiornamento riguardo alla Lotteria DR7 Empire. ULTIMI BIGLIETTI.
 
-📅 L'ESTRAZIONE È STATA RINVIATA AL 24 GENNAIO 2025
+📅 L'ESTRAZIONE È STATA RINVIATA AL 24 GENNAIO 2026
 TEMPO MASSIMO COME DA REGOLAMENTO
 
 Il tuo biglietto rimane valido!
@@ -147,7 +147,7 @@ Tutti i biglietti acquistati parteciperanno regolarmente all'estrazione nella nu
 Cosa significa per te:
 ✅ Il tuo biglietto è confermato e valido
 ✅ Hai più tempo per acquistare biglietti aggiuntivi
-✅ L'estrazione si terrà il 24 gennaio 2025
+✅ L'estrazione si terrà il 24 gennaio 2026
 ✅ I premi rimangono invariati
 
 Ci scusiamo per l'inconveniente e ti ringraziamo per la comprensione.

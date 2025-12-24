@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 
 interface Vehicle {
   id: string
@@ -519,15 +520,31 @@ export default function CalendarTab() {
                   <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
                     Targa
                   </th>
-                  {daysInMonth.map(day => (
-                    <th
-                      key={day}
-                      className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
-                        }`}
-                    >
-                      {day}
-                    </th>
-                  ))}
+                  {daysInMonth.map(day => {
+                    const year = currentDate.getFullYear()
+                    const month = currentDate.getMonth()
+                    const dayDate = new Date(year, month, day)
+                    const holiday = getHolidayForDate(dayDate)
+                    const isSundayDay = isSunday(dayDate)
+
+                    return (
+                      <th
+                        key={day}
+                        className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] relative ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                            holiday || isSundayDay ? 'bg-red-900/20 border-red-500/30 text-red-400' :
+                              'text-gray-400'
+                          }`}
+                        title={holiday ? holiday.name : isSundayDay ? 'Domenica' : ''}
+                      >
+                        {(holiday || isSundayDay) && (
+                          <div className="absolute top-0 left-0 right-0 bg-red-600 text-white text-[8px] px-1 py-0.5 rounded-t-lg text-center font-semibold truncate">
+                            {holiday ? holiday.name : 'Domenica'}
+                          </div>
+                        )}
+                        <div className={`${holiday || isSundayDay ? 'mt-4' : ''}`}>{day}</div>
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>

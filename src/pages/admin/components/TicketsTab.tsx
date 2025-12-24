@@ -144,21 +144,19 @@ export default function TicketsTab() {
       <div className="mb-6 flex gap-2">
         <button
           onClick={() => setViewMode('commercial')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            viewMode === 'commercial'
-              ? 'bg-white text-black'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-          }`}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'commercial'
+            ? 'bg-white text-black'
+            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
         >
           Biglietti Operazione Commerciale
         </button>
         <button
           onClick={() => setViewMode('gift_cards')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            viewMode === 'gift_cards'
-              ? 'bg-white text-black'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-          }`}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'gift_cards'
+            ? 'bg-white text-black'
+            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
         >
           Buoni Regalo Promozionali
         </button>
@@ -252,7 +250,7 @@ export default function TicketsTab() {
               <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
                 <li>I biglietti vengono salvati automaticamente dopo ogni acquisto</li>
                 <li>Ogni biglietto ha un numero univoco da 1 a 350,000</li>
-                <li>L'estrazione si terrà il 24 Dicembre 2025</li>
+                <li>L'estrazione si terrà il 24 Gennaio 2026</li>
                 <li>I biglietti appariranno qui dopo il primo acquisto</li>
               </ul>
             </div>
