@@ -10,6 +10,7 @@ export const ITALIAN_HOLIDAYS_2025 = [
     { date: '2025-11-01', name: 'Ognissanti' },
     { date: '2025-12-08', name: 'Immacolata Concezione' },
     { date: '2025-12-25', name: 'Natale' },
+    { date: '2025-12-26', name: 'Santo Stefano' },
 ];
 
 export const ITALIAN_HOLIDAYS_2026 = [
@@ -24,6 +25,7 @@ export const ITALIAN_HOLIDAYS_2026 = [
     { date: '2026-11-01', name: 'Ognissanti' },
     { date: '2026-12-08', name: 'Immacolata Concezione' },
     { date: '2026-12-25', name: 'Natale' },
+    { date: '2026-12-26', name: 'Santo Stefano' },
 ];
 
 export const ALL_ITALIAN_HOLIDAYS = [...ITALIAN_HOLIDAYS_2025, ...ITALIAN_HOLIDAYS_2026];

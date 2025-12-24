@@ -530,13 +530,26 @@ export default function CalendarTab() {
                     return (
                       <th
                         key={day}
-                        className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] relative ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
-                            holiday || isSundayDay ? 'bg-red-900/20 border-red-500/30 text-red-400' :
-                              'text-gray-400'
+                        className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[24px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                          holiday || isSundayDay ? 'bg-red-900/20 border-red-500/30 text-red-400' :
+                            'text-gray-400'
                           }`}
-                        title={holiday ? holiday.name : isSundayDay ? 'Domenica' : ''}
                       >
-                        <div>{day}</div>
+                        <div className="flex flex-col items-center justify-center h-full">
+                          <span>{day}</span>
+                          {(holiday || isSundayDay) && (
+                            <div className="w-1 h-1 rounded-full bg-red-500 mt-0.5"></div>
+                          )}
+                        </div>
+
+                        {/* Custom Tooltip */}
+                        {(holiday || isSundayDay) && (
+                          <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg border border-gray-700 whitespace-nowrap z-50 pointer-events-none">
+                            {holiday ? holiday.name : 'Domenica'}
+                            {/* Arrow */}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                          </div>
+                        )}
                       </th>
                     )
                   })}
