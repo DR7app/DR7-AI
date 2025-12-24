@@ -538,7 +538,7 @@ export default function CalendarTab() {
                         <div className="flex flex-col items-center justify-center h-full">
                           <span>{day}</span>
                           {(holiday || isSundayDay) && (
-                            <div className="w-1 h-1 rounded-full bg-red-500 mt-0.5"></div>
+                            <div className="w-1.5 h-1.5 rounded-full bg-white mt-0.5 shadow-sm"></div>
                           )}
                         </div>
 
