@@ -31,7 +31,13 @@ export const ITALIAN_HOLIDAYS_2026 = [
 export const ALL_ITALIAN_HOLIDAYS = [...ITALIAN_HOLIDAYS_2025, ...ITALIAN_HOLIDAYS_2026];
 
 export const getHolidayForDate = (date: Date): { name: string; label: string } | null => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Use local time components to avoid timezone offsets causing "off by one" errors
+    // when comparing to fixed date strings (e.g. 2025-12-25)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
     return ALL_ITALIAN_HOLIDAYS.find(h => h.date === dateStr) || null;
 };
 
