@@ -678,7 +678,7 @@ const LotteriaBoard: React.FC = () => {
                 .eq('email', email)
                 .single();
 
-              await fetch('https://dr7empire.com/.netlify/functions/send-manual-ticket-pdf', {
+              await fetch('/.netlify/functions/send-manual-ticket-pdf', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
