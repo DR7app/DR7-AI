@@ -535,14 +535,14 @@ export default function CalendarTab() {
                             'text-gray-400'
                           }`}
                       >
-                        <div className="flex flex-col items-center justify-center h-full">
-                          <span>{day}</span>
+                        <div className="flex flex-col items-center justify-between h-full py-0.5">
+                          <span className="text-[10px] leading-none mb-1">{day}</span>
                           {holiday ? (
-                            <span className="text-[8px] leading-none mt-0.5 font-bold uppercase tracking-tighter text-white opacity-90">
-                              {holiday.name.substring(0, 2)}
+                            <span className="text-[7px] leading-tight font-medium text-white uppercase tracking-tight absolute bottom-0.5 left-0 right-0 overflow-visible whitespace-nowrap z-10 px-0.5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                              {holiday.label}
                             </span>
                           ) : isSundayDay && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-white mt-0.5 shadow-sm"></div>
+                            <div className="w-1.5 h-1.5 rounded-full bg-white mb-0.5 shadow-sm"></div>
                           )}
                         </div>
 
