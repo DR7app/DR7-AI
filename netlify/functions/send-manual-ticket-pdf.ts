@@ -90,6 +90,19 @@ export const handler: Handler = async (event) => {
             color: rgb(1, 1, 1),
         })
 
+        // Draw Date
+        const dateStr = 'Estrazione: 24 Gennaio 2026'
+        const dateWidth = fontBold.widthOfTextAtSize(dateStr, 16)
+        page.drawText(dateStr, {
+            x: width / 2 - dateWidth / 2,
+            y: height - 315, // Below the gold box (which ends at y: height - 300 + 100 = height - 200?? No, y is bottom-left. Box y is height-300, height 100. So top is height-200. Text is inside. Let's put this text below the box.)
+            // Box is from y=height-300 to y=height-200. 
+            // So y=height-315 is slightly below the box.
+            size: 16,
+            font: fontBold,
+            color: rgb(0.8, 0.1, 0.1), // Red for visibility
+        })
+
         // Customer Details
         const startY = height - 350
         const lineHeight = 20
