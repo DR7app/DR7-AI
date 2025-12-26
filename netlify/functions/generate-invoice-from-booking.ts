@@ -69,35 +69,33 @@ export const handler: Handler = async (event) => {
             .eq('booking_id', bookingId)
             .single()
 
+        // If invoice exists, we'll update it instead of creating a new one
+        let invoiceNumber: string
+
         if (existingInvoice) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({
-                    error: 'Invoice already exists for this booking',
-                    invoiceNumber: existingInvoice.numero_fattura
-                })
+            // Reuse existing invoice number
+            invoiceNumber = existingInvoice.numero_fattura
+        } else {
+            // Get next invoice number
+            const { data: lastInvoice } = await supabase
+                .from('fatture')
+                .select('numero_fattura')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single()
+
+            let nextNumber = 1
+            const currentYear = new Date().getFullYear()
+
+            if (lastInvoice?.numero_fattura) {
+                const match = lastInvoice.numero_fattura.match(/^(\d+)\//)
+                if (match) {
+                    nextNumber = parseInt(match[1]) + 1
+                }
             }
+
+            invoiceNumber = `${nextNumber}/${currentYear}`
         }
-
-        // Get next invoice number
-        const { data: lastInvoice } = await supabase
-            .from('fatture')
-            .select('numero_fattura')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-
-        let nextNumber = 1
-        const currentYear = new Date().getFullYear()
-
-        if (lastInvoice?.numero_fattura) {
-            const match = lastInvoice.numero_fattura.match(/^(\d+)\//)
-            if (match) {
-                nextNumber = parseInt(match[1]) + 1
-            }
-        }
-
-        const invoiceNumber = `${nextNumber}/${currentYear}`
 
 
         // Parse booking dates
@@ -177,11 +175,18 @@ export const handler: Handler = async (event) => {
             sdi_status: 'draft'
         }
 
-        const { data: invoice, error: insertError } = await supabase
-            .from('fatture')
-            .insert([invoiceData])
-            .select()
-            .single()
+        const { data: invoice, error: insertError } = existingInvoice
+            ? await supabase
+                .from('fatture')
+                .update(invoiceData)
+                .eq('id', existingInvoice.id)
+                .select()
+                .single()
+            : await supabase
+                .from('fatture')
+                .insert([invoiceData])
+                .select()
+                .single()
 
         if (insertError) {
             throw insertError

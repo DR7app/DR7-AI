@@ -53,7 +53,7 @@ export default function InvoicesTab() {
       const { data, error } = await supabase
         .from('fatture')
         .select('*')
-        .order('data_emissione', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (error) throw error
       setInvoices(data || [])
