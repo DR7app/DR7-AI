@@ -68,44 +68,38 @@ export default function InvoicesTab() {
 
   async function downloadPDF(invoice: Invoice) {
     try {
-      // If HTML exists, use it
-      if (invoice.invoice_html) {
-        const printWindow = window.open('', '_blank')
-        if (!printWindow) {
-          alert('Impossibile aprire la finestra. Verifica le impostazioni del browser.')
-          return
+      let html = invoice.invoice_html
+
+      // If HTML doesn't exist, generate it
+      if (!html) {
+        const response = await fetch('/.netlify/functions/generate-invoice-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoiceId: invoice.id })
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to generate invoice PDF')
         }
-        printWindow.document.write(invoice.invoice_html)
-        printWindow.document.close()
-        setTimeout(() => printWindow.print(), 250)
-        return
+
+        html = await response.text()
+        // Reload to get updated invoice with HTML
+        loadInvoices()
       }
 
-      // Generate HTML on-the-fly
-      const response = await fetch('/.netlify/functions/generate-invoice-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId: invoice.id })
-      })
+      // Create a blob URL and open it - this avoids popup blockers
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      const printWindow = window.open(url, '_blank')
 
-      if (!response.ok) {
-        throw new Error('Failed to generate invoice PDF')
-      }
-
-      const html = await response.text()
-
-      const printWindow = window.open('', '_blank')
       if (!printWindow) {
         alert('Impossibile aprire la finestra. Verifica le impostazioni del browser.')
+        URL.revokeObjectURL(url)
         return
       }
 
-      printWindow.document.write(html)
-      printWindow.document.close()
-      setTimeout(() => printWindow.print(), 250)
-
-      // Reload to get updated invoice with HTML
-      loadInvoices()
+      // Clean up the blob URL after a delay
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (error) {
       console.error('Error downloading PDF:', error)
       alert('Errore durante la generazione del PDF')
