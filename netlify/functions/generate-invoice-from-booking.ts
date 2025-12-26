@@ -79,13 +79,33 @@ export const handler: Handler = async (event) => {
         let fullAddress = ''
         if (customerData) {
             const addressParts = []
-            if (customerData.indirizzo) addressParts.push(customerData.indirizzo)
-            if (customerData.citta_residenza) {
-                const cityPart = customerData.citta_residenza
-                const province = customerData.provincia_residenza ? ` (${customerData.provincia_residenza})` : ''
-                const cap = customerData.codice_postale ? `, ${customerData.codice_postale}` : ''
-                addressParts.push(`${cityPart}${province}${cap}`.trim())
+
+            // Build street address with civic number
+            if (customerData.indirizzo) {
+                let streetAddress = customerData.indirizzo
+                if (customerData.numero_civico) {
+                    streetAddress += ` ${customerData.numero_civico}`
+                }
+                addressParts.push(streetAddress)
             }
+
+            // Build city line with postal code
+            if (customerData.citta_residenza || customerData.codice_postale) {
+                let cityLine = ''
+                if (customerData.codice_postale) {
+                    cityLine += customerData.codice_postale
+                }
+                if (customerData.citta_residenza) {
+                    cityLine += (cityLine ? ' ' : '') + customerData.citta_residenza
+                }
+                if (customerData.provincia_residenza) {
+                    cityLine += ` (${customerData.provincia_residenza})`
+                }
+                if (cityLine) {
+                    addressParts.push(cityLine)
+                }
+            }
+
             fullAddress = addressParts.join(', ')
         }
 
