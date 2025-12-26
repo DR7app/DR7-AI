@@ -2047,14 +2047,6 @@ export default function ReservationsTab() {
                       </button>
                     )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
-                      disabled={generatingInvoice}
-                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700 text-white'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
-                      title="Genera Fattura"
-                    >
-                      {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
-                    </button>
-                    <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                       className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors whitespace-nowrap w-full"
                     >
@@ -2171,18 +2163,6 @@ export default function ReservationsTab() {
                                 Cancella
                               </button>
                             </>
-                          )}
-
-                          {/* Genera Fattura Button (Desktop) */}
-                          {booking.contract_url && booking.status !== 'cancelled' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
-                              disabled={generatingInvoice}
-                              className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700 text-white'} text-xs rounded transition-colors whitespace-nowrap`}
-                              title="Genera Fattura"
-                            >
-                              {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
-                            </button>
                           )}
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
