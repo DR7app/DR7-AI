@@ -341,9 +341,10 @@ export const handler: Handler = async (event) => {
         const total = subtotal + vatAmount + exemptAmount
 
         // Create invoice
+        const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
         const invoiceData = {
             numero_fattura: invoiceNumber,
-            data_emissione: new Date().toISOString().split('T')[0],
+            data_emissione: italyDate,
             importo_totale: total,
             stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',

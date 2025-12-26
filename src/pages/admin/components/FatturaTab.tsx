@@ -182,33 +182,30 @@ export default function InvoicesTab() {
         <div>
           <h2 className="text-2xl font-bold text-white">Fatture</h2>
         </div>
-        <Button
-          onClick={() => {
-            setMultiSelectMode(!multiSelectMode)
-            setSelectedIds([])
-          }}
-          variant={multiSelectMode ? 'secondary' : 'primary'}
-          className={multiSelectMode ? 'bg-blue-600 text-white' : ''}
-        >
-          {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
-        </Button>
-      </div>
-
-      {/* Bulk Actions Bar */}
-      {selectedIds.length > 0 && (
-        <div className="bg-blue-900/50 p-4 rounded-lg mb-4 flex justify-between items-center border border-blue-700 animate-fadeIn">
-          <span className="text-blue-200">
-            {selectedIds.length} fatture selezionate
-          </span>
-          <Button
-            onClick={handleBulkDelete}
-            variant="danger"
-            className="bg-red-600 hover:bg-red-700 text-white"
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setMultiSelectMode(!multiSelectMode)
+              setSelectedIds([])
+            }}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${multiSelectMode
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
           >
-            Elimina Selezionati ({selectedIds.length})
-          </Button>
+            {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
+          </button>
+
+          {multiSelectMode && selectedIds.length > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+            >
+              Elimina Selezionati ({selectedIds.length})
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
