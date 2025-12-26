@@ -6,68 +6,68 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    }
-  }
-
-  try {
-    const { invoiceId } = JSON.parse(event.body || '{}')
-
-    if (!invoiceId) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Invoice ID is required' })
-      }
+    if (event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            body: JSON.stringify({ error: 'Method not allowed' })
+        }
     }
 
-    // Fetch invoice from database
-    const { data: invoice, error: fetchError } = await supabase
-      .from('fatture')
-      .select('*')
-      .eq('id', invoiceId)
-      .single()
+    try {
+        const { invoiceId } = JSON.parse(event.body || '{}')
 
-    if (fetchError || !invoice) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ error: 'Invoice not found' })
-      }
+        if (!invoiceId) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Invoice ID is required' })
+            }
+        }
+
+        // Fetch invoice from database
+        const { data: invoice, error: fetchError } = await supabase
+            .from('fatture')
+            .select('*')
+            .eq('id', invoiceId)
+            .single()
+
+        if (fetchError || !invoice) {
+            return {
+                statusCode: 404,
+                body: JSON.stringify({ error: 'Invoice not found' })
+            }
+        }
+
+        // Generate HTML for the invoice
+        const html = generateInvoiceHTML(invoice)
+
+        // Update invoice with HTML
+        await supabase
+            .from('fatture')
+            .update({ invoice_html: html })
+            .eq('id', invoiceId)
+
+        return {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'text/html; charset=utf-8'
+            },
+            body: html
+        }
+    } catch (error: any) {
+        console.error('Error generating invoice PDF:', error)
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: 'Failed to generate invoice PDF',
+                message: error.message
+            })
+        }
     }
-
-    // Generate HTML for the invoice
-    const html = generateInvoiceHTML(invoice)
-
-    // Update invoice with HTML
-    await supabase
-      .from('fatture')
-      .update({ invoice_html: html })
-      .eq('id', invoiceId)
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8'
-      },
-      body: html
-    }
-  } catch (error: any) {
-    console.error('Error generating invoice PDF:', error)
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: 'Failed to generate invoice PDF',
-        message: error.message
-      })
-    }
-  }
 }
 
 function generateInvoiceHTML(invoice: any): string {
-  const items = invoice.items || []
-  const itemsHTML = items.map((item: any) => `
+    const items = invoice.items || []
+    const itemsHTML = items.map((item: any) => `
         <tr>
             <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.description}</td>
             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
@@ -77,7 +77,7 @@ function generateInvoiceHTML(invoice: any): string {
         </tr>
     `).join('')
 
-  return `
+    return `
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -153,7 +153,7 @@ function generateInvoiceHTML(invoice: any): string {
 <body>
     <div class="header">
         <div class="company-info">
-            <h1 style="margin: 0; font-size: 20px;">DR7 EMPIRE SRL</h1>
+            <h1 style="margin: 0; font-size: 20px;">DR7 S.p.A</h1>
             <p style="margin: 5px 0;">Viale Marconi, 229</p>
             <p style="margin: 5px 0;">09131 Cagliari (CA)</p>
             <p style="margin: 5px 0;">P.IVA: 04066690923</p>
