@@ -45,24 +45,9 @@ interface InvoiceItem {
 export default function InvoicesTab() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [sendingToSDI, setSendingToSDI] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState<string | null>(null)
 
-  const [formData, setFormData] = useState({
-    invoice_number: '',
-    invoice_date: new Date().toISOString().split('T')[0],
-    customer_name: '',
-    customer_address: '',
-    customer_tax_code: '',
-    customer_vat: '',
-    items: [{ description: '', unit_price: 0, quantity: 1, vat_rate: 0 }],
-    payment_method: 'Carta di credito / bancomat',
-    payment_date: new Date().toISOString().split('T')[0],
-    status: 'paid' as 'paid' | 'pending' | 'overdue',
-    notes: ''
-  })
+
 
   useEffect(() => {
     loadInvoices()
@@ -85,131 +70,7 @@ export default function InvoicesTab() {
     }
   }
 
-  function calculateTotals() {
-    let subtotal = 0
-    let vatAmount = 0
-    let exemptAmount = 0
 
-    formData.items.forEach(item => {
-      const itemTotal = item.unit_price * item.quantity
-      if (item.vat_rate === 0) {
-        exemptAmount += itemTotal
-      } else {
-        subtotal += itemTotal
-        vatAmount += itemTotal * (item.vat_rate / 100)
-      }
-    })
-
-    const total = subtotal + vatAmount + exemptAmount
-
-    return { subtotal, vatAmount, exemptAmount, total }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setSendingToSDI(true)
-    try {
-      const { subtotal, vatAmount, exemptAmount, total } = calculateTotals()
-
-      const invoiceData = {
-        ...formData,
-        subtotal,
-        vat_amount: vatAmount,
-        exempt_amount: exemptAmount,
-        total,
-        items: formData.items,
-        sdi_status: 'draft' // Initial status
-      }
-
-      let invoiceId = editingId
-
-      if (editingId) {
-        const { error } = await supabase
-          .from('fatture')
-          .update(invoiceData)
-          .eq('id', editingId)
-
-        if (error) throw error
-      } else {
-        const { data, error } = await supabase
-          .from('fatture')
-          .insert([invoiceData])
-          .select()
-          .single()
-
-        if (error) throw error
-        invoiceId = data.id
-      }
-
-      // Automatically send to SDI
-      if (invoiceId) {
-        try {
-          const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ invoiceId })
-          })
-
-          const result = await response.json()
-
-          if (response.ok) {
-            alert(`✅ Fattura salvata e inviata a SDI con successo!\n\nID SDI: ${result.sdi_id || 'N/A'}`)
-          } else {
-            alert(`⚠️ Fattura salvata, ma invio a SDI fallito:\n\n${result.error || 'Errore sconosciuto'}\n\nPuoi riprovare cliccando "Verifica Stato".`)
-          }
-        } catch (sdiError) {
-          console.error('SDI error:', sdiError)
-          alert('⚠️ Fattura salvata, ma errore durante invio a SDI. Verifica la connessione.')
-        }
-      }
-
-      setShowForm(false)
-      setEditingId(null)
-      resetForm()
-      loadInvoices()
-    } catch (error) {
-      console.error('Failed to save invoice:', error)
-      alert('Impossibile salvare la fattura')
-    } finally {
-      setSendingToSDI(false)
-    }
-  }
-
-  function resetForm() {
-    setFormData({
-      invoice_number: '',
-      invoice_date: new Date().toISOString().split('T')[0],
-      customer_name: '',
-      customer_address: '',
-      customer_tax_code: '',
-      customer_vat: '',
-      items: [{ description: '', unit_price: 0, quantity: 1, vat_rate: 0 }],
-      payment_method: 'Carta di credito / bancomat',
-      payment_date: new Date().toISOString().split('T')[0],
-      status: 'paid',
-      notes: ''
-    })
-  }
-
-  function addItem() {
-    setFormData({
-      ...formData,
-      items: [...formData.items, { description: '', unit_price: 0, quantity: 1, vat_rate: 0 }]
-    })
-  }
-
-  function removeItem(index: number) {
-    setFormData({
-      ...formData,
-      items: formData.items.filter((_, i) => i !== index)
-    })
-  }
-
-  function updateItem(index: number, field: keyof InvoiceItem, value: any) {
-    const newItems = [...formData.items]
-    newItems[index] = { ...newItems[index], [field]: value }
-    setFormData({ ...formData, items: newItems })
-  }
 
   function downloadPDF(invoice: Invoice) {
     // Open invoice HTML in new window for printing/saving as PDF
@@ -254,7 +115,7 @@ export default function InvoicesTab() {
     }
   }
 
-  const { subtotal, vatAmount, exemptAmount, total } = calculateTotals()
+
 
   if (loading) {
     return <div className="text-center py-8 text-gray-400">Caricamento...</div>
