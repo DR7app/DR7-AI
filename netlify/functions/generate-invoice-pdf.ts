@@ -339,7 +339,7 @@ function generateInvoiceHTML(invoice: any): string {
                 <span>Totale fattura</span>
                 <span>€${totale.toFixed(2)}</span>
             </div>
-            <div class="summary-row total">
+            <div class="summary-row">
                 <span>Importo dovuto</span>
                 <span>€${totale.toFixed(2)}</span>
             </div>
