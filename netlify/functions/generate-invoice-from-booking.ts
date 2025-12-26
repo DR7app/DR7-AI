@@ -46,24 +46,32 @@ export const handler: Handler = async (event) => {
         console.log('Booking customer_id:', booking.customer_id)
         console.log('Using customer ID:', customerId)
 
-        const { data: customerData, error: customerError } = await supabase
-            .from('customers_extended')
-            .select('*')
-            .eq('id', customerId)
-            .single()
+        let customerData = null
 
-        if (customerError) {
-            console.error('Customer fetch error:', customerError)
+        // Only fetch customer data if we have a valid customer ID
+        if (customerId && customerId !== 'undefined') {
+            const { data, error: customerError } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('id', customerId)
+                .single()
+
+            if (customerError) {
+                console.error('Customer fetch error:', customerError)
+            } else {
+                customerData = data
+                console.log('Customer data fetched:', {
+                    id: customerData?.id,
+                    fullName: customerData?.fullName,
+                    nome: customerData?.nome,
+                    email: customerData?.email,
+                    telefono: customerData?.telefono,
+                    indirizzo: customerData?.indirizzo,
+                    hasData: !!(customerData?.email || customerData?.telefono || customerData?.indirizzo)
+                })
+            }
         } else {
-            console.log('Customer data fetched:', {
-                id: customerData?.id,
-                fullName: customerData?.fullName,
-                nome: customerData?.nome,
-                email: customerData?.email,
-                telefono: customerData?.telefono,
-                indirizzo: customerData?.indirizzo,
-                hasData: !!(customerData?.email || customerData?.telefono || customerData?.indirizzo)
-            })
+            console.log('No valid customer ID - will use booking data only')
         }
         console.log('=== END DEBUG ===')
 
