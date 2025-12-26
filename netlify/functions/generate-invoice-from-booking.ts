@@ -40,7 +40,7 @@ export const handler: Handler = async (event) => {
         // Check if invoice already exists for this booking
         const { data: existingInvoice } = await supabase
             .from('fatture')
-            .select('id, invoice_number')
+            .select('id, numero_fattura')
             .eq('booking_id', bookingId)
             .single()
 
@@ -49,7 +49,7 @@ export const handler: Handler = async (event) => {
                 statusCode: 400,
                 body: JSON.stringify({
                     error: 'Invoice already exists for this booking',
-                    invoiceNumber: existingInvoice.invoice_number
+                    invoiceNumber: existingInvoice.numero_fattura
                 })
             }
         }
@@ -57,7 +57,7 @@ export const handler: Handler = async (event) => {
         // Get next invoice number
         const { data: lastInvoice } = await supabase
             .from('fatture')
-            .select('invoice_number')
+            .select('numero_fattura')
             .order('created_at', { ascending: false })
             .limit(1)
             .single()
@@ -65,8 +65,8 @@ export const handler: Handler = async (event) => {
         let nextNumber = 1
         const currentYear = new Date().getFullYear()
 
-        if (lastInvoice?.invoice_number) {
-            const match = lastInvoice.invoice_number.match(/^(\d+)\//)
+        if (lastInvoice?.numero_fattura) {
+            const match = lastInvoice.numero_fattura.match(/^(\d+)\//)
             if (match) {
                 nextNumber = parseInt(match[1]) + 1
             }
@@ -138,11 +138,11 @@ export const handler: Handler = async (event) => {
 
         // Create invoice
         const invoiceData = {
-            invoice_number: invoiceNumber,
-            invoice_date: new Date().toISOString().split('T')[0],
+            numero_fattura: invoiceNumber,
+            data_emissione: new Date().toISOString().split('T')[0],
+            importo_totale: total,
+            stato: 'paid',
             customer_name: booking.customer_name || customerData.fullName || 'Cliente',
-            customer_email: booking.customer_email || customerData.email,
-            customer_phone: booking.customer_phone || customerData.phone,
             customer_address: customerData.address || '',
             customer_tax_code: customerData.codiceFiscale || '',
             customer_vat: customerData.partitaIva || '',
@@ -151,11 +151,9 @@ export const handler: Handler = async (event) => {
             subtotal,
             vat_amount: vatAmount,
             exempt_amount: exemptAmount,
-            total,
+            invoice_date: new Date().toISOString().split('T')[0],
             payment_method: booking.payment_method || 'Carta di credito / bancomat',
             payment_date: new Date().toISOString().split('T')[0],
-            status: 'paid',
-            payment_status: 'paid',
             sdi_status: 'draft'
         }
 
