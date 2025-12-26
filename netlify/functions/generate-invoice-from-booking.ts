@@ -119,6 +119,7 @@ export const handler: Handler = async (event) => {
         })
 
         // Add insurance if present in booking details
+        const bookingDetails = booking.booking_details || {}
         if (bookingDetails.insurance) {
             const insuranceName = bookingDetails.insurance.replace(/_/g, ' ')
             items.push({
