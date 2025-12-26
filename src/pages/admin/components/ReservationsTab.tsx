@@ -2109,7 +2109,7 @@ export default function ReservationsTab() {
                       className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700 text-white'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
                       title="Genera Fattura"
                     >
-                      {generatingInvoice ? '⏳' : '🧾'} Fattura
+                      {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
