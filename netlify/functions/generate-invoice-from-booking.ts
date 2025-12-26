@@ -5,6 +5,10 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyira
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+const FATTURA_API_USERNAME = process.env.FATTURA_API_USERNAME || ''
+const FATTURA_API_PASSWORD = process.env.FATTURA_API_PASSWORD || ''
+const FATTURA_API_BASE_URL = process.env.FATTURA_API_BASE_URL || 'https://fattura-elettronica-api.it/ws2.0/test'
+
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return {
@@ -379,6 +383,50 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
+        // --- AUTOMATIC SDI SENDING ---
+        let sdiResult = null
+        if (FATTURA_API_USERNAME && FATTURA_API_PASSWORD && invoice) {
+            try {
+                // Generate Payload
+                const fatturaPayload = generateFatturaPayload(invoice, items)
+
+                // Auth
+                const authString = Buffer.from(`${FATTURA_API_USERNAME}:${FATTURA_API_PASSWORD}`).toString('base64')
+
+                // Send
+                const sdiResponse = await fetch(`${FATTURA_API_BASE_URL}/fatture`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Basic ${authString}`
+                    },
+                    body: JSON.stringify(fatturaPayload)
+                })
+
+                const responseData = await sdiResponse.json()
+                sdiResult = responseData
+
+                // Update Invoice Status
+                await supabase
+                    .from('fatture')
+                    .update({
+                        sdi_status: sdiResponse.ok ? 'sent' : 'error',
+                        sdi_id: responseData.id || responseData.IdFattura,
+                        sdi_sent_at: new Date().toISOString(),
+                        sdi_response: responseData,
+                        xml_fattura_pa: JSON.stringify(fatturaPayload)
+                    })
+                    .eq('id', invoice.id)
+
+                // Update local object for return
+                invoice.sdi_status = sdiResponse.ok ? 'sent' : 'error'
+            } catch (sdiError: any) {
+                console.error('SDI Sending Failed:', sdiError)
+                // Don't fail the whole request, just log
+                await supabase.from('fatture').update({ sdi_status: 'error', sdi_response: { error: sdiError.message } }).eq('id', invoice.id)
+            }
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({
@@ -405,4 +453,51 @@ export const handler: Handler = async (event) => {
             })
         }
     }
+}
+
+function generateFatturaPayload(invoice: any, items: any[]) {
+    const addressParts = parseAddress(invoice.customer_address || '')
+
+    // Line items
+    const righe = items.map(item => ({
+        Descrizione: item.description,
+        PrezzoUnitario: item.unit_price.toFixed(2),
+        Quantita: item.quantity.toString(),
+        AliquotaIVA: item.vat_rate
+    }))
+
+    return {
+        destinatario: {
+            CodiceFiscale: invoice.customer_tax_code || '',
+            PartitaIVA: invoice.customer_vat || '',
+            Denominazione: invoice.customer_name,
+            Indirizzo: addressParts.street || invoice.customer_address,
+            CAP: addressParts.cap || '09100',
+            Comune: addressParts.comune || 'Cagliari',
+            Provincia: addressParts.provincia || 'CA',
+            Nazione: 'IT'
+        },
+        documento: {
+            Data: invoice.data_emissione, // YYYY-MM-DD
+            Numero: invoice.numero_fattura,
+            TipoDocumento: 'TD01',
+            Valuta: 'EUR'
+        },
+        righe
+    }
+}
+
+function parseAddress(address: string) {
+    const parts = address.split(',').map(p => p.trim())
+    if (parts.length >= 2) {
+        const street = parts[0]
+        const cityPart = parts[1]
+        const capMatch = cityPart.match(/\b(\d{5})\b/)
+        const cap = capMatch ? capMatch[1] : ''
+        const provinciaMatch = cityPart.match(/\(([A-Z]{2})\)/)
+        const provincia = provinciaMatch ? provinciaMatch[1] : ''
+        let comune = cityPart.replace(cap, '').replace(`(${provincia})`, '').trim()
+        return { street, cap, comune, provincia }
+    }
+    return { street: address, cap: '', comune: '', provincia: '' }
 }
