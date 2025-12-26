@@ -114,24 +114,26 @@ function generateInvoiceHTML(invoice: any): string {
         }
         .invoice-title {
             text-align: right;
-            font-size: 28px;
-            font-weight: bold;
+            font-size: 24px;
+            font-weight: 700;
+            color: #000;
         }
         .invoice-date {
             text-align: right;
-            color: #6b7280;
-            margin-top: 5px;
+            color: #000;
+            margin-top: 4px;
+            font-size: 13px;
         }
         .section {
             margin-bottom: 10px;
         }
         .section-title {
-            font-size: 11px;
+            font-size: 10px;
             text-transform: uppercase;
-            color: #6b7280;
+            color: #000;
             letter-spacing: 0.5px;
-            margin-bottom: 10px;
-            font-weight: 600;
+            margin-bottom: 6px;
+            font-weight: 700;
         }
         .company-details, .customer-details {
             background: #f9fafb;
@@ -141,13 +143,13 @@ function generateInvoiceHTML(invoice: any): string {
         }
         .company-details p, .customer-details p {
             margin: 1px 0;
-            color: #374151;
+            color: #000;
             font-size: 12px;
         }
         .company-name {
             font-weight: 700;
             font-size: 13px;
-            color: #111827;
+            color: #000;
             margin-bottom: 4px;
         }
         .two-column {
