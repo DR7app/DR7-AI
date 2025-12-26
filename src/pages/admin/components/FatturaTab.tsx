@@ -264,212 +264,7 @@ export default function InvoicesTab() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-white">Fatture</h2>
-        <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
-          + Nuova Fattura
-        </Button>
       </div>
-
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-900 p-6 rounded-lg mb-6 border border-gray-700">
-          <h3 className="text-xl font-semibold text-white mb-4">
-            {editingId ? 'Modifica Fattura' : 'Nuova Fattura'}
-          </h3>
-
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Numero Fattura *</label>
-              <input
-                type="text"
-                value={formData.invoice_number}
-                onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-                placeholder="1448/FE"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Data Fattura *</label>
-              <input
-                type="date"
-                value={formData.invoice_date}
-                onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4 mb-6">
-            <h4 className="text-lg font-semibold text-white">Destinatario</h4>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Nome / Ragione Sociale *</label>
-              <input
-                type="text"
-                value={formData.customer_name}
-                onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Indirizzo *</label>
-              <input
-                type="text"
-                value={formData.customer_address}
-                onChange={(e) => setFormData({ ...formData, customer_address: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-                placeholder="Via Roma 43, 09070 Cagliari (CA)"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Codice Fiscale *</label>
-                <input
-                  type="text"
-                  value={formData.customer_tax_code}
-                  onChange={(e) => setFormData({ ...formData, customer_tax_code: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">P. IVA (opzionale)</label>
-                <input
-                  type="text"
-                  value={formData.customer_vat}
-                  onChange={(e) => setFormData({ ...formData, customer_vat: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-3">
-              <h4 className="text-lg font-semibold text-white">Articoli</h4>
-              <Button type="button" onClick={addItem} variant="secondary">+ Aggiungi Articolo</Button>
-            </div>
-
-            {formData.items.map((item, index) => (
-              <div key={index} className="bg-gray-800 p-4 rounded-lg mb-3">
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 md:col-span-5">
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(e) => updateItem(index, 'description', e.target.value)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-                      placeholder="Descrizione"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={item.unit_price}
-                      onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-                      placeholder="Prezzo"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-2">
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-                      placeholder="Q.tà"
-                      min="1"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-2">
-                    <input
-                      type="number"
-                      value={item.vat_rate}
-                      onChange={(e) => updateItem(index, 'vat_rate', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-                      placeholder="IVA %"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-1 flex items-center justify-end">
-                    {formData.items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeItem(index)}
-                        className="text-red-400 hover:text-red-300 text-sm"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <div className="bg-gray-800 p-4 rounded-lg mt-4">
-              <div className="space-y-2 text-sm">
-                {subtotal > 0 && <div className="flex justify-between"><span className="text-gray-400">Imponibile:</span><span className="text-white">€{subtotal.toFixed(2)}</span></div>}
-                {vatAmount > 0 && <div className="flex justify-between"><span className="text-gray-400">IVA:</span><span className="text-white">€{vatAmount.toFixed(2)}</span></div>}
-                {exemptAmount > 0 && <div className="flex justify-between"><span className="text-gray-400">Esente IVA:</span><span className="text-white">€{exemptAmount.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-700"><span className="text-white">Totale:</span><span className="text-dr7-gold">€{total.toFixed(2)}</span></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Metodo Pagamento</label>
-              <select
-                value={formData.payment_method}
-                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-              >
-                <option value="Carta di credito / bancomat">Carta di credito / bancomat</option>
-                <option value="Bonifico bancario">Bonifico bancario</option>
-                <option value="Contanti">Contanti</option>
-                <option value="Assegno">Assegno</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Data Scadenza</label>
-              <input
-                type="date"
-                value={formData.payment_date}
-                onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-1">Stato</label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-              className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
-            >
-              <option value="paid">Pagata</option>
-              <option value="pending">In attesa</option>
-              <option value="overdue">Scaduta</option>
-            </select>
-          </div>
-
-          <div className="flex gap-3">
-            <Button type="submit" disabled={sendingToSDI}>
-              {sendingToSDI ? '⏳ Invio a SDI in corso...' : 'Salva e Invia a SDI'}
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); resetForm() }}>
-              Annulla
-            </Button>
-          </div>
-        </form>
-      )}
 
       <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
@@ -494,18 +289,18 @@ export default function InvoicesTab() {
                   <td className="px-4 py-3 text-sm text-white text-right">€{(invoice.total || 0).toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.payment_status === 'paid' ? 'bg-green-500/20 text-green-400' :
-                        invoice.payment_status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-red-500/20 text-red-400'
+                      invoice.payment_status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-red-500/20 text-red-400'
                       }`}>
                       {invoice.payment_status === 'paid' ? 'Pagata' : invoice.payment_status === 'pending' ? 'In attesa' : 'Non pagata'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.sdi_status === 'accepted' ? 'bg-green-500/20 text-green-400' :
-                        invoice.sdi_status === 'sent' ? 'bg-blue-500/20 text-blue-400' :
-                          invoice.sdi_status === 'sending' ? 'bg-yellow-500/20 text-yellow-400' :
-                            invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-500/20 text-red-400' :
-                              'bg-gray-500/20 text-gray-400'
+                      invoice.sdi_status === 'sent' ? 'bg-blue-500/20 text-blue-400' :
+                        invoice.sdi_status === 'sending' ? 'bg-yellow-500/20 text-yellow-400' :
+                          invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-500/20 text-red-400' :
+                            'bg-gray-500/20 text-gray-400'
                       }`}>
                       {invoice.sdi_status === 'accepted' ? '✅ Accettata' :
                         invoice.sdi_status === 'sent' ? '📤 Inviata' :
