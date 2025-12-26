@@ -151,9 +151,6 @@ export const handler: Handler = async (event) => {
             subtotal,
             vat_amount: vatAmount,
             exempt_amount: exemptAmount,
-            invoice_date: new Date().toISOString().split('T')[0],
-            payment_method: booking.payment_method || 'Carta di credito / bancomat',
-            payment_date: new Date().toISOString().split('T')[0],
             sdi_status: 'draft'
         }
 
