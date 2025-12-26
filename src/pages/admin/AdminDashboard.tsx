@@ -209,7 +209,7 @@ export default function AdminDashboard() {
               <div className="relative group">
                 <button
                   className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar'
-                    ? 'bg-gray-800 text-white'
+                    ? 'text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
                 >
@@ -238,7 +238,7 @@ export default function AdminDashboard() {
               <div className="relative group">
                 <button
                   className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'carwash' || activeTab === 'carwash-calendar'
-                    ? 'bg-gray-800 text-white'
+                    ? 'text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
                 >
@@ -267,7 +267,7 @@ export default function AdminDashboard() {
               <div className="relative group">
                 <button
                   className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'mechanical' || activeTab === 'mechanical-calendar'
-                    ? 'bg-gray-800 text-white'
+                    ? 'text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
                 >
@@ -296,7 +296,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('unpaid')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'unpaid'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -305,7 +305,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('documents-verification')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'documents-verification'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -314,7 +314,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('customers')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'customers'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -323,7 +323,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('vehicles')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'vehicles'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -332,7 +332,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('lotteria')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'lotteria'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -341,7 +341,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('fattura')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -350,7 +350,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('contratto')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -359,7 +359,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('marketing')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
@@ -368,7 +368,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('reviews')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reviews'
-                  ? 'bg-gray-800 text-white'
+                  ? 'text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
