@@ -765,12 +765,15 @@ export default function ReservationsTab() {
       })
 
       const data = await response.json()
-
       if (!response.ok) {
         if (data.invoiceNumber) {
           alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
         } else {
-          throw new Error(data.error || 'Impossibile generare la fattura')
+          // Show detailed error from backend
+          const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
+          const errorDetails = data.details ? `\n\nDettagli: ${data.details}` : ''
+          const errorHint = data.hint ? `\n\nSuggerimento: ${data.hint}` : ''
+          throw new Error(errorMsg + errorDetails + errorHint)
         }
         return
       }
@@ -779,7 +782,7 @@ export default function ReservationsTab() {
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)
-      alert('Errore nella generazione della fattura: ' + error.message)
+      alert('Errore nella generazione della fattura:\n\n' + error.message)
     } finally {
       setGeneratingInvoice(false)
     }
