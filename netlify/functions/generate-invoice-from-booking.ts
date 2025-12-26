@@ -209,7 +209,8 @@ export const handler: Handler = async (event) => {
             numero_fattura: invoiceNumber,
             data_emissione: new Date().toISOString().split('T')[0],
             importo_totale: total,
-            stato: 'paid',
+            stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'paid' :
+                booking.payment_status === 'pending' ? 'pending' : 'unpaid',
             customer_name: booking.customer_name || customerData?.fullName || customerData?.nome || 'Cliente',
             customer_address: fullAddress || customerData?.indirizzo || '',
             customer_phone: customerData?.telefono || customerData?.phone || booking.customer_phone || '',
