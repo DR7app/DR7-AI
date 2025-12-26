@@ -99,9 +99,6 @@ export const handler: Handler = async (event) => {
 
         const invoiceNumber = `${nextNumber}/${currentYear}`
 
-        // Extract customer info from booking
-        const bookingDetails = booking.booking_details || {}
-        const customerData = bookingDetails.customer || {}
 
         // Parse booking dates
         const pickupDate = new Date(booking.pickup_date)

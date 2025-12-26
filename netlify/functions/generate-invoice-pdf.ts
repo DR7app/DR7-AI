@@ -367,23 +367,22 @@ function generateInvoiceHTML(invoice: any): string {
     `.trim()
 }
 
-<tr>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;" > ${ item.description } </td>
-        < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: center;" > ${ item.quantity } </td>
-            < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: right;" >€${ item.unit_price.toFixed(2) } </td>
-                < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: center;" > ${ item.vat_rate }% </td>
-                    < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: right;" >€${ (item.unit_price * item.quantity).toFixed(2) } </td>
-                        </tr>
-                            `).join('')
+<td style="padding: 8px; border-bottom: 1px solid #ddd;" > ${ item.description } </td>
+    < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: center;" > ${ item.quantity } </td>
+        < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: right;" >€${ item.unit_price.toFixed(2) } </td>
+            < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: center;" > ${ item.vat_rate }% </td>
+                < td style = "padding: 8px; border-bottom: 1px solid #ddd; text-align: right;" >€${ (item.unit_price * item.quantity).toFixed(2) } </td>
+                    </tr>
+                        `).join('')
 
 return `
-                        < !DOCTYPE html >
-                            <html lang="it" >
-                                <head>
-                                <meta charset="UTF-8" >
-                                    <meta name="viewport" content = "width=device-width, initial-scale=1.0" >
-                                        <title>Fattura ${ invoice.numero_fattura } </title>
-                                            <style>
+                    < !DOCTYPE html >
+                        <html lang="it" >
+                            <head>
+                            <meta charset="UTF-8" >
+                                <meta name="viewport" content = "width=device-width, initial-scale=1.0" >
+                                    <title>Fattura ${ invoice.numero_fattura } </title>
+                                        <style>
         body {
     font - family: Arial, sans - serif;
     max - width: 800px;
