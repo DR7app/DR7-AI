@@ -159,27 +159,32 @@ function generateInvoiceHTML(invoice: any): string {
             margin-bottom: 10px;
         }
         .invoice-meta {
-            display: grid;
-            grid-template-columns: auto auto auto auto auto auto;
-            gap: 10px;
+            display: flex;
+            justify-content: flex-start; /* Or space-between if wider */
+            gap: 40px;
             align-items: center;
-            margin-bottom: 10px;
-            padding: 8px 10px;
-            background: #fff;
-            border-radius: 4px;
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
         }
-        .invoice-meta label {
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .meta-label {
             font-size: 11px;
             text-transform: uppercase;
             color: #6b7280;
             font-weight: 600;
+            letter-spacing: 0.5px;
         }
-        .invoice-meta .value {
-            padding: 8px 12px;
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
+        .meta-value {
+            font-size: 14px;
             font-weight: 600;
+            color: #111827;
         }
         table {
             width: 100%;
@@ -295,15 +300,20 @@ function generateInvoiceHTML(invoice: any): string {
         </div>
 
         <!-- Invoice Meta -->
+        <!-- Invoice Meta -->
         <div class="invoice-meta">
-            <label>TIPO DI DOCUMENTO</label>
-            <div class="value">Fattura</div>
-            
-            <label>NUMERO</label>
-            <div class="value">${invoice.numero_fattura}</div>
-            
-            <label>DATA</label>
-            <div class="value">${new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</div>
+            <div class="meta-item">
+                <span class="meta-label">TIPO DI DOCUMENTO</span>
+                <span class="meta-value">Fattura</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">NUMERO</span>
+                <span class="meta-value">${invoice.numero_fattura}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">DATA</span>
+                <span class="meta-value">${new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</span>
+            </div>
         </div>
 
         <!-- Line Items -->
@@ -338,8 +348,8 @@ function generateInvoiceHTML(invoice: any): string {
                 <span>€${totale.toFixed(2)}</span>
             </div>
             <div class="summary-row">
-                <span>Importo dovuto</span>
-                <span>€${totale.toFixed(2)}</span>
+                <span>${invoice.stato === 'paid' ? 'Totale da pagare' : 'Importo dovuto'}</span>
+                <span>€${invoice.stato === 'paid' ? '0.00' : totale.toFixed(2)}</span>
             </div>
         </div>
 

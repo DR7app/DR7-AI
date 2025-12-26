@@ -219,13 +219,19 @@ export const handler: Handler = async (event) => {
             const currentYear = new Date().getFullYear()
 
             if (lastInvoice?.numero_fattura) {
-                const match = lastInvoice.numero_fattura.match(/^(\d+)\//)
-                if (match) {
-                    nextNumber = parseInt(match[1]) + 1
+                // Parse standard "DR7-2025-0013" or legacy "13/2025"
+                const legacyMatch = lastInvoice.numero_fattura.match(/^(\d+)\//)
+                const newMatch = lastInvoice.numero_fattura.match(/DR7-\d+-(\d+)/)
+
+                if (newMatch) {
+                    nextNumber = parseInt(newMatch[1], 10) + 1
+                } else if (legacyMatch) {
+                    nextNumber = parseInt(legacyMatch[1], 10) + 1
                 }
             }
 
-            invoiceNumber = `${nextNumber}/${currentYear}`
+            const padded = String(nextNumber).padStart(4, '0')
+            invoiceNumber = `DR7-${currentYear}-${padded}`
         }
 
 

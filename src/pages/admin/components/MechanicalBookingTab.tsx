@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import MechanicalBookingForm from './MechanicalBookingForm'
+import NewClientModal from './NewClientModal'
 
 interface Customer {
   id: string
@@ -11,6 +12,7 @@ interface Customer {
 
 interface MechanicalBooking {
   id: string
+  customer_id: string
   customer_name: string
   customer_email: string
   customer_phone: string
@@ -40,6 +42,30 @@ export default function MechanicalBookingTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+
+  // Quick Edit Customer Modal State
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [customerToEdit, setCustomerToEdit] = useState<any>(null)
+
+  async function openEditCustomer(customerId: string) {
+    if (!customerId) return
+    try {
+      const { data, error } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .eq('id', customerId)
+        .single()
+
+      if (error) throw error
+      if (data) {
+        setCustomerToEdit(data)
+        setEditModalOpen(true)
+      }
+    } catch (error) {
+      console.error('Error fetching customer for edit:', error)
+      alert("Impossibile caricare i dati del cliente per la modifica.")
+    }
+  }
 
 
   useEffect(() => {
@@ -176,7 +202,18 @@ export default function MechanicalBookingTab() {
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)
-      alert('Errore nella generazione della fattura:\n\n' + error.message)
+      console.error('Error generating invoice:', error)
+      const errorMessage = error.message || ''
+
+      // Check for validation errors (missing address/tax code)
+      if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
+        if (confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
+          openEditCustomer(booking.customer_id)
+          return
+        }
+      }
+
+      alert('Errore nella generazione della fattura:\n\n' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
     }
@@ -239,6 +276,17 @@ export default function MechanicalBookingTab() {
           </div>
         </div>
       )}
+
+      {/* Quick Edit Customer Modal */}
+      <NewClientModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        initialData={customerToEdit}
+        onClientCreated={() => {
+          loadData() // Refresh booking data to reflect customer updates (though join might need refetch)
+          // We don't automatically retry invoice generation, user can click again
+        }}
+      />
 
       {/* Bookings Table */}
       <div className="bg-gray-900 rounded-lg overflow-hidden">

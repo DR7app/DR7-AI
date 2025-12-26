@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
+import NewClientModal from './NewClientModal'
 
 interface Customer {
   id: string
@@ -11,6 +12,7 @@ interface Customer {
 
 interface CarWashBooking {
   id: string
+  customer_id: string
   customer_name: string
   customer_email: string
   customer_phone: string
@@ -166,6 +168,30 @@ export default function CarWashBookingsTab() {
   })
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
+
+  // Quick Edit Customer Modal State
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [customerToEdit, setCustomerToEdit] = useState<any>(null)
+
+  async function openEditCustomer(customerId: string) {
+    if (!customerId) return
+    try {
+      const { data, error } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .eq('id', customerId)
+        .single()
+
+      if (error) throw error
+      if (data) {
+        setCustomerToEdit(data)
+        setEditModalOpen(true)
+      }
+    } catch (error) {
+      console.error('Error fetching customer for edit:', error)
+      alert("Impossibile caricare i dati del cliente per la modifica.")
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -327,7 +353,16 @@ export default function CarWashBookingsTab() {
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)
-      alert('Errore nella generazione della fattura:\n\n' + error.message)
+      const errorMessage = error.message || ''
+
+      // Check for validation errors (missing address/tax code)
+      if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
+        if (confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
+          openEditCustomer(booking.customer_id)
+          return
+        }
+      }
+      alert('Errore nella generazione della fattura:\n\n' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
     }
@@ -731,6 +766,16 @@ export default function CarWashBookingsTab() {
           className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
       </div>
+
+      {/* Quick Edit Customer Modal */}
+      <NewClientModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        initialData={customerToEdit}
+        onClientCreated={() => {
+          loadData()
+        }}
+      />
 
       {showForm && (
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
