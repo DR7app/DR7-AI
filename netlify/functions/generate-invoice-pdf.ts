@@ -366,8 +366,7 @@ function generateInvoiceHTML(invoice: any): string {
 </html>
     `.trim()
 }
-
-const itemsHTML = items.map((item: any) => `
+`
         <tr>
             <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.description}</td>
             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
