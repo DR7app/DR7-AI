@@ -357,7 +357,7 @@ function generateInvoiceHTML(invoice: any): string {
         <!-- Footer -->
         <div class="footer">
             <p><strong>Dubai rent 7.0 S.p.A.</strong> Iscr. reg. imp.: 04104640927</p>
-            <p>Tel: 3457905205 &nbsp;|&nbsp; Email: amministrazione@dr7luxuryempire.com &nbsp;|&nbsp; PEC: dubai.rent7.0srl@legalmail.it &nbsp;|&nbsp; Website: www.dr7empire.com</p>
+            <p>Tel: 3457905205 &nbsp;|&nbsp; Email: Info@dr7.app &nbsp;|&nbsp; PEC: dubai.rent7.0srl@legalmail.it &nbsp;|&nbsp; Website: www.dr7empire.com</p>
             <p>Socio unico - Cap. soc. 50.000,00 €</p>
             <p>Regime Fiscale: Ordinario</p>
         </div>
