@@ -116,6 +116,72 @@ export default function MechanicalBookingTab() {
     }
   }
 
+  const [generatingInvoice, setGeneratingInvoice] = useState(false)
+
+  async function handleGenerateInvoice(booking: MechanicalBooking) {
+    if (!booking.id) return
+    const customerName = booking.customer_name
+    const serviceName = booking.service_name
+
+    if (!confirm(`Vuoi generare una fattura per questa prenotazione?\n\nCliente: ${customerName}\nServizio: ${serviceName}`)) {
+      return
+    }
+
+    setGeneratingInvoice(true)
+    try {
+      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id })
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        if (data.invoiceNumber) {
+          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        } else {
+          const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
+          const errorDetails = data.details ? `\n\nDettagli: ${data.details}` : ''
+          const errorHint = data.hint ? `\n\nSuggerimento: ${data.hint}` : ''
+          throw new Error(errorMsg + errorDetails + errorHint)
+        }
+        return
+      }
+
+      // Generate and open the invoice PDF
+      const invoiceId = data.invoice.id
+      const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId })
+      })
+
+      if (pdfResponse.ok) {
+        const html = await pdfResponse.text()
+        const blob = new Blob([html], { type: 'text/html' })
+        const url = URL.createObjectURL(blob)
+        const printWindow = window.open(url, '_blank')
+
+        if (printWindow) {
+          // Increase timeout to ensure browser has time to load the Blob URL
+          setTimeout(() => URL.revokeObjectURL(url), 3000)
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+        } else {
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        }
+      } else {
+        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+      }
+
+      loadData()
+    } catch (error: any) {
+      console.error('Error generating invoice:', error)
+      alert('Errore nella generazione della fattura:\n\n' + error.message)
+    } finally {
+      setGeneratingInvoice(false)
+    }
+  }
+
   // State for search query
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
 
@@ -237,6 +303,13 @@ export default function MechanicalBookingTab() {
                       className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
                     >
                       Modifica
+                    </button>
+                    <button
+                      onClick={() => handleGenerateInvoice(booking)}
+                      disabled={generatingInvoice}
+                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-purple-600 hover:bg-purple-700 text-white'} rounded text-xs font-medium transition-colors`}
+                    >
+                      {generatingInvoice ? '...' : 'Genera Fattura'}
                     </button>
                     <button
                       onClick={() => handleDelete(booking.id)}

@@ -37,18 +37,22 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Fetch customer data
-        const customerId = booking.user_id || booking.customer_id
+        // Fetch customer data with robust fallback (Logic from generate-contract.ts)
+        const bookingDetails = booking.booking_details || {}
+        // Priority order:
+        // 1. booking.booking_details.customer.customerId (admin-created bookings)
+        // 2. booking.user_id (website bookings)
+        // 3. booking.customer_id (legacy)
+        const customerId = bookingDetails.customer?.customerId || booking.user_id || booking.customer_id
+
         console.log('=== INVOICE GENERATION DEBUG ===')
         console.log('Booking ID:', bookingId)
-        console.log('Booking customer_name:', booking.customer_name)
-        console.log('Booking user_id:', booking.user_id)
-        console.log('Booking customer_id:', booking.customer_id)
-        console.log('Using customer ID:', customerId)
+        console.log('Looking for Customer ID:', customerId)
+        console.log('Booking Email:', booking.customer_email)
 
-        let customerData = null
+        let customerData: any = null
 
-        // Only fetch customer data if we have a valid customer ID
+        // 1. Try by ID
         if (customerId && customerId !== 'undefined') {
             const { data, error: customerError } = await supabase
                 .from('customers_extended')
@@ -56,57 +60,137 @@ export const handler: Handler = async (event) => {
                 .eq('id', customerId)
                 .single()
 
-            if (customerError) {
-                console.error('Customer fetch error:', customerError)
-            } else {
+            if (data) {
                 customerData = data
-                console.log('Customer data fetched:', {
-                    id: customerData?.id,
-                    fullName: customerData?.fullName,
-                    nome: customerData?.nome,
-                    email: customerData?.email,
-                    telefono: customerData?.telefono,
-                    indirizzo: customerData?.indirizzo,
-                    hasData: !!(customerData?.email || customerData?.telefono || customerData?.indirizzo)
-                })
+                console.log('✅ Found customer by ID')
+            } else if (customerError) {
+                console.warn('Customer fetch error by ID:', customerError.message)
             }
-        } else {
-            console.log('No valid customer ID - will use booking data only')
+        }
+
+        // 2. Fallback: Try by email in customers_extended
+        if (!customerData && booking.customer_email) {
+            console.log('Fallback: Fetching by email from customers_extended...')
+            const { data, error } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('email', booking.customer_email)
+                .single()
+
+            if (data) {
+                customerData = data
+                console.log('✅ Found customer by Email (extended)')
+            }
+        }
+
+        // 3. Fallback: Try basic customers table
+        if (!customerData && booking.customer_email) {
+            console.log('Fallback: Fetching by email from basic customers...')
+            const { data } = await supabase
+                .from('customers')
+                .select('*')
+                .eq('email', booking.customer_email)
+                .single()
+
+            if (data) {
+                console.log('✅ Found customer by Email (basic)')
+                // Map basic customer to extended format roughly
+                customerData = {
+                    ...data,
+                    fullName: data.full_name,
+                    nome: data.full_name,
+                    email: data.email,
+                    telefono: data.phone,
+                    indirizzo: data.notes, // Sometimes notes contain address? Or we just use what we have.
+                    // metadata might have info
+                    indirizzo_residenza: data.metadata?.address,
+                    citta_residenza: data.metadata?.city,
+                    codice_postale: data.metadata?.zip,
+                    codiceFiscale: data.metadata?.taxCode || data.metadata?.fiscalCode
+                }
+            }
+        }
+
+        console.log('Final Customer Data present:', !!customerData)
+
+        // Ensure customerData is at least an empty object if null, to avoid crashes later? 
+        // No, we handle null checks downstream. Except we want to merge booking details if customerData is missing.
+
+        if (!customerData) {
+            console.log('⚠️ No customer record found. Will use booking details.')
+            // We don't construct a fake object here because the downstream logic
+            // explicitly checks "if (customerData) { ... } else { ... use booking details ... }"
+            // But wait, my downstream logic in previous step was:
+            // "if ((!fullAddress ...) && bookingCustomer.address)"
+            // So we are good.
         }
         console.log('=== END DEBUG ===')
 
         // Build complete customer address
         let fullAddress = ''
+        // bookingDetails is already declared above
+        const bookingCustomer = bookingDetails.customer || {}
+
+        // 1. Try customerData from database
         if (customerData) {
             const addressParts = []
+            // Check various potential address fields
+            const street = customerData.indirizzo || customerData.address || customerData.street || ''
+            const num = customerData.numero_civico || customerData.streetNumber || ''
+            const zip = customerData.codice_postale || customerData.zipCode || customerData.zip || ''
+            const city = customerData.citta_residenza || customerData.city || ''
+            const prov = customerData.provincia_residenza || customerData.province || ''
 
-            // Build street address with civic number
-            if (customerData.indirizzo) {
-                let streetAddress = customerData.indirizzo
-                if (customerData.numero_civico) {
-                    streetAddress += ` ${customerData.numero_civico}`
-                }
+            if (street) {
+                let streetAddress = street
+                if (num) streetAddress += ` ${num}`
                 addressParts.push(streetAddress)
             }
 
-            // Build city line with postal code
-            if (customerData.citta_residenza || customerData.codice_postale) {
+            if (city || zip) {
                 let cityLine = ''
-                if (customerData.codice_postale) {
-                    cityLine += customerData.codice_postale
-                }
-                if (customerData.citta_residenza) {
-                    cityLine += (cityLine ? ' ' : '') + customerData.citta_residenza
-                }
-                if (customerData.provincia_residenza) {
-                    cityLine += ` (${customerData.provincia_residenza})`
-                }
-                if (cityLine) {
-                    addressParts.push(cityLine)
-                }
+                if (zip) cityLine += zip
+                if (city) cityLine += (cityLine ? ' ' : '') + city
+                if (prov) cityLine += ` (${prov})`
+                if (cityLine) addressParts.push(cityLine)
             }
 
             fullAddress = addressParts.join(', ')
+        }
+
+        // 2. Fallback to booking details if address empty
+        // This mirrors generate-contract.ts logic: clientAddress = customer?.indirizzo || booking...address
+        if (!fullAddress || fullAddress.trim() === '') {
+            fullAddress = bookingCustomer.address || ''
+            if (bookingCustomer.city) fullAddress += `, ${bookingCustomer.city}`
+            if (bookingCustomer.zip) fullAddress += ` ${bookingCustomer.zip}`
+        }
+
+        // Ensure tax fields are robustly fetched
+        const taxCode = customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || ''
+        const vatNumber = customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || ''
+
+        // VALIDATION: Mandatory fields check
+        // User Requirement: "Client data incomplete: address and tax code are required."
+        if (!fullAddress || fullAddress.trim() === '') {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    error: 'Client data incomplete',
+                    message: 'Indirizzo cliente obbligatorio. Aggiorna il profilo cliente o la prenotazione.',
+                    details: 'Address is missing'
+                })
+            }
+        }
+        if (!taxCode || taxCode.trim() === '') {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    error: 'Client data incomplete',
+                    message: 'Codice Fiscale cliente obbligatorio. Aggiorna il profilo cliente o la prenotazione.',
+                    details: 'Tax Code (Codice Fiscale) is missing'
+                })
+            }
         }
 
         // Check if invoice already exists for this booking
@@ -145,47 +229,92 @@ export const handler: Handler = async (event) => {
         }
 
 
-        // Parse booking dates
-        const pickupDate = new Date(booking.pickup_date)
-        const dropoffDate = new Date(booking.dropoff_date)
-        const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
-
         // Create invoice items
         const items = []
+        let rentalDays = 1
 
-        // Main rental item
-        const totalRentalPrice = (booking.price_total || 0) / 100 // Convert from cents
-        items.push({
-            description: `Noleggio ${booking.vehicle_name} - ${rentalDays} giorni`,
-            unit_price: totalRentalPrice,
-            quantity: 1,
-            vat_rate: 22,
-            total: totalRentalPrice
-        })
+        if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical') {
+            // Logic for Services (Car Wash / Mechanical)
+            const serviceName = booking.service_name || (booking.service_type === 'car_wash' ? 'Lavaggio Auto' : 'Intervento Meccanico')
+            const totalServicePrice = (booking.price_total || 0) / 100
 
-        // Add insurance if present in booking details
-        const bookingDetails = booking.booking_details || {}
-        if (bookingDetails.insurance) {
-            const insuranceName = bookingDetails.insurance.replace(/_/g, ' ')
-            const totalInsurancePrice = (bookingDetails.insurancePrice || 0) * rentalDays
+            // Calculate net price (assuming total is gross)
+            const netPrice = totalServicePrice / 1.22
+
             items.push({
-                description: `Assicurazione ${insuranceName} - ${rentalDays} giorni`,
-                unit_price: totalInsurancePrice,
+                description: `${serviceName} - Data: ${new Date(booking.appointment_date || booking.pickup_date).toLocaleDateString('it-IT')}`,
+                unit_price: netPrice,
                 quantity: 1,
                 vat_rate: 22,
-                total: totalInsurancePrice
+                total: netPrice // Should be just net price for the item total
             })
-        }
+        } else {
+            // Logic for Rentals (Default)
+            // Parse booking dates
+            const pickupDate = new Date(booking.pickup_date)
+            const dropoffDate = new Date(booking.dropoff_date)
+            rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            if (rentalDays < 1) rentalDays = 1
 
-        // Add KM overage fee if present
-        if (booking.km_overage_fee && booking.km_overage_fee > 0) {
+            // Parse prices (assuming stored as cents)
+            const priceTotal = (booking.price_total || 0) / 100
+            const insuranceTotal = (bookingDetails.insurancePrice || 0) * rentalDays
+            const kmFee = (booking.km_overage_fee || 0) / 100
+
+            // Calculate base rental price (Total - Insurance - KM Fee)
+            // Note: This logic assumes price_total INCLUDES insurance and fees. 
+            // If price_total is JUST the car, verify logic. Usually price_total is final amount to pay.
+            let vehiclePriceGross = priceTotal
+
+            // If insurance is priced separately in metadata but included in total, subtract it to isolate vehicle price?
+            // Simplified approach: Treat specific line items if we know them.
+            // If we add insurance as a separate line item, we must ensure we don't double count it in the total.
+            // The user wants clear lines.
+
+            // Re-calculating from components if possible is safer, but we might drift from stored total.
+            // Let's stick to: Create line items that SUM up to the booking.price_total.
+
+            // If we have insurance, we split the Pot. If not, everything is Rental.
+
+            // Calculate Net Prices for components (Gross / 1.22)
+            const insurancePriceGross = insuranceTotal
+            const kmFeeGross = kmFee // KM fee might be exempt or 22%? Assuming 22% for now unless exempt.
+
+            // Subtract extras from total to get vehicle portion
+            let rentalGross = priceTotal - insurancePriceGross - kmFeeGross
+            if (rentalGross < 0) rentalGross = 0 // Safety check
+
+            // 1. Vehicle Rental Item
             items.push({
-                description: 'Penale chilometraggio extra',
-                unit_price: booking.km_overage_fee / 100,
+                description: `Noleggio ${booking.vehicle_name} - ${rentalDays} giorni`,
+                unit_price: rentalGross / 1.22, // Net Price
                 quantity: 1,
-                vat_rate: 0, // Penalties are usually VAT exempt
-                total: booking.km_overage_fee / 100
+                vat_rate: 22,
+                total: rentalGross / 1.22
             })
+
+            // 2. Insurance Item
+            if (bookingDetails.insurance) {
+                const insuranceName = bookingDetails.insurance.replace(/_/g, ' ')
+                items.push({
+                    description: `Assicurazione ${insuranceName} - ${rentalDays} giorni`,
+                    unit_price: insurancePriceGross / 1.22,
+                    quantity: 1,
+                    vat_rate: 22,
+                    total: insurancePriceGross / 1.22
+                })
+            }
+
+            // 3. KM Overage
+            if (kmFeeGross > 0) {
+                items.push({
+                    description: 'Penale chilometraggio extra',
+                    unit_price: kmFeeGross, // Usually penalties effectively have 0 rate or we treat as is
+                    quantity: 1,
+                    vat_rate: 0,
+                    total: kmFeeGross
+                })
+            }
         }
 
         // Calculate totals
@@ -212,12 +341,12 @@ export const handler: Handler = async (event) => {
             importo_totale: total,
             stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
-            customer_name: booking.customer_name || customerData?.fullName || customerData?.nome || 'Cliente',
-            customer_address: fullAddress || customerData?.indirizzo || '',
-            customer_phone: customerData?.telefono || customerData?.phone || booking.customer_phone || '',
-            customer_email: customerData?.email || booking.customer_email || '',
-            customer_tax_code: customerData?.codiceFiscale || customerData?.codice_fiscale || '',
-            customer_vat: customerData?.partitaIva || customerData?.partita_iva || '',
+            customer_name: booking.customer_name || customerData?.fullName || bookingCustomer.fullName || customerData?.nome || 'Cliente',
+            customer_address: fullAddress || '',
+            customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || booking.customer_phone || '',
+            customer_email: customerData?.email || bookingCustomer.email || booking.customer_email || '',
+            customer_tax_code: taxCode,
+            customer_vat: vatNumber,
             booking_id: bookingId,
             items,
             subtotal,

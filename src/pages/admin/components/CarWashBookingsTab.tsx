@@ -260,12 +260,76 @@ export default function CarWashBookingsTab() {
         .eq('id', bookingId)
 
       if (error) throw error
-
       alert('✅ Prenotazione eliminata definitivamente!')
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
       alert(`❌ Errore durante l'eliminazione: ${error.message}`)
+    }
+  }
+
+  const [generatingInvoice, setGeneratingInvoice] = useState(false)
+
+  async function handleGenerateInvoice(booking: CarWashBooking) {
+    if (!booking.id) return
+    const customerName = booking.customer_name // booking object here is CarWashBooking interface
+    const serviceName = booking.service_name
+
+    if (!confirm(`Vuoi generare una fattura per questa prenotazione?\n\nCliente: ${customerName}\nServizio: ${serviceName}`)) {
+      return
+    }
+
+    setGeneratingInvoice(true)
+    try {
+      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id })
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        if (data.invoiceNumber) {
+          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        } else {
+          const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
+          const errorDetails = data.details ? `\n\nDettagli: ${data.details}` : ''
+          const errorHint = data.hint ? `\n\nSuggerimento: ${data.hint}` : ''
+          throw new Error(errorMsg + errorDetails + errorHint)
+        }
+        return
+      }
+
+      // Generate and open the invoice PDF
+      const invoiceId = data.invoice.id
+      const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId })
+      })
+
+      if (pdfResponse.ok) {
+        const html = await pdfResponse.text()
+        const blob = new Blob([html], { type: 'text/html' })
+        const url = URL.createObjectURL(blob)
+        const printWindow = window.open(url, '_blank')
+
+        if (printWindow) {
+          setTimeout(() => URL.revokeObjectURL(url), 3000)
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+        } else {
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        }
+      } else {
+        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+      }
+
+      loadData()
+    } catch (error: any) {
+      console.error('Error generating invoice:', error)
+      alert('Errore nella generazione della fattura:\n\n' + error.message)
+    } finally {
+      setGeneratingInvoice(false)
     }
   }
 
@@ -1100,6 +1164,13 @@ export default function CarWashBookingsTab() {
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
                           >
                             Modifica
+                          </button>
+                          <button
+                            onClick={() => handleGenerateInvoice(booking)}
+                            disabled={generatingInvoice}
+                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-purple-600 hover:bg-purple-700 text-white'} rounded text-xs font-medium transition-colors`}
+                          >
+                            {generatingInvoice ? '...' : 'Genera Fattura'}
                           </button>
                           {booking.status !== 'cancelled' ? (
                             <button

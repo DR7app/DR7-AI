@@ -795,7 +795,7 @@ export default function ReservationsTab() {
 
         if (printWindow) {
           // Clean up the blob URL after a delay
-          setTimeout(() => URL.revokeObjectURL(url), 1000)
+          setTimeout(() => URL.revokeObjectURL(url), 3000)
           alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
         } else {
           alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)

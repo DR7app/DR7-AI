@@ -41,6 +41,7 @@ export default function InvoicesTab() {
   const [loading, setLoading] = useState(true)
   const [checkingStatus, setCheckingStatus] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
 
   useEffect(() => {
     loadInvoices()
@@ -139,7 +140,7 @@ export default function InvoicesTab() {
       }
 
       // Clean up the blob URL after a delay
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setTimeout(() => URL.revokeObjectURL(url), 3000)
     } catch (error) {
       console.error('Error downloading PDF:', error)
       alert('Errore durante la generazione del PDF')
@@ -177,6 +178,22 @@ export default function InvoicesTab() {
 
   return (
     <div>
+      <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Fatture</h2>
+        </div>
+        <Button
+          onClick={() => {
+            setMultiSelectMode(!multiSelectMode)
+            setSelectedIds([])
+          }}
+          variant={multiSelectMode ? 'secondary' : 'primary'}
+          className={multiSelectMode ? 'bg-blue-600 text-white' : ''}
+        >
+          {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
+        </Button>
+      </div>
+
       {/* Bulk Actions Bar */}
       {selectedIds.length > 0 && (
         <div className="bg-blue-900/50 p-4 rounded-lg mb-4 flex justify-between items-center border border-blue-700 animate-fadeIn">
@@ -198,14 +215,16 @@ export default function InvoicesTab() {
           <table className="w-full">
             <thead className="bg-black">
               <tr>
-                <th className="px-4 py-3 text-left w-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.length === invoices.length && invoices.length > 0}
-                    onChange={toggleSelectAll}
-                    className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                  />
-                </th>
+                {multiSelectMode && (
+                  <th className="px-4 py-3 text-left w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length === invoices.length && invoices.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Numero</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Cliente</th>
@@ -218,14 +237,16 @@ export default function InvoicesTab() {
             <tbody>
               {invoices.map((invoice) => (
                 <tr key={invoice.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedIds.includes(invoice.id) ? 'bg-blue-900/20' : ''}`}>
-                  <td className="px-4 py-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(invoice.id)}
-                      onChange={() => toggleSelect(invoice.id)}
-                      className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                    />
-                  </td>
+                  {multiSelectMode && (
+                    <td className="px-4 py-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(invoice.id)}
+                        onChange={() => toggleSelect(invoice.id)}
+                        className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-sm text-white">{invoice.numero_fattura}</td>
                   <td className="px-4 py-3 text-sm text-white">{new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</td>
                   <td className="px-4 py-3 text-sm text-white">{invoice.customer_name}</td>
@@ -285,7 +306,7 @@ export default function InvoicesTab() {
               ))}
               {invoices.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
                     Nessuna fattura trovata
                   </td>
                 </tr>
