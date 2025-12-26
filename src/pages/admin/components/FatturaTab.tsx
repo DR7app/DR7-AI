@@ -27,6 +27,11 @@ interface Invoice {
   status?: 'paid' | 'pending' | 'overdue'
   notes?: string
   created_at: string
+  // SDI fields
+  sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'error'
+  sdi_id?: string
+  sdi_sent_at?: string
+  sdi_response?: any
 }
 
 interface InvoiceItem {
@@ -42,6 +47,8 @@ export default function InvoicesTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [sendingToSDI, setSendingToSDI] = useState(false)
+  const [checkingStatus, setCheckingStatus] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     invoice_number: '',
@@ -100,6 +107,7 @@ export default function InvoicesTab() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setSendingToSDI(true)
     try {
       const { subtotal, vatAmount, exemptAmount, total } = calculateTotals()
 
@@ -109,22 +117,50 @@ export default function InvoicesTab() {
         vat_amount: vatAmount,
         exempt_amount: exemptAmount,
         total,
-        items: formData.items
+        items: formData.items,
+        sdi_status: 'draft' // Initial status
       }
+
+      let invoiceId = editingId
 
       if (editingId) {
         const { error } = await supabase
-          .from('invoices')
+          .from('fatture')
           .update(invoiceData)
           .eq('id', editingId)
 
         if (error) throw error
       } else {
-        const { error } = await supabase
-          .from('invoices')
+        const { data, error } = await supabase
+          .from('fatture')
           .insert([invoiceData])
+          .select()
+          .single()
 
         if (error) throw error
+        invoiceId = data.id
+      }
+
+      // Automatically send to SDI
+      if (invoiceId) {
+        try {
+          const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invoiceId })
+          })
+
+          const result = await response.json()
+
+          if (response.ok) {
+            alert(`✅ Fattura salvata e inviata a SDI con successo!\n\nID SDI: ${result.sdi_id || 'N/A'}`)
+          } else {
+            alert(`⚠️ Fattura salvata, ma invio a SDI fallito:\n\n${result.error || 'Errore sconosciuto'}\n\nPuoi riprovare cliccando "Verifica Stato".`)
+          }
+        } catch (sdiError) {
+          console.error('SDI error:', sdiError)
+          alert('⚠️ Fattura salvata, ma errore durante invio a SDI. Verifica la connessione.')
+        }
       }
 
       setShowForm(false)
@@ -134,6 +170,8 @@ export default function InvoicesTab() {
     } catch (error) {
       console.error('Failed to save invoice:', error)
       alert('Impossibile salvare la fattura')
+    } finally {
+      setSendingToSDI(false)
     }
   }
 
@@ -188,6 +226,31 @@ export default function InvoicesTab() {
       setTimeout(() => printWindow.print(), 250)
     } else {
       alert('HTML fattura non disponibile')
+    }
+  }
+
+  async function handleCheckStatus(invoiceId: string) {
+    setCheckingStatus(invoiceId)
+    try {
+      const response = await fetch('/.netlify/functions/check-sdi-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        alert(`✅ Stato aggiornato: ${result.status}\n\nDettagli: ${JSON.stringify(result.details, null, 2)}`)
+        loadInvoices()
+      } else {
+        alert(`❌ Errore nel controllo stato:\n\n${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error checking status:', error)
+      alert('Errore durante il controllo dello stato')
+    } finally {
+      setCheckingStatus(null)
     }
   }
 
@@ -398,7 +461,9 @@ export default function InvoicesTab() {
           </div>
 
           <div className="flex gap-3">
-            <Button type="submit">Salva Fattura</Button>
+            <Button type="submit" disabled={sendingToSDI}>
+              {sendingToSDI ? '⏳ Invio a SDI in corso...' : 'Salva e Invia a SDI'}
+            </Button>
             <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); resetForm() }}>
               Annulla
             </Button>
@@ -415,7 +480,8 @@ export default function InvoicesTab() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Cliente</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-white">Totale</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-white">Stato</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-white">Pagamento</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-white">SDI</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-white">Azioni</th>
               </tr>
             </thead>
@@ -425,14 +491,28 @@ export default function InvoicesTab() {
                   <td className="px-4 py-3 text-sm text-white">{invoice.invoice_number}</td>
                   <td className="px-4 py-3 text-sm text-white">{new Date(invoice.invoice_date).toLocaleDateString('it-IT')}</td>
                   <td className="px-4 py-3 text-sm text-white">{invoice.customer_name}</td>
-                  <td className="px-4 py-3 text-sm text-white text-right">€{((invoice.total_amount || 0) / 100).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-sm text-white text-right">€{(invoice.total || 0).toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      invoice.payment_status === 'paid' ? 'bg-green-500/20 text-green-400' :
-                      invoice.payment_status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-red-500/20 text-red-400'
-                    }`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.payment_status === 'paid' ? 'bg-green-500/20 text-green-400' :
+                        invoice.payment_status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-red-500/20 text-red-400'
+                      }`}>
                       {invoice.payment_status === 'paid' ? 'Pagata' : invoice.payment_status === 'pending' ? 'In attesa' : 'Non pagata'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.sdi_status === 'accepted' ? 'bg-green-500/20 text-green-400' :
+                        invoice.sdi_status === 'sent' ? 'bg-blue-500/20 text-blue-400' :
+                          invoice.sdi_status === 'sending' ? 'bg-yellow-500/20 text-yellow-400' :
+                            invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-500/20 text-red-400' :
+                              'bg-gray-500/20 text-gray-400'
+                      }`}>
+                      {invoice.sdi_status === 'accepted' ? '✅ Accettata' :
+                        invoice.sdi_status === 'sent' ? '📤 Inviata' :
+                          invoice.sdi_status === 'sending' ? '⏳ Invio...' :
+                            invoice.sdi_status === 'rejected' ? '❌ Rifiutata' :
+                              invoice.sdi_status === 'error' ? '⚠️ Errore' :
+                                '📝 Bozza'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
@@ -442,15 +522,25 @@ export default function InvoicesTab() {
                         variant="secondary"
                         className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
                       >
-                        📄 Scarica
+                        📄 PDF
                       </Button>
+                      {invoice.sdi_id && (
+                        <Button
+                          onClick={() => handleCheckStatus(invoice.id)}
+                          variant="secondary"
+                          className="text-xs py-1 px-3 bg-purple-900 hover:bg-purple-800"
+                          disabled={checkingStatus === invoice.id}
+                        >
+                          {checkingStatus === invoice.id ? '⏳' : '🔄'} Stato
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
               {invoices.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     Nessuna fattura trovata
                   </td>
                 </tr>

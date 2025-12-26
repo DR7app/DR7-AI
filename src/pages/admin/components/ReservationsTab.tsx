@@ -220,6 +220,7 @@ export default function ReservationsTab() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
+  const [generatingInvoice, setGeneratingInvoice] = useState(false)
 
   // Add custom scrollbar styles
   const scrollbarStyle = `
@@ -780,6 +781,42 @@ export default function ReservationsTab() {
     } catch (error: any) {
       console.error('Yousign error:', error)
       alert('Errore Yousign: ' + error.message)
+    }
+  }
+
+  async function handleGenerateInvoice(booking: Booking) {
+    if (!booking.id) return
+
+    if (!confirm(`Vuoi generare una fattura per questa prenotazione?\n\nCliente: ${booking.customer_name}\nVeicolo: ${booking.vehicle_name}`)) {
+      return
+    }
+
+    setGeneratingInvoice(true)
+    try {
+      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        if (data.invoiceNumber) {
+          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        } else {
+          throw new Error(data.error || 'Failed to generate invoice')
+        }
+        return
+      }
+
+      alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.invoice_number}\n\nLa fattura è stata salvata e verrà inviata automaticamente a SDI.\n\nVai alla tab "Fatture" per visualizzarla.`)
+      loadData()
+    } catch (error: any) {
+      console.error('Error generating invoice:', error)
+      alert('Errore nella generazione della fattura: ' + error.message)
+    } finally {
+      setGeneratingInvoice(false)
     }
   }
 
@@ -2066,6 +2103,14 @@ export default function ReservationsTab() {
                         Cancella
                       </button>
                     )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
+                      disabled={generatingInvoice}
+                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700 text-white'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
+                      title="Genera Fattura"
+                    >
+                      {generatingInvoice ? '⏳' : '🧾'} Fattura
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                       className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors whitespace-nowrap w-full"
