@@ -154,25 +154,26 @@ export const handler: Handler = async (event) => {
         const items = []
 
         // Main rental item
-        const dailyRate = (booking.price_total || 0) / rentalDays / 100 // Convert from cents
+        const totalRentalPrice = (booking.price_total || 0) / 100 // Convert from cents
         items.push({
             description: `Noleggio ${booking.vehicle_name} - ${rentalDays} giorni`,
-            unit_price: dailyRate,
-            quantity: rentalDays,
+            unit_price: totalRentalPrice,
+            quantity: 1,
             vat_rate: 22,
-            total: dailyRate * rentalDays
+            total: totalRentalPrice
         })
 
         // Add insurance if present in booking details
         const bookingDetails = booking.booking_details || {}
         if (bookingDetails.insurance) {
             const insuranceName = bookingDetails.insurance.replace(/_/g, ' ')
+            const totalInsurancePrice = (bookingDetails.insurancePrice || 0) * rentalDays
             items.push({
-                description: `Assicurazione ${insuranceName}`,
-                unit_price: bookingDetails.insurancePrice || 0,
-                quantity: rentalDays,
+                description: `Assicurazione ${insuranceName} - ${rentalDays} giorni`,
+                unit_price: totalInsurancePrice,
+                quantity: 1,
                 vat_rate: 22,
-                total: (bookingDetails.insurancePrice || 0) * rentalDays
+                total: totalInsurancePrice
             })
         }
 
