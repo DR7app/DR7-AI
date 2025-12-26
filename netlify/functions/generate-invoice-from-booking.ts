@@ -179,11 +179,19 @@ export const handler: Handler = async (event) => {
         }
     } catch (error: any) {
         console.error('Error generating invoice:', error)
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+        })
         return {
             statusCode: 500,
             body: JSON.stringify({
-                error: 'Internal server error',
-                message: error.message
+                error: 'Failed to generate invoice',
+                message: error.message,
+                details: error.details || 'No additional details',
+                hint: error.hint || 'Check Netlify function logs for more info'
             })
         }
     }
