@@ -4,8 +4,10 @@ import Button from './Button'
 
 interface Invoice {
   id: string
-  invoice_number: string
-  invoice_date: string
+  numero_fattura: string
+  data_emissione: string
+  importo_totale: number
+  stato: string
   customer_name: string
   customer_email?: string
   customer_phone?: string
@@ -13,19 +15,11 @@ interface Invoice {
   customer_tax_code?: string
   customer_vat?: string
   booking_id?: string
-  booking_type?: string
-  total_amount: number
-  payment_status: string
   invoice_html?: string
   items?: InvoiceItem[]
   subtotal?: number
   vat_amount?: number
   exempt_amount?: number
-  total?: number
-  payment_method?: string
-  payment_date?: string
-  status?: 'paid' | 'pending' | 'overdue'
-  notes?: string
   created_at: string
   // SDI fields
   sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'error'
@@ -59,7 +53,7 @@ export default function InvoicesTab() {
       const { data, error } = await supabase
         .from('fatture')
         .select('*')
-        .order('invoice_date', { ascending: false })
+        .order('data_emissione', { ascending: false })
 
       if (error) throw error
       setInvoices(data || [])
@@ -144,16 +138,16 @@ export default function InvoicesTab() {
             <tbody>
               {invoices.map((invoice) => (
                 <tr key={invoice.id} className="border-t border-gray-700 hover:bg-gray-800">
-                  <td className="px-4 py-3 text-sm text-white">{invoice.invoice_number}</td>
-                  <td className="px-4 py-3 text-sm text-white">{new Date(invoice.invoice_date).toLocaleDateString('it-IT')}</td>
+                  <td className="px-4 py-3 text-sm text-white">{invoice.numero_fattura}</td>
+                  <td className="px-4 py-3 text-sm text-white">{new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</td>
                   <td className="px-4 py-3 text-sm text-white">{invoice.customer_name}</td>
-                  <td className="px-4 py-3 text-sm text-white text-right">€{(invoice.total || 0).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-sm text-white text-right">€{(invoice.importo_totale || 0).toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.payment_status === 'paid' ? 'bg-green-500/20 text-green-400' :
-                      invoice.payment_status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.stato === 'paid' ? 'bg-green-500/20 text-green-400' :
+                      invoice.stato === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
                         'bg-red-500/20 text-red-400'
                       }`}>
-                      {invoice.payment_status === 'paid' ? 'Pagata' : invoice.payment_status === 'pending' ? 'In attesa' : 'Non pagata'}
+                      {invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'pending' ? 'In attesa' : 'Non pagata'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
