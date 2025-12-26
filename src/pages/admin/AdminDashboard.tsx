@@ -208,9 +208,9 @@ export default function AdminDashboard() {
               {/* Noleggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar'
+                    ? 'bg-gray-800 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
                 >
                   Noleggio
@@ -237,9 +237,9 @@ export default function AdminDashboard() {
               {/* Lavaggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'carwash' || activeTab === 'carwash-calendar'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'carwash' || activeTab === 'carwash-calendar'
+                    ? 'bg-gray-800 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
                 >
                   Lavaggio
@@ -266,9 +266,9 @@ export default function AdminDashboard() {
               {/* Meccanica Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'mechanical' || activeTab === 'mechanical-calendar'
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'mechanical' || activeTab === 'mechanical-calendar'
+                    ? 'bg-gray-800 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
                 >
                   Meccanica
@@ -295,81 +295,81 @@ export default function AdminDashboard() {
               {/* Other menu items */}
               <button
                 onClick={() => setActiveTab('unpaid')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'unpaid'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'unpaid'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Da Saldare
               </button>
               <button
                 onClick={() => setActiveTab('documents-verification')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'documents-verification'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'documents-verification'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Verifica Documenti
               </button>
               <button
                 onClick={() => setActiveTab('customers')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'customers'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'customers'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Clienti
               </button>
               <button
                 onClick={() => setActiveTab('vehicles')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'vehicles'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'vehicles'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Veicoli
               </button>
               <button
                 onClick={() => setActiveTab('lotteria')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'lotteria'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'lotteria'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Lotteria
               </button>
               <button
                 onClick={() => setActiveTab('fattura')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Fatture
               </button>
               <button
                 onClick={() => setActiveTab('contratto')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Contratti
               </button>
               <button
                 onClick={() => setActiveTab('marketing')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Marketing
               </button>
               <button
                 onClick={() => setActiveTab('reviews')}
-                className={`py-4 px-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reviews'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reviews'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
               >
                 Recensioni
