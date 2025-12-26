@@ -66,21 +66,49 @@ export default function InvoicesTab() {
 
 
 
-  function downloadPDF(invoice: Invoice) {
-    // Open invoice HTML in new window for printing/saving as PDF
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) {
-      alert('Impossibile aprire la finestra. Verifica le impostazioni del browser.')
-      return
-    }
+  async function downloadPDF(invoice: Invoice) {
+    try {
+      // If HTML exists, use it
+      if (invoice.invoice_html) {
+        const printWindow = window.open('', '_blank')
+        if (!printWindow) {
+          alert('Impossibile aprire la finestra. Verifica le impostazioni del browser.')
+          return
+        }
+        printWindow.document.write(invoice.invoice_html)
+        printWindow.document.close()
+        setTimeout(() => printWindow.print(), 250)
+        return
+      }
 
-    // Use the stored HTML from the database if available
-    if (invoice.invoice_html) {
-      printWindow.document.write(invoice.invoice_html)
+      // Generate HTML on-the-fly
+      const response = await fetch('/.netlify/functions/generate-invoice-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: invoice.id })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate invoice PDF')
+      }
+
+      const html = await response.text()
+
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) {
+        alert('Impossibile aprire la finestra. Verifica le impostazioni del browser.')
+        return
+      }
+
+      printWindow.document.write(html)
       printWindow.document.close()
       setTimeout(() => printWindow.print(), 250)
-    } else {
-      alert('HTML fattura non disponibile')
+
+      // Reload to get updated invoice with HTML
+      loadInvoices()
+    } catch (error) {
+      console.error('Error downloading PDF:', error)
+      alert('Errore durante la generazione del PDF')
     }
   }
 

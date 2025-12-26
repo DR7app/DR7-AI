@@ -1,337 +1,222 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
+const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-interface InvoiceData {
-  bookingId: string
-  bookingType: 'car_rental' | 'car_wash' | 'mechanical'
-  customerName: string
-  customerEmail: string
-  customerPhone: string
-  items: Array<{
-    description: string
-    quantity: number
-    unitPrice: number
-    total: number
-  }>
-  subtotal: number
-  tax: number
-  total: number
-  paymentStatus: string
-  bookingDate: string
-  serviceDate: string
-  notes?: string
+export const handler: Handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    }
+  }
+
+  try {
+    const { invoiceId } = JSON.parse(event.body || '{}')
+
+    if (!invoiceId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Invoice ID is required' })
+      }
+    }
+
+    // Fetch invoice from database
+    const { data: invoice, error: fetchError } = await supabase
+      .from('fatture')
+      .select('*')
+      .eq('id', invoiceId)
+      .single()
+
+    if (fetchError || !invoice) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: 'Invoice not found' })
+      }
+    }
+
+    // Generate HTML for the invoice
+    const html = generateInvoiceHTML(invoice)
+
+    // Update invoice with HTML
+    await supabase
+      .from('fatture')
+      .update({ invoice_html: html })
+      .eq('id', invoiceId)
+
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8'
+      },
+      body: html
+    }
+  } catch (error: any) {
+    console.error('Error generating invoice PDF:', error)
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Failed to generate invoice PDF',
+        message: error.message
+      })
+    }
+  }
 }
 
-// Generate HTML for PDF invoice
-function generateInvoiceHTML(data: InvoiceData): string {
-  const invoiceNumber = `DR7-${data.bookingId.substring(0, 8).toUpperCase()}`
-  const invoiceDate = new Date().toLocaleDateString('it-IT')
+function generateInvoiceHTML(invoice: any): string {
+  const items = invoice.items || []
+  const itemsHTML = items.map((item: any) => `
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.description}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">€${item.unit_price.toFixed(2)}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.vat_rate}%</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">€${(item.unit_price * item.quantity).toFixed(2)}</td>
+        </tr>
+    `).join('')
 
   return `
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fattura ${invoiceNumber}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Arial', sans-serif;
-      color: #333;
-      padding: 40px;
-      background: white;
-    }
-    .invoice-container {
-      max-width: 800px;
-      margin: 0 auto;
-      background: white;
-      padding: 40px;
-      border: 1px solid #ddd;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 40px;
-      border-bottom: 3px solid #d4af37;
-      padding-bottom: 20px;
-    }
-    .company-info h1 {
-      color: #d4af37;
-      font-size: 32px;
-      margin-bottom: 5px;
-    }
-    .company-info p {
-      font-size: 12px;
-      color: #666;
-      line-height: 1.5;
-    }
-    .invoice-details {
-      text-align: right;
-    }
-    .invoice-details h2 {
-      font-size: 24px;
-      color: #333;
-      margin-bottom: 10px;
-    }
-    .invoice-details p {
-      font-size: 14px;
-      color: #666;
-      margin: 5px 0;
-    }
-    .customer-info {
-      margin-bottom: 30px;
-      background: #f9f9f9;
-      padding: 20px;
-      border-radius: 5px;
-    }
-    .customer-info h3 {
-      font-size: 16px;
-      margin-bottom: 10px;
-      color: #d4af37;
-    }
-    .customer-info p {
-      font-size: 14px;
-      line-height: 1.6;
-      color: #333;
-    }
-    .items-table {
-      width: 100%;
-      margin-bottom: 30px;
-      border-collapse: collapse;
-    }
-    .items-table thead {
-      background: #d4af37;
-      color: white;
-    }
-    .items-table th {
-      padding: 12px;
-      text-align: left;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .items-table td {
-      padding: 12px;
-      border-bottom: 1px solid #ddd;
-      font-size: 14px;
-    }
-    .items-table tbody tr:hover {
-      background: #f9f9f9;
-    }
-    .text-right { text-align: right; }
-    .totals {
-      margin-left: auto;
-      width: 300px;
-    }
-    .totals-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      font-size: 14px;
-    }
-    .totals-row.subtotal {
-      border-top: 1px solid #ddd;
-      padding-top: 15px;
-    }
-    .totals-row.total {
-      border-top: 2px solid #333;
-      margin-top: 10px;
-      padding-top: 15px;
-      font-size: 18px;
-      font-weight: bold;
-      color: #d4af37;
-    }
-    .payment-status {
-      margin-top: 30px;
-      padding: 15px;
-      border-radius: 5px;
-      text-align: center;
-      font-weight: bold;
-      font-size: 16px;
-    }
-    .payment-status.paid {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-    .payment-status.pending {
-      background: #fff3cd;
-      color: #856404;
-      border: 1px solid #ffeaa7;
-    }
-    .payment-status.unpaid {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-    .notes {
-      margin-top: 30px;
-      padding: 15px;
-      background: #f9f9f9;
-      border-left: 3px solid #d4af37;
-      font-size: 13px;
-      color: #666;
-    }
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #ddd;
-      text-align: center;
-      font-size: 12px;
-      color: #999;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fattura ${invoice.numero_fattura}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 20px;
+        }
+        .company-info {
+            flex: 1;
+        }
+        .invoice-info {
+            text-align: right;
+        }
+        .invoice-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .customer-info {
+            background-color: #f5f5f5;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th {
+            background-color: #000;
+            color: #fff;
+            padding: 10px;
+            text-align: left;
+        }
+        .totals {
+            text-align: right;
+            margin-top: 20px;
+        }
+        .totals table {
+            margin-left: auto;
+            width: 300px;
+        }
+        .totals td {
+            padding: 5px 10px;
+        }
+        .total-row {
+            font-weight: bold;
+            font-size: 18px;
+            border-top: 2px solid #000;
+        }
+        @media print {
+            body {
+                padding: 0;
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="invoice-container">
-    <!-- Header -->
     <div class="header">
-      <div class="company-info">
-        <h1>DR7 EMPIRE</h1>
-        <p>Via Esempio, 123<br>
-        09100 Cagliari, CA<br>
-        P.IVA: IT12345678901<br>
-        Tel: +39 123 456 7890<br>
-        Email: info@dr7empire.com</p>
-      </div>
-      <div class="invoice-details">
-        <h2>FATTURA</h2>
-        <p><strong>N°:</strong> ${invoiceNumber}</p>
-        <p><strong>Data:</strong> ${invoiceDate}</p>
-        <p><strong>Data Prenotazione:</strong> ${new Date(data.bookingDate).toLocaleDateString('it-IT')}</p>
-      </div>
+        <div class="company-info">
+            <h1 style="margin: 0; font-size: 20px;">DR7 EMPIRE SRL</h1>
+            <p style="margin: 5px 0;">Viale Marconi, 229</p>
+            <p style="margin: 5px 0;">09131 Cagliari (CA)</p>
+            <p style="margin: 5px 0;">P.IVA: 04066690923</p>
+            <p style="margin: 5px 0;">Email: info@dr7.app</p>
+        </div>
+        <div class="invoice-info">
+            <div class="invoice-title">FATTURA</div>
+            <p><strong>N°:</strong> ${invoice.numero_fattura}</p>
+            <p><strong>Data:</strong> ${new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</p>
+        </div>
     </div>
 
-    <!-- Customer Info -->
     <div class="customer-info">
-      <h3>INTESTATO A:</h3>
-      <p><strong>${data.customerName}</strong><br>
-      ${data.customerEmail ? `Email: ${data.customerEmail}<br>` : ''}
-      ${data.customerPhone ? `Tel: ${data.customerPhone}` : ''}</p>
+        <h3 style="margin-top: 0;">Cliente</h3>
+        <p><strong>${invoice.customer_name}</strong></p>
+        ${invoice.customer_address ? `<p>${invoice.customer_address}</p>` : ''}
+        ${invoice.customer_tax_code ? `<p>Codice Fiscale: ${invoice.customer_tax_code}</p>` : ''}
+        ${invoice.customer_vat ? `<p>P.IVA: ${invoice.customer_vat}</p>` : ''}
     </div>
 
-    <!-- Items Table -->
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th>Descrizione</th>
-          <th class="text-right">Qtà</th>
-          <th class="text-right">Prezzo Unit.</th>
-          <th class="text-right">Totale</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${data.items.map(item => `
-        <tr>
-          <td>${item.description}</td>
-          <td class="text-right">${item.quantity}</td>
-          <td class="text-right">€${(item.unitPrice / 100).toFixed(2)}</td>
-          <td class="text-right">€${(item.total / 100).toFixed(2)}</td>
-        </tr>
-        `).join('')}
-      </tbody>
+    <table>
+        <thead>
+            <tr>
+                <th>Descrizione</th>
+                <th style="text-align: center;">Quantità</th>
+                <th style="text-align: right;">Prezzo Unitario</th>
+                <th style="text-align: center;">IVA</th>
+                <th style="text-align: right;">Totale</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${itemsHTML}
+        </tbody>
     </table>
 
-    <!-- Totals -->
     <div class="totals">
-      <div class="totals-row subtotal">
-        <span>Subtotale:</span>
-        <span>€${(data.subtotal / 100).toFixed(2)}</span>
-      </div>
-      ${data.tax > 0 ? `
-      <div class="totals-row">
-        <span>IVA (22%):</span>
-        <span>€${(data.tax / 100).toFixed(2)}</span>
-      </div>
-      ` : ''}
-      <div class="totals-row total">
-        <span>TOTALE:</span>
-        <span>€${(data.total / 100).toFixed(2)}</span>
-      </div>
+        <table>
+            <tr>
+                <td>Imponibile:</td>
+                <td style="text-align: right;">€${(invoice.subtotal || 0).toFixed(2)}</td>
+            </tr>
+            <tr>
+                <td>IVA (22%):</td>
+                <td style="text-align: right;">€${(invoice.vat_amount || 0).toFixed(2)}</td>
+            </tr>
+            ${invoice.exempt_amount > 0 ? `
+            <tr>
+                <td>Esente IVA:</td>
+                <td style="text-align: right;">€${invoice.exempt_amount.toFixed(2)}</td>
+            </tr>
+            ` : ''}
+            <tr class="total-row">
+                <td>TOTALE:</td>
+                <td style="text-align: right;">€${(invoice.importo_totale || 0).toFixed(2)}</td>
+            </tr>
+        </table>
     </div>
 
-    <!-- Payment Status -->
-    <div class="payment-status ${data.paymentStatus}">
-      ${data.paymentStatus === 'paid' ? '✓ PAGATO' :
-        data.paymentStatus === 'pending' ? '⏳ DA SALDARE' : '✗ NON PAGATO'}
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
+        <p>Pagamento: ${invoice.stato === 'paid' ? 'Pagato' : 'Non pagato'}</p>
+        <p>Documento emesso in forma elettronica ai sensi del D.Lgs. 127/2015</p>
     </div>
-
-    ${data.notes ? `
-    <div class="notes">
-      <strong>Note:</strong><br>
-      ${data.notes}
-    </div>
-    ` : ''}
-
-    <!-- Footer -->
-    <div class="footer">
-      <p>Grazie per aver scelto DR7 Empire</p>
-      <p>www.dr7empire.com</p>
-    </div>
-  </div>
 </body>
 </html>
-  `
-}
-
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' }
-  }
-
-  try {
-    const invoiceData: InvoiceData = JSON.parse(event.body || '{}')
-
-    // Generate HTML
-    const html = generateInvoiceHTML(invoiceData)
-
-    // Store invoice in Supabase fatture table
-    const { data: invoice, error } = await supabase
-      .from('fatture')
-      .insert([{
-        booking_id: invoiceData.bookingId,
-        booking_type: invoiceData.bookingType,
-        invoice_number: `DR7-${invoiceData.bookingId.substring(0, 8).toUpperCase()}`,
-        customer_name: invoiceData.customerName,
-        customer_email: invoiceData.customerEmail,
-        customer_phone: invoiceData.customerPhone,
-        total_amount: invoiceData.total,
-        payment_status: invoiceData.paymentStatus,
-        invoice_date: new Date().toISOString(),
-        invoice_html: html,
-        items: invoiceData.items,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error creating invoice:', error)
-      throw error
-    }
-
-    console.log('✅ Invoice created:', invoice)
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        invoice,
-        html
-      })
-    }
-  } catch (error: any) {
-    console.error('Failed to generate invoice:', error)
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message })
-    }
-  }
+    `.trim()
 }
