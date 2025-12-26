@@ -770,12 +770,12 @@ export default function ReservationsTab() {
         if (data.invoiceNumber) {
           alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
         } else {
-          throw new Error(data.error || 'Failed to generate invoice')
+          throw new Error(data.error || 'Impossibile generare la fattura')
         }
         return
       }
 
-      alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.invoice_number}\n\nLa fattura è stata salvata e verrà inviata automaticamente a SDI.\n\nVai alla tab "Fatture" per visualizzarla.`)
+      alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata salvata.\n\nVai alla tab "Fatture" per visualizzarla.`)
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)
