@@ -37,6 +37,31 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Fetch customer data
+        const { data: customerData, error: customerError } = await supabase
+            .from('customers_extended')
+            .select('*')
+            .eq('id', booking.user_id || booking.customer_id)
+            .single()
+
+        if (customerError) {
+            console.error('Customer fetch error:', customerError)
+        }
+
+        // Build complete customer address
+        let fullAddress = ''
+        if (customerData) {
+            const addressParts = []
+            if (customerData.indirizzo) addressParts.push(customerData.indirizzo)
+            if (customerData.citta_residenza) {
+                const cityPart = customerData.citta_residenza
+                const province = customerData.provincia_residenza ? ` (${customerData.provincia_residenza})` : ''
+                const cap = customerData.codice_postale ? `, ${customerData.codice_postale}` : ''
+                addressParts.push(`${cityPart}${province}${cap}`.trim())
+            }
+            fullAddress = addressParts.join(', ')
+        }
+
         // Check if invoice already exists for this booking
         const { data: existingInvoice } = await supabase
             .from('fatture')
@@ -142,10 +167,10 @@ export const handler: Handler = async (event) => {
             data_emissione: new Date().toISOString().split('T')[0],
             importo_totale: total,
             stato: 'paid',
-            customer_name: booking.customer_name || customerData.fullName || 'Cliente',
-            customer_address: customerData.address || '',
-            customer_tax_code: customerData.codiceFiscale || '',
-            customer_vat: customerData.partitaIva || '',
+            customer_name: booking.customer_name || customerData?.fullName || customerData?.nome || 'Cliente',
+            customer_address: fullAddress || customerData?.indirizzo || '',
+            customer_tax_code: customerData?.codiceFiscale || customerData?.codice_fiscale || '',
+            customer_vat: customerData?.partitaIva || customerData?.partita_iva || '',
             booking_id: bookingId,
             items,
             subtotal,
