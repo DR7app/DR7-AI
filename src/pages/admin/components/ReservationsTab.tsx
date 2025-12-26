@@ -778,7 +778,32 @@ export default function ReservationsTab() {
         return
       }
 
-      alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata salvata.\n\nVai alla tab "Fatture" per visualizzarla.`)
+      // Generate and open the invoice PDF
+      const invoiceId = data.invoice.id
+      const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId })
+      })
+
+      if (pdfResponse.ok) {
+        const html = await pdfResponse.text()
+        // Create a blob URL and open it
+        const blob = new Blob([html], { type: 'text/html' })
+        const url = URL.createObjectURL(blob)
+        const printWindow = window.open(url, '_blank')
+
+        if (printWindow) {
+          // Clean up the blob URL after a delay
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+        } else {
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        }
+      } else {
+        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+      }
+
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)
