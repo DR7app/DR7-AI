@@ -40,8 +40,7 @@ export default function InvoicesTab() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [checkingStatus, setCheckingStatus] = useState<string | null>(null)
-
-
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   useEffect(() => {
     loadInvoices()
@@ -64,7 +63,48 @@ export default function InvoicesTab() {
     }
   }
 
+  const toggleSelectAll = () => {
+    if (selectedIds.length === invoices.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(invoices.map(invoice => invoice.id))
+    }
+  }
 
+  const toggleSelect = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id))
+    } else {
+      setSelectedIds([...selectedIds, id])
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Sei sicuro di voler eliminare questa fattura?')) return
+
+    try {
+      const { error } = await supabase.from('fatture').delete().eq('id', id)
+      if (error) throw error
+      loadInvoices()
+    } catch (error) {
+      console.error('Error deleting invoice:', error)
+      alert('Errore durante l\'eliminazione')
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!confirm(`Sei sicuro di voler eliminare ${selectedIds.length} fatture?`)) return
+
+    try {
+      const { error } = await supabase.from('fatture').delete().in('id', selectedIds)
+      if (error) throw error
+      setSelectedIds([])
+      loadInvoices()
+    } catch (error) {
+      console.error('Error bulk deleting invoices:', error)
+      alert('Errore durante l\'eliminazione multipla')
+    }
+  }
 
   async function downloadPDF(invoice: Invoice) {
     try {
@@ -131,19 +171,41 @@ export default function InvoicesTab() {
     }
   }
 
-
-
   if (loading) {
     return <div className="text-center py-8 text-gray-400">Caricamento...</div>
   }
 
   return (
     <div>
+      {/* Bulk Actions Bar */}
+      {selectedIds.length > 0 && (
+        <div className="bg-blue-900/50 p-4 rounded-lg mb-4 flex justify-between items-center border border-blue-700 animate-fadeIn">
+          <span className="text-blue-200">
+            {selectedIds.length} fatture selezionate
+          </span>
+          <Button
+            onClick={handleBulkDelete}
+            variant="danger"
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            Elimina Selezionati ({selectedIds.length})
+          </Button>
+        </div>
+      )}
+
       <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-black">
               <tr>
+                <th className="px-4 py-3 text-left w-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === invoices.length && invoices.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Numero</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Cliente</th>
@@ -155,7 +217,15 @@ export default function InvoicesTab() {
             </thead>
             <tbody>
               {invoices.map((invoice) => (
-                <tr key={invoice.id} className="border-t border-gray-700 hover:bg-gray-800">
+                <tr key={invoice.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedIds.includes(invoice.id) ? 'bg-blue-900/20' : ''}`}>
+                  <td className="px-4 py-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(invoice.id)}
+                      onChange={() => toggleSelect(invoice.id)}
+                      className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-sm text-white">{invoice.numero_fattura}</td>
                   <td className="px-4 py-3 text-sm text-white">{new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</td>
                   <td className="px-4 py-3 text-sm text-white">{invoice.customer_name}</td>
@@ -202,13 +272,20 @@ export default function InvoicesTab() {
                           {checkingStatus === invoice.id ? '⏳' : '🔄'} Stato
                         </Button>
                       )}
+                      <Button
+                        onClick={() => handleDelete(invoice.id)}
+                        variant="danger"
+                        className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800 text-white"
+                      >
+                        Elimina
+                      </Button>
                     </div>
                   </td>
                 </tr>
               ))}
               {invoices.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     Nessuna fattura trovata
                   </td>
                 </tr>
