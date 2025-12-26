@@ -109,7 +109,7 @@ function generateInvoiceHTML(invoice: any): string {
             margin-bottom: 12px;
         }
         .logo img {
-            height: 50px;
+            height: 120px;
             width: auto;
         }
         .invoice-title {
