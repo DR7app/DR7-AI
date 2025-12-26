@@ -749,41 +749,6 @@ export default function ReservationsTab() {
     }
   }
 
-  async function handleSendToYousign(bookingId: string) {
-    console.log('[handleSendToYousign] Clicked for booking:', bookingId)
-    // if (!confirm('Vuoi inviare il contratto a Yousign per la firma digitale?')) return // Commented out for debugging speed
-
-    try {
-      console.log('[handleSendToYousign] Sending fetch request...')
-      const res = await fetch('/.netlify/functions/yousign-init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId })
-      })
-      console.log('[handleSendToYousign] Response status:', res.status)
-
-      const text = await res.text()
-      console.log('[handleSendToYousign] Response body:', text)
-
-      let data
-      try {
-        data = JSON.parse(text)
-      } catch (e) {
-        throw new Error('Risposta non valida dal server: ' + text.substring(0, 100))
-      }
-
-      if (res.ok) {
-        alert('Richiesta di firma inviata con successo! 📩')
-        loadData()
-      } else {
-        throw new Error(data.error || 'Errore sconosciuto')
-      }
-    } catch (error: any) {
-      console.error('Yousign error:', error)
-      alert('Errore Yousign: ' + error.message)
-    }
-  }
-
   async function handleGenerateInvoice(booking: Booking) {
     if (!booking.id) return
 
