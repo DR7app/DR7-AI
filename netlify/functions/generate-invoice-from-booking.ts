@@ -165,6 +165,8 @@ export const handler: Handler = async (event) => {
             stato: 'paid',
             customer_name: booking.customer_name || customerData?.fullName || customerData?.nome || 'Cliente',
             customer_address: fullAddress || customerData?.indirizzo || '',
+            customer_phone: customerData?.telefono || customerData?.phone || booking.customer_phone || '',
+            customer_email: customerData?.email || booking.customer_email || '',
             customer_tax_code: customerData?.codiceFiscale || customerData?.codice_fiscale || '',
             customer_vat: customerData?.partitaIva || customerData?.partita_iva || '',
             booking_id: bookingId,
