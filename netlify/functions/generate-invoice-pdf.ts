@@ -136,10 +136,10 @@ function generateInvoiceHTML(invoice: any): string {
             font-weight: 700;
         }
         .company-details, .customer-details {
-            background: #f9fafb;
+            background: #fff;
             padding: 8px 12px;
             border-radius: 4px;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #e0e0e0;
         }
         .company-details p, .customer-details p {
             margin: 1px 0;
@@ -165,7 +165,7 @@ function generateInvoiceHTML(invoice: any): string {
             align-items: center;
             margin-bottom: 10px;
             padding: 8px 10px;
-            background: #f9fafb;
+            background: #fff;
             border-radius: 4px;
         }
         .invoice-meta label {
@@ -185,27 +185,27 @@ function generateInvoiceHTML(invoice: any): string {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 10px;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #e0e0e0;
             border-radius: 4px;
             overflow: hidden;
         }
         thead {
-            background: #f3f4f6;
+            background: #f5f5f5;
         }
         th {
             padding: 6px 4px;
             text-align: left;
             font-size: 9px;
             text-transform: uppercase;
-            color: #6b7280;
+            color: #666;
             font-weight: 600;
             letter-spacing: 0.5px;
         }
         .summary {
-            background: #f9fafb;
+            background: #fff;
             padding: 10px 12px;
             border-radius: 4px;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #e0e0e0;
             margin-bottom: 10px;
         }
         .summary-title {
@@ -220,7 +220,7 @@ function generateInvoiceHTML(invoice: any): string {
             font-size: 12px;
         }
         .summary-row.total {
-            border-top: 2px solid #111827;
+            border-top: 1px solid #e0e0e0;
             margin-top: 6px;
             padding-top: 8px;
             font-weight: 700;
@@ -228,7 +228,7 @@ function generateInvoiceHTML(invoice: any): string {
         }
         .payment-info {
             background: #f0fdf4;
-            border: 1px solid #86efac;
+            border: 1px solid #d1fae5;
             padding: 8px 12px;
             border-radius: 4px;
             margin-bottom: 10px;
@@ -241,10 +241,10 @@ function generateInvoiceHTML(invoice: any): string {
             color: #166534;
         }
         .footer {
-            border-top: 2px solid #e5e7eb;
+            border-top: 1px solid #e0e0e0;
             padding-top: 8px;
             text-align: center;
-            color: #6b7280;
+            color: #666;
             font-size: 10px;
             line-height: 1.5;
         }
