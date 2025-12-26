@@ -160,7 +160,7 @@ function generateInvoiceHTML(invoice: any): string {
         }
         .invoice-meta {
             display: grid;
-            grid-template-columns: auto 1fr auto;
+            grid-template-columns: auto auto auto auto auto auto;
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
@@ -297,15 +297,12 @@ function generateInvoiceHTML(invoice: any): string {
         <div class="invoice-meta">
             <label>TIPO DI DOCUMENTO</label>
             <div class="value">Fattura</div>
-            <div></div>
             
             <label>NUMERO</label>
             <div class="value">${invoice.numero_fattura}</div>
-            <div></div>
             
             <label>DATA</label>
             <div class="value">${new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</div>
-            <div></div>
         </div>
 
         <!-- Line Items -->
