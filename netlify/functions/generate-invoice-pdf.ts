@@ -75,13 +75,13 @@ function generateInvoiceHTML(invoice: any): string {
 
     const itemsHTML = items.map((item: any, index: number) => `
         <tr>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">
-                <div style="font-weight: 500; color: #111827; margin-bottom: 4px;">${item.description}</div>
+            <td style="padding: 8px 6px; border-bottom: 1px solid #e5e7eb;">
+                <div style="font-weight: 500; color: #111827; font-size: 13px;">${item.description}</div>
             </td>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">€${item.unit_price.toFixed(2)}</td>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.vat_rate}%</td>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">€${(item.unit_price * item.quantity).toFixed(2)}</td>
+            <td style="padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: right; font-size: 13px;">€${item.unit_price.toFixed(2)}</td>
+            <td style="padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: center; font-size: 13px;">${item.quantity}</td>
+            <td style="padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: center; font-size: 13px;">${item.vat_rate}%</td>
+            <td style="padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600; font-size: 13px;">€${(item.unit_price * item.quantity).toFixed(2)}</td>
         </tr>
     `).join('')
 
@@ -96,25 +96,21 @@ function generateInvoiceHTML(invoice: any): string {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            padding: 40px;
+            padding: 25px;
             color: #111827;
             background: #fff;
-            line-height: 1.5;
+            line-height: 1.4;
         }
         .container { max-width: 900px; margin: 0 auto; }
         .header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 40px;
+            margin-bottom: 20px;
         }
-        .logo {
-            background: #000;
-            color: #FFD700;
-            padding: 20px 30px;
-            font-size: 32px;
-            font-weight: bold;
-            letter-spacing: 2px;
+        .logo img {
+            height: 60px;
+            width: auto;
         }
         .invoice-title {
             text-align: right;
@@ -127,7 +123,7 @@ function generateInvoiceHTML(invoice: any): string {
             margin-top: 5px;
         }
         .section {
-            margin-bottom: 30px;
+            margin-bottom: 15px;
         }
         .section-title {
             font-size: 11px;
@@ -139,35 +135,36 @@ function generateInvoiceHTML(invoice: any): string {
         }
         .company-details, .customer-details {
             background: #f9fafb;
-            padding: 20px;
-            border-radius: 8px;
+            padding: 12px 15px;
+            border-radius: 6px;
             border: 1px solid #e5e7eb;
         }
         .company-details p, .customer-details p {
-            margin: 4px 0;
+            margin: 2px 0;
             color: #374151;
+            font-size: 13px;
         }
         .company-name {
             font-weight: 700;
-            font-size: 16px;
+            font-size: 14px;
             color: #111827;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .two-column {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            gap: 20px;
+            margin-bottom: 15px;
         }
         .invoice-meta {
             display: grid;
             grid-template-columns: auto 1fr auto;
-            gap: 15px;
+            gap: 12px;
             align-items: center;
-            margin-bottom: 30px;
-            padding: 15px;
+            margin-bottom: 15px;
+            padding: 10px 12px;
             background: #f9fafb;
-            border-radius: 8px;
+            border-radius: 6px;
         }
         .invoice-meta label {
             font-size: 11px;
@@ -185,18 +182,18 @@ function generateInvoiceHTML(invoice: any): string {
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
             border: 1px solid #e5e7eb;
-            border-radius: 8px;
+            border-radius: 6px;
             overflow: hidden;
         }
         thead {
             background: #f3f4f6;
         }
         th {
-            padding: 12px 8px;
+            padding: 8px 6px;
             text-align: left;
-            font-size: 11px;
+            font-size: 10px;
             text-transform: uppercase;
             color: #6b7280;
             font-weight: 600;
@@ -204,35 +201,35 @@ function generateInvoiceHTML(invoice: any): string {
         }
         .summary {
             background: #f9fafb;
-            padding: 25px;
-            border-radius: 8px;
+            padding: 15px;
+            border-radius: 6px;
             border: 1px solid #e5e7eb;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
         }
         .summary-title {
             font-weight: 700;
-            font-size: 16px;
-            margin-bottom: 15px;
+            font-size: 14px;
+            margin-bottom: 10px;
         }
         .summary-row {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            font-size: 15px;
+            padding: 6px 0;
+            font-size: 13px;
         }
         .summary-row.total {
             border-top: 2px solid #111827;
-            margin-top: 10px;
-            padding-top: 15px;
+            margin-top: 8px;
+            padding-top: 10px;
             font-weight: 700;
-            font-size: 18px;
+            font-size: 15px;
         }
         .payment-info {
             background: #f0fdf4;
             border: 1px solid #86efac;
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 30px;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
         }
         .payment-info .status {
             display: inline-flex;
@@ -243,17 +240,17 @@ function generateInvoiceHTML(invoice: any): string {
         }
         .footer {
             border-top: 2px solid #e5e7eb;
-            padding-top: 20px;
+            padding-top: 12px;
             text-align: center;
             color: #6b7280;
-            font-size: 13px;
-            line-height: 1.8;
+            font-size: 11px;
+            line-height: 1.6;
         }
         .footer strong {
             color: #111827;
         }
         @media print {
-            body { padding: 20px; }
+            body { padding: 15px; }
             .no-print { display: none; }
         }
     </style>
@@ -262,7 +259,7 @@ function generateInvoiceHTML(invoice: any): string {
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="logo">DR7</div>
+            <div class="logo"><img src="https://dr7empire.com/DR7logo1.png" alt="DR7 Logo"></div>
             <div>
                 <div class="invoice-title">Fattura ${invoice.numero_fattura}</div>
                 <div class="invoice-date">del ${new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</div>
@@ -279,7 +276,6 @@ function generateInvoiceHTML(invoice: any): string {
                     <p>P.IVA 04104640927</p>
                     <p>C.F. 04104640927</p>
                     <p>PEC: dubai.rent7.0srl@legalmail.it</p>
-                    <p>Website: www.dr7empire.com</p>
                 </div>
             </div>
             <div class="section">
@@ -287,6 +283,8 @@ function generateInvoiceHTML(invoice: any): string {
                 <div class="customer-details">
                     <div class="company-name">${invoice.customer_name}</div>
                     ${invoice.customer_address ? `<p>${invoice.customer_address}</p>` : ''}
+                    ${invoice.customer_phone ? `<p>Tel: ${invoice.customer_phone}</p>` : ''}
+                    ${invoice.customer_email ? `<p>Email: ${invoice.customer_email}</p>` : ''}
                     ${invoice.customer_tax_code ? `<p>C.F. ${invoice.customer_tax_code}</p>` : ''}
                     ${invoice.customer_vat ? `<p>P.IVA ${invoice.customer_vat}</p>` : ''}
                 </div>
