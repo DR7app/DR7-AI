@@ -38,15 +38,34 @@ export const handler: Handler = async (event) => {
         }
 
         // Fetch customer data
+        const customerId = booking.user_id || booking.customer_id
+        console.log('=== INVOICE GENERATION DEBUG ===')
+        console.log('Booking ID:', bookingId)
+        console.log('Booking customer_name:', booking.customer_name)
+        console.log('Booking user_id:', booking.user_id)
+        console.log('Booking customer_id:', booking.customer_id)
+        console.log('Using customer ID:', customerId)
+
         const { data: customerData, error: customerError } = await supabase
             .from('customers_extended')
             .select('*')
-            .eq('id', booking.user_id || booking.customer_id)
+            .eq('id', customerId)
             .single()
 
         if (customerError) {
             console.error('Customer fetch error:', customerError)
+        } else {
+            console.log('Customer data fetched:', {
+                id: customerData?.id,
+                fullName: customerData?.fullName,
+                nome: customerData?.nome,
+                email: customerData?.email,
+                telefono: customerData?.telefono,
+                indirizzo: customerData?.indirizzo,
+                hasData: !!(customerData?.email || customerData?.telefono || customerData?.indirizzo)
+            })
         }
+        console.log('=== END DEBUG ===')
 
         // Build complete customer address
         let fullAddress = ''
