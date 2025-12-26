@@ -108,6 +108,21 @@ export default function InvoicesTab() {
   }
 
   async function downloadPDF(invoice: Invoice) {
+    // Open window immediately to feedback to user
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <body style="font-family:system-ui,sans-serif;text-align:center;padding:50px;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
+            <div>
+              <div style="margin-bottom:20px;font-size:30px;">📄</div>
+              <div>Generazione anteprima in corso...</div>
+            </div>
+          </body>
+        </html>
+      `)
+    }
+
     try {
       // Always generate to ensure latest template/CSS is applied
       const response = await fetch('/.netlify/functions/generate-invoice-pdf', {
@@ -124,21 +139,22 @@ export default function InvoicesTab() {
       // Reload to update local cache
       loadInvoices()
 
-      // Create a blob URL and open it - this avoids popup blockers
-      const blob = new Blob([html], { type: 'text/html' })
-      const url = URL.createObjectURL(blob)
-      const printWindow = window.open(url, '_blank')
-
-      if (!printWindow) {
-        alert('Impossibile aprire la finestra. Verifica le impostazioni del browser.')
-        URL.revokeObjectURL(url)
-        return
+      // Set content
+      if (printWindow) {
+        printWindow.document.open()
+        printWindow.document.write(html)
+        printWindow.document.close()
+      } else {
+        // Fallback
+        const blob = new Blob([html], { type: 'text/html' })
+        const url = URL.createObjectURL(blob)
+        window.open(url, '_blank')
+        setTimeout(() => URL.revokeObjectURL(url), 3000)
       }
 
-      // Clean up the blob URL after a delay
-      setTimeout(() => URL.revokeObjectURL(url), 3000)
     } catch (error) {
       console.error('Error downloading PDF:', error)
+      if (printWindow) printWindow.close()
       alert('Errore durante la generazione del PDF')
     }
   }
