@@ -139,10 +139,6 @@ export default function InvoicesTab() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Fatture</h2>
-      </div>
-
       <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
