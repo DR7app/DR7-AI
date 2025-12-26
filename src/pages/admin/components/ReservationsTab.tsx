@@ -2050,40 +2050,15 @@ export default function ReservationsTab() {
                           <span>✉️</span> Email
                         </a>
 
-                        {/* Yousign Button (Mobile) */}
-                        {(() => {
-                          const contract = Array.isArray(booking.contracts) ? booking.contracts[0] : booking.contracts
-                          const status = contract?.yousign_status
-                          const signedUrl = contract?.signed_pdf_url
-
-                          if (status === 'signed' && signedUrl) {
-                            return (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); window.open(signedUrl, '_blank') }}
-                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
-                                title="Scarica Contratto Firmato"
-                              >
-                                <span>🖊️</span> Firmato
-                              </button>
-                            )
-                          } else if (status === 'ongoing') {
-                            return (
-                              <span className="px-3 py-1 bg-yellow-600 text-white text-sm rounded flex items-center gap-1 opacity-70 cursor-not-allowed">
-                                <span>⏳</span> In Firma
-                              </span>
-                            )
-                          } else {
-                            return (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleSendToYousign(booking.id) }}
-                                className="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
-                                title="Invia a Yousign"
-                              >
-                                <span>✍️</span> Yousign
-                              </button>
-                            )
-                          }
-                        })()}
+                        {/* Genera Fattura Button (Mobile) */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
+                          disabled={generatingInvoice}
+                          className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700 text-white'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
+                          title="Genera Fattura"
+                        >
+                          {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
+                        </button>
                       </div>
                     ) : (
                       <button
@@ -2223,40 +2198,17 @@ export default function ReservationsTab() {
                             </>
                           )}
 
-                          {/* Yousign Button (Desktop) */}
-                          {booking.contract_url && booking.status !== 'cancelled' && (() => {
-                            const contract = Array.isArray(booking.contracts) ? booking.contracts[0] : booking.contracts
-                            const status = contract?.yousign_status
-                            const signedUrl = contract?.signed_pdf_url
-
-                            if (status === 'signed' && signedUrl) {
-                              return (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(signedUrl, '_blank') }}
-                                  className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                                  title="Scarica Firmato"
-                                >
-                                  🖊️ Firmato
-                                </button>
-                              )
-                            } else if (status === 'ongoing') {
-                              return (
-                                <span className="px-3 py-1 bg-yellow-600 text-white text-xs rounded opacity-70 cursor-not-allowed whitespace-nowrap">
-                                  ⏳ In Firma
-                                </span>
-                              )
-                            } else {
-                              return (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleSendToYousign(booking.id) }}
-                                  className="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white text-xs rounded transition-colors whitespace-nowrap"
-                                  title="Invia a Yousign"
-                                >
-                                  ✍️ Yousign
-                                </button>
-                              )
-                            }
-                          })()}
+                          {/* Genera Fattura Button (Desktop) */}
+                          {booking.contract_url && booking.status !== 'cancelled' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
+                              disabled={generatingInvoice}
+                              className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700 text-white'} text-xs rounded transition-colors whitespace-nowrap`}
+                              title="Genera Fattura"
+                            >
+                              {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
+                            </button>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                             className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors whitespace-nowrap"
