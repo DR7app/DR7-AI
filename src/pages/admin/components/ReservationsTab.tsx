@@ -2149,6 +2149,13 @@ export default function ReservationsTab() {
                                 {generatingContract ? '...' : 'Genera Contratto'}
                               </button>
                               <button
+                                onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking.id) }}
+                                disabled={generatingInvoice}
+                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
+                              >
+                                {generatingInvoice ? '...' : 'Genera Fattura'}
+                              </button>
+                              <button
                                 onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
                                 className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors whitespace-nowrap"
                               >
