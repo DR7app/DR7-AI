@@ -93,16 +93,23 @@ function generateInvoiceHTML(invoice: any): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fattura ${invoice.numero_fattura}</title>
     <style>
-        @page { margin: 0; }
+        @page { size: A4; margin: 0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            padding: 20mm;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 0;
+            margin: 0 auto;
             color: #111827;
             background: #fff;
             line-height: 1.3;
+            font-size: 12px;
         }
-        .container { max-width: 900px; margin: 0 auto; }
+        .container { 
+            width: 100%; 
+            padding: 15mm; 
+        }
         .header {
             display: flex;
             justify-content: space-between;

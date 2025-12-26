@@ -109,24 +109,20 @@ export default function InvoicesTab() {
 
   async function downloadPDF(invoice: Invoice) {
     try {
-      let html = invoice.invoice_html
+      // Always generate to ensure latest template/CSS is applied
+      const response = await fetch('/.netlify/functions/generate-invoice-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: invoice.id })
+      })
 
-      // If HTML doesn't exist, generate it
-      if (!html) {
-        const response = await fetch('/.netlify/functions/generate-invoice-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invoiceId: invoice.id })
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to generate invoice PDF')
-        }
-
-        html = await response.text()
-        // Reload to get updated invoice with HTML
-        loadInvoices()
+      if (!response.ok) {
+        throw new Error('Failed to generate invoice PDF')
       }
+
+      const html = await response.text()
+      // Reload to update local cache
+      loadInvoices()
 
       // Create a blob URL and open it - this avoids popup blockers
       const blob = new Blob([html], { type: 'text/html' })
