@@ -265,6 +265,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
 
+  // Optional document uploads
+  const [showDocumentSection, setShowDocumentSection] = useState(false)
+  const [driversLicenseFile, setDriversLicenseFile] = useState<File | null>(null)
+  const [identityDocumentFile, setIdentityDocumentFile] = useState<File | null>(null)
+  const [codiceFiscaleFile, setCodiceFiscaleFile] = useState<File | null>(null)
+
   // Validation functions
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -434,6 +440,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       console.log('Saving customer data:', customerData)
 
       let resultData;
+      let createdClientId: string | null = null;
 
       if (initialData?.id) {
         // Validate that the ID is a proper UUID
@@ -461,6 +468,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
           if (extendedError) throw extendedError
           resultData = updatedExtended
+          createdClientId = initialData.id
 
           // 2. Also update basic 'customers' table to keep sync
           const basicData = {
@@ -502,6 +510,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         if (error) throw error
         resultData = newClient
+        createdClientId = newClient.id
 
         // Also insert into basic 'customers' table for backward compatibility
         try {
@@ -528,6 +537,127 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         }
 
         alert('Cliente creato con successo!')
+      }
+
+      // Upload documents if any were selected
+      if (createdClientId && (driversLicenseFile || identityDocumentFile || codiceFiscaleFile)) {
+        console.log('Uploading documents for client:', createdClientId)
+
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (!user || authError) {
+          console.warn('Cannot upload documents: user not authenticated')
+        } else {
+          // Upload driver's license
+          if (driversLicenseFile) {
+            try {
+              const fileExt = driversLicenseFile.name.split('.').pop()
+              const fileName = `drivers_license_${Date.now()}.${fileExt}`
+              const filePath = `${createdClientId}/${fileName}`
+              const bucket = 'driver-licenses'
+
+              const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, driversLicenseFile, {
+                  cacheControl: '3600',
+                  upsert: true
+                })
+
+              if (uploadError) throw uploadError
+
+              await supabase
+                .from('customer_documents')
+                .insert({
+                  customer_id: createdClientId,
+                  document_type: 'drivers_license',
+                  file_name: driversLicenseFile.name,
+                  file_path: filePath,
+                  file_size: driversLicenseFile.size,
+                  mime_type: driversLicenseFile.type,
+                  bucket_id: bucket,
+                  uploaded_by: user.id
+                })
+
+              console.log('✅ Driver\'s license uploaded successfully')
+            } catch (docError: any) {
+              console.error('Error uploading driver\'s license:', docError)
+              alert(`Attenzione: Cliente creato ma errore caricamento patente: ${docError.message}`)
+            }
+          }
+
+          // Upload identity document
+          if (identityDocumentFile) {
+            try {
+              const fileExt = identityDocumentFile.name.split('.').pop()
+              const fileName = `identity_document_${Date.now()}.${fileExt}`
+              const filePath = `${createdClientId}/${fileName}`
+              const bucket = 'customer-documents'
+
+              const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, identityDocumentFile, {
+                  cacheControl: '3600',
+                  upsert: true
+                })
+
+              if (uploadError) throw uploadError
+
+              await supabase
+                .from('customer_documents')
+                .insert({
+                  customer_id: createdClientId,
+                  document_type: 'identity_document',
+                  file_name: identityDocumentFile.name,
+                  file_path: filePath,
+                  file_size: identityDocumentFile.size,
+                  mime_type: identityDocumentFile.type,
+                  bucket_id: bucket,
+                  uploaded_by: user.id
+                })
+
+              console.log('✅ Identity document uploaded successfully')
+            } catch (docError: any) {
+              console.error('Error uploading identity document:', docError)
+              alert(`Attenzione: Cliente creato ma errore caricamento documento: ${docError.message}`)
+            }
+          }
+
+          // Upload codice fiscale document
+          if (codiceFiscaleFile) {
+            try {
+              const fileExt = codiceFiscaleFile.name.split('.').pop()
+              const fileName = `codice_fiscale_${Date.now()}.${fileExt}`
+              const filePath = `${createdClientId}/${fileName}`
+              const bucket = 'codice-fiscale'
+
+              const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, codiceFiscaleFile, {
+                  cacheControl: '3600',
+                  upsert: true
+                })
+
+              if (uploadError) throw uploadError
+
+              await supabase
+                .from('customer_documents')
+                .insert({
+                  customer_id: createdClientId,
+                  document_type: 'codice_fiscale' as any,
+                  file_name: codiceFiscaleFile.name,
+                  file_path: filePath,
+                  file_size: codiceFiscaleFile.size,
+                  mime_type: codiceFiscaleFile.type,
+                  bucket_id: bucket,
+                  uploaded_by: user.id
+                })
+
+              console.log('✅ Codice fiscale uploaded successfully')
+            } catch (docError: any) {
+              console.error('Error uploading codice fiscale:', docError)
+              alert(`Attenzione: Cliente creato ma errore caricamento codice fiscale: ${docError.message}`)
+            }
+          }
+        }
       }
 
       if (onClientCreated && resultData) {
@@ -572,6 +702,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   const handleClose = () => {
     // Reset essential fields or all
     setErrors({})
+    setShowDocumentSection(false)
+    setDriversLicenseFile(null)
+    setIdentityDocumentFile(null)
+    setCodiceFiscaleFile(null)
     onClose()
   }
 
@@ -1058,6 +1192,131 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               </div>
             )}
 
+          </div>
+
+          {/* OPTIONAL DOCUMENT UPLOAD SECTION */}
+          <div className="border-t border-gray-800 pt-6">
+            <button
+              type="button"
+              onClick={() => setShowDocumentSection(!showDocumentSection)}
+              className="w-full flex items-center justify-between p-4 bg-gray-800 hover:bg-gray-750 rounded-lg transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <svg className="w-6 h-6 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <div className="text-left">
+                  <h3 className="text-lg font-medium text-white">Documenti (Opzionale)</h3>
+                  <p className="text-sm text-gray-400">Carica patente e documento d'identità se disponibili</p>
+                </div>
+              </div>
+              <svg
+                className={`w-5 h-5 text-gray-400 transition-transform ${showDocumentSection ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showDocumentSection && (
+              <div className="mt-4 space-y-4 animate-fadeIn">
+                <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm text-blue-300">
+                      I documenti verranno caricati dopo la creazione del cliente. Puoi anche caricarli successivamente dalla sezione documenti del cliente.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Driver's License Upload */}
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Patente di Guida
+                  </label>
+                  <input
+                    type="file"
+                    onChange={(e) => setDriversLicenseFile(e.target.files?.[0] || null)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm
+                      file:mr-4 file:py-2 file:px-4 file:rounded file:border-0
+                      file:text-sm file:font-semibold file:bg-dr7-gold file:text-black
+                      hover:file:bg-yellow-500 file:cursor-pointer"
+                    accept="image/*,.pdf"
+                  />
+                  {driversLicenseFile && (
+                    <p className="text-xs text-green-400 mt-2 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {driversLicenseFile.name} ({(driversLicenseFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
+
+                {/* Identity Document Upload */}
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Documento d'Identità
+                  </label>
+                  <input
+                    type="file"
+                    onChange={(e) => setIdentityDocumentFile(e.target.files?.[0] || null)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm
+                      file:mr-4 file:py-2 file:px-4 file:rounded file:border-0
+                      file:text-sm file:font-semibold file:bg-dr7-gold file:text-black
+                      hover:file:bg-yellow-500 file:cursor-pointer"
+                    accept="image/*,.pdf"
+                  />
+                  {identityDocumentFile && (
+                    <p className="text-xs text-green-400 mt-2 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {identityDocumentFile.name} ({(identityDocumentFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
+
+                {/* Codice Fiscale Upload */}
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Codice Fiscale
+                  </label>
+                  <input
+                    type="file"
+                    onChange={(e) => setCodiceFiscaleFile(e.target.files?.[0] || null)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm
+                      file:mr-4 file:py-2 file:px-4 file:rounded file:border-0
+                      file:text-sm file:font-semibold file:bg-dr7-gold file:text-black
+                      hover:file:bg-yellow-500 file:cursor-pointer"
+                    accept="image/*,.pdf"
+                  />
+                  {codiceFiscaleFile && (
+                    <p className="text-xs text-green-400 mt-2 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {codiceFiscaleFile.name} ({(codiceFiscaleFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
+
+                {(driversLicenseFile || identityDocumentFile || codiceFiscaleFile) && (
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                    <p className="text-sm text-green-300 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {[driversLicenseFile && 'Patente', identityDocumentFile && 'Documento d\'identità', codiceFiscaleFile && 'Codice Fiscale'].filter(Boolean).join(', ')} {[driversLicenseFile, identityDocumentFile, codiceFiscaleFile].filter(Boolean).length > 1 ? 'verranno caricati' : 'verrà caricato'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* FOOTER ACTIONS */}
