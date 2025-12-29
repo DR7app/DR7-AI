@@ -1169,16 +1169,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
             {showDocumentSection && (
               <div className="mt-4 space-y-4 animate-fadeIn">
-                <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-sm text-blue-300">
-                      I documenti verranno caricati dopo la creazione del cliente. Puoi caricare fronte e retro separatamente.
-                    </p>
-                  </div>
-                </div>
 
                 {/* Driver's License Upload */}
                 <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
