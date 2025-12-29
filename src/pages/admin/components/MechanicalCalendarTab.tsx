@@ -181,8 +181,9 @@ export default function MechanicalCalendarTab() {
 
     const query = searchQuery.toLowerCase()
     return bookings.filter(booking => {
-      if (!booking.customer_name) return false
-      return booking.customer_name.toLowerCase().includes(query)
+      const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
+      if (!customerName) return false
+      return customerName.toLowerCase().includes(query)
     })
   }, [bookings, searchQuery])
 
@@ -314,7 +315,7 @@ export default function MechanicalCalendarTab() {
                   }}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-white font-bold text-sm">{booking.customer_name}</h4>
+                    <h4 className="text-white font-bold text-sm">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</h4>
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
                       booking.status === 'pending' ? 'bg-yellow-600 text-black' :
                         'bg-gray-600 text-white'
@@ -322,7 +323,7 @@ export default function MechanicalCalendarTab() {
                       {booking.status}
                     </span>
                   </div>
-                  <p className="text-gray-400 text-xs mb-2">{booking.customer_email}</p>
+                  <p className="text-gray-400 text-xs mb-2">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
                   <div className="space-y-1 text-xs">
                     <p className="text-white">
                       <span className="text-gray-400">Servizio:</span> {booking.service_name}
@@ -445,11 +446,17 @@ export default function MechanicalCalendarTab() {
                         }`}>
                         {booking.status}
                       </span>
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'paid' ? 'bg-green-600 text-white' :
-                        booking.payment_status === 'pending' ? 'bg-yellow-600 text-black' :
-                          'bg-red-600 text-white'
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'paid' ||
+                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                          ? 'bg-green-600 text-white'
+                          : booking.payment_status === 'pending'
+                            ? 'bg-yellow-600 text-black'
+                            : 'bg-red-600 text-white'
                         }`}>
-                        {booking.payment_status}
+                        {booking.payment_status === 'paid' ||
+                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                          ? 'Pagato'
+                          : booking.payment_status}
                       </span>
                     </div>
                   </div>
@@ -457,15 +464,15 @@ export default function MechanicalCalendarTab() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-gray-400">Cliente:</span>
-                      <p className="text-white font-semibold">{booking.customer_name}</p>
+                      <p className="text-white font-semibold">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-400">Telefono:</span>
-                      <p className="text-white font-semibold">{booking.customer_phone}</p>
+                      <p className="text-white font-semibold">{booking.customer_phone || booking.booking_details?.customer?.phone || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-400">Email:</span>
-                      <p className="text-white font-semibold text-xs">{booking.customer_email}</p>
+                      <p className="text-white font-semibold text-xs">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-400">Veicolo:</span>

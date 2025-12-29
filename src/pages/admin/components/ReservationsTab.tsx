@@ -777,7 +777,26 @@ export default function ReservationsTab() {
   async function handleGenerateInvoice(booking: Booking) {
     if (!booking.id) return
 
-    if (!confirm(`Vuoi generare una fattura per questa prenotazione?\n\nCliente: ${booking.customer_name}\nVeicolo: ${booking.vehicle_name}`)) {
+    // Custom IVA selection dialog
+    const ivaChoice = window.prompt(
+      `Vuoi generare una fattura per questa prenotazione?\n\n` +
+      `Cliente: ${booking.customer_name}\n` +
+      `Veicolo: ${booking.vehicle_name}\n\n` +
+      `Seleziona il tipo di fattura:\n` +
+      `1 - Con IVA (22%)\n` +
+      `2 - Senza IVA (0%)\n\n` +
+      `Inserisci 1 o 2:`,
+      '1'
+    )
+
+    if (!ivaChoice) {
+      return // User cancelled
+    }
+
+    const includeIVA = ivaChoice.trim() === '1'
+
+    if (ivaChoice.trim() !== '1' && ivaChoice.trim() !== '2') {
+      alert('⚠️ Scelta non valida. Inserisci 1 o 2.')
       return
     }
 
@@ -786,7 +805,7 @@ export default function ReservationsTab() {
       const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id })
+        body: JSON.stringify({ bookingId: booking.id, includeIVA })
       })
 
       const data = await response.json()
@@ -821,12 +840,15 @@ export default function ReservationsTab() {
         if (printWindow) {
           // Clean up the blob URL after a delay
           setTimeout(() => URL.revokeObjectURL(url), 3000)
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+          const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
+          alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
         } else {
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
+          alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
         }
       } else {
-        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
+        alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
       loadData()
@@ -2027,9 +2049,17 @@ export default function ReservationsTab() {
                     </div>
                     <div className="text-sm text-gray-400">{booking.customer_phone || '-'}</div>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                  <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
+                      booking.payment_status === 'paid' ||
+                      (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                      ? 'bg-green-900 text-green-300'
+                      : 'bg-red-900 text-red-300'
                     }`}>
-                    {booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
+                    {booking.payment_status === 'completed' ||
+                      booking.payment_status === 'paid' ||
+                      (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                      ? 'Pagato'
+                      : 'Non Pagato'}
                   </span>
                 </div>
 
@@ -2194,9 +2224,17 @@ export default function ReservationsTab() {
                         }
                       </td>
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                        <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
+                            booking.payment_status === 'paid' ||
+                            (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                            ? 'bg-green-900 text-green-300'
+                            : 'bg-red-900 text-red-300'
                           }`}>
-                          {booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
+                          {booking.payment_status === 'completed' ||
+                            booking.payment_status === 'paid' ||
+                            (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                            ? 'Pagato'
+                            : 'Non Pagato'}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
@@ -2350,13 +2388,17 @@ export default function ReservationsTab() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Stato:</span>
-                      <span className={`px-3 py-1.5 rounded text-sm font-medium ${selectedBooking.payment_status === 'completed' || selectedBooking.payment_status === 'paid'
-                        ? 'bg-green-900 text-green-300'
-                        : selectedBooking.payment_status === 'pending'
-                          ? 'bg-yellow-900 text-yellow-300'
-                          : 'bg-red-900 text-red-300'
+                      <span className={`px-3 py-1.5 rounded text-sm font-medium ${selectedBooking.payment_status === 'completed' ||
+                          selectedBooking.payment_status === 'paid' ||
+                          (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
+                          ? 'bg-green-900 text-green-300'
+                          : selectedBooking.payment_status === 'pending'
+                            ? 'bg-yellow-900 text-yellow-300'
+                            : 'bg-red-900 text-red-300'
                         }`}>
-                        {selectedBooking.payment_status === 'completed' || selectedBooking.payment_status === 'paid'
+                        {selectedBooking.payment_status === 'completed' ||
+                          selectedBooking.payment_status === 'paid' ||
+                          (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                           ? 'Pagato'
                           : selectedBooking.payment_status === 'pending'
                             ? 'Da Saldare'

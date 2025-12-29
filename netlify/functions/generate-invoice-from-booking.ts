@@ -18,7 +18,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId } = JSON.parse(event.body || '{}')
+        const { bookingId, includeIVA = true } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return {
@@ -245,18 +245,26 @@ export const handler: Handler = async (event) => {
 
         if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical') {
             // Logic for Services (Car Wash / Mechanical)
+            // User confirmed prices INCLUDE IVA (Gross)
             const serviceName = booking.service_name || (booking.service_type === 'car_wash' ? 'Lavaggio Auto' : 'Intervento Meccanico')
             const totalServicePrice = (booking.price_total || 0) / 100
 
-            // Calculate net price (assuming total is gross)
+            // Always extract Net Price implies dividing Gross by 1.22
             const netPrice = totalServicePrice / 1.22
+            const vatRate = includeIVA ? 22 : 0
 
             items.push({
                 description: `${serviceName} - Data: ${new Date(booking.appointment_date || booking.pickup_date).toLocaleDateString('it-IT')}`,
                 unit_price: netPrice,
                 quantity: 1,
-                vat_rate: 22,
-                total: netPrice // Should be just net price for the item total
+                vat_rate: vatRate,
+                total: netPrice // Line item logic downstream calculates total based on rate? No, mapped manually below.
+                // Wait, the 'total' field in items array is usually (unit * qty). 
+                // But generatesInvoiceHTML uses unit_price * quantity.
+                // The 'total' property here in the object pushed to 'items' is used for subtotal calculation loop below?
+                // Let's check lines 335+ "items.forEach..."
+                // It uses "item.unit_price * item.quantity". So keys in object matter.
+                // We should push the NET total into 'total' property? No, code doesn't use it.
             })
         } else {
             // Logic for Rentals (Default)
@@ -283,10 +291,13 @@ export const handler: Handler = async (event) => {
 
             // Re-calculating from components if possible is safer, but we might drift from stored total.
             // Let's stick to: Create line items that SUM up to the booking.price_total.
-
             // If we have insurance, we split the Pot. If not, everything is Rental.
 
-            // Calculate Net Prices for components (Gross / 1.22)
+            // Calculate Net Prices for components based on IVA inclusion
+            const vatRate = includeIVA ? 22 : 0
+            // Always divide by 1.22 because prices are Gross (IVA Included)
+            const vatDivisor = 1.22
+
             const insurancePriceGross = insuranceTotal
             const kmFeeGross = kmFee // KM fee might be exempt or 22%? Assuming 22% for now unless exempt.
 
@@ -297,10 +308,10 @@ export const handler: Handler = async (event) => {
             // 1. Vehicle Rental Item
             items.push({
                 description: `Noleggio ${booking.vehicle_name} - ${rentalDays} giorni`,
-                unit_price: rentalGross / 1.22, // Net Price
+                unit_price: rentalGross / vatDivisor, // Net Price
                 quantity: 1,
-                vat_rate: 22,
-                total: rentalGross / 1.22
+                vat_rate: vatRate,
+                total: (rentalGross / vatDivisor) // Not strictly used by calculation loop
             })
 
             // 2. Insurance Item
@@ -308,18 +319,18 @@ export const handler: Handler = async (event) => {
                 const insuranceName = bookingDetails.insurance.replace(/_/g, ' ')
                 items.push({
                     description: `Assicurazione ${insuranceName} - ${rentalDays} giorni`,
-                    unit_price: insurancePriceGross / 1.22,
+                    unit_price: insurancePriceGross / vatDivisor,
                     quantity: 1,
-                    vat_rate: 22,
-                    total: insurancePriceGross / 1.22
+                    vat_rate: vatRate,
+                    total: (insurancePriceGross / vatDivisor)
                 })
             }
 
-            // 3. KM Overage
+            // 3. KM Overage (always 0% VAT for penalties)
             if (kmFeeGross > 0) {
-                items.push({
+                items.push({ // Penalties usually exempt (Article 15). Keep as is.
                     description: 'Penale chilometraggio extra',
-                    unit_price: kmFeeGross, // Usually penalties effectively have 0 rate or we treat as is
+                    unit_price: kmFeeGross,
                     quantity: 1,
                     vat_rate: 0,
                     total: kmFeeGross

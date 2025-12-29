@@ -30,6 +30,7 @@ interface Booking {
   customer_name: string
   customer_email: string
   price_total: number
+  booking_details?: any
 }
 
 type CellStatus = 'available' | 'rented' | 'unavailable'
@@ -102,7 +103,7 @@ export default function CalendarTab() {
       // Load bookings (only car rentals, not car wash) - include ALL statuses except cancelled
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type')
+        .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type, booking_details')
         .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
@@ -456,10 +457,10 @@ export default function CalendarTab() {
             Risultati ricerca: "{searchQuery}"
           </h3>
           {(() => {
-            const matchingBookings = bookings.filter(booking =>
-              booking.customer_name &&
-              booking.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
-            )
+            const matchingBookings = bookings.filter(booking => {
+              const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || ''
+              return customerName && customerName.toLowerCase().includes(searchQuery.toLowerCase())
+            })
 
             if (matchingBookings.length === 0) {
               return (
@@ -476,8 +477,12 @@ export default function CalendarTab() {
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-white font-semibold">{booking.customer_name}</p>
-                        <p className="text-gray-400 text-sm">{booking.customer_email}</p>
+                        <p className="text-white font-semibold">
+                          {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
+                        </p>
+                        <p className="text-gray-400 text-sm">
+                          {booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}
+                        </p>
                         <p className="text-dr7-gold text-sm mt-1">
                           🚗 {booking.vehicle_name}
                           {booking.vehicle_plate && <span className="text-gray-400"> ({booking.vehicle_plate})</span>}
@@ -565,14 +570,15 @@ export default function CalendarTab() {
                   const query = searchQuery.toLowerCase()
                   // Filter vehicles that have bookings matching the customer name search
                   return bookings.some(booking => {
-                    // Safely check if customer_name exists
-                    if (!booking.customer_name) return false
+                    // Safely check if customer_name exists (in top-level or booking_details)
+                    const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
+                    if (!customerName) return false
 
                     const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
                     const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
                     // Prioritize plate match
                     if (vehicle.plate && booking.vehicle_plate && vehicle.plate === booking.vehicle_plate) {
-                      return booking.customer_name.toLowerCase().includes(query)
+                      return customerName.toLowerCase().includes(query)
                     }
 
                     const vehicleMatches = bookingVehicle === vehicleDisplay ||
@@ -580,7 +586,7 @@ export default function CalendarTab() {
                         bookingVehicle.includes(vehicleDisplay) ||
                         vehicleDisplay.includes(bookingVehicle)
                       ))
-                    return vehicleMatches && booking.customer_name.toLowerCase().includes(query)
+                    return vehicleMatches && customerName.toLowerCase().includes(query)
                   })
                 }).map(vehicle => (
                   <tr key={vehicle.id}>
@@ -690,8 +696,12 @@ export default function CalendarTab() {
                     <div key={booking.id} className="bg-gray-800/50 rounded-lg p-5 border border-red-500/30">
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <div className="text-white font-bold text-lg mb-1">{booking.customer_name}</div>
-                          <div className="text-gray-400 text-sm">{booking.customer_email}</div>
+                          <div className="text-white font-bold text-lg mb-1">
+                            {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
+                          </div>
+                          <div className="text-gray-400 text-sm">
+                            {booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}
+                          </div>
                         </div>
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
                           {booking.status}

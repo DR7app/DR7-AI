@@ -347,10 +347,17 @@ function generateInvoiceHTML(invoice: any): string {
                 <span>Imponibile</span>
                 <span>€${imponibile.toFixed(2)}</span>
             </div>
+            ${iva > 0 ? `
             <div class="summary-row">
                 <span>IVA 22%</span>
                 <span>€${iva.toFixed(2)}</span>
             </div>
+            ` : `
+            <div class="summary-row">
+                <span>IVA 0% (Esente)</span>
+                <span>€0.00</span>
+            </div>
+            `}
             <div class="summary-row total">
                 <span>Totale fattura</span>
                 <span>€${totale.toFixed(2)}</span>

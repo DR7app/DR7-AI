@@ -215,8 +215,9 @@ export default function CarWashCalendarTab() {
 
     const query = searchQuery.toLowerCase()
     return bookings.filter(booking => {
-      if (!booking.customer_name) return false
-      return booking.customer_name.toLowerCase().includes(query)
+      const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
+      if (!customerName) return false
+      return customerName.toLowerCase().includes(query)
     })
   }, [bookings, searchQuery])
 
@@ -347,7 +348,7 @@ export default function CarWashCalendarTab() {
                   }}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-white font-bold text-sm">{booking.customer_name}</h4>
+                    <h4 className="text-white font-bold text-sm">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</h4>
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
                       booking.status === 'pending' ? 'bg-yellow-600 text-black' :
                         'bg-gray-600 text-white'
@@ -355,7 +356,7 @@ export default function CarWashCalendarTab() {
                       {booking.status}
                     </span>
                   </div>
-                  <p className="text-gray-400 text-xs mb-2">{booking.customer_email}</p>
+                  <p className="text-gray-400 text-xs mb-2">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
                   <div className="space-y-1 text-xs">
                     <p className="text-white">
                       <span className="text-gray-400">Servizio:</span> {booking.service_name}
@@ -462,9 +463,9 @@ export default function CarWashCalendarTab() {
                 <div key={booking.id} className="bg-gray-800/50 rounded-lg p-5 border border-red-500/30">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <div className="text-white font-bold text-lg mb-1">{booking.customer_name}</div>
-                      <div className="text-gray-400 text-sm">{booking.customer_email}</div>
-                      <div className="text-gray-400 text-sm">{booking.customer_phone}</div>
+                      <div className="text-white font-bold text-lg mb-1">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
+                      <div className="text-gray-400 text-sm">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</div>
+                      <div className="text-gray-400 text-sm">{booking.customer_phone || booking.booking_details?.customer?.phone || 'N/A'}</div>
                     </div>
                     <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
                       {booking.status}
@@ -494,11 +495,17 @@ export default function CarWashCalendarTab() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Stato Pagamento:</span>
-                      <span className={`font-medium ${booking.payment_status === 'paid' || booking.payment_status === 'completed'
-                        ? 'text-green-400'
-                        : 'text-red-400'
+                      <span className={`font-medium ${booking.payment_status === 'paid' ||
+                          booking.payment_status === 'completed' ||
+                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                          ? 'text-green-400'
+                          : 'text-red-400'
                         }`}>
-                        {booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'Pagato' : 'Non Pagato'}
+                        {booking.payment_status === 'paid' ||
+                          booking.payment_status === 'completed' ||
+                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                          ? 'Pagato'
+                          : 'Non Pagato'}
                       </span>
                     </div>
                   </div>

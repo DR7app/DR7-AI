@@ -93,11 +93,11 @@ export default function MechanicalBookingTab() {
 
       setCustomers(mappedCustomers)
 
-      // Load mechanical service bookings
+      // Load mechanical service bookings (include both 'mechanical_service' and 'mechanical')
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
-        .eq('service_type', 'mechanical_service')
+        .or('service_type.eq.mechanical_service,service_type.eq.mechanical')
         .order('appointment_date', { ascending: false })
 
       if (bookingsError) throw bookingsError
@@ -149,7 +149,26 @@ export default function MechanicalBookingTab() {
     const customerName = booking.customer_name
     const serviceName = booking.service_name
 
-    if (!confirm(`Vuoi generare una fattura per questa prenotazione?\n\nCliente: ${customerName}\nServizio: ${serviceName}`)) {
+    // Custom IVA selection dialog
+    const ivaChoice = window.prompt(
+      `Vuoi generare una fattura per questa prenotazione?\n\n` +
+      `Cliente: ${customerName}\n` +
+      `Servizio: ${serviceName}\n\n` +
+      `Seleziona il tipo di fattura:\n` +
+      `1 - Con IVA (22%)\n` +
+      `2 - Senza IVA (0%)\n\n` +
+      `Inserisci 1 o 2:`,
+      '1'
+    )
+
+    if (!ivaChoice) {
+      return // User cancelled
+    }
+
+    const includeIVA = ivaChoice.trim() === '1'
+
+    if (ivaChoice.trim() !== '1' && ivaChoice.trim() !== '2') {
+      alert('⚠️ Scelta non valida. Inserisci 1 o 2.')
       return
     }
 
@@ -158,7 +177,7 @@ export default function MechanicalBookingTab() {
       const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id })
+        body: JSON.stringify({ bookingId: booking.id, includeIVA })
       })
 
       const data = await response.json()
@@ -191,12 +210,15 @@ export default function MechanicalBookingTab() {
         if (printWindow) {
           // Increase timeout to ensure browser has time to load the Blob URL
           setTimeout(() => URL.revokeObjectURL(url), 3000)
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+          const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
+          alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
         } else {
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
+          alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
         }
       } else {
-        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
+        alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
       loadData()
