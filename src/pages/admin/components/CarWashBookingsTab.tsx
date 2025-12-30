@@ -339,15 +339,12 @@ export default function CarWashBookingsTab() {
 
         if (printWindow) {
           setTimeout(() => URL.revokeObjectURL(url), 3000)
-          const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
-          alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
         } else {
-          const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
-          alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
         }
       } else {
-        const ivaText = includeIVA ? 'con IVA (22%)' : 'senza IVA (0%)'
-        alert(`✅ Fattura generata con successo ${ivaText}!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
       loadData()
