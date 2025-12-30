@@ -299,8 +299,8 @@ export default function CarWashBookingsTab() {
   async function handleGenerateInvoice(booking: CarWashBooking) {
     if (!booking.id) return
 
-    // IVA is already included in the price, don't add it again
-    const includeIVA = false
+    // Include IVA (22%) in invoice breakdown
+    const includeIVA = true
 
     setGeneratingInvoice(true)
     try {
