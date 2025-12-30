@@ -62,6 +62,7 @@ interface Customer {
   // Membership fields
   membership_tier?: 'Argento' | 'Oro' | 'Platino' | null
   membership_expires_at?: string | null
+  active_membership?: any // populated from customer_memberships table
   // Metadata for extended fields
   metadata?: {
     sesso?: string
@@ -403,6 +404,51 @@ export default function CustomersTab() {
             customerMap.set(key, c)
           }
         })
+      }
+
+      // [NEW] Fetch Customer Memberships
+      console.log('[CustomersTab] Fetching customer_memberships...')
+      const { data: membershipsData, error: membershipsError } = await supabase
+        .from('customer_memberships')
+        .select('*')
+        .eq('status', 'active') // Only fetch active for the list view for now, or fetch all and filter? 
+      // Let's fetch all active ones to show current package.
+      // Ideally we fetch all and sort by date, but specifically we want the *active* one.
+
+      if (!membershipsError && membershipsData) {
+        console.log('[CustomersTab] Memberships found:', membershipsData.length)
+
+        // Map memberships to customers
+        const membershipMap = new Map()
+        membershipsData.forEach((m: any) => {
+          // If multiple active, take the one with latest start_date? Or just first.
+          membershipMap.set(m.client_id, m)
+        })
+
+        // Iterate through all customers and attach membership if found
+        customerMap.forEach((customer, key) => {
+          if (customer.id && membershipMap.has(customer.id)) {
+            const mem = membershipMap.get(customer.id)
+            // We add a 'membership' object to the customer. 
+            // Currently type definition has membership_tier (legacy?). 
+            // Let's use a new field or map to existing if compatible, but I prefer explicit 'active_membership'
+            // modifying the customer object in the map
+            const updatedCustomer = {
+              ...customer,
+              active_membership: mem,
+              // Also update legacy fields for compatibility if needed, but UI will use active_membership
+              membership_tier: mem.package_name
+            }
+            customerMap.set(key, updatedCustomer)
+          }
+        })
+      } else if (membershipsError) {
+        // If table doesn't exist yet (404/42P01), ignore error prevents crashing
+        if (membershipsError.code !== '42P01') {
+          console.error('Error fetching memberships:', membershipsError)
+        } else {
+          console.warn('customer_memberships table missing, skipping.')
+        }
       }
 
       // Check storage for documents (optimized to just check existence if possible, or skip if too slow)
@@ -1416,6 +1462,7 @@ export default function CustomersTab() {
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Pacchetto</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tipo Cliente</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Telefono</th>
@@ -1452,17 +1499,25 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm text-white">
                     <div className="flex items-center gap-2">
                       <span>{customer.full_name}</span>
-                      {customer.membership_tier && (
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${customer.membership_tier === 'Argento'
-                          ? 'bg-gray-400/20 text-gray-300 border border-gray-400/30'
-                          : customer.membership_tier === 'Oro'
-                            ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                            : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                          }`}>
-                          {customer.membership_tier}
-                        </span>
-                      )}
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {(customer as any).active_membership ? (
+                      <div className="flex flex-col">
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold inline-block w-fit mb-1 ${(customer as any).active_membership.package_name === 'Argento' ? 'bg-gray-400 text-black' :
+                          (customer as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500 text-black' :
+                            (customer as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-white' :
+                              'bg-blue-600 text-white'
+                          }`}>
+                          {(customer as any).active_membership.package_name}
+                        </span>
+                        <span className="text-[10px] text-gray-400 capitalize">
+                          {(customer as any).active_membership.status === 'active' ? 'Attivo' : (customer as any).active_membership.status}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-600 text-xs">Nessun pacchetto</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {customer.tipo_cliente ? (
