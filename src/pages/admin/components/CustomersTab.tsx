@@ -788,6 +788,57 @@ export default function CustomersTab() {
                 </span>
               </div>
 
+              {/* Membership Section */}
+              <div className="bg-gray-800 rounded-lg p-4 border border-dr7-gold/20 mb-4">
+                <h4 className="text-sm font-semibold text-dr7-gold mb-3 border-b border-gray-700 pb-2 flex justify-between items-center">
+                  <span>Pacchetto Membership</span>
+                  {(viewingCustomerDetails as any).active_membership && (
+                    <span className={`px-2 py-0.5 rounded text-xs text-black font-bold ${(viewingCustomerDetails as any).active_membership.package_name === 'Argento' ? 'bg-gray-400' :
+                        (viewingCustomerDetails as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500' :
+                          (viewingCustomerDetails as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
+                      }`}>
+                      {(viewingCustomerDetails as any).active_membership.package_name}
+                    </span>
+                  )}
+                </h4>
+                {(viewingCustomerDetails as any).active_membership ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-sm text-gray-400">Stato:</span>
+                      <p className="text-sm text-white font-medium capitalize">
+                        {(viewingCustomerDetails as any).active_membership.status === 'active' ? 'Attivo' : (viewingCustomerDetails as any).active_membership.status}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Data Attivazione:</span>
+                      <p className="text-sm text-white font-medium">
+                        {(viewingCustomerDetails as any).active_membership.start_date ? new Date((viewingCustomerDetails as any).active_membership.start_date).toLocaleDateString('it-IT') : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Data Scadenza:</span>
+                      <p className="text-sm text-white font-medium">
+                        {(viewingCustomerDetails as any).active_membership.end_date ? new Date((viewingCustomerDetails as any).active_membership.end_date).toLocaleDateString('it-IT') : 'Illimitato'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Riferimento Ordine:</span>
+                      <p className="text-sm text-white font-medium font-mono">
+                        {(viewingCustomerDetails as any).active_membership.external_order_id || '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Fonte:</span>
+                      <p className="text-sm text-white font-medium">
+                        {(viewingCustomerDetails as any).active_membership.source || 'dr7empire.com'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Nessun pacchetto attivo</p>
+                )}
+              </div>
+
               {/* Persona Fisica Details */}
               {viewingCustomerDetails.tipo_cliente === 'persona_fisica' && (
                 <div className="bg-gray-800 rounded-lg p-4">
