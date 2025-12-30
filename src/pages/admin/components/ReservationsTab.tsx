@@ -320,7 +320,11 @@ export default function ReservationsTab() {
   const [selectedBookingForPenalty, setSelectedBookingForPenalty] = useState<Booking | null>(null)
 
   async function openEditCustomer(customerId: string) {
-    if (!customerId) return
+    if (!customerId || customerId === 'undefined') {
+      alert("ID cliente non valido. Impossibile aprire la scheda cliente.")
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('customers_extended')
@@ -332,10 +336,18 @@ export default function ReservationsTab() {
       if (data) {
         setCustomerToEdit(data)
         setEditModalOpen(true)
+      } else {
+        throw new Error('Customer not found')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching customer for edit:', error)
-      alert("Impossibile caricare i dati del cliente per la modifica.")
+
+      // More helpful error message
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) {
+        alert("Cliente non trovato nel database.\n\nIl cliente potrebbe essere stato creato sul sito web ma non ha ancora un profilo completo nell'admin panel.\n\nContatta il supporto tecnico per risolvere questo problema.")
+      } else {
+        alert("Impossibile caricare i dati del cliente per la modifica.\n\nErrore: " + (error.message || 'Errore sconosciuto'))
+      }
     }
   }
 
