@@ -10,9 +10,10 @@ interface PenaltyModalProps {
     }
     onClose: () => void
     onSuccess: () => void
+    onEditCustomer?: (customerId: string) => void
 }
 
-export default function PenaltyModal({ isOpen, booking, onClose, onSuccess }: PenaltyModalProps) {
+export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEditCustomer }: PenaltyModalProps) {
     const [amount, setAmount] = useState('')
     const [motivo, setMotivo] = useState('')
     const [note, setNote] = useState('')
@@ -50,7 +51,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess }: Pe
             const data = await response.json()
 
             if (!response.ok) {
-                throw new Error(data.error || 'Errore durante la generazione della fattura. Riprova.')
+                throw new Error(data.message || data.error || 'Errore durante la generazione della fattura. Riprova.')
             }
 
             // Success - open invoice PDF
@@ -83,7 +84,10 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess }: Pe
             onClose()
         } catch (error: any) {
             console.error('Error generating penalty invoice:', error)
-            setError(error.message || 'Errore durante la generazione della fattura. Riprova.')
+
+            // Show detailed error message
+            const errorMessage = error.message || 'Errore durante la generazione della fattura. Riprova.'
+            setError(errorMessage)
         } finally {
             setIsGenerating(false)
         }
@@ -98,6 +102,17 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess }: Pe
             onClose()
         }
     }
+
+    const handleEditCustomerClick = () => {
+        const customerId = booking.customer_id || booking.user_id
+        if (customerId && onEditCustomer) {
+            onEditCustomer(customerId)
+            handleClose()
+        }
+    }
+
+    // Check if error is about missing customer data
+    const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
 
     return (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -161,10 +176,19 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess }: Pe
                         />
                     </div>
 
-                    {/* Error message */}
+                    {/* Error message with edit customer button */}
                     {error && (
-                        <div className="p-3 bg-red-900/30 border border-red-700 rounded-md">
+                        <div className="p-3 bg-red-900/30 border border-red-700 rounded-md space-y-2">
                             <p className="text-red-300 text-sm">{error}</p>
+                            {isCustomerDataError && onEditCustomer && (booking.customer_id || booking.user_id) && (
+                                <button
+                                    type="button"
+                                    onClick={handleEditCustomerClick}
+                                    className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                                >
+                                    Modifica Dati Cliente
+                                </button>
+                            )}
                         </div>
                     )}
 

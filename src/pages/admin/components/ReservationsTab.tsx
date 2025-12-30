@@ -1530,6 +1530,10 @@ export default function ReservationsTab() {
             onSuccess={() => {
               loadData()
             }}
+            onEditCustomer={(customerId) => {
+              openEditCustomer(customerId)
+              setPenaltyModalOpen(false)
+            }}
           />
         )}
 
