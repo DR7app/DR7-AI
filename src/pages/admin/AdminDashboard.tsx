@@ -142,6 +142,13 @@ export default function AdminDashboard() {
                 Veicoli
               </button>
               <button
+                onClick={() => setActiveTab('fleet')}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                  }`}
+              >
+                Gestione Flotta
+              </button>
+              <button
                 onClick={() => setActiveTab('calendar')}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
                   }`}
@@ -330,6 +337,15 @@ export default function AdminDashboard() {
                   }`}
               >
                 Veicoli
+              </button>
+              <button
+                onClick={() => setActiveTab('fleet')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fleet'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  }`}
+              >
+                Gestione Flotta
               </button>
               <button
                 onClick={() => setActiveTab('lotteria')}
