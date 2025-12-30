@@ -260,16 +260,7 @@ export default function CalendarTab() {
         return false
       }
 
-      // PRIORITY 2: Match by vehicle_id if available
-      if (booking.vehicle_id && vehicle.id && booking.vehicle_id === vehicle.id) {
-        const pickupDate = new Date(booking.pickup_date)
-        const dropoffDate = new Date(booking.dropoff_date)
-        pickupDate.setHours(0, 0, 0, 0)
-        dropoffDate.setHours(0, 0, 0, 0)
-        return checkDate >= pickupDate && checkDate < dropoffDate
-      }
-
-      // PRIORITY 3: Match by name (fallback for legacy bookings)
+      // PRIORITY 2: Match by name (fallback for legacy bookings)
       const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
       const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
       const exactMatch = bookingVehicle === vehicleDisplay
@@ -306,16 +297,7 @@ export default function CalendarTab() {
         return false
       }
 
-      // PRIORITY 2: Match by vehicle_id if available
-      if (booking.vehicle_id && vehicle.id && booking.vehicle_id === vehicle.id) {
-        const pickupDate = new Date(booking.pickup_date)
-        const dropoffDate = new Date(booking.dropoff_date)
-        pickupDate.setHours(0, 0, 0, 0)
-        dropoffDate.setHours(0, 0, 0, 0)
-        return checkDate >= pickupDate && checkDate < dropoffDate
-      }
-
-      // PRIORITY 3: Match by name (fallback)
+      // PRIORITY 2: Match by name (fallback)
       const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
       const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
       const exactMatch = bookingVehicle === vehicleDisplay
