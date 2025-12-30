@@ -170,9 +170,15 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // Get current time (rounded to minute)
             const now = new Date()
             now.setSeconds(0, 0)
-            const nowISO = now.toISOString()
 
-            // Query bookings due for return in the current minute
+            // Calculate threshold: 10 minutes ago
+            // We want to trigger alarm if dropoff_date was 10 minutes ago
+            const tenMinutesAgo = new Date(now.getTime() - 10 * 60000)
+            const tenMinutesAgoISO = tenMinutesAgo.toISOString()
+            // Next minute boundary for the range
+            const tenMinutesAgoPlusOne = new Date(tenMinutesAgo.getTime() + 60000).toISOString()
+
+            // Query bookings due for return 10 minutes ago
             // Only check bookings that haven't been returned and haven't triggered alarm
             const { data: bookings, error } = await supabase
                 .from('bookings')
@@ -180,8 +186,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 .is('alarm_triggered_at', null)
                 .neq('status', 'returned')
                 .neq('status', 'cancelled')
-                .gte('dropoff_date', nowISO)
-                .lt('dropoff_date', new Date(now.getTime() + 60000).toISOString()) // Within next minute
+                .gte('dropoff_date', tenMinutesAgoISO)
+                .lt('dropoff_date', tenMinutesAgoPlusOne) // Within that specific minute 10 mins ago
 
             if (error) {
                 console.error('Failed to check due returns:', error)
@@ -199,13 +205,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     continue
                 }
 
-                // Parse return time and compare to current time (minute precision)
+                // Parse return time and compare to threshold (minute precision)
                 const returnTime = new Date(booking.dropoff_date)
                 returnTime.setSeconds(0, 0)
 
-                // If times match (same minute), trigger alarm
-                if (returnTime.getTime() === now.getTime()) {
-                    console.log('🚨 ALARM TRIGGERED for booking:', booking.id)
+                // Double check locally (should be covered by query but safe to check)
+                // If returnTime matches tenMinutesAgo
+                if (returnTime.getTime() === tenMinutesAgo.getTime()) {
+                    console.log('🚨 ALARM TRIGGERED (Delayed 10m) for booking:', booking.id)
 
                     // Mark as triggered
                     triggeredAlarmsRef.current.add(booking.id)

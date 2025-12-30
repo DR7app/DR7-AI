@@ -775,7 +775,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <label className="block text-sm font-medium text-gray-400 mb-1">Data Nascita</label>
                       <input
                         type="date"
-                        value={formData.data_nascita}
+                        lang="it"
+                        value={formData.data_nascita || ''}
                         onChange={(e) => setFormData({ ...formData, data_nascita: e.target.value })}
                         className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
                       />
@@ -934,7 +935,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <label className="block text-sm font-medium text-gray-400 mb-1">Data Rilascio</label>
                       <input
                         type="date"
-                        value={formData.patente_rilascio}
+                        lang="it"
+                        value={formData.patente_rilascio || ''}
                         onChange={(e) => setFormData({ ...formData, patente_rilascio: e.target.value })}
                         className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
                       />
@@ -943,7 +945,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <label className="block text-sm font-medium text-gray-400 mb-1">Scadenza</label>
                       <input
                         type="date"
-                        value={formData.patente_scadenza}
+                        lang="it"
+                        value={formData.patente_scadenza || ''}
                         onChange={(e) => setFormData({ ...formData, patente_scadenza: e.target.value })}
                         className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
                       />

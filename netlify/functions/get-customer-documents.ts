@@ -37,7 +37,7 @@ export const handler: Handler = async (event) => {
         const addToList = (bucket: string, fileObj: any) => {
             if (bucket === 'driver-licenses') licenseUrls.push(fileObj)
             else if (bucket === 'codice-fiscale') codiceFiscaleUrls.push(fileObj)
-            else if (bucket === 'driver-ids' || bucket === 'carta-identita') idUrls.push(fileObj)
+            else if (bucket === 'driver-ids' || bucket === 'carta-identita' || bucket === 'customer-documents') idUrls.push(fileObj)
         }
 
         // Process DB docs
@@ -64,7 +64,7 @@ export const handler: Handler = async (event) => {
         }
 
         // 2. Fetch from Storage Buckets (Direct list) to catch files not in DB
-        const BUCKETS = ['driver-licenses', 'driver-ids', 'codice-fiscale', 'carta-identita']
+        const BUCKETS = ['driver-licenses', 'driver-ids', 'codice-fiscale', 'carta-identita', 'customer-documents']
 
         await Promise.all(BUCKETS.map(async (bucket) => {
             const { data: files } = await supabase.storage

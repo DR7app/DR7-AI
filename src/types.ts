@@ -26,6 +26,43 @@ export interface Vehicle {
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
+  // Fleet Management Fields
+  current_km?: number
+  insurance_expiry?: string
+  tax_expiry?: string
+  inspection_expiry?: string
+  leasing_expiry?: string
+}
+
+export interface VehicleMaintenance {
+  vehicle_id: string
+  last_service_km: number | null
+  last_service_date: string | null
+  service_interval_km: number
+  service_interval_months: number | null
+  last_tire_change_front_km: number | null
+  last_tire_change_front_date: string | null
+  last_tire_change_rear_km: number | null
+  last_tire_change_rear_date: string | null
+  tire_interval_km: number | null
+  last_brake_change_front_km: number | null
+  last_brake_change_front_date: string | null
+  last_brake_change_rear_km: number | null
+  last_brake_change_rear_date: string | null
+  brake_interval_km: number | null
+}
+
+export interface VehicleEvent {
+  id: string
+  vehicle_id: string
+  event_type: 'tagliando' | 'gomme' | 'freni' | 'revisione' | 'assicurazione' | 'bollo' | 'altro'
+  event_date: string
+  km: number
+  cost: number | null
+  provider: string | null
+  notes: string | null
+  attachment_url: string | null
+  created_at: string
 }
 
 export interface Reservation {

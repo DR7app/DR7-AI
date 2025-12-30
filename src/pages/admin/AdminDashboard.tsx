@@ -18,7 +18,9 @@ import ReviewsTab from './components/ReviewsTab'
 import FatturaTab from './components/FatturaTab'
 import ContrattoTab from './components/ContrattoTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews'
+import FleetManagementTab from './components/FleetManagementTab'
+
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -414,7 +416,9 @@ export default function AdminDashboard() {
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'marketing' && <MarketingTab />}
+          {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'reviews' && <ReviewsTab />}
+          {activeTab === 'fleet' && <FleetManagementTab />}
         </div>
       </main>
     </div>

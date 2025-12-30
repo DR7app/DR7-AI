@@ -1878,6 +1878,7 @@ export default function ReservationsTab() {
                   options={[
                     { value: 'Bonifico', label: 'Bonifico' },
                     { value: 'Contanti', label: 'Contanti' },
+                    { value: 'Credit Wallet', label: 'Credit Wallet' },
                     { value: 'Carta di Credito / bancomat', label: 'Carta di Credito / bancomat' },
                     { value: 'Paypal', label: 'Paypal' },
                     { value: 'RIBA', label: 'RIBA' },
@@ -2050,10 +2051,10 @@ export default function ReservationsTab() {
                     <div className="text-sm text-gray-400">{booking.customer_phone || '-'}</div>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
-                      booking.payment_status === 'paid' ||
-                      (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                      ? 'bg-green-900 text-green-300'
-                      : 'bg-red-900 text-red-300'
+                    booking.payment_status === 'paid' ||
+                    (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                    ? 'bg-green-900 text-green-300'
+                    : 'bg-red-900 text-red-300'
                     }`}>
                     {booking.payment_status === 'completed' ||
                       booking.payment_status === 'paid' ||
@@ -2225,10 +2226,10 @@ export default function ReservationsTab() {
                       </td>
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
-                            booking.payment_status === 'paid' ||
-                            (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                            ? 'bg-green-900 text-green-300'
-                            : 'bg-red-900 text-red-300'
+                          booking.payment_status === 'paid' ||
+                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                          ? 'bg-green-900 text-green-300'
+                          : 'bg-red-900 text-red-300'
                           }`}>
                           {booking.payment_status === 'completed' ||
                             booking.payment_status === 'paid' ||
@@ -2389,12 +2390,12 @@ export default function ReservationsTab() {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Stato:</span>
                       <span className={`px-3 py-1.5 rounded text-sm font-medium ${selectedBooking.payment_status === 'completed' ||
-                          selectedBooking.payment_status === 'paid' ||
-                          (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
-                          ? 'bg-green-900 text-green-300'
-                          : selectedBooking.payment_status === 'pending'
-                            ? 'bg-yellow-900 text-yellow-300'
-                            : 'bg-red-900 text-red-300'
+                        selectedBooking.payment_status === 'paid' ||
+                        (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
+                        ? 'bg-green-900 text-green-300'
+                        : selectedBooking.payment_status === 'pending'
+                          ? 'bg-yellow-900 text-yellow-300'
+                          : 'bg-red-900 text-red-300'
                         }`}>
                         {selectedBooking.payment_status === 'completed' ||
                           selectedBooking.payment_status === 'paid' ||
