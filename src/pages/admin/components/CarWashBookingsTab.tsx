@@ -298,31 +298,9 @@ export default function CarWashBookingsTab() {
 
   async function handleGenerateInvoice(booking: CarWashBooking) {
     if (!booking.id) return
-    const customerName = booking.customer_name // booking object here is CarWashBooking interface
-    const serviceName = booking.service_name
 
-    // Custom IVA selection dialog
-    const ivaChoice = window.prompt(
-      `Vuoi generare una fattura per questa prenotazione?\n\n` +
-      `Cliente: ${customerName}\n` +
-      `Servizio: ${serviceName}\n\n` +
-      `Seleziona il tipo di fattura:\n` +
-      `1 - Con IVA (22%)\n` +
-      `2 - Senza IVA (0%)\n\n` +
-      `Inserisci 1 o 2:`,
-      '1'
-    )
-
-    if (!ivaChoice) {
-      return // User cancelled
-    }
-
-    const includeIVA = ivaChoice.trim() === '1'
-
-    if (ivaChoice.trim() !== '1' && ivaChoice.trim() !== '2') {
-      alert('⚠️ Scelta non valida. Inserisci 1 o 2.')
-      return
-    }
+    // IVA is already included in the price, don't add it again
+    const includeIVA = false
 
     setGeneratingInvoice(true)
     try {

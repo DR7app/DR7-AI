@@ -7,6 +7,7 @@ import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import PenaltyModal from './PenaltyModal'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -313,6 +314,10 @@ export default function ReservationsTab() {
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
+
+  // Penalty Modal State
+  const [penaltyModalOpen, setPenaltyModalOpen] = useState(false)
+  const [selectedBookingForPenalty, setSelectedBookingForPenalty] = useState<Booking | null>(null)
 
   async function openEditCustomer(customerId: string) {
     if (!customerId) return
@@ -777,28 +782,8 @@ export default function ReservationsTab() {
   async function handleGenerateInvoice(booking: Booking) {
     if (!booking.id) return
 
-    // Custom IVA selection dialog
-    const ivaChoice = window.prompt(
-      `Vuoi generare una fattura per questa prenotazione?\n\n` +
-      `Cliente: ${booking.customer_name}\n` +
-      `Veicolo: ${booking.vehicle_name}\n\n` +
-      `Seleziona il tipo di fattura:\n` +
-      `1 - Con IVA (22%)\n` +
-      `2 - Senza IVA (0%)\n\n` +
-      `Inserisci 1 o 2:`,
-      '1'
-    )
-
-    if (!ivaChoice) {
-      return // User cancelled
-    }
-
-    const includeIVA = ivaChoice.trim() === '1'
-
-    if (ivaChoice.trim() !== '1' && ivaChoice.trim() !== '2') {
-      alert('⚠️ Scelta non valida. Inserisci 1 o 2.')
-      return
-    }
+    // IVA is already included in the price, don't add it again
+    const includeIVA = false
 
     setGeneratingInvoice(true)
     try {
@@ -1528,6 +1513,26 @@ export default function ReservationsTab() {
           }}
         />
 
+        {/* Penalty Modal */}
+        {selectedBookingForPenalty && (
+          <PenaltyModal
+            isOpen={penaltyModalOpen}
+            booking={{
+              id: selectedBookingForPenalty.id,
+              customer_name: selectedBookingForPenalty.customer_name || 'Cliente',
+              customer_id: selectedBookingForPenalty.booking_details?.customer?.customerId || undefined,
+              user_id: selectedBookingForPenalty.user_id || undefined
+            }}
+            onClose={() => {
+              setPenaltyModalOpen(false)
+              setSelectedBookingForPenalty(null)
+            }}
+            onSuccess={() => {
+              loadData()
+            }}
+          />
+        )}
+
         {showForm && (
           <form onSubmit={handleSubmit} className="bg-dr7-dark p-4 sm:p-6 rounded-lg mb-6 border border-gray-800">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
@@ -2244,6 +2249,12 @@ export default function ReservationsTab() {
                               </button>
                             </>
                           )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForPenalty(booking); setPenaltyModalOpen(true) }}
+                            className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                          >
+                            Penali
+                          </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                             className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors whitespace-nowrap"

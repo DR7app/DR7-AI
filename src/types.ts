@@ -15,6 +15,20 @@ export interface Customer {
   notes: string | null
   created_at: string
   updated_at: string
+  membership?: CustomerMembership[] // Array because we might join 1:N, but typically we'll show the active one
+}
+
+export interface CustomerMembership {
+  id: string
+  client_id: string
+  package_code: string
+  package_name: string
+  status: 'active' | 'expired' | 'pending'
+  start_date: string
+  end_date: string | null
+  external_order_id: string | null
+  source: string | null
+  created_at: string
 }
 
 export interface Vehicle {
