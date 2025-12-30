@@ -22,6 +22,7 @@ interface Vehicle {
 
 interface Booking {
   id: string
+  vehicle_id?: string
   vehicle_name: string
   vehicle_plate?: string
   pickup_date: string
@@ -103,7 +104,7 @@ export default function CalendarTab() {
       // Load bookings (only car rentals, not car wash) - include ALL statuses except cancelled
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type, booking_details')
+        .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type, booking_details')
         .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
@@ -248,33 +249,40 @@ export default function CalendarTab() {
 
     // Find bookings for this vehicle on this day
     const vehicleBookings = bookings.filter(booking => {
-      // 1. STRICT PRIORITY: If booking has a plate, ONLY match by plate
-      if (booking.vehicle_plate) {
-        // Booking has a plate - only match if vehicle plate matches exactly
-        if (vehicle.plate === booking.vehicle_plate) {
-          // Exact plate match - check dates
+      // 1. PRIMARY: Match by vehicle_id (most reliable)
+      if (booking.vehicle_id && vehicle.id) {
+        if (booking.vehicle_id === vehicle.id) {
           const pickupDate = new Date(booking.pickup_date)
           const dropoffDate = new Date(booking.dropoff_date)
           pickupDate.setHours(0, 0, 0, 0)
           dropoffDate.setHours(0, 0, 0, 0)
           return checkDate >= pickupDate && checkDate < dropoffDate
         }
-        // Plate doesn't match or vehicle has no plate - NOT a match
+        // vehicle_id doesn't match - NOT a match
         return false
       }
 
-      // 2. Fallback: Match by Name ONLY if booking has NO plate
+      // 2. FALLBACK: Match by plate if vehicle_id not available
+      if (booking.vehicle_plate && vehicle.plate) {
+        if (vehicle.plate === booking.vehicle_plate) {
+          const pickupDate = new Date(booking.pickup_date)
+          const dropoffDate = new Date(booking.dropoff_date)
+          pickupDate.setHours(0, 0, 0, 0)
+          dropoffDate.setHours(0, 0, 0, 0)
+          return checkDate >= pickupDate && checkDate < dropoffDate
+        }
+        return false
+      }
+
+      // 3. LAST RESORT: Match by name (legacy bookings)
       const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
       const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-
-      // Require exact match to prevent fuzzy matching issues
       const exactMatch = bookingVehicle === vehicleDisplay
 
       if (!exactMatch) return false
 
       const pickupDate = new Date(booking.pickup_date)
       const dropoffDate = new Date(booking.dropoff_date)
-
       pickupDate.setHours(0, 0, 0, 0)
       dropoffDate.setHours(0, 0, 0, 0)
 
@@ -291,33 +299,39 @@ export default function CalendarTab() {
     checkDate.setHours(0, 0, 0, 0)
 
     return bookings.filter(booking => {
-      // 1. STRICT PRIORITY: If booking has a plate, ONLY match by plate
-      if (booking.vehicle_plate) {
-        // Booking has a plate - only match if vehicle plate matches exactly
-        if (vehicle.plate === booking.vehicle_plate) {
-          // Exact plate match - check dates
+      // 1. PRIMARY: Match by vehicle_id (most reliable)
+      if (booking.vehicle_id && vehicle.id) {
+        if (booking.vehicle_id === vehicle.id) {
           const pickupDate = new Date(booking.pickup_date)
           const dropoffDate = new Date(booking.dropoff_date)
           pickupDate.setHours(0, 0, 0, 0)
           dropoffDate.setHours(0, 0, 0, 0)
           return checkDate >= pickupDate && checkDate < dropoffDate
         }
-        // Plate doesn't match or vehicle has no plate - NOT a match
         return false
       }
 
-      // 2. Fallback: Match by Name ONLY if booking has NO plate
+      // 2. FALLBACK: Match by plate if vehicle_id not available
+      if (booking.vehicle_plate && vehicle.plate) {
+        if (vehicle.plate === booking.vehicle_plate) {
+          const pickupDate = new Date(booking.pickup_date)
+          const dropoffDate = new Date(booking.dropoff_date)
+          pickupDate.setHours(0, 0, 0, 0)
+          dropoffDate.setHours(0, 0, 0, 0)
+          return checkDate >= pickupDate && checkDate < dropoffDate
+        }
+        return false
+      }
+
+      // 3. LAST RESORT: Match by name (legacy bookings)
       const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
       const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-
-      // Require exact match to prevent fuzzy matching issues
       const exactMatch = bookingVehicle === vehicleDisplay
 
       if (!exactMatch) return false
 
       const pickupDate = new Date(booking.pickup_date)
       const dropoffDate = new Date(booking.dropoff_date)
-
       pickupDate.setHours(0, 0, 0, 0)
       dropoffDate.setHours(0, 0, 0, 0)
 
