@@ -203,8 +203,8 @@ export const handler: Handler = async (event) => {
             vat_amount: vatAmount,
             exempt_amount: exemptAmount,
             sdi_status: 'draft',
-            note: note || undefined,
-            tipo_fattura: 'penale' // Mark as penalty invoice
+            note: note || undefined
+            // tipo_fattura: 'penale' // Commented out to prevent errors if column is missing. Use description to identify.
         }
 
         const { data: invoice, error: insertError } = await supabase
