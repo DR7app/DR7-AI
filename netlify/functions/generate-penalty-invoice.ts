@@ -190,7 +190,7 @@ export const handler: Handler = async (event) => {
             numero_fattura: invoiceNumber,
             data_emissione: italyDate,
             importo_totale: total,
-            stato: 'unpaid', // Penalties are typically unpaid initially
+            stato: 'pending', // Use 'pending' as 'unpaid' might violate constraint
             customer_name: booking.customer_name || customerData?.fullName || customerData?.nome || 'Cliente',
             customer_address: fullAddress,
             customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || booking.customer_phone || '',
