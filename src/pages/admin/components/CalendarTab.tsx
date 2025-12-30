@@ -22,7 +22,6 @@ interface Vehicle {
 
 interface Booking {
   id: string
-  vehicle_id?: string
   vehicle_name: string
   vehicle_plate?: string
   pickup_date: string
@@ -104,7 +103,7 @@ export default function CalendarTab() {
       // Load bookings (only car rentals, not car wash) - include ALL statuses except cancelled
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type, booking_details')
+        .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type, booking_details')
         .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
