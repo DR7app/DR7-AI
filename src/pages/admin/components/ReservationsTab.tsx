@@ -1228,7 +1228,6 @@ export default function ReservationsTab() {
         guest_email: customerInfo?.email || null,
         guest_phone: customerInfo?.phone || null,
         vehicle_type: 'car',
-        vehicle_id: formData.vehicle_id, // CRITICAL FIX: Store vehicle_id reference
         vehicle_name: vehicle?.display_name || 'N/A',
         vehicle_plate: vehicle?.plate || null,
         vehicle_image_url: null,
