@@ -210,7 +210,7 @@ export default function VehiclesTab() {
       query = query.eq('vehicle_name', vehicleName)
     }
 
-    const { error: bookError } = await query
+    await query
 
     // ...
   }

@@ -1,4 +1,4 @@
-import { Vehicle, VehicleMaintenance } from '../types'
+import type { Vehicle, VehicleMaintenance } from '../types'
 
 export type VehicleStatus = 'OK' | 'ATTENZIONE' | 'URGENTE'
 export type DeadlineType = 'tagliando' | 'gomme' | 'freni' | 'revisione' | 'assicurazione' | 'bollo' | 'altro'
@@ -18,8 +18,6 @@ export interface DeadlineInfo {
 const DATE_WARNING_DAYS = 15
 const SERVICE_WARNING_KM = 2000
 const SERVICE_URGENT_KM = 500
-const TIRE_BRAKE_WARNING_KM = 3000
-const TIRE_BRAKE_URGENT_KM = 1000
 
 export function calculateDaysRemaining(dateString?: string | null): number | null {
     if (!dateString) return null

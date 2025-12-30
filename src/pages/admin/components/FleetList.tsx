@@ -85,7 +85,8 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                         </Button>
                                     </td>
                                 </tr>
-                            ))}
+                            )
+                        })}
                     </tbody>
                 </table>
             </div>
