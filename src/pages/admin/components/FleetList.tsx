@@ -53,40 +53,41 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         </tr>
                     </thead>
                     <tbody>
-                        {vehicles.map(vehicle => (
-                            const {status, nearestDeadline} = getVehicleStatus(vehicle, null) // Pass maintenance data when available
+                        <tbody>
+                            {vehicles.map(vehicle => {
+                                const { status, nearestDeadline } = getVehicleStatus(vehicle, null) // Pass maintenance data when available
 
-                        return (
-                        <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800 cursor-pointer" onClick={() => onOpenDetail(vehicle.id)}>
-                            <td className="px-4 py-3 text-white font-medium">
-                                {vehicle.display_name}
-                                {nearestDeadline && (
-                                    <div className={`text-xs mt-1 ${nearestDeadline.isUrgent ? 'text-red-400 font-bold' : nearestDeadline.isWarning ? 'text-yellow-400' : 'text-gray-500'}`}>
-                                        {nearestDeadline.label}: {nearestDeadline.isDate ? `${nearestDeadline.value} gg` : `${nearestDeadline.value} km`}
-                                    </div>
-                                )}
-                            </td>
-                            <td className="px-4 py-3 text-gray-300">{vehicle.plate || '-'}</td>
-                            <td className="px-4 py-3 text-white font-mono">{vehicle.current_km?.toLocaleString() || 0} km</td>
-                            <td className="px-4 py-3">
-                                <span className={`px-2 py-1 rounded text-xs font-bold ${status === 'URGENTE' ? 'bg-red-900 text-red-200 animate-pulse' :
-                                    status === 'ATTENZIONE' ? 'bg-yellow-900 text-yellow-200' :
-                                        'bg-green-900 text-green-200'
-                                    }`}>
-                                    {status}
-                                </span>
-                            </td>
-                            <td className="px-4 py-3">
-                                <Button
-                                    onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
-                                    className="text-xs py-1 px-3"
-                                >
-                                    Apri Scheda
-                                </Button>
-                            </td>
-                        </tr>
-                        ))}
-                    </tbody>
+                                return (
+                                    <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800 cursor-pointer" onClick={() => onOpenDetail(vehicle.id)}>
+                                        <td className="px-4 py-3 text-white font-medium">
+                                            {vehicle.display_name}
+                                            {nearestDeadline && (
+                                                <div className={`text-xs mt-1 ${nearestDeadline.isUrgent ? 'text-red-400 font-bold' : nearestDeadline.isWarning ? 'text-yellow-400' : 'text-gray-500'}`}>
+                                                    {nearestDeadline.label}: {nearestDeadline.isDate ? `${nearestDeadline.value} gg` : `${nearestDeadline.value} km`}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-gray-300">{vehicle.plate || '-'}</td>
+                                        <td className="px-4 py-3 text-white font-mono">{vehicle.current_km?.toLocaleString() || 0} km</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${status === 'URGENTE' ? 'bg-red-900 text-red-200 animate-pulse' :
+                                                status === 'ATTENZIONE' ? 'bg-yellow-900 text-yellow-200' :
+                                                    'bg-green-900 text-green-200'
+                                                }`}>
+                                                {status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Button
+                                                onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
+                                                className="text-xs py-1 px-3"
+                                            >
+                                                Apri Scheda
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                        </tbody>
                 </table>
             </div>
         </div>
