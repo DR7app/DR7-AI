@@ -22,13 +22,13 @@ export default function AlarmNotification() {
     }
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-red-900/95 animate-pulse">
-            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 border-4 border-red-600">
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center ${alarmState.activeAlarm.type === 'deposit' ? 'bg-yellow-900/95' : 'bg-red-900/95'} animate-pulse`}>
+            <div className={`bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 border-4 ${alarmState.activeAlarm.type === 'deposit' ? 'border-yellow-500' : 'border-red-600'}`}>
                 <div className="flex flex-col items-center text-center gap-6">
                     {/* Icon */}
-                    <div className="bg-red-100 p-6 rounded-full">
+                    <div className={`${alarmState.activeAlarm.type === 'deposit' ? 'bg-yellow-100' : 'bg-red-100'} p-6 rounded-full`}>
                         <svg
-                            className="w-20 h-20 text-red-600 animate-bounce"
+                            className={`w-20 h-20 ${alarmState.activeAlarm.type === 'deposit' ? 'text-yellow-600' : 'text-red-600'} animate-bounce`}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -44,14 +44,23 @@ export default function AlarmNotification() {
 
                     {/* Content */}
                     <div>
-                        <h2 className="text-4xl font-black text-red-600 mb-2 uppercase tracking-wide">
-                            VEHICLE RETURN DUE NOW
+                        <h2 className={`text-4xl font-black ${alarmState.activeAlarm.type === 'deposit' ? 'text-yellow-600' : 'text-red-600'} mb-2 uppercase tracking-wide`}>
+                            {alarmState.activeAlarm.type === 'deposit' ? 'DEPOSIT REQUIRED FOR PICKUP' : 'VEHICLE RETURN DUE NOW'}
                         </h2>
                         <div className="text-gray-800 text-xl space-y-2 font-medium">
                             <p>Booking <span className="font-bold">#{bookingId.slice(0, 8)}</span></p>
                             <p className="text-2xl font-bold">{vehicleName}</p>
                             <p>{customerName}</p>
-                            <p className="text-red-600 font-bold">Due: {returnTime}</p>
+                            <div className="flex flex-col items-center">
+                                <p className={`${alarmState.activeAlarm.type === 'deposit' ? 'text-yellow-600' : 'text-red-600'} font-bold`}>
+                                    {alarmState.activeAlarm.type === 'deposit' ? 'Pickup at:' : 'Due:'} {returnTime}
+                                </p>
+                                {alarmState.activeAlarm.type === 'deposit' && alarmState.activeAlarm.deposit && (
+                                    <p className="text-3xl font-black text-gray-900 mt-2 p-2 bg-yellow-100 rounded-lg border-2 border-yellow-400">
+                                        € {Number(alarmState.activeAlarm.deposit).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     </div>
 

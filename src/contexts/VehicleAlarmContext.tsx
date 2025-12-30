@@ -6,6 +6,8 @@ interface AlarmBooking {
     vehicleName: string
     returnTime: string
     customerName: string
+    type?: 'return' | 'deposit'
+    deposit?: number
 }
 
 interface AlarmState {
@@ -164,91 +166,107 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }))
     }
 
-    // Check for due returns
-    const checkDueReturns = async () => {
+    // Check for alarms (Returns & Deposits)
+    const checkAlarms = async () => {
         try {
-            // Get current time (rounded to minute)
             const now = new Date()
             now.setSeconds(0, 0)
 
-            // Calculate threshold: 10 minutes ago
-            // We want to trigger alarm if dropoff_date was 10 minutes ago
+            // --- 1. CHECK RETURNS (10 mins AFTER due time) ---
+            // Triggers if return_date was 10 mins ago
             const tenMinutesAgo = new Date(now.getTime() - 10 * 60000)
             const tenMinutesAgoISO = tenMinutesAgo.toISOString()
-            // Next minute boundary for the range
             const tenMinutesAgoPlusOne = new Date(tenMinutesAgo.getTime() + 60000).toISOString()
 
-            // Query bookings due for return 10 minutes ago
-            // Only check bookings that haven't been returned and haven't triggered alarm
-            const { data: bookings, error } = await supabase
+            const { data: returns, error: returnsError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at')
                 .is('alarm_triggered_at', null)
                 .neq('status', 'returned')
                 .neq('status', 'cancelled')
                 .gte('dropoff_date', tenMinutesAgoISO)
-                .lt('dropoff_date', tenMinutesAgoPlusOne) // Within that specific minute 10 mins ago
+                .lt('dropoff_date', tenMinutesAgoPlusOne)
 
-            if (error) {
-                console.error('Failed to check due returns:', error)
-                return
-            }
+            if (!returnsError && returns && returns.length > 0) {
+                for (const booking of returns) {
+                    const trackingId = `return_${booking.id}`
+                    if (triggeredAlarmsRef.current.has(trackingId) || triggeredAlarmsRef.current.has(booking.id)) continue
 
-            if (!bookings || bookings.length === 0) {
-                return
-            }
+                    // Check exact minute match locally
+                    const returnTime = new Date(booking.dropoff_date)
+                    returnTime.setSeconds(0, 0)
 
-            // Check each booking
-            for (const booking of bookings) {
-                // Skip if already triggered in this session
-                if (triggeredAlarmsRef.current.has(booking.id)) {
-                    continue
-                }
+                    if (returnTime.getTime() === tenMinutesAgo.getTime()) {
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
 
-                // Parse return time and compare to threshold (minute precision)
-                const returnTime = new Date(booking.dropoff_date)
-                returnTime.setSeconds(0, 0)
-
-                // Double check locally (should be covered by query but safe to check)
-                // If returnTime matches tenMinutesAgo
-                if (returnTime.getTime() === tenMinutesAgo.getTime()) {
-                    console.log('🚨 ALARM TRIGGERED (Delayed 10m) for booking:', booking.id)
-
-                    // Mark as triggered
-                    triggeredAlarmsRef.current.add(booking.id)
-                    localStorage.setItem(
-                        'triggered_alarms',
-                        JSON.stringify([...triggeredAlarmsRef.current])
-                    )
-
-                    // Trigger alarm
-                    playAlarm({
-                        bookingId: booking.id,
-                        vehicleName: booking.vehicle_name || 'Unknown Vehicle',
-                        returnTime: returnTime.toLocaleTimeString('it-IT', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        }),
-                        customerName: booking.customer_name || 'Unknown Customer'
-                    })
-
-                    // Only trigger one alarm at a time
-                    break
+                        playAlarm({
+                            bookingId: booking.id,
+                            vehicleName: booking.vehicle_name || 'Unknown Vehicle',
+                            returnTime: returnTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                            customerName: booking.customer_name || 'Unknown Customer',
+                            type: 'return'
+                        })
+                        return // Trigger one at a time
+                    }
                 }
             }
+
+            // --- 2. CHECK DEPOSITS (10 mins BEFORE pickup time) ---
+            // Triggers if pickup_date is 10 mins in FUTURE
+            const tenMinutesFuture = new Date(now.getTime() + 10 * 60000)
+            const tenMinutesFutureISO = tenMinutesFuture.toISOString()
+            const tenMinutesFuturePlusOne = new Date(tenMinutesFuture.getTime() + 60000).toISOString()
+
+            // We need to fetch bookings starting soon and check deposit in JS/JSON field
+            const { data: pickups, error: pickupsError } = await supabase
+                .from('bookings')
+                .select('id, customer_name, vehicle_name, pickup_date, status, booking_details')
+                .neq('status', 'cancelled')
+                .gte('pickup_date', tenMinutesFutureISO)
+                .lt('pickup_date', tenMinutesFuturePlusOne)
+
+            if (!pickupsError && pickups && pickups.length > 0) {
+                for (const booking of pickups) {
+                    // Check if deposit exists and > 0
+                    const details = booking.booking_details as any
+                    const deposit = details?.deposit ? Number(details.deposit) : 0
+
+                    if (deposit <= 0) continue
+
+                    const trackingId = `deposit_${booking.id}`
+                    if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                    // Check exact minute match locally
+                    const pickupTime = new Date(booking.pickup_date)
+                    pickupTime.setSeconds(0, 0)
+
+                    if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: booking.id,
+                            vehicleName: booking.vehicle_name || 'Unknown Vehicle',
+                            returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                            customerName: booking.customer_name || 'Unknown Customer',
+                            type: 'deposit',
+                            deposit: deposit
+                        })
+                        return // Trigger one at a time
+                    }
+                }
+            }
+
         } catch (error) {
-            console.error('Error checking due returns:', error)
+            console.error('Error checking alarms:', error)
         }
     }
 
-    // Poll for due returns every 30 seconds
+    // Poll every 30 seconds
     useEffect(() => {
-        // Initial check
-        checkDueReturns()
-
-        // Set up polling interval
-        const interval = setInterval(checkDueReturns, 30000) // 30 seconds
-
+        checkAlarms()
+        const interval = setInterval(checkAlarms, 30000)
         return () => clearInterval(interval)
     }, []) // Empty deps - runs once on mount
 
