@@ -233,16 +233,6 @@ export default function CustomersTab() {
           const key = customerEmail || customerPhone || booking.user_id
 
           if (key) {
-            // Only create customer entry if we have a valid UUID for user_id
-            // Otherwise, skip it - the customer will be loaded from customers_extended table
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-            const hasValidUserId = booking.user_id && uuidRegex.test(booking.user_id)
-
-            if (!hasValidUserId) {
-              // Skip customers without valid UUID - they'll come from customers_extended
-              return
-            }
-
             // If customer already exists, update phone and email if missing
             const existing = customerMap.get(key)
             if (existing) {
@@ -256,9 +246,14 @@ export default function CustomersTab() {
                 existing.full_name = customerName
               }
             } else {
-              // Create new customer entry with valid UUID
+              // Create new customer entry - use user_id if valid, otherwise generate temp ID
+              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+              const customerId = (booking.user_id && uuidRegex.test(booking.user_id))
+                ? booking.user_id
+                : `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
               customerMap.set(key, {
-                id: booking.user_id, // Always a valid UUID at this point
+                id: customerId,
                 full_name: customerName,
                 email: customerEmail,
                 phone: customerPhone,
@@ -270,7 +265,7 @@ export default function CustomersTab() {
             }
           }
         })
-        console.log('Unique customers from bookings with valid UUIDs:', customerMap.size)
+        console.log('Unique customers from bookings:', customerMap.size)
       }
 
       // Get customers from customers_extended table
@@ -794,8 +789,8 @@ export default function CustomersTab() {
                   <span>Pacchetto Membership</span>
                   {(viewingCustomerDetails as any).active_membership && (
                     <span className={`px-2 py-0.5 rounded text-xs text-black font-bold ${(viewingCustomerDetails as any).active_membership.package_name === 'Argento' ? 'bg-gray-400' :
-                        (viewingCustomerDetails as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500' :
-                          (viewingCustomerDetails as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
+                      (viewingCustomerDetails as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500' :
+                        (viewingCustomerDetails as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
                       }`}>
                       {(viewingCustomerDetails as any).active_membership.package_name}
                     </span>
