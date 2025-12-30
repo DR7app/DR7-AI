@@ -1279,49 +1279,20 @@ export default function ReservationsTab() {
 
       let insertedBooking
       if (editingId) {
-        // Update existing booking using admin bypass function
-        // This avoids the trigger that blocks modifications
-        const { data: rpcData, error: rpcError } = await supabase.rpc('admin_update_booking', {
-          p_booking_id: editingId,
-          p_pickup_date: pickupDate.toISOString(),
-          p_dropoff_date: returnDate.toISOString(),
-          p_vehicle_plate: vehicle?.plate || null,
-          p_status: formData.status,
-          p_payment_status: formData.payment_status
-        })
+        // Update existing booking - trigger will properly exclude current booking from conflict check
+        const { data, error: bookingError } = await supabase
+          .from('bookings')
+          .update(bookingData)
+          .eq('id', editingId)
+          .select()
+          .single()
 
-        if (rpcError) {
-          console.error('Admin update failed, trying standard update:', rpcError)
-          // Fallback to standard update if RPC fails
-          const { data, error: bookingError } = await supabase
-            .from('bookings')
-            .update(bookingData)
-            .eq('id', editingId)
-            .select()
-            .single()
-
-          if (bookingError) {
-            console.error('Failed to update booking:', bookingError)
-            console.error('Booking data that failed:', bookingData)
-            throw new Error(`Failed to update booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
-          }
-          insertedBooking = data
-        } else {
-          // RPC succeeded, now update the full booking data
-          const { data, error: fullUpdateError } = await supabase
-            .from('bookings')
-            .update(bookingData)
-            .eq('id', editingId)
-            .select()
-            .single()
-
-          if (fullUpdateError) {
-            console.warn('Full update after RPC failed:', fullUpdateError)
-            insertedBooking = rpcData
-          } else {
-            insertedBooking = data
-          }
+        if (bookingError) {
+          console.error('Failed to update booking:', bookingError)
+          console.error('Booking data that failed:', bookingData)
+          throw new Error(`Failed to update booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
         }
+        insertedBooking = data
         console.log('Booking updated successfully:', insertedBooking)
       } else {
         // Create new booking

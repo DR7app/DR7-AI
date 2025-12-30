@@ -113,18 +113,22 @@ export default function VehiclesTab() {
       }
 
       if (editingId) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('vehicles')
           .update(dataToSave)
           .eq('id', editingId)
+          .select()
 
         if (error) throw error
+        console.log('Vehicle updated:', data)
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('vehicles')
           .insert([dataToSave])
+          .select()
 
         if (error) throw error
+        console.log('Vehicle created:', data)
       }
 
       // Sync with Google Calendar if vehicle is marked unavailable with dates
