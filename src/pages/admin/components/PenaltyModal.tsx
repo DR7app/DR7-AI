@@ -7,13 +7,60 @@ interface PenaltyModalProps {
         customer_name: string
         customer_id?: string
         user_id?: string
+        vehicle_name?: string
+        booking_details?: any
     }
     onClose: () => void
     onSuccess: () => void
     onEditCustomer?: (customerId: string) => void
 }
 
+// Supercar Penalties
+const SUPERCAR_PENALTIES = [
+    { id: 'fermo_incidente', label: 'Fermo veicolo per incidente o danni', amount: 350, description: 'Per ogni giorno di inutilizzo del veicolo' },
+    { id: 'fermo_alto_valore', label: 'Fermo veicolo – auto di valore ≥ 200.000 €', amount: 700, description: 'Applicata alle vetture di fascia alta' },
+    { id: 'fumo', label: 'Fumo all\'interno dell\'auto', amount: 200, description: '200 € per solo odore/cenere; fino a 1.500 € se presenti danni. Riparazioni sempre a carico del cliente' },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non indicato nel contratto', amount: 1000, description: 'Possono guidare esclusivamente le persone indicate nel contratto' },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 25, description: 'In base al livello indicato dal quadro strumenti' },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 50, description: 'In base al livello indicato dal quadro strumenti' },
+    { id: 'danni_interni', label: 'Danni a tappezzeria, sedili o interni', amount: 1000, description: 'Tutti i costi e il fermo veicolo sono a carico del cliente' },
+    { id: 'gonfia_ripara', label: 'Utilizzo bomboletta "gonfia e ripara"', amount: 100, description: 'Per pneumatico - Salvo maggior danno' },
+    { id: 'sporco', label: 'Veicolo restituito in condizioni pessime (sporco/rifiuti)', amount: 30, description: 'Sporco evidente o immondizia all\'interno' },
+    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'In aggiunta alla penale per sporco' },
+    { id: 'controlli_elettronici', label: 'Disattivazione controlli elettronici', amount: 500, description: 'ESP, controlli di stabilità o sicurezza' },
+    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico del cliente - Nessuna esclusione' },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario a consegna/ritiro', amount: 500, description: '+ eventuali costi per ritardi o ulteriori fermi' },
+    { id: 'ritardo_checkout', label: 'Ritardo al check-out', amount: 50, description: 'Dopo i primi 30 minuti di ritardo' },
+    { id: 'pista', label: 'Utilizzo del veicolo in pista o competizioni', amount: 5000, description: '+ risarcimento danni totali (kasko non attiva)' },
+    { id: 'cani', label: 'Presenza di cani o pelo di cane', amount: 100, description: 'Non tollerato' },
+    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 10000, description: 'Violazione grave del contratto' },
+    { id: 'neopatentati', label: 'Guida di neopatentati o soggetti non abilitati (art. 117 CdS)', amount: 0, description: 'Responsabilità totale del cliente - Include sanzioni, fermi amministrativi e danni' },
+    { id: 'patente_mancante', label: 'Mancata esibizione patente fisica al ritiro', amount: 0, description: 'Perdita prenotazione e importo versato' },
+]
+
+// Urban/Utilitaire Penalties
+const URBAN_UTILITAIRE_PENALTIES = [
+    { id: 'fermo_utilitarie', label: 'Fermo veicolo per incidente o danni (Utilitarie)', amount: 30, description: 'Addebitata per ogni giorno di inutilizzo' },
+    { id: 'fermo_furgoni', label: 'Fermo veicolo per incidente o danni (Furgoni / NCC)', amount: 100, description: 'Addebitata per ogni giorno di inutilizzo' },
+    { id: 'fumo', label: 'Fumo all\'interno dell\'auto', amount: 200, description: '200 € per solo odore/cenere; fino a 1.500 € se presenti danni (riparazioni sempre a carico del cliente)' },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non indicato nel contratto', amount: 1000, description: 'Possono guidare solo i soggetti espressamente indicati' },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: 'In base al livello del quadro strumenti' },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: 'In base al livello del quadro strumenti' },
+    { id: 'danni_interni', label: 'Danni a tappezzeria, sedili o interni', amount: 1000, description: 'Tutti i costi restano a carico del cliente' },
+    { id: 'gonfia_ripara', label: 'Uso bomboletta "gonfia e ripara"', amount: 100, description: 'Per pneumatico - Salvo maggior danno' },
+    { id: 'sporco', label: 'Auto restituita molto sporca', amount: 30, description: 'Sporco evidente su interni o rifiuti lasciati' },
+    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'In aggiunta alla penale per sporco' },
+    { id: 'controlli_elettronici', label: 'Disattivazione controlli elettronici', amount: 500, description: 'ESP, controlli di stabilità o sicurezza' },
+    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico del cliente - Nessuna esclusione' },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario a consegna/ritiro', amount: 500, description: '+ eventuali costi per ritardi o fermi aggiuntivi' },
+    { id: 'ritardo_checkout', label: 'Ritardo al check-out', amount: 20, description: 'Dopo i primi 30 minuti' },
+    { id: 'neopatentati', label: 'Guida di neopatentati / non abilitati (art. 117 CdS)', amount: 0, description: 'Responsabilità totale del cliente - Include sanzioni, fermi e danni' },
+    { id: 'cani', label: 'Presenza di cani o pelo di cane', amount: 100, description: 'Non tollerato' },
+    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 10000, description: 'Violazione grave del contratto' },
+]
+
 export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEditCustomer }: PenaltyModalProps) {
+    const [selectedPenalty, setSelectedPenalty] = useState('')
     const [amount, setAmount] = useState('')
     const [motivo, setMotivo] = useState('')
     const [note, setNote] = useState('')
@@ -21,6 +68,45 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const [error, setError] = useState('')
 
     if (!isOpen) return null
+
+    // Determine vehicle type from booking
+    const vehicleName = booking.vehicle_name?.toLowerCase() || ''
+
+    // Check if it's a supercar (exotic) or urban/utilitaire
+    const isSupercar = !vehicleName.includes('panda') &&
+        !vehicleName.includes('captur') &&
+        !vehicleName.includes('clio') &&
+        !vehicleName.includes('ducato') &&
+        !vehicleName.includes('vito') &&
+        !vehicleName.includes('van') &&
+        !vehicleName.includes('utilitaire')
+
+    // Select appropriate penalty list
+    const penaltyList = isSupercar ? SUPERCAR_PENALTIES : URBAN_UTILITAIRE_PENALTIES
+    const vehicleTypeLabel = isSupercar ? 'Supercar' : 'Urban/Utilitaire'
+
+    // Handle penalty selection
+    const handlePenaltySelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const penaltyId = e.target.value
+        setSelectedPenalty(penaltyId)
+
+        if (penaltyId === 'custom') {
+            // Reset to manual entry
+            setAmount('')
+            setMotivo('')
+        } else if (penaltyId) {
+            // Auto-fill from selected penalty
+            const penalty = penaltyList.find(p => p.id === penaltyId)
+            if (penalty) {
+                setAmount(penalty.amount > 0 ? penalty.amount.toString() : '')
+                setMotivo(penalty.label)
+            }
+        } else {
+            // Reset if empty selection
+            setAmount('')
+            setMotivo('')
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -95,6 +181,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     const handleClose = () => {
         if (!isGenerating) {
+            setSelectedPenalty('')
             setAmount('')
             setMotivo('')
             setNote('')
@@ -125,6 +212,32 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Penalty Selection Dropdown */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Seleziona Penale ({vehicleTypeLabel})
+                        </label>
+                        <select
+                            value={selectedPenalty}
+                            onChange={handlePenaltySelect}
+                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                            disabled={isGenerating}
+                        >
+                            <option value="">-- Seleziona una penale --</option>
+                            {penaltyList.map(penalty => (
+                                <option key={penalty.id} value={penalty.id}>
+                                    {penalty.label} - €{penalty.amount > 0 ? penalty.amount : 'Variabile'}
+                                </option>
+                            ))}
+                            <option value="custom">✏️ Penale personalizzata</option>
+                        </select>
+                        {selectedPenalty && selectedPenalty !== 'custom' && (
+                            <p className="mt-2 text-xs text-gray-400">
+                                {penaltyList.find(p => p.id === selectedPenalty)?.description}
+                            </p>
+                        )}
+                    </div>
+
                     {/* Amount field */}
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
