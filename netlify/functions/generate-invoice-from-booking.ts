@@ -1,13 +1,15 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { generateFatturaXML } from './xml-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-const FATTURA_API_USERNAME = process.env.FATTURA_API_USERNAME || ''
-const FATTURA_API_PASSWORD = process.env.FATTURA_API_PASSWORD || ''
-const FATTURA_API_BASE_URL = process.env.FATTURA_API_BASE_URL || 'https://fattura-elettronica-api.it/ws2.0/test'
+// OpenAPI.it SDI Configuration
+const OPENAPI_SDI_TOKEN = process.env.OPENAPI_SDI_TOKEN || 'opfepkbt2nqzer8ixlpl7guyqilotiof'
+const OPENAPI_SDI_BASE_URL = process.env.OPENAPI_SDI_BASE_URL || 'https://sdi.openapi.it'
+const OPENAPI_SDI_SANDBOX_URL = 'https://test.sdi.openapi.it'
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -394,48 +396,73 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // --- AUTOMATIC SDI SENDING ---
+        // --- AUTOMATIC SDI SENDING via OpenAPI.it ---
         let sdiResult = null
-        if (FATTURA_API_USERNAME && FATTURA_API_PASSWORD && invoice) {
+        if (OPENAPI_SDI_TOKEN && invoice) {
             try {
-                // Generate Payload
-                const fatturaPayload = generateFatturaPayload(invoice, items)
+                console.log('[SDI] Generating FatturaPA XML...')
 
-                // Auth
-                const authString = Buffer.from(`${FATTURA_API_USERNAME}:${FATTURA_API_PASSWORD}`).toString('base64')
+                // Generate FatturaPA XML
+                const fatturaXML = generateFatturaXML({
+                    numero_fattura: invoice.numero_fattura,
+                    data_emissione: invoice.data_emissione,
+                    customer_name: invoice.customer_name,
+                    customer_address: invoice.customer_address,
+                    customer_tax_code: invoice.customer_tax_code,
+                    customer_vat: invoice.customer_vat,
+                    items: items,
+                    subtotal: subtotal,
+                    vat_amount: vatAmount,
+                    exempt_amount: exemptAmount,
+                    importo_totale: total
+                })
 
-                // Send
-                const sdiResponse = await fetch(`${FATTURA_API_BASE_URL}/fatture`, {
+                console.log('[SDI] Sending to OpenAPI.it SDI...')
+
+                // Send to OpenAPI.it SDI
+                const sdiResponse = await fetch(`${OPENAPI_SDI_BASE_URL}/invoices`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Basic ${authString}`
+                        'Content-Type': 'application/xml',
+                        'Authorization': `Bearer ${OPENAPI_SDI_TOKEN}`,
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify(fatturaPayload)
+                    body: fatturaXML
                 })
 
                 const responseData = await sdiResponse.json()
                 sdiResult = responseData
+
+                console.log('[SDI] Response:', responseData)
 
                 // Update Invoice Status
                 await supabase
                     .from('fatture')
                     .update({
                         sdi_status: sdiResponse.ok ? 'sent' : 'error',
-                        sdi_id: responseData.id || responseData.IdFattura,
+                        sdi_id: responseData.data?.uuid || responseData.uuid,
                         sdi_sent_at: new Date().toISOString(),
                         sdi_response: responseData,
-                        xml_fattura_pa: JSON.stringify(fatturaPayload)
+                        xml_fattura_pa: fatturaXML
                     })
                     .eq('id', invoice.id)
 
                 // Update local object for return
                 invoice.sdi_status = sdiResponse.ok ? 'sent' : 'error'
+
+                if (!sdiResponse.ok) {
+                    console.error('[SDI] Error response:', responseData)
+                }
             } catch (sdiError: any) {
-                console.error('SDI Sending Failed:', sdiError)
+                console.error('[SDI] Sending Failed:', sdiError)
                 // Don't fail the whole request, just log
-                await supabase.from('fatture').update({ sdi_status: 'error', sdi_response: { error: sdiError.message } }).eq('id', invoice.id)
+                await supabase.from('fatture').update({
+                    sdi_status: 'error',
+                    sdi_response: { error: sdiError.message, stack: sdiError.stack }
+                }).eq('id', invoice.id)
             }
+        } else {
+            console.warn('[SDI] Token not configured, skipping automatic send')
         }
 
         return {
@@ -466,49 +493,4 @@ export const handler: Handler = async (event) => {
     }
 }
 
-function generateFatturaPayload(invoice: any, items: any[]) {
-    const addressParts = parseAddress(invoice.customer_address || '')
-
-    // Line items
-    const righe = items.map(item => ({
-        Descrizione: item.description,
-        PrezzoUnitario: item.unit_price.toFixed(2),
-        Quantita: item.quantity.toString(),
-        AliquotaIVA: item.vat_rate
-    }))
-
-    return {
-        destinatario: {
-            CodiceFiscale: invoice.customer_tax_code || '',
-            PartitaIVA: invoice.customer_vat || '',
-            Denominazione: invoice.customer_name,
-            Indirizzo: addressParts.street || invoice.customer_address,
-            CAP: addressParts.cap || '09100',
-            Comune: addressParts.comune || 'Cagliari',
-            Provincia: addressParts.provincia || 'CA',
-            Nazione: 'IT'
-        },
-        documento: {
-            Data: invoice.data_emissione, // YYYY-MM-DD
-            Numero: invoice.numero_fattura,
-            TipoDocumento: 'TD01',
-            Valuta: 'EUR'
-        },
-        righe
-    }
-}
-
-function parseAddress(address: string) {
-    const parts = address.split(',').map(p => p.trim())
-    if (parts.length >= 2) {
-        const street = parts[0]
-        const cityPart = parts[1]
-        const capMatch = cityPart.match(/\b(\d{5})\b/)
-        const cap = capMatch ? capMatch[1] : ''
-        const provinciaMatch = cityPart.match(/\(([A-Z]{2})\)/)
-        const provincia = provinciaMatch ? provinciaMatch[1] : ''
-        let comune = cityPart.replace(cap, '').replace(`(${provincia})`, '').trim()
-        return { street, cap, comune, provincia }
-    }
-    return { street: address, cap: '', comune: '', provincia: '' }
-}
+// Address parsing moved to xml-utils.ts
