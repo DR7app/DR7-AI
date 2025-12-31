@@ -199,33 +199,33 @@ export default function DailyCalendarTab() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             {/* Header */}
-            <div className="bg-gray-900 rounded-lg p-4">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-white">Calendario Giornaliero</h2>
+            <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 shadow-lg">
+                <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-xl font-bold text-white">Calendario Giornaliero</h2>
                     <div className="flex gap-2">
                         <button
                             onClick={() => navigateDay('prev')}
-                            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors text-sm font-semibold"
+                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white rounded text-xs font-semibold"
                         >
-                            ← Precedente
+                            ← Prec
                         </button>
                         <button
                             onClick={() => setSelectedDate(new Date())}
-                            className="px-3 py-2 bg-dr7-gold hover:bg-yellow-500 text-black rounded-md transition-colors text-sm font-semibold"
+                            className="px-3 py-1 bg-dr7-gold hover:bg-yellow-500 text-black rounded text-xs font-bold"
                         >
                             Oggi
                         </button>
                         <button
                             onClick={() => navigateDay('next')}
-                            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors text-sm font-semibold"
+                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white rounded text-xs font-semibold"
                         >
-                            Successivo →
+                            Succ →
                         </button>
                     </div>
                 </div>
-                <p className="text-gray-400 text-sm mb-4">
+                <p className="text-gray-400 text-xs mb-2">
                     {selectedDate.toLocaleDateString('it-IT', {
                         weekday: 'long',
                         year: 'numeric',
@@ -235,25 +235,25 @@ export default function DailyCalendarTab() {
                 </p>
 
                 {/* Legend */}
-                <div className="flex flex-wrap gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-green-600 rounded"></div>
+                <div className="flex flex-wrap gap-3 text-xs">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 bg-green-600 rounded"></div>
                         <span className="text-gray-300">Car Rental</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-blue-600 rounded"></div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 bg-blue-600 rounded"></div>
                         <span className="text-gray-300">Lavaggio</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-orange-600 rounded"></div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 bg-orange-600 rounded"></div>
                         <span className="text-gray-300">Meccanica</span>
                     </div>
                 </div>
             </div>
 
             {/* Calendar Grid */}
-            <div className="bg-gray-900 rounded-lg p-4">
-                <div className="space-y-1">
+            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-lg">
+                <div className="divide-y divide-gray-800">
                     {TIME_SLOTS.map((slot) => {
                         const slotBookings = getSlotBookings(slot)
                         const isCurrentSlot = isToday && slot === currentSlot
@@ -266,14 +266,14 @@ export default function DailyCalendarTab() {
                                     } hover:bg-gray-800 transition-colors`}
                             >
                                 {/* Time Column */}
-                                <div className="w-20 flex-shrink-0 p-2 text-gray-400 font-mono text-sm">
+                                <div className="w-16 flex-shrink-0 p-2 text-gray-400 font-mono text-xs font-semibold">
                                     {slot}
                                 </div>
 
                                 {/* Bookings Column */}
-                                <div className="flex-1 p-2 flex flex-wrap gap-2">
+                                <div className="flex-1 p-1.5 flex flex-wrap gap-1.5">
                                     {slotBookings.length === 0 ? (
-                                        <span className="text-gray-600 text-xs">-</span>
+                                        <span className="text-gray-700 text-xs py-1">—</span>
                                     ) : (
                                         slotBookings.map((booking) => {
                                             const bgColor =
@@ -290,14 +290,16 @@ export default function DailyCalendarTab() {
                                             return (
                                                 <div
                                                     key={booking.id}
-                                                    className={`${bgColor} text-white rounded-md p-2 text-xs flex-1 min-w-[200px]`}
+                                                    className={`${bgColor} text-white rounded px-2 py-1.5 text-xs flex-1 min-w-[180px] shadow-md hover:shadow-lg transition-shadow`}
                                                 >
-                                                    <div className="font-bold text-xs mb-1">{label}</div>
-                                                    <div className="font-semibold">{parseCustomerName(booking.customer_name)}</div>
-                                                    <div className="text-gray-200">{booking.vehicle_name}</div>
-                                                    <div className="text-gray-300 font-mono text-xs">Targa: {getTarga(booking)}</div>
+                                                    <div className="font-bold text-[10px] mb-0.5 opacity-90">{label}</div>
+                                                    <div className="font-bold text-sm leading-tight">{parseCustomerName(booking.customer_name)}</div>
+                                                    <div className="text-white/90 text-xs mt-0.5">{booking.vehicle_name}</div>
+                                                    {booking.type !== 'lavaggio' && (
+                                                        <div className="text-white/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
+                                                    )}
                                                     {booking.service_name && (
-                                                        <div className="text-gray-200 text-xs mt-1">{booking.service_name}</div>
+                                                        <div className="text-white/70 text-[10px] mt-1 italic">{booking.service_name}</div>
                                                     )}
                                                 </div>
                                             )
