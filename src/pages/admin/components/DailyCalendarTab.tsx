@@ -272,8 +272,8 @@ export default function DailyCalendarTab() {
                                                         'bg-orange-600'
 
                                             const label =
-                                                booking.type === 'check-in' ? 'RITIRO' :
-                                                    booking.type === 'check-out' ? 'RIENTRO' :
+                                                booking.type === 'check-in' ? 'USCITE' :
+                                                    booking.type === 'check-out' ? 'RIENTRI' :
                                                         booking.type === 'lavaggio' ? 'LAVAGGIO' :
                                                             'MECCANICA'
 
