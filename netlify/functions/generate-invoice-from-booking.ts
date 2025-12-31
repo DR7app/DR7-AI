@@ -6,9 +6,9 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyira
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// OpenAPI.it SDI Configuration
+// OpenAPI.it SDI Configuration (SANDBOX for testing)
 const OPENAPI_SDI_TOKEN = process.env.OPENAPI_SDI_TOKEN || '69550c20eee33b17830b704a'
-const OPENAPI_SDI_BASE_URL = process.env.OPENAPI_SDI_BASE_URL || 'https://sdi.openapi.it'
+const OPENAPI_SDI_BASE_URL = process.env.OPENAPI_SDI_BASE_URL || 'https://test.sdi.openapi.it' // SANDBOX
 const OPENAPI_SDI_SANDBOX_URL = 'https://test.sdi.openapi.it'
 
 export const handler: Handler = async (event) => {
