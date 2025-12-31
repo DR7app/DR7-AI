@@ -17,13 +17,15 @@ interface Booking {
     type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica'
 }
 
-// Generate 15-minute time slots for the entire day
+// Generate 15-minute time slots for business hours (9 AM - 8 PM)
 const generateTimeSlots = () => {
     const slots: string[] = []
-    for (let hour = 0; hour < 24; hour++) {
+    for (let hour = 9; hour <= 20; hour++) {
         for (let minute = 0; minute < 60; minute += 15) {
             const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
             slots.push(time)
+            // Stop at 20:00 (don't add 20:15, 20:30, 20:45)
+            if (hour === 20 && minute === 0) break
         }
     }
     return slots
