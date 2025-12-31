@@ -7,7 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 // OpenAPI.it SDI Configuration
-const OPENAPI_SDI_TOKEN = process.env.OPENAPI_SDI_TOKEN || 'opfepkbt2nqzer8ixlpl7guyqilotiof'
+const OPENAPI_SDI_TOKEN = process.env.OPENAPI_SDI_TOKEN || '6954f3715d2ffbd97e09564c'
 const OPENAPI_SDI_BASE_URL = process.env.OPENAPI_SDI_BASE_URL || 'https://sdi.openapi.it'
 const OPENAPI_SDI_SANDBOX_URL = 'https://test.sdi.openapi.it'
 
