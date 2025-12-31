@@ -14,7 +14,7 @@ interface Booking {
     service_name?: string
     booking_details: any
     status: string
-    type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica'
+    type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
 
 // Generate 15-minute time slots for business hours (9 AM - 8 PM)
@@ -112,6 +112,12 @@ export default function DailyCalendarTab() {
                     if ((booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical') &&
                         booking.appointment_date?.split('T')[0] === dateStr) {
                         categorized.push({ ...booking, type: 'meccanica' })
+                    }
+
+                    // Varie (miscellaneous) - any other service types or manual entries
+                    if (booking.service_type === 'varie' &&
+                        (booking.pickup_date?.split('T')[0] === dateStr || booking.appointment_date?.split('T')[0] === dateStr)) {
+                        categorized.push({ ...booking, type: 'varie' })
                     }
                 }
             })
@@ -238,7 +244,7 @@ export default function DailyCalendarTab() {
                 <div className="flex flex-wrap gap-3 text-xs">
                     <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 bg-green-600 rounded"></div>
-                        <span className="text-gray-300">Car Rental</span>
+                        <span className="text-gray-300">Noleggio</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 bg-blue-600 rounded"></div>
@@ -247,6 +253,10 @@ export default function DailyCalendarTab() {
                     <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 bg-orange-600 rounded"></div>
                         <span className="text-gray-300">Meccanica</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 bg-purple-600 rounded"></div>
+                        <span className="text-gray-300">Varie</span>
                     </div>
                 </div>
             </div>
@@ -279,13 +289,15 @@ export default function DailyCalendarTab() {
                                             const bgColor =
                                                 booking.type === 'check-in' || booking.type === 'check-out' ? 'bg-green-600' :
                                                     booking.type === 'lavaggio' ? 'bg-blue-600' :
-                                                        'bg-orange-600'
+                                                        booking.type === 'meccanica' ? 'bg-orange-600' :
+                                                            'bg-purple-600'
 
                                             const label =
                                                 booking.type === 'check-in' ? 'USCITE' :
                                                     booking.type === 'check-out' ? 'RIENTRI' :
                                                         booking.type === 'lavaggio' ? 'LAVAGGIO' :
-                                                            'MECCANICA'
+                                                            booking.type === 'meccanica' ? 'MECCANICA' :
+                                                                'VARIE'
 
                                             return (
                                                 <div
