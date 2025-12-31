@@ -161,6 +161,14 @@ export default function DailyCalendarTab() {
         return fullName
     }
 
+    // Get targa from booking
+    const getTarga = (booking: Booking): string => {
+        return booking.vehicle_plate ||
+            booking.booking_details?.vehicle?.targa ||
+            booking.booking_details?.vehicle?.plate ||
+            'N/A'
+    }
+
     // Get current time slot
     const getCurrentTimeSlot = (): string => {
         const now = new Date()
@@ -244,7 +252,7 @@ export default function DailyCalendarTab() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="bg-gray-900 rounded-lg p-4 max-h-[70vh] overflow-y-auto">
+            <div className="bg-gray-900 rounded-lg p-4">
                 <div className="space-y-1">
                     {TIME_SLOTS.map((slot) => {
                         const slotBookings = getSlotBookings(slot)
@@ -287,6 +295,7 @@ export default function DailyCalendarTab() {
                                                     <div className="font-bold text-xs mb-1">{label}</div>
                                                     <div className="font-semibold">{parseCustomerName(booking.customer_name)}</div>
                                                     <div className="text-gray-200">{booking.vehicle_name}</div>
+                                                    <div className="text-gray-300 font-mono text-xs">Targa: {getTarga(booking)}</div>
                                                     {booking.service_name && (
                                                         <div className="text-gray-200 text-xs mt-1">{booking.service_name}</div>
                                                     )}
