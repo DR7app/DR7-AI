@@ -239,84 +239,112 @@ export default function DailyCalendarTab() {
                         day: 'numeric'
                     })}
                 </p>
-
-                {/* Legend */}
-                <div className="flex flex-wrap gap-3 text-xs">
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 bg-green-600 rounded"></div>
-                        <span className="text-gray-300">Noleggio</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                        <span className="text-gray-300">Lavaggio</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 bg-orange-600 rounded"></div>
-                        <span className="text-gray-300">Meccanica</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 bg-purple-600 rounded"></div>
-                        <span className="text-gray-300">Varie</span>
-                    </div>
-                </div>
             </div>
 
             {/* Calendar Grid */}
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-lg">
+            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-lg overflow-x-auto">
+                {/* Header Row with Categories */}
+                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-gray-700 bg-gray-800 sticky top-0">
+                    <div className="p-2 text-xs font-bold text-gray-400">ORA</div>
+                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                        <div className="flex items-center justify-center gap-1.5">
+                            <div className="w-3 h-3 bg-green-600 rounded"></div>
+                            <span className="text-gray-200">NOLEGGIO</span>
+                        </div>
+                    </div>
+                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                        <div className="flex items-center justify-center gap-1.5">
+                            <div className="w-3 h-3 bg-blue-600 rounded"></div>
+                            <span className="text-gray-200">LAVAGGIO</span>
+                        </div>
+                    </div>
+                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                        <div className="flex items-center justify-center gap-1.5">
+                            <div className="w-3 h-3 bg-orange-600 rounded"></div>
+                            <span className="text-gray-200">MECCANICA</span>
+                        </div>
+                    </div>
+                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                        <div className="flex items-center justify-center gap-1.5">
+                            <div className="w-3 h-3 bg-purple-600 rounded"></div>
+                            <span className="text-gray-200">VARIE</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Time Rows */}
                 <div className="divide-y divide-gray-800">
                     {TIME_SLOTS.map((slot) => {
                         const slotBookings = getSlotBookings(slot)
                         const isCurrentSlot = isToday && slot === currentSlot
 
+                        // Separate bookings by type
+                        const noleggioBookings = slotBookings.filter(b => b.type === 'check-in' || b.type === 'check-out')
+                        const lavaggioBookings = slotBookings.filter(b => b.type === 'lavaggio')
+                        const meccanicaBookings = slotBookings.filter(b => b.type === 'meccanica')
+                        const varieBookings = slotBookings.filter(b => b.type === 'varie')
+
+                        const renderBookings = (bookings: Booking[], bgColor: string) => {
+                            if (bookings.length === 0) {
+                                return <span className="text-gray-700 text-xs">—</span>
+                            }
+                            return bookings.map((booking) => {
+                                const label =
+                                    booking.type === 'check-in' ? 'USCITE' :
+                                        booking.type === 'check-out' ? 'RIENTRI' :
+                                            booking.type === 'lavaggio' ? 'LAVAGGIO' :
+                                                booking.type === 'meccanica' ? 'MECCANICA' :
+                                                    'VARIE'
+
+                                return (
+                                    <div
+                                        key={booking.id}
+                                        className={`${bgColor} text-white rounded px-2 py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow`}
+                                    >
+                                        <div className="font-bold text-[10px] mb-0.5 opacity-90">{label}</div>
+                                        <div className="font-bold text-sm leading-tight">{parseCustomerName(booking.customer_name)}</div>
+                                        <div className="text-white/90 text-xs mt-0.5">{booking.vehicle_name}</div>
+                                        {booking.type !== 'lavaggio' && (
+                                            <div className="text-white/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
+                                        )}
+                                        {booking.service_name && (
+                                            <div className="text-white/70 text-[10px] mt-1 italic">{booking.service_name}</div>
+                                        )}
+                                    </div>
+                                )
+                            })
+                        }
+
                         return (
                             <div
                                 key={slot}
                                 ref={isCurrentSlot ? currentTimeRef : null}
-                                className={`flex border-l-4 ${isCurrentSlot ? 'border-dr7-gold bg-gray-800' : 'border-gray-700'
-                                    } hover:bg-gray-800 transition-colors`}
+                                className={`grid grid-cols-[80px_1fr_1fr_1fr_1fr] ${isCurrentSlot ? 'bg-gray-800/50 border-l-2 border-dr7-gold' : ''
+                                    } hover:bg-gray-800/30 transition-colors`}
                             >
                                 {/* Time Column */}
-                                <div className="w-16 flex-shrink-0 p-2 text-gray-400 font-mono text-xs font-semibold">
+                                <div className="p-2 text-gray-400 font-mono text-xs font-semibold border-r border-gray-800">
                                     {slot}
                                 </div>
 
-                                {/* Bookings Column */}
-                                <div className="flex-1 p-1.5 flex flex-wrap gap-1.5">
-                                    {slotBookings.length === 0 ? (
-                                        <span className="text-gray-700 text-xs py-1">—</span>
-                                    ) : (
-                                        slotBookings.map((booking) => {
-                                            const bgColor =
-                                                booking.type === 'check-in' || booking.type === 'check-out' ? 'bg-green-600' :
-                                                    booking.type === 'lavaggio' ? 'bg-blue-600' :
-                                                        booking.type === 'meccanica' ? 'bg-orange-600' :
-                                                            'bg-purple-600'
+                                {/* Noleggio Column */}
+                                <div className="p-1.5 border-l border-gray-800">
+                                    {renderBookings(noleggioBookings, 'bg-green-600')}
+                                </div>
 
-                                            const label =
-                                                booking.type === 'check-in' ? 'USCITE' :
-                                                    booking.type === 'check-out' ? 'RIENTRI' :
-                                                        booking.type === 'lavaggio' ? 'LAVAGGIO' :
-                                                            booking.type === 'meccanica' ? 'MECCANICA' :
-                                                                'VARIE'
+                                {/* Lavaggio Column */}
+                                <div className="p-1.5 border-l border-gray-800">
+                                    {renderBookings(lavaggioBookings, 'bg-blue-600')}
+                                </div>
 
-                                            return (
-                                                <div
-                                                    key={booking.id}
-                                                    className={`${bgColor} text-white rounded px-2 py-1.5 text-xs flex-1 min-w-[180px] shadow-md hover:shadow-lg transition-shadow`}
-                                                >
-                                                    <div className="font-bold text-[10px] mb-0.5 opacity-90">{label}</div>
-                                                    <div className="font-bold text-sm leading-tight">{parseCustomerName(booking.customer_name)}</div>
-                                                    <div className="text-white/90 text-xs mt-0.5">{booking.vehicle_name}</div>
-                                                    {booking.type !== 'lavaggio' && (
-                                                        <div className="text-white/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
-                                                    )}
-                                                    {booking.service_name && (
-                                                        <div className="text-white/70 text-[10px] mt-1 italic">{booking.service_name}</div>
-                                                    )}
-                                                </div>
-                                            )
-                                        })
-                                    )}
+                                {/* Meccanica Column */}
+                                <div className="p-1.5 border-l border-gray-800">
+                                    {renderBookings(meccanicaBookings, 'bg-orange-600')}
+                                </div>
+
+                                {/* Varie Column */}
+                                <div className="p-1.5 border-l border-gray-800">
+                                    {renderBookings(varieBookings, 'bg-purple-600')}
                                 </div>
                             </div>
                         )
