@@ -1,71 +1,65 @@
-```typescript
 import { Handler } from '@netlify/functions'
 
-const OPENAPI_SDI_TOKEN = process.env.OPENAPI_SDI_TOKEN || 'opfepkbt2nqzer8ixlpl7guyqilotiof'
+const OPENAPI_SDI_TOKEN = '69550c20eee33b17830b704a'
 const OPENAPI_SDI_BASE_URL = 'https://sdi.openapi.it'
 
 export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    }
-  }
-
-  try {
-    const OPENAPI_SDI_TOKEN = '69550c20eee33b17830b704a'
-    const OPENAPI_SDI_BASE_URL = 'https://sdi.openapi.it'
-
-    // Step 1: Create API Configuration for the company
-    console.log('[API Config] Creating API configuration for fiscal_id: 04104640927')
-
-    const apiConfigData = {
-      fiscal_id: '04104640927',
-      callback_url: 'https://admin.dr7empire.com/.netlify/functions/openapi-webhook' // Optional webhook
+    if (event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            body: JSON.stringify({ error: 'Method not allowed' })
+        }
     }
 
-    const configResponse = await fetch(`${ OPENAPI_SDI_BASE_URL }/api_configurations`, {
-method: 'POST',
-    headers: {
-    'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAPI_SDI_TOKEN}`,
-            'Accept': 'application/json'
-},
-body: JSON.stringify(apiConfigData)
-    })
+    try {
+        // Step 1: Create API Configuration for the company
+        console.log('[API Config] Creating API configuration for fiscal_id: 04104640927')
 
-const configResponseData = await configResponse.json()
+        const apiConfigData = {
+            fiscal_id: '04104640927'
+        }
 
-console.log('[API Config] Response:', configResponseData)
-
-if (!configResponse.ok) {
-    return {
-        statusCode: configResponse.status,
-        body: JSON.stringify({
-            error: 'Failed to create API configuration',
-            details: configResponseData,
-            status: configResponse.status
+        const configResponse = await fetch(`${OPENAPI_SDI_BASE_URL}/api_configurations`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAPI_SDI_TOKEN}`,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(apiConfigData)
         })
-    }
-}
 
-return {
-    statusCode: 200,
-    body: JSON.stringify({
-        success: true,
-        message: 'API Configuration created successfully',
-        data: configResponseData
-    })
-}
-  } catch (error: any) {
-    console.error('[API Config] Error:', error)
-    return {
-        statusCode: 500,
-        body: JSON.stringify({
-            error: 'Internal server error',
-            message: error.message
-        })
+        const configResponseData = await configResponse.json()
+
+        console.log('[API Config] Response:', configResponseData)
+
+        if (!configResponse.ok) {
+            return {
+                statusCode: configResponse.status,
+                body: JSON.stringify({
+                    error: 'Failed to create API configuration',
+                    details: configResponseData,
+                    status: configResponse.status
+                })
+            }
+        }
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                success: true,
+                message: 'API Configuration created successfully',
+                data: configResponseData
+            })
+        }
+    } catch (error: any) {
+        console.error('[API Config] Error:', error)
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: 'Internal server error',
+                message: error.message
+            })
+        }
     }
 }
-}
-```
