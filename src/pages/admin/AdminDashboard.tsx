@@ -17,10 +17,11 @@ import MarketingTab from './components/MarketingTab'
 import ReviewsTab from './components/ReviewsTab'
 import FatturaTab from './components/FatturaTab'
 import ContrattoTab from './components/ContrattoTab'
+import DailyCalendarTab from './components/DailyCalendarTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'daily-calendar'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -203,6 +204,13 @@ export default function AdminDashboard() {
                   }`}
               >
                 Recensioni
+              </button>
+              <button
+                onClick={() => setActiveTab('daily-calendar')}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'daily-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                  }`}
+              >
+                Calendario Giornaliero
               </button>
             </nav>
           </div>
@@ -392,6 +400,15 @@ export default function AdminDashboard() {
               >
                 Recensioni
               </button>
+              <button
+                onClick={() => setActiveTab('daily-calendar')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'daily-calendar'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  }`}
+              >
+                Calendario Giornaliero
+              </button>
             </nav>
           </div>
         </div>
@@ -414,6 +431,7 @@ export default function AdminDashboard() {
             {activeTab === 'contratto' && 'Contratti'}
             {activeTab === 'marketing' && 'Marketing'}
             {activeTab === 'reviews' && 'Recensioni'}
+            {activeTab === 'daily-calendar' && 'Calendario Giornaliero'}
           </h2>
         </div>
 
@@ -432,9 +450,9 @@ export default function AdminDashboard() {
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'marketing' && <MarketingTab />}
-          {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'reviews' && <ReviewsTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
+          {activeTab === 'daily-calendar' && <DailyCalendarTab />}
         </div>
       </main>
     </div>
