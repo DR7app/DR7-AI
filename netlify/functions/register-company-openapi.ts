@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 
-const OPENAPI_SDI_TOKEN = '6956807e111514c4500ca41a'
+const OPENAPI_SDI_TOKEN = '69567f51a9928bf1e0083a74'
 const OPENAPI_SDI_BASE_URL = 'https://sdi.openapi.it'
 
 export const handler: Handler = async (event) => {
