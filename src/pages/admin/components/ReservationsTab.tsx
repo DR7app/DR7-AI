@@ -1721,6 +1721,7 @@ export default function ReservationsTab() {
                     label="Data Riconsegna"
                     type="date"
                     required
+                    min={formData.pickup_date}
                     value={formData.return_date}
                     onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
                   />
