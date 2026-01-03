@@ -244,6 +244,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
+  // Missing Data Modal State
+  const [showMissingDataModal, setShowMissingDataModal] = useState(false)
+  const [missingFields, setMissingFields] = useState<string[]>([])
+  const [tempCustomerData, setTempCustomerData] = useState<any>(null)
+  const [currentValidationBooking, setCurrentValidationBooking] = useState<Booking | null>(null)
+
   // Filter time options based on selected date
   const getFilteredTimeOptions = (dateStr: string) => {
     if (!dateStr) return TIME_OPTIONS
@@ -906,8 +912,67 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
+  // Validate customer data before contract generation
+  async function validateForContract(booking: Booking): Promise<string[]> {
+    // Use user_id as customer_id
+    const customerId = booking.user_id || booking.booking_details?.customer?.id
+
+    if (!customerId) return ['Cliente non identificato']
+
+    // Fetch full customer data
+    const { data: customer, error } = await supabase
+      .from('customers_extended')
+      .select('*')
+      .eq('id', customerId)
+      .single()
+
+    if (error || !customer) {
+      console.error('Error fetching customer for validation:', error)
+      return ['Errore recupero dati cliente']
+    }
+
+    const missing: string[] = []
+
+    // Common fields
+    if (!customer.codice_fiscale) missing.push('codice_fiscale')
+    if (!customer.indirizzo) missing.push('indirizzo')
+    if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza') // Handle different naming
+
+    // Persona Fisica specific
+    if (customer.tipo_cliente === 'persona_fisica') {
+      if (!customer.data_nascita) missing.push('data_nascita')
+      if (!customer.luogo_nascita) missing.push('luogo_nascita')
+      if (!customer.patente) missing.push('patente')
+    }
+
+    // Azienda specific
+    if (customer.tipo_cliente === 'azienda' && !customer.partita_iva) {
+      missing.push('partita_iva')
+    }
+
+    // Return customer object via side-effect if needed, but for now just return missing fields
+    // We'll refetch/use this data when opening modal
+    return missing
+  }
+
   async function handleGenerateContract(booking: Booking, showSuccessAlert = true) {
     if (!booking.id) return
+
+    // 1. Validate Data
+    const missing = await validateForContract(booking)
+    if (missing.length > 0) {
+      console.warn('⚠️ Missing fields for contract:', missing)
+
+      // Fetch full customer data to populate modal
+      const customerId = booking.user_id || booking.booking_details?.customer?.id
+      const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+
+      setMissingFields(missing)
+      setTempCustomerData(customer || {})
+      setCurrentValidationBooking(booking)
+      setShowMissingDataModal(true)
+      return
+    }
 
     setGeneratingContract(true)
     try {
@@ -2642,7 +2707,110 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             </div>
           </div>
         )}
+
+        {/* Missing Data Modal */}
+        {showMissingDataModal && (
+          <MissingDataModal
+            isOpen={showMissingDataModal}
+            missingFields={missingFields}
+            initialData={tempCustomerData}
+            onClose={() => setShowMissingDataModal(false)}
+            onSave={async (updates: any) => {
+              try {
+                if (!tempCustomerData?.id) return
+
+                console.log('Updating customer with missing data:', updates)
+
+                // Update customer in DB
+                const { error } = await supabase
+                  .from('customers_extended')
+                  .update(updates)
+                  .eq('id', tempCustomerData.id)
+
+                if (error) throw error
+
+                // Reload Data
+                await loadData()
+
+                // Close Modal
+                setShowMissingDataModal(false)
+
+                // Retry Generation
+                if (currentValidationBooking) {
+                  handleGenerateContract(currentValidationBooking, true)
+                }
+
+              } catch (err: any) {
+                alert('Errore aggiornamento dati: ' + err.message)
+              }
+            }}
+          />
+        )}
       </div >
     </>
+  )
+}
+
+function MissingDataModal({ isOpen, missingFields, initialData, onSave, onClose }: any) {
+  const [data, setData] = useState(initialData || {})
+
+  if (!isOpen) return null
+
+  const getLabel = (field: string) => {
+    switch (field) {
+      case 'codice_fiscale': return 'Codice Fiscale *'
+      case 'indirizzo': return 'Indirizzo (Via e Civico) *'
+      case 'citta_residenza': return 'Città di Residenza *'
+      case 'data_nascita': return 'Data di Nascita *'
+      case 'luogo_nascita': return 'Luogo di Nascita *'
+      case 'patente': return 'Numero Patente *'
+      case 'partita_iva': return 'Partita IVA *'
+      default: return field
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="bg-zinc-900 border border-yellow-600 rounded-lg p-6 max-w-md w-full shadow-2xl">
+        <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+          <span>⚠️</span> Dati Mancanti
+        </h2>
+        <p className="text-gray-400 mb-6 text-sm">
+          Per generare un contratto valido, è necessario completare i seguenti dati mancanti per il cliente.
+        </p>
+
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+          {missingFields.map((field: string) => (
+            <div key={field}>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                {getLabel(field)}
+              </label>
+              <input
+                type={field === 'data_nascita' ? 'date' : 'text'}
+                className="w-full px-3 py-2 bg-black border border-gray-700 rounded text-white focus:border-yellow-500 focus:outline-none transition-colors"
+                value={data[field] || ''}
+                onChange={(e) => setData({ ...data, [field]: e.target.value })}
+                placeholder={`Inserisci ${getLabel(field).replace(' *', '')}`}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-800">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 hover:bg-gray-800 text-gray-300 rounded transition-colors"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={() => onSave(data)}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-black font-semibold rounded transition-colors"
+          >
+            Salva e Continua
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
