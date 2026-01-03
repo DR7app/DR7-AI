@@ -532,13 +532,14 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
           <div className="relative min-w-max">
             {/* Layer 1: Availability Grid (Base) */}
-            <table className="w-full border-collapse table-fixed">
+            {/* Layer 1: Availability Grid (Base) */}
+            <table className="w-full border-collapse">
               <thead>
                 <tr className="h-10">
-                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[200px] min-w-[200px] max-w-[200px] shadow-lg box-border">
+                  <th className="sticky left-0 top-0 z-50 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[200px] min-w-[200px] max-w-[200px] shadow-lg box-border">
                     Veicolo
                   </th>
-                  <th className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[100px] min-w-[100px] max-w-[100px] shadow-lg box-border">
+                  <th className="sticky left-[200px] top-0 z-50 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[100px] min-w-[100px] max-w-[100px] shadow-lg box-border">
                     Targa
                   </th>
                   {daysInMonth.map(day => {
@@ -551,9 +552,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return (
                       <th
                         key={day}
-                        className={`border border-gray-700/40 px-1 py-1 text-center text-[10px] font-semibold w-[40px] min-w-[40px] max-w-[40px] relative group cursor-help box-border ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
-                          holiday || isSundayDay ? 'bg-red-900/40 border-red-500/30 text-red-300' :
-                            'text-gray-400 bg-gray-800/20'
+                        className={`sticky top-0 z-30 border border-gray-700/40 px-1 py-1 text-center text-[10px] font-semibold w-[40px] min-w-[40px] max-w-[40px] relative group cursor-help box-border ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                          holiday || isSundayDay ? 'bg-red-900/90 border-red-500/30 text-red-300' : // Solid bg to hide scroll
+                            'text-gray-400 bg-gray-900' // Solid bg to hide scroll
                           }`}
                       >
                         <div className="flex flex-col items-center justify-between h-full py-0.5">
@@ -601,7 +602,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   })
                 }).map((vehicle) => (
                   <tr key={vehicle.id} className="relative group/row hover:bg-white/5 transition-colors h-10">
-                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-white font-semibold text-sm shadow-lg group-hover/row:bg-gray-800 transition-colors w-[200px] min-w-[200px] max-w-[200px] box-border overflow-hidden">
+                    <td className="sticky left-0 z-40 bg-gray-900 border border-gray-700/40 px-3 py-2 text-white font-semibold text-sm shadow-lg group-hover/row:bg-gray-800 transition-colors w-[200px] min-w-[200px] max-w-[200px] box-border overflow-hidden">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
                           <span className="truncate" title={vehicle.display_name}>{vehicle.display_name}</span>
@@ -618,7 +619,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
                       </div>
                     </td>
-                    <td className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-gray-300 text-xs font-mono shadow-lg group-hover/row:bg-gray-800 transition-colors w-[100px] min-w-[100px] max-w-[100px] box-border overflow-hidden">
+                    <td className="sticky left-[200px] z-40 bg-gray-900 border border-gray-700/40 px-3 py-2 text-gray-300 text-xs font-mono shadow-lg group-hover/row:bg-gray-800 transition-colors w-[100px] min-w-[100px] max-w-[100px] box-border overflow-hidden">
                       {vehicle.plate || '-'}
                     </td>
                     {daysInMonth.map(day => {
