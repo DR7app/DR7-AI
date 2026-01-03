@@ -698,11 +698,19 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                           case 'check-out': return 'RIENTRI'
                           case 'lavaggio': return 'LAVAGGIO'
                           case 'meccanica': return 'MECCANICA'
-                          default: return 'NOLEGGIO'
+                          default: return null // Don't show label for regular rentals
                         }
                       }
 
+                      const getTarga = (): string => {
+                        return segment.booking.vehicle_plate ||
+                          segment.booking.booking_details?.vehicle?.targa ||
+                          segment.booking.booking_details?.vehicle?.plate ||
+                          ''
+                      }
 
+                      const pickupDay = new Date(segment.booking.pickup_date).getDate()
+                      const dropoffDay = new Date(segment.booking.dropoff_date).getDate()
 
                       return (
                         <div
@@ -721,19 +729,33 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               bookings: [segment.booking]
                             })
                           }}
-                          title={`${segment.booking.customer_name} - ${segment.booking.vehicle_name}`}
+                          title={`${segment.booking.customer_name} - ${segment.booking.vehicle_name} - ${getTarga()}`}
                         >
                           {/* Match DailyCalendarModal layout */}
                           <div className="flex items-center gap-2 h-full">
-                            {/* Label badge */}
-                            <div className={`inline-block px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold uppercase tracking-wide ${textColorClass} whitespace-nowrap`}>
-                              {getLabel()}
+                            {/* Label badge - only for special types */}
+                            {getLabel() && (
+                              <div className={`inline-block px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold uppercase tracking-wide ${textColorClass} whitespace-nowrap`}>
+                                {getLabel()}
+                              </div>
+                            )}
+
+                            {/* Customer name */}
+                            <div className="text-white font-semibold text-sm truncate">
+                              {segment.booking.customer_name || 'N/A'}
                             </div>
 
-                            {/* Customer name - always show if space allows */}
-                            {segment.columnSpan >= 2 && (
-                              <div className="text-white font-semibold text-sm truncate">
-                                {segment.booking.customer_name || 'N/A'}
+                            {/* Dates - show if space allows */}
+                            {segment.columnSpan >= 4 && (
+                              <div className="text-white/80 text-xs whitespace-nowrap">
+                                {pickupDay}→{dropoffDay}
+                              </div>
+                            )}
+
+                            {/* Targa - show if space allows */}
+                            {segment.columnSpan >= 5 && getTarga() && (
+                              <div className="text-white/70 text-xs font-mono">
+                                {getTarga()}
                               </div>
                             )}
                           </div>
