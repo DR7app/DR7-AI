@@ -348,13 +348,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   return (
     <div className="space-y-6">
       {/* Header with Stats */}
-      <div className="bg-gray-900 rounded-lg p-3 lg:p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-lg font-bold text-white">Calendario Flotta</h2>
-            <div className="flex items-center gap-1.5">
+      <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 p-4 lg:p-6 shadow-2xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <h2 className="text-xl font-light text-white">Calendario Flotta</h2>
+            <div className="flex items-center gap-2">
               <span className="text-xs text-gray-400">Questo Mese:</span>
-              <span className="text-dr7-gold font-bold text-sm">
+              <span className="text-dr7-gold font-semibold text-sm">
                 {bookings.filter(b => {
                   const pickupDate = new Date(b.pickup_date)
                   return pickupDate.getMonth() === currentDate.getMonth() &&
@@ -363,9 +363,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
               </span>
             </div>
             {canViewFinancials && !hideFinancials && userEmail !== 'dubai.rent7.0srl@gmail.com' && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">Fatturato:</span>
-                <span className="text-green-400 font-bold text-sm">
+                <span className="text-green-400 font-semibold text-sm">
                   <FinancialData type="total">
                     €{(bookings
                       .filter(b => {
@@ -379,26 +379,26 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
               </div>
             )}
             {/* Legend */}
-            <div className="flex items-center gap-3 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 bg-green-500 rounded border border-gray-600"></div>
-                <span className="text-gray-300">Disponibile</span>
+            <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50"></div>
+                <span className="text-gray-300 font-light">Disponibile</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 bg-orange-500 rounded border border-gray-600"></div>
-                <span className="text-gray-300">Non Disponibile</span>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/50"></div>
+                <span className="text-gray-300 font-light">Non Disponibile</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 bg-red-500 rounded border border-gray-600"></div>
-                <span className="text-gray-300">Noleggiato</span>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/50"></div>
+                <span className="text-gray-300 font-light">Noleggiato</span>
               </div>
             </div>
             {canViewFinancials && (
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 ${hideFinancials
+                  ? 'bg-green-600/20 border border-green-500/30 text-green-400 hover:bg-green-600/30'
+                  : 'bg-yellow-600/20 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-600/30'
                   }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -411,29 +411,29 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
       {/* Search and Navigation Bar */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-xl font-bold text-white mb-2 capitalize">{monthName}</h3>
+          <h3 className="text-2xl font-light text-white mb-3 capitalize">{monthName}</h3>
           <input
             type="text"
             placeholder="Cerca cliente..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold w-64"
+            className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 focus:border-dr7-gold/30 w-64 backdrop-blur-sm transition-all"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigateMonth('prev')}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors text-sm font-semibold"
+            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
             aria-label="Mese precedente"
           >
-            ← Precedente
+            Prec
           </button>
           <button
             onClick={() => navigateMonth('next')}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors text-sm font-semibold"
+            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
             aria-label="Mese successivo"
           >
-            Successivo →
+            Succ
           </button>
         </div>
       </div>
@@ -621,12 +621,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                               onNewBooking(vehicle.display_name, clickDate)
                             }
                           }}
-                          className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'
-                            ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
+                          className={`border border-white/10 rounded-lg p-0.5 min-w-[24px] h-6 transition-all duration-200 cursor-pointer ${status === 'rented'
+                            ? 'bg-gradient-to-br from-red-500/20 to-red-600/10 border-l-2 border-red-500 hover:scale-105 hover:shadow-lg hover:shadow-red-500/30'
                             : status === 'unavailable'
-                              ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer'
-                              : 'bg-green-500 hover:bg-green-600'
-                            } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
+                              ? 'bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-l-2 border-orange-500 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/30'
+                              : 'bg-gradient-to-br from-green-500/20 to-green-600/10 border-l-2 border-green-500 hover:scale-105 hover:shadow-lg hover:shadow-green-500/30'
+                            } ${day === todayDay ? 'ring-2 ring-dr7-gold shadow-lg shadow-dr7-gold/50' : ''}`}
                           title={
                             status === 'rented'
                               ? `${vehicle.display_name} - Noleggiato`
@@ -657,26 +657,26 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
       {
         selectedCell && (
           <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn"
             onClick={() => setSelectedCell(null)}
           >
             <div
-              className="bg-gray-900 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700 shadow-2xl"
+              className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-gray-800">
+              <div className="p-6 border-b border-white/10">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-2xl font-bold text-white mb-2">
-                      🚗 {selectedCell.vehicle}
+                    <h3 className="text-2xl font-light text-white mb-2">
+                      {selectedCell.vehicle}
                     </h3>
-                    <p className="text-gray-400">{selectedCell.date}</p>
+                    <p className="text-gray-400 text-sm">{selectedCell.date}</p>
                   </div>
                   <button
                     onClick={() => setSelectedCell(null)}
-                    className="text-gray-400 hover:text-white transition-colors text-3xl leading-none"
+                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-white text-xl"
                   >
-                    ×
+                    ✕
                   </button>
                 </div>
               </div>
@@ -687,17 +687,17 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   const hasAlternatives = alternativeVehicles.length > 1
 
                   return (
-                    <div key={booking.id} className="bg-gray-800/50 rounded-lg p-5 border border-red-500/30">
+                    <div key={booking.id} className="bg-gradient-to-br from-red-500/20 to-red-600/10 backdrop-blur-sm rounded-lg p-5 border-l-2 border-red-500 border border-white/10 hover:scale-[1.01] transition-all duration-200">
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <div className="text-white font-bold text-lg mb-1">
+                          <div className="text-white font-medium text-lg mb-1">
                             {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
                           </div>
-                          <div className="text-gray-400 text-sm">
+                          <div className="text-gray-300 text-sm">
                             {booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}
                           </div>
                         </div>
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-red-400 border border-red-500/30">
                           {booking.status}
                         </span>
                       </div>
