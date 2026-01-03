@@ -396,15 +396,18 @@ export default function ReservationsTab() {
         const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
         let isForThisVehicle = bookingVehicleId === vehicle.id
 
-        // Priority 2: Fallback to matching by vehicle name (for old bookings without vehicle_id)
-        if (!isForThisVehicle && !bookingVehicleId) {
-          // Match by display name
-          isForThisVehicle = booking.vehicle_name === vehicle.display_name
-
-          // Also try matching by plate if available
-          if (!isForThisVehicle && booking.vehicle_plate && (vehicle.plate || vehicle.targa)) {
-            isForThisVehicle = booking.vehicle_plate === vehicle.plate || booking.vehicle_plate === vehicle.targa
+        // Priority 2: If no vehicle_id, try matching by plate/targa FIRST (more reliable than name)
+        if (!isForThisVehicle && !bookingVehicleId && booking.vehicle_plate) {
+          const vehiclePlate = vehicle.plate || vehicle.targa
+          if (vehiclePlate) {
+            isForThisVehicle = booking.vehicle_plate === vehiclePlate
           }
+        }
+
+        // Priority 3: ONLY if both booking and vehicle lack plate data, fall back to name matching
+        // This prevents false positives for vehicles with duplicate names (e.g., "Renault Clio Blue")
+        if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
+          isForThisVehicle = booking.vehicle_name === vehicle.display_name
         }
 
         if (!isForThisVehicle) {
