@@ -35,13 +35,11 @@ interface Booking {
 
 type CellStatus = 'available' | 'rented' | 'unavailable'
 
-interface BookingSegment {
-  bookingId: string
-  vehicleId: string
-  startDay: number
-  endDay: number
-  columnSpan: number
-  booking: Booking
+interface CellBookingInfo {
+  booking: Booking | null
+  isStart: boolean
+  isMiddle: boolean
+  isEnd: boolean
 }
 
 export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
@@ -287,74 +285,50 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return vehicleBookings.length > 0 ? 'rented' : 'available'
   }
 
-
-
-  // Build booking segments for overlay bars
-  const buildBookingSegments = useMemo(() => {
-    const segments: BookingSegment[] = []
+  // Get booking info for a cell including span position
+  const getCellBookingInfo = (vehicle: Vehicle, day: number): CellBookingInfo => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-    const lastDay = new Date(year, month + 1, 0).getDate()
+    const checkDate = new Date(year, month, day)
+    checkDate.setHours(0, 0, 0, 0)
 
-    for (const vehicle of vehicles) {
-      for (const booking of bookings) {
-        // Match booking to vehicle
-        const matchesByPlate = booking.vehicle_plate && vehicle.plate && vehicle.plate === booking.vehicle_plate
-        const matchesByName = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+    const booking = bookings.find(b => {
+      // Match by plate or name
+      const matchesByPlate = b.vehicle_plate && vehicle.plate && vehicle.plate === b.vehicle_plate
+      const matchesByName = b.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
 
-        if (!matchesByPlate && !matchesByName) continue
+      if (!matchesByPlate && !matchesByName) return false
 
-        const pickupDate = new Date(booking.pickup_date)
-        const dropoffDate = new Date(booking.dropoff_date)
-        pickupDate.setHours(0, 0, 0, 0)
-        dropoffDate.setHours(0, 0, 0, 0)
+      const pickupDate = new Date(b.pickup_date)
+      const dropoffDate = new Date(b.dropoff_date)
+      pickupDate.setHours(0, 0, 0, 0)
+      dropoffDate.setHours(0, 0, 0, 0)
 
-        const monthStart = new Date(year, month, 1)
-        const monthEnd = new Date(year, month + 1, 0)
-        monthStart.setHours(0, 0, 0, 0)
-        monthEnd.setHours(23, 59, 59, 999)
+      return checkDate >= pickupDate && checkDate < dropoffDate
+    })
 
-        // Skip if booking doesn't overlap this month
-        if (dropoffDate <= monthStart || pickupDate > monthEnd) continue
-
-        // Calculate start/end days within month
-        const startDay = pickupDate.getMonth() === month ? pickupDate.getDate() : 1
-        const endDay = dropoffDate.getMonth() === month ? Math.min(dropoffDate.getDate() - 1, lastDay) : lastDay
-
-        if (startDay <= endDay) {
-          segments.push({
-            bookingId: booking.id,
-            vehicleId: vehicle.id,
-            startDay,
-            endDay,
-            columnSpan: endDay - startDay + 1,
-            booking
-          })
-        }
-      }
+    if (!booking) {
+      return { booking: null, isStart: false, isMiddle: false, isEnd: false }
     }
 
-    return segments
-  }, [vehicles, bookings, currentDate])
+    const pickupDate = new Date(booking.pickup_date)
+    const dropoffDate = new Date(booking.dropoff_date)
+    pickupDate.setHours(0, 0, 0, 0)
+    dropoffDate.setHours(0, 0, 0, 0)
 
-  // Helper: Get initials from name
-  const getInitials = (name: string | null): string => {
-    if (!name) return 'N/A'
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    const prevDay = new Date(year, month, day - 1)
+    const nextDay = new Date(year, month, day + 1)
+    prevDay.setHours(0, 0, 0, 0)
+    nextDay.setHours(0, 0, 0, 0)
+
+    const isStart = checkDate.getTime() === pickupDate.getTime()
+    const isEnd = nextDay.getTime() === dropoffDate.getTime()
+    const isMiddle = !isStart && !isEnd
+
+    return { booking, isStart, isMiddle, isEnd }
   }
 
-  // Helper: Get booking label based on bar width
-  const getBookingLabel = (booking: Booking, columnSpan: number): string => {
-    const customerName = booking.customer_name || 'N/A'
 
-    if (columnSpan >= 3) {
-      // Medium/wide bars: show customer name
-      return customerName
-    } else {
-      // Narrow bars: show initials only
-      return getInitials(customerName)
-    }
-  }
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -539,22 +513,21 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
         </div>
       )}
 
-      {/* All Vehicles Grid - Two-Layer Design */}
+      {/* Month Grid */}
       {vehicles.length > 0 && (
         <div className="bg-gray-900 rounded-lg p-4 lg:p-6 overflow-x-auto">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <span className="text-sm text-gray-400">Tutti i Veicoli ({vehicles.length})</span>
           </h3>
 
-          <div className="relative min-w-max">
-            {/* Layer 1: Availability Grid (Base) */}
+          <div className="min-w-max">
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-left text-white font-bold text-xs min-w-[140px]">
+                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[140px]">
                     Veicolo
                   </th>
-                  <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
+                  <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
                     Targa
                   </th>
                   {daysInMonth.map(day => {
@@ -567,7 +540,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return (
                       <th
                         key={day}
-                        className={`border border-gray-800/30 px-1 py-1 text-center text-[10px] font-semibold min-w-[40px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                        className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[50px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
                           holiday || isSundayDay ? 'bg-red-900/20 border-red-500/30 text-red-400' :
                             'text-gray-400'
                           }`}
@@ -616,8 +589,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return vehicleMatches && customerName.toLowerCase().includes(query)
                   })
                 }).map((vehicle) => (
-                  <tr key={vehicle.id} className="relative">
-                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-white font-semibold text-sm">
+                  <tr key={vehicle.id}>
+                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-white font-semibold text-sm">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate">{vehicle.display_name}</span>
@@ -634,88 +607,58 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
                       </div>
                     </td>
-                    <td className="sticky left-[140px] z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-gray-300 text-sm font-mono">
+                    <td className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-gray-300 text-sm font-mono">
                       {vehicle.plate || '-'}
                     </td>
                     {daysInMonth.map(day => {
                       const status = getCellStatus(vehicle, day)
+                      const cellInfo = getCellBookingInfo(vehicle, day)
+
+                      // Determine border radius based on position
+                      const getBorderRadius = () => {
+                        if (!cellInfo.booking) return ''
+                        if (cellInfo.isStart && cellInfo.isEnd) return 'rounded-lg'
+                        if (cellInfo.isStart) return 'rounded-l-lg'
+                        if (cellInfo.isEnd) return 'rounded-r-lg'
+                        return ''
+                      }
+
                       return (
                         <td
                           key={day}
-                          className={`border border-gray-800/30 h-8 min-w-[40px] ${status === 'rented'
-                            ? 'bg-red-500/15'
-                            : status === 'unavailable'
-                              ? 'bg-orange-500/15'
-                              : 'bg-green-500/20'
-                            } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold' : ''}`}
-                        />
+                          onClick={() => {
+                            if (cellInfo.booking) {
+                              setSelectedCell({
+                                vehicle: vehicle.display_name,
+                                date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
+                                bookings: [cellInfo.booking]
+                              })
+                            } else if (status === 'unavailable') {
+                              setSelectedUnavailability(vehicle)
+                            }
+                          }}
+                          className={`relative border border-gray-700 min-w-[50px] h-10 transition-all cursor-pointer ${getBorderRadius()} ${status === 'rented'
+                              ? 'bg-green-600 hover:bg-green-500'
+                              : status === 'unavailable'
+                                ? 'bg-orange-600/80 hover:bg-orange-500'
+                                : 'bg-green-500/10 hover:bg-green-500/20'
+                            } ${day === todayDay ? 'ring-2 ring-inset ring-dr7-gold' : ''}`}
+                        >
+                          {/* Show customer name only on start cell */}
+                          {cellInfo.isStart && cellInfo.booking && (
+                            <div className="absolute inset-0 flex items-center justify-center px-2">
+                              <span className="text-white text-xs font-semibold truncate">
+                                {cellInfo.booking.customer_name?.split(' ')[0] || 'N/A'}
+                              </span>
+                            </div>
+                          )}
+                        </td>
                       )
                     })}
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            {/* Layer 2: Booking Bars Overlay */}
-            <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ top: '40px' }}>
-              {vehicles.filter(vehicle => {
-                if (!searchQuery) return true
-                const query = searchQuery.toLowerCase()
-                return bookings.some(booking => {
-                  const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
-                  if (!customerName) return false
-                  const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
-                  const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-                  if (vehicle.plate && booking.vehicle_plate && vehicle.plate === booking.vehicle_plate) {
-                    return customerName.toLowerCase().includes(query)
-                  }
-                  const vehicleMatches = bookingVehicle === vehicleDisplay ||
-                    (bookingVehicle && vehicleDisplay && (
-                      bookingVehicle.includes(vehicleDisplay) ||
-                      vehicleDisplay.includes(bookingVehicle)
-                    ))
-                  return vehicleMatches && customerName.toLowerCase().includes(query)
-                })
-              }).map((vehicle) => (
-                <div
-                  key={vehicle.id}
-                  className="relative h-8"
-                  style={{ marginLeft: '230px' }}
-                >
-                  {buildBookingSegments
-                    .filter(seg => seg.vehicleId === vehicle.id)
-                    .map(segment => {
-                      const cellWidth = 40 // min-w-[40px]
-                      const left = (segment.startDay - 1) * cellWidth
-                      const width = segment.columnSpan * cellWidth
-
-                      return (
-                        <div
-                          key={segment.bookingId}
-                          className="absolute pointer-events-auto bg-gradient-to-br from-green-500/30 to-green-600/20 backdrop-blur-sm border-l-2 border-green-500 rounded-lg px-2 flex items-center hover:shadow-lg hover:shadow-green-500/30 cursor-pointer transition-all"
-                          style={{
-                            left: `${left}px`,
-                            width: `${width}px`,
-                            height: '32px'
-                          }}
-                          onClick={() => {
-                            setSelectedCell({
-                              vehicle: vehicle.display_name,
-                              date: `${segment.startDay}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
-                              bookings: [segment.booking]
-                            })
-                          }}
-                          title={`${segment.booking.customer_name} - ${segment.booking.vehicle_name}`}
-                        >
-                          <span className="text-white text-xs font-medium truncate">
-                            {getBookingLabel(segment.booking, segment.columnSpan)}
-                          </span>
-                        </div>
-                      )
-                    })}
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       )}
