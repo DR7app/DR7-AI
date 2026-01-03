@@ -628,10 +628,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         <td
                           key={day}
                           className={`border border-gray-700/30 h-10 min-w-[40px] transition-colors ${status === 'rented'
-                            ? 'bg-red-500/5' // Very subtle red for rented underlying
+                            ? 'bg-red-500/15' // Red for booked
                             : status === 'unavailable'
-                              ? 'bg-gray-800/80 pattern-diagonal-lines pattern-gray-700 pattern-bg-gray-800 pattern-opacity-20'
-                              : 'bg-transparent hover:bg-white/5'
+                              ? 'bg-gray-800/80'
+                              : 'bg-green-500/15' // Green for available
                             } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold/50 bg-dr7-gold/5' : ''}`}
                         />
                       )
