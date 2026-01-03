@@ -424,7 +424,9 @@ export default function ReservationsTab() {
             vehicleId: vehicle.id,
             bookingVehicleId,
             bookingVehicleName: booking.vehicle_name,
-            matchedBy: bookingVehicleId ? 'vehicle_id' : 'name/plate',
+            bookingVehiclePlate: booking.vehicle_plate,
+            vehiclePlate: vehicle.plate || vehicle.targa,
+            matchedBy: bookingVehicleId ? 'vehicle_id' : (booking.vehicle_plate ? 'plate' : 'name'),
             bookingPickup: bookingPickup.toISOString(),
             bookingDropoff: bookingDropoff.toISOString(),
             requestPickup: pickupDateTime.toISOString(),
@@ -440,7 +442,7 @@ export default function ReservationsTab() {
 
     console.log('[getAvailableVehicles] Result:', {
       availableCount: availableVehicles.length,
-      availableVehicles: availableVehicles.map(v => ({ id: v.id, name: v.display_name }))
+      availableVehicles: availableVehicles.map(v => ({ id: v.id, name: v.display_name, plate: v.plate || v.targa }))
     })
 
     return availableVehicles
