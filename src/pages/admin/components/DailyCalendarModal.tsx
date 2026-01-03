@@ -161,56 +161,71 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
     async function loadDayBookings() {
         setLoading(true)
         try {
-            const dateStr = selectedDate.toISOString().split('T')[0]
+            // Create start and end of the selected day in local time
+            const startOfDay = new Date(selectedDate)
+            startOfDay.setHours(0, 0, 0, 0)
+
+            const endOfDay = new Date(selectedDate)
+            endOfDay.setHours(23, 59, 59, 999)
+
+            // Convert to ISO strings for DB query - add buffer for timezone differences
+            const queryStart = new Date(startOfDay)
+            queryStart.setDate(queryStart.getDate() - 1)
+
+            const queryEnd = new Date(endOfDay)
+            queryEnd.setDate(queryEnd.getDate() + 1)
 
             const { data, error } = await supabase
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
-                .or(`pickup_date.gte.${dateStr},pickup_date.lt.${dateStr}T23:59:59,dropoff_date.gte.${dateStr},dropoff_date.lt.${dateStr}T23:59:59,appointment_date.gte.${dateStr},appointment_date.lt.${dateStr}T23:59:59`)
+                .or(`pickup_date.gte.${queryStart.toISOString()},pickup_date.lt.${queryEnd.toISOString()},dropoff_date.gte.${queryStart.toISOString()},dropoff_date.lt.${queryEnd.toISOString()},appointment_date.gte.${queryStart.toISOString()},appointment_date.lt.${queryEnd.toISOString()}`)
 
             if (error) throw error
 
             const categorized: Booking[] = []
 
+            // Helper to check if a date string falls on the selected local date
+            const isSameDay = (dateStr?: string) => {
+                if (!dateStr) return false
+                const date = new Date(dateStr)
+                return date.getDate() === selectedDate.getDate() &&
+                    date.getMonth() === selectedDate.getMonth() &&
+                    date.getFullYear() === selectedDate.getFullYear()
+            }
+
             data?.forEach((booking: any) => {
-                const bookingDateStr = booking.pickup_date?.split('T')[0] ||
-                    booking.dropoff_date?.split('T')[0] ||
-                    booking.appointment_date?.split('T')[0]
-
-                if (bookingDateStr === dateStr) {
-                    if (booking.pickup_date?.split('T')[0] === dateStr) {
-                        const isRental = !booking.service_type ||
-                            booking.service_type === 'rental' ||
-                            booking.service_type === 'car_rental'
-                        if (isRental) {
-                            categorized.push({ ...booking, type: 'check-in' })
-                        }
+                if (isSameDay(booking.pickup_date)) {
+                    const isRental = !booking.service_type ||
+                        booking.service_type === 'rental' ||
+                        booking.service_type === 'car_rental'
+                    if (isRental) {
+                        categorized.push({ ...booking, type: 'check-in' })
                     }
+                }
 
-                    if (booking.dropoff_date?.split('T')[0] === dateStr) {
-                        const isRental = !booking.service_type ||
-                            booking.service_type === 'rental' ||
-                            booking.service_type === 'car_rental'
-                        if (isRental) {
-                            categorized.push({ ...booking, type: 'check-out' })
-                        }
+                if (isSameDay(booking.dropoff_date)) {
+                    const isRental = !booking.service_type ||
+                        booking.service_type === 'rental' ||
+                        booking.service_type === 'car_rental'
+                    if (isRental) {
+                        categorized.push({ ...booking, type: 'check-out' })
                     }
+                }
 
-                    if (booking.service_type === 'car_wash' &&
-                        booking.appointment_date?.split('T')[0] === dateStr) {
-                        categorized.push({ ...booking, type: 'lavaggio' })
-                    }
+                if (booking.service_type === 'car_wash' &&
+                    isSameDay(booking.appointment_date)) {
+                    categorized.push({ ...booking, type: 'lavaggio' })
+                }
 
-                    if ((booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical') &&
-                        booking.appointment_date?.split('T')[0] === dateStr) {
-                        categorized.push({ ...booking, type: 'meccanica' })
-                    }
+                if ((booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical') &&
+                    isSameDay(booking.appointment_date)) {
+                    categorized.push({ ...booking, type: 'meccanica' })
+                }
 
-                    if (booking.service_type === 'varie' &&
-                        (booking.pickup_date?.split('T')[0] === dateStr || booking.appointment_date?.split('T')[0] === dateStr)) {
-                        categorized.push({ ...booking, type: 'varie' })
-                    }
+                if (booking.service_type === 'varie' &&
+                    (isSameDay(booking.pickup_date) || isSameDay(booking.appointment_date))) {
+                    categorized.push({ ...booking, type: 'varie' })
                 }
             })
 
@@ -256,7 +271,9 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
     }
 
     const currentSlot = getCurrentTimeSlot()
-    const isToday = selectedDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0]
+    const isToday = selectedDate.getDate() === new Date().getDate() &&
+        selectedDate.getMonth() === new Date().getMonth() &&
+        selectedDate.getFullYear() === new Date().getFullYear()
 
     const navigateDay = (direction: 'prev' | 'next') => {
         setSelectedDate(prev => {

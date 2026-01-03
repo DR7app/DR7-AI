@@ -414,22 +414,25 @@ export default function ReservationsTab() {
           return false
         }
 
+        // Ignore cancelled bookings
+        if (booking.status === 'cancelled') {
+          console.log(`[getAvailableVehicles] Ignoring cancelled booking ${booking.id} for vehicle ${vehicle.display_name}`)
+          return false
+        }
+
         // Check for date overlap
         const bookingPickup = new Date(booking.pickup_date)
         const bookingDropoff = new Date(booking.dropoff_date)
 
-        // Bookings conflict if they overlap
         const overlaps = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
 
         if (overlaps) {
           console.log('[getAvailableVehicles] CONFLICT FOUND:', {
             vehicleName: vehicle.display_name,
             vehicleId: vehicle.id,
-            bookingVehicleId,
-            bookingVehicleName: booking.vehicle_name,
-            bookingVehiclePlate: booking.vehicle_plate,
             vehiclePlate: vehicle.plate || vehicle.targa,
-            matchedBy: bookingVehicleId ? 'vehicle_id' : (booking.vehicle_plate ? 'plate' : 'name'),
+            bookingId: booking.id,
+            bookingStatus: booking.status,
             bookingPickup: bookingPickup.toISOString(),
             bookingDropoff: bookingDropoff.toISOString(),
             requestPickup: pickupDateTime.toISOString(),
@@ -444,8 +447,9 @@ export default function ReservationsTab() {
     })
 
     console.log('[getAvailableVehicles] Result:', {
+      totalVehicles: vehicles.length,
       availableCount: availableVehicles.length,
-      availableVehicles: availableVehicles.map(v => ({ id: v.id, name: v.display_name, plate: v.plate || v.targa }))
+      availableVehicles: availableVehicles.map(v => ({ id: v.id, name: v.display_name }))
     })
 
     return availableVehicles
@@ -477,28 +481,28 @@ export default function ReservationsTab() {
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
       return
     }
-
+  
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
     if (!selectedVehicle) return
-
+  
     // Calculate number of rental days
     const pickupDate = new Date(formData.pickup_date)
     const returnDate = new Date(formData.return_date)
     const diffTime = Math.abs(returnDate.getTime() - pickupDate.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
+  
     if (diffDays <= 0) return
-
+  
     // Check for special pricing rule (e.g. Massimo Runchina)
     const customerName = customers.find(c => c.id === formData.customer_id)?.full_name
     const specialRule = getSpecialPricing(customerName)
-
+  
     if (specialRule) {
       console.log('[ReservationsTab] Applying special pricing for:', customerName)
-
+  
       // Calculate special total
       const specialTotal = calculateSpecialPrice(specialRule, diffDays)
-
+  
       setFormData(prev => ({
         ...prev,
         total_amount: specialTotal.toFixed(2),
@@ -507,23 +511,23 @@ export default function ReservationsTab() {
         // We can't easily set "unlimited KM" here as it might be a UI text, but we can store it in metadata if needed
         // For now, the price includes it.
       }))
-
+  
       // Optional: Visual feedback could be added here or in the render
       return
     }
-
+  
     // Standard Calculation
     // Get vehicle daily rate (convert from cents to euros)
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
-
+  
     // Get Kasko daily cost
     const kaskoOptions = getInsuranceOptions(selectedVehicle)
     const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
     const kaskoDailyCost = selectedKasko?.pricePerDay || 0
-
+  
     // Calculate total: (vehicle rate + kasko) * days
     const totalAmount = (vehicleDailyRate + kaskoDailyCost) * diffDays
-
+  
     // Update form data with calculated total
     setFormData(prev => ({
       ...prev,

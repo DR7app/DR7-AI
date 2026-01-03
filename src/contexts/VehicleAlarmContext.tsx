@@ -6,7 +6,7 @@ interface AlarmBooking {
     vehicleName: string
     returnTime: string
     customerName: string
-    type?: 'return' | 'deposit'
+    type?: 'return' | 'deposit' | 'unpaid_pickup' | 'car_wash'
     deposit?: number
 }
 
@@ -174,9 +174,55 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
             // --- 1. CHECK RETURNS (10 mins AFTER due time) ---
             // Triggers if return_date was 10 mins ago
+            // --- TIME CALCULATIONS ---
             const tenMinutesAgo = new Date(now.getTime() - 10 * 60000)
             const tenMinutesAgoISO = tenMinutesAgo.toISOString()
             const tenMinutesAgoPlusOne = new Date(tenMinutesAgo.getTime() + 60000).toISOString()
+
+            const tenMinutesFuture = new Date(now.getTime() + 10 * 60000)
+            const tenMinutesFutureISO = tenMinutesFuture.toISOString()
+            const tenMinutesFuturePlusOne = new Date(tenMinutesFuture.getTime() + 60000).toISOString()
+
+            // --- 0. CHECK CAR WASH (10 mins BEFORE appointment) ---
+
+            const { data: carWash, error: carWashError } = await supabase
+                .from('bookings')
+                .select('id, customer_name, service_name, appointment_date, appointment_time, status')
+                .eq('service_type', 'car_wash')
+                .neq('status', 'cancelled')
+                .gte('appointment_date', tenMinutesFutureISO.split('T')[0]) // Check date match first
+
+            if (!carWashError && carWash && carWash.length > 0) {
+                for (const booking of carWash) {
+                    // Car wash has separate date and time fields usually, or a combined one. 
+                    // Based on UnpaidBookingsTab it uses appointment_date (string YYYY-MM-DD) and appointment_time (string HH:MM)
+                    // We need to construct the full Date object
+                    if (!booking.appointment_date || !booking.appointment_time) continue
+
+                    const appointmentDateTime = new Date(`${booking.appointment_date}T${booking.appointment_time}`)
+
+                    const trackingId = `car_wash_${booking.id}`
+                    if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                    // Check if appointment is in the 10 minute window (checking precise minute)
+                    // We simply compare the minutes
+                    const diff = appointmentDateTime.getTime() - now.getTime()
+                    // 10 minutes = 600000 ms. Allow small window.
+                    if (diff >= 600000 && diff < 660000) {
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: booking.id,
+                            vehicleName: booking.service_name || 'Lavaggio Auto',
+                            returnTime: booking.appointment_time,
+                            customerName: booking.customer_name || 'Unknown',
+                            type: 'car_wash'
+                        })
+                        return
+                    }
+                }
+            }
 
             const { data: returns, error: returnsError } = await supabase
                 .from('bookings')
@@ -214,9 +260,6 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
             // --- 2. CHECK DEPOSITS (10 mins BEFORE pickup time) ---
             // Triggers if pickup_date is 10 mins in FUTURE
-            const tenMinutesFuture = new Date(now.getTime() + 10 * 60000)
-            const tenMinutesFutureISO = tenMinutesFuture.toISOString()
-            const tenMinutesFuturePlusOne = new Date(tenMinutesFuture.getTime() + 60000).toISOString()
 
             // We need to fetch bookings starting soon and check deposit in JS/JSON field
             const { data: pickups, error: pickupsError } = await supabase
@@ -254,6 +297,41 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                             deposit: deposit
                         })
                         return // Trigger one at a time
+                    }
+                }
+            }
+
+            // --- 3. CHECK UNPAID PICKUP (10 mins BEFORE pickup) ---
+            const { data: unpaidPickups, error: unpaidError } = await supabase
+                .from('bookings')
+                .select('id, customer_name, vehicle_name, pickup_date, status, payment_status, price_total, booking_details')
+                .neq('status', 'cancelled')
+                .neq('payment_status', 'paid')
+                .gte('pickup_date', tenMinutesFutureISO)
+                .lt('pickup_date', tenMinutesFuturePlusOne)
+
+            if (!unpaidError && unpaidPickups && unpaidPickups.length > 0) {
+                for (const booking of unpaidPickups) {
+                    const trackingId = `unpaid_${booking.id}`
+                    if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                    const pickupTime = new Date(booking.pickup_date)
+                    pickupTime.setSeconds(0, 0)
+
+                    // Double check time match just in case
+                    if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: booking.id,
+                            vehicleName: booking.vehicle_name || 'Unknown Vehicle',
+                            returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                            customerName: booking.customer_name || 'Unknown',
+                            type: 'unpaid_pickup',
+                            deposit: booking.price_total // Using deposit field to store amount to pay for reuse
+                        })
+                        return
                     }
                 }
             }

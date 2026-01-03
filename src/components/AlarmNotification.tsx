@@ -21,14 +21,57 @@ export default function AlarmNotification() {
         stopAlarm(bookingId)
     }
 
+    const getAlarmStyle = () => {
+        switch (alarmState.activeAlarm?.type) {
+            case 'deposit':
+                return {
+                    bg: 'bg-yellow-900',
+                    border: 'border-yellow-500',
+                    iconBg: 'bg-yellow-100',
+                    iconColor: 'text-yellow-600',
+                    title: 'DEPOSIT REQUIRED',
+                    label: 'Pickup at:'
+                }
+            case 'unpaid_pickup':
+                return {
+                    bg: 'bg-red-900',
+                    border: 'border-red-600',
+                    iconBg: 'bg-red-100',
+                    iconColor: 'text-red-600',
+                    title: 'DA SALDARE / TO PAY',
+                    label: 'Pickup at:'
+                }
+            case 'car_wash':
+                return {
+                    bg: 'bg-blue-900',
+                    border: 'border-blue-500',
+                    iconBg: 'bg-blue-100',
+                    iconColor: 'text-blue-600',
+                    title: 'LAVAGGIO / CAR WASH',
+                    label: 'Time:'
+                }
+            default: // return
+                return {
+                    bg: 'bg-red-900',
+                    border: 'border-red-600',
+                    iconBg: 'bg-red-100',
+                    iconColor: 'text-red-600',
+                    title: 'VEHICLE RETURN DUE',
+                    label: 'Due:'
+                }
+        }
+    }
+
+    const style = getAlarmStyle()
+
     return (
-        <div className={`fixed inset-0 z-[9999] flex items-center justify-center ${alarmState.activeAlarm.type === 'deposit' ? 'bg-yellow-900/95' : 'bg-red-900/95'} animate-pulse`}>
-            <div className={`bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 border-4 ${alarmState.activeAlarm.type === 'deposit' ? 'border-yellow-500' : 'border-red-600'}`}>
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center ${style.bg} animate-pulse`}>
+            <div className={`bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 border-4 ${style.border}`}>
                 <div className="flex flex-col items-center text-center gap-6">
                     {/* Icon */}
-                    <div className={`${alarmState.activeAlarm.type === 'deposit' ? 'bg-yellow-100' : 'bg-red-100'} p-6 rounded-full`}>
+                    <div className={`${style.iconBg} p-6 rounded-full`}>
                         <svg
-                            className={`w-20 h-20 ${alarmState.activeAlarm.type === 'deposit' ? 'text-yellow-600' : 'text-red-600'} animate-bounce`}
+                            className={`w-20 h-20 ${style.iconColor} animate-bounce`}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -44,22 +87,25 @@ export default function AlarmNotification() {
 
                     {/* Content */}
                     <div>
-                        <h2 className={`text-4xl font-black ${alarmState.activeAlarm.type === 'deposit' ? 'text-yellow-600' : 'text-red-600'} mb-2 uppercase tracking-wide`}>
-                            {alarmState.activeAlarm.type === 'deposit' ? 'DEPOSIT REQUIRED FOR PICKUP' : 'VEHICLE RETURN DUE NOW'}
+                        <h2 className={`text-4xl font-black ${style.iconColor} mb-2 uppercase tracking-wide`}>
+                            {style.title}
                         </h2>
                         <div className="text-gray-800 text-xl space-y-2 font-medium">
                             <p>Booking <span className="font-bold">#{bookingId.slice(0, 8)}</span></p>
                             <p className="text-2xl font-bold">{vehicleName}</p>
                             <p>{customerName}</p>
                             <div className="flex flex-col items-center">
-                                <p className={`${alarmState.activeAlarm.type === 'deposit' ? 'text-yellow-600' : 'text-red-600'} font-bold`}>
-                                    {alarmState.activeAlarm.type === 'deposit' ? 'Pickup at:' : 'Due:'} {returnTime}
+                                <p className={`${style.iconColor} font-bold`}>
+                                    {style.label} {returnTime}
                                 </p>
-                                {alarmState.activeAlarm.type === 'deposit' && alarmState.activeAlarm.deposit && (
-                                    <p className="text-3xl font-black text-gray-900 mt-2 p-2 bg-yellow-100 rounded-lg border-2 border-yellow-400">
-                                        € {Number(alarmState.activeAlarm.deposit).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
-                                    </p>
-                                )}
+
+                                {/* Show amount for Deposit or Unpaid */}
+                                {((alarmState.activeAlarm.type === 'deposit' && alarmState.activeAlarm.deposit) ||
+                                    (alarmState.activeAlarm.type === 'unpaid_pickup' && alarmState.activeAlarm.deposit)) && (
+                                        <p className={`text-3xl font-black text-gray-900 mt-2 p-2 ${style.iconBg} rounded-lg border-2 ${style.border}`}>
+                                            € {Number(alarmState.activeAlarm.deposit).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    )}
                             </div>
                         </div>
                     </div>
@@ -68,7 +114,7 @@ export default function AlarmNotification() {
                     <div className="flex gap-4 w-full justify-center mt-4">
                         <button
                             onClick={handleOpenBooking}
-                            className="px-8 py-4 bg-red-600 text-white text-xl font-bold rounded-lg hover:bg-red-700 transition-colors shadow-lg flex-1 max-w-xs"
+                            className={`px-8 py-4 ${style.iconColor.replace('text', 'bg')} text-white text-xl font-bold rounded-lg hover:opacity-90 transition-opacity shadow-lg flex-1 max-w-xs`}
                         >
                             Open Booking
                         </button>
