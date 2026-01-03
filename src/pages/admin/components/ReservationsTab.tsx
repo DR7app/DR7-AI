@@ -65,6 +65,14 @@ export const URBAN_INSURANCE_ELIGIBILITY = {
   DR7: { minAge: 21, minLicenseYears: 2 },
 };
 
+// Generate time options for 15-minute intervals
+export const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
+  const hour = Math.floor(i / 4).toString().padStart(2, '0')
+  const minute = ((i % 4) * 15).toString().padStart(2, '0')
+  const time = `${hour}:${minute}`
+  return { value: time, label: time }
+})
+
 // Helper function to check if vehicle is a furgone (Ducato/Vito)
 function isFurgone(vehicle?: Vehicle): boolean {
   if (!vehicle) return false;
@@ -212,6 +220,19 @@ function calculateCarWashEndTime(appointmentDate: string, appointmentTime: strin
 const API_BASE = '/.netlify/functions/admin'
 const API_TOKEN = import.meta.env.VITE_ADMIN_UI_TOKEN
 
+// Helper to get next 15 minute interval
+function getNext15MinuteTime(): string {
+  const now = new Date()
+  const minutes = now.getMinutes()
+  const nextInterval = Math.ceil(minutes / 15) * 15
+  now.setMinutes(nextInterval)
+  now.setSeconds(0)
+
+  const h = now.getHours().toString().padStart(2, '0')
+  const m = now.getMinutes().toString().padStart(2, '0')
+  return `${h}:${m}`
+}
+
 export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleName?: string; pickupDate?: Date } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
@@ -249,9 +270,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     start_at: '',
     end_at: '',
     pickup_date: '',
-    pickup_time: '',
+    pickup_time: getNext15MinuteTime(),
     return_date: '',
-    return_time: '',
+    return_time: '10:00',
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
     status: 'confirmed',
@@ -290,6 +311,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (vehicle) {
         // Format date as YYYY-MM-DD
         const dateStr = pickupDate ? pickupDate.toISOString().split('T')[0] : ''
+        const smartTime = getNext15MinuteTime()
 
         console.log('📅 Prefilling booking form:', { vehicle: vehicle.display_name, date: dateStr })
 
@@ -297,9 +319,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           ...prev,
           vehicle_id: vehicle.id,
           pickup_date: dateStr,
-          pickup_time: '10:00', // Default start time
+          pickup_time: smartTime,
           return_date: dateStr, // Default same day return? Or +1? Let's say +1 day default
-          return_time: '18:00',
+          return_time: smartTime,
           // Recalculate based on logic if needed, but simple is better for now
           category: vehicle.category,
         }));
@@ -1821,10 +1843,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       setFormData({ ...formData, pickup_date: e.target.value })
                     }}
                   />
-                  <Input
+                  <Select
                     label="Ora Ritiro"
-                    type="time"
-                    step="900" // 15 minute intervals
                     required
                     value={formData.pickup_time}
                     onChange={(e) => {
@@ -1832,6 +1852,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData({ ...formData, pickup_time: pickupTime, return_time: returnTime })
                     }}
+                    options={TIME_OPTIONS}
                   />
                   <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile</p>
                 </div>
@@ -1851,13 +1872,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     value={formData.return_date}
                     onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
                   />
-                  <Input
+                  <Select
                     label="Ora Riconsegna"
-                    type="time"
-                    step="900" // 15 minute intervals
                     required
                     value={formData.return_time}
                     onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
+                    options={TIME_OPTIONS}
                   />
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
                   <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile</p>
