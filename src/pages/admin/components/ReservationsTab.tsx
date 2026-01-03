@@ -1004,6 +1004,11 @@ export default function ReservationsTab() {
           // Try to cancel first to bypass constraints
           await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
 
+          // Manually delete related records if server-side failed (Cascade emulation)
+          console.log('Client-side cascade: Deleting related records...')
+          await supabase.from('fatture').delete().eq('booking_id', bookingId)
+          await supabase.from('contracts').delete().eq('booking_id', bookingId)
+
           const { error: clientError } = await supabase
             .from('bookings')
             .delete()
