@@ -6,10 +6,9 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyira
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// OpenAPI.it SDI Configuration (SANDBOX for testing)
-const OPENAPI_SDI_TOKEN = process.env.OPENAPI_SDI_TOKEN || '69567f51a9928bf1e0083a74'
-const OPENAPI_SDI_BASE_URL = process.env.OPENAPI_SDI_BASE_URL || 'https://test.sdi.openapi.it' // SANDBOX
-const OPENAPI_SDI_SANDBOX_URL = 'https://test.sdi.openapi.it'
+// Invoicetronic SDI Configuration
+const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || 'ik_live_z7Wzq9ySqSfX5AbNUzlVpRJXJY4AXdGU'
+const INVOICETRONIC_BASE_URL = process.env.INVOICETRONIC_BASE_URL || 'https://api.invoicetronic.com/v1'
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -396,9 +395,9 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // --- AUTOMATIC SDI SENDING via OpenAPI.it ---
+        // --- AUTOMATIC SDI SENDING via Invoicetronic ---
         let sdiResult = null
-        if (OPENAPI_SDI_TOKEN && invoice) {
+        if (INVOICETRONIC_API_KEY && invoice) {
             try {
                 console.log('[SDI] Generating FatturaPA XML...')
 
@@ -417,14 +416,14 @@ export const handler: Handler = async (event) => {
                     importo_totale: total
                 })
 
-                console.log('[SDI] Sending to OpenAPI.it SDI...')
+                console.log('[SDI] Sending to Invoicetronic SDI...')
 
-                // Send to OpenAPI.it SDI
-                const sdiResponse = await fetch(`${OPENAPI_SDI_BASE_URL}/invoices`, {
+                // Send to Invoicetronic SDI
+                const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/invoices`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/xml',
-                        'Authorization': `Bearer ${OPENAPI_SDI_TOKEN}`,
+                        'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`,
                         'Accept': 'application/json'
                     },
                     body: fatturaXML
