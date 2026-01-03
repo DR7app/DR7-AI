@@ -56,6 +56,27 @@ interface Ticket {
   customer_phone?: string;
   purchase_date: string;
   payment_intent_id: string;
+  user_id?: string;
+  // All possible customer fields that might be in the database
+  customer_data?: {
+    tipo_cliente?: string;
+    nome?: string;
+    cognome?: string;
+    data_nascita?: string;
+    luogo_nascita?: string;
+    indirizzo?: string;
+    citta?: string;
+    cap?: string;
+    provincia?: string;
+    codice_fiscale?: string;
+    telefono?: string;
+    ragione_sociale?: string;
+    denominazione?: string;
+    partita_iva?: string;
+    pec?: string;
+    codice_sdi?: string;
+    ente_ufficio?: string;
+  };
 }
 
 // Simple Payment Method Selection Modal
@@ -565,19 +586,64 @@ const LotteriaBoard: React.FC = () => {
   const fetchSoldTickets = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+
+      // Step 1: Fetch all tickets
+      const { data: ticketsData, error: ticketsError } = await supabase
         .from('commercial_operation_tickets')
         .select('*')
         .order('ticket_number', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching tickets:', error);
-        throw error;
+      if (ticketsError) {
+        console.error('Error fetching tickets:', ticketsError);
+        throw ticketsError;
       }
 
+      // Step 2: Get unique emails from tickets
+      const uniqueEmails = [...new Set(ticketsData?.map(t => t.email).filter(Boolean) || [])];
+
+      // Step 3: Fetch customer data for these emails from customers_extended
+      const { data: customersExtended } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .in('email', uniqueEmails);
+
+      // Step 4: Also try old customers table as fallback
+      const { data: customersOld } = await supabase
+        .from('customers')
+        .select('*')
+        .in('email', uniqueEmails);
+
+      // Step 5: Create email -> customer data map (prefer customers_extended)
+      const customerMap = new Map();
+
+      // First add old customers data
+      customersOld?.forEach(customer => {
+        if (customer.email) {
+          customerMap.set(customer.email, {
+            tipo_cliente: 'persona_fisica',
+            nome: customer.full_name?.split(' ')[0] || '',
+            cognome: customer.full_name?.split(' ').slice(1).join(' ') || '',
+            telefono: customer.phone,
+            email: customer.email
+          });
+        }
+      });
+
+      // Then override with customers_extended (more complete data)
+      customersExtended?.forEach(customer => {
+        if (customer.email) {
+          customerMap.set(customer.email, customer);
+        }
+      });
+
+      // Step 6: Merge ticket data with customer data
       const ticketMap = new Map<number, Ticket>();
-      data?.forEach((ticket) => {
-        ticketMap.set(ticket.ticket_number, ticket);
+      ticketsData?.forEach((ticket) => {
+        const customerData = customerMap.get(ticket.email);
+        ticketMap.set(ticket.ticket_number, {
+          ...ticket,
+          customer_data: customerData || null
+        });
       });
 
       setSoldTickets(ticketMap);
@@ -1551,6 +1617,141 @@ const LotteriaBoard: React.FC = () => {
                 <div className="font-mono text-xs text-gray-700">{selectedTicketForDetails.payment_intent_id}</div>
               </div>
             </div>
+
+            {/* Extended Customer Data Section */}
+            {selectedTicketForDetails.customer_data && (
+              <div className="mb-6">
+                <h4 className="text-lg font-bold text-gray-900 mb-3 border-b pb-2">
+                  Dati Cliente Completi
+                </h4>
+                <div className="space-y-2">
+                  {selectedTicketForDetails.customer_data.tipo_cliente && (
+                    <div className="bg-blue-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Tipo Cliente</div>
+                      <div className="font-semibold text-gray-900 capitalize">
+                        {selectedTicketForDetails.customer_data.tipo_cliente.replace('_', ' ')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Personal Data */}
+                  {selectedTicketForDetails.customer_data.nome && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Nome</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.nome}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.cognome && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Cognome</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.cognome}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.data_nascita && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Data di Nascita</div>
+                      <div className="font-semibold text-gray-900">
+                        {new Date(selectedTicketForDetails.customer_data.data_nascita).toLocaleDateString('it-IT')}
+                      </div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.luogo_nascita && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Luogo di Nascita</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.luogo_nascita}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.codice_fiscale && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Codice Fiscale</div>
+                      <div className="font-semibold text-gray-900 font-mono">{selectedTicketForDetails.customer_data.codice_fiscale}</div>
+                    </div>
+                  )}
+
+                  {/* Address */}
+                  {selectedTicketForDetails.customer_data.indirizzo && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Indirizzo</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.indirizzo}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.citta && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Città</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.citta}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.cap && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">CAP</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.cap}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.provincia && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Provincia</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.provincia}</div>
+                    </div>
+                  )}
+
+                  {/* Business Data */}
+                  {selectedTicketForDetails.customer_data.ragione_sociale && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Ragione Sociale</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.ragione_sociale}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.denominazione && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Denominazione</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.denominazione}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.partita_iva && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Partita IVA</div>
+                      <div className="font-semibold text-gray-900 font-mono">{selectedTicketForDetails.customer_data.partita_iva}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.pec && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">PEC</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.pec}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.codice_sdi && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Codice SDI</div>
+                      <div className="font-semibold text-gray-900 font-mono">{selectedTicketForDetails.customer_data.codice_sdi}</div>
+                    </div>
+                  )}
+                  {selectedTicketForDetails.customer_data.ente_ufficio && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm text-gray-600">Ente/Ufficio</div>
+                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.ente_ufficio}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Warning if no extended data */}
+            {!selectedTicketForDetails.customer_data && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <div className="font-semibold text-yellow-800 text-sm">Dati Cliente Incompleti</div>
+                    <div className="text-yellow-700 text-xs mt-1">
+                      Questo biglietto non è collegato a un profilo cliente completo.
+                      Il cliente potrebbe aver acquistato prima di creare un account completo.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button

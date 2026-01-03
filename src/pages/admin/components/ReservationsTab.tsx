@@ -363,6 +363,47 @@ export default function ReservationsTab() {
     return `${returnHours}:${returnMinutes}`
   }
 
+  // Get available vehicles based on selected dates
+  const getAvailableVehicles = (): Vehicle[] => {
+    // If no dates selected, return all vehicles
+    if (!formData.pickup_date || !formData.return_date) {
+      return vehicles
+    }
+
+    const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time || '00:00'}:00`)
+    const returnDateTime = new Date(`${formData.return_date}T${formData.return_time || '23:59'}:00`)
+
+    // Filter out vehicles that have conflicting bookings
+    return vehicles.filter(vehicle => {
+      // Check if this vehicle has any conflicting bookings
+      const hasConflict = bookings.some(booking => {
+        // Skip the current booking if we're editing
+        if (editingId && booking.id === editingId) {
+          return false
+        }
+
+        // Check if this booking is for the same vehicle
+        const isForThisVehicle = booking.booking_details?.vehicle_id === vehicle.id
+
+        if (!isForThisVehicle) {
+          return false
+        }
+
+        // Check for date overlap
+        const bookingPickup = new Date(booking.pickup_date)
+        const bookingDropoff = new Date(booking.dropoff_date)
+
+        // Bookings conflict if they overlap
+        const overlaps = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
+
+        return overlaps
+      })
+
+      return !hasConflict
+    })
+  }
+
+
   const LOCATIONS = [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
     { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)' }
@@ -1672,19 +1713,7 @@ export default function ReservationsTab() {
 
             {/* Service Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Select
-                label="Veicolo"
-                required
-                value={formData.vehicle_id}
-                onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
-                options={[
-                  { value: '', label: 'Seleziona veicolo...' },
-                  ...vehicles.map(v => ({
-                    value: v.id,
-                    label: v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
-                  }))
-                ]}
-              />
+              {/* DATE SELECTION FIRST - Moved before vehicle selection */}
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-dr7-darker rounded-lg border border-gray-700">
                 <div className="space-y-3">
                   <Input
@@ -1742,6 +1771,36 @@ export default function ReservationsTab() {
                   onChange={(e) => setFormData({ ...formData, dropoff_location: e.target.value })}
                   options={LOCATIONS}
                 />
+              </div>
+
+              {/* VEHICLE SELECTION - Now appears after dates */}
+              <div className="md:col-span-2">
+                {!formData.pickup_date || !formData.return_date ? (
+                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
+                    <p className="text-yellow-400 text-sm">
+                      ⚠️ Seleziona le date per vedere i veicoli disponibili
+                    </p>
+                  </div>
+                ) : (
+                  <Select
+                    label={`Veicolo (${getAvailableVehicles().length} disponibili)`}
+                    required
+                    value={formData.vehicle_id}
+                    onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
+                    options={[
+                      { value: '', label: 'Seleziona veicolo...' },
+                      ...getAvailableVehicles().map(v => ({
+                        value: v.id,
+                        label: v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
+                      }))
+                    ]}
+                  />
+                )}
+                {formData.pickup_date && formData.return_date && getAvailableVehicles().length === 0 && (
+                  <p className="text-red-400 text-sm mt-2">
+                    ❌ Nessun veicolo disponibile per le date selezionate
+                  </p>
+                )}
               </div>
             </div>
 

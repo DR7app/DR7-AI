@@ -89,17 +89,23 @@ export default function DailyCalendarTab() {
 
                 if (bookingDateStr === dateStr) {
                     // Check-In (Pickup)
-                    if (booking.pickup_date?.split('T')[0] === dateStr &&
-                        !booking.service_type?.includes('car_wash') &&
-                        !booking.service_type?.includes('mechanical')) {
-                        categorized.push({ ...booking, type: 'check-in' })
+                    if (booking.pickup_date?.split('T')[0] === dateStr) {
+                        const isRental = !booking.service_type ||
+                            booking.service_type === 'rental' ||
+                            booking.service_type === 'car_rental'
+                        if (isRental) {
+                            categorized.push({ ...booking, type: 'check-in' })
+                        }
                     }
 
                     // Check-Out (Return)
-                    if (booking.dropoff_date?.split('T')[0] === dateStr &&
-                        !booking.service_type?.includes('car_wash') &&
-                        !booking.service_type?.includes('mechanical')) {
-                        categorized.push({ ...booking, type: 'check-out' })
+                    if (booking.dropoff_date?.split('T')[0] === dateStr) {
+                        const isRental = !booking.service_type ||
+                            booking.service_type === 'rental' ||
+                            booking.service_type === 'car_rental'
+                        if (isRental) {
+                            categorized.push({ ...booking, type: 'check-out' })
+                        }
                     }
 
                     // Car Wash
