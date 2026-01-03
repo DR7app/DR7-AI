@@ -345,12 +345,14 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
   // Helper: Get booking label based on bar width
   const getBookingLabel = (booking: Booking, columnSpan: number): string => {
-    if (columnSpan >= 5) {
-      return `${booking.customer_name || 'N/A'} - ${booking.vehicle_name}`
-    } else if (columnSpan >= 3) {
-      return booking.customer_name || 'N/A'
+    const customerName = booking.customer_name || 'N/A'
+
+    if (columnSpan >= 3) {
+      // Medium/wide bars: show customer name
+      return customerName
     } else {
-      return getInitials(booking.customer_name)
+      // Narrow bars: show initials only
+      return getInitials(customerName)
     }
   }
 
@@ -549,10 +551,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[140px]">
+                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-left text-white font-bold text-xs min-w-[140px]">
                     Veicolo
                   </th>
-                  <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
+                  <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
                     Targa
                   </th>
                   {daysInMonth.map(day => {
@@ -565,7 +567,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return (
                       <th
                         key={day}
-                        className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[40px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                        className={`border border-gray-800/30 px-1 py-1 text-center text-[10px] font-semibold min-w-[40px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
                           holiday || isSundayDay ? 'bg-red-900/20 border-red-500/30 text-red-400' :
                             'text-gray-400'
                           }`}
@@ -615,7 +617,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   })
                 }).map((vehicle) => (
                   <tr key={vehicle.id} className="relative">
-                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-white font-semibold text-sm">
+                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-white font-semibold text-sm">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate">{vehicle.display_name}</span>
@@ -632,7 +634,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
                       </div>
                     </td>
-                    <td className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-gray-300 text-sm font-mono">
+                    <td className="sticky left-[140px] z-10 bg-gray-900 border border-gray-800/30 px-2 py-1 text-gray-300 text-sm font-mono">
                       {vehicle.plate || '-'}
                     </td>
                     {daysInMonth.map(day => {
@@ -640,11 +642,11 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       return (
                         <td
                           key={day}
-                          className={`border border-gray-800/50 h-8 min-w-[40px] ${status === 'rented'
-                            ? 'bg-red-500/10'
+                          className={`border border-gray-800/30 h-8 min-w-[40px] ${status === 'rented'
+                            ? 'bg-red-500/15'
                             : status === 'unavailable'
-                              ? 'bg-orange-500/10'
-                              : 'bg-green-500/10'
+                              ? 'bg-orange-500/15'
+                              : 'bg-green-500/20'
                             } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold' : ''}`}
                         />
                       )
@@ -690,7 +692,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       return (
                         <div
                           key={segment.bookingId}
-                          className="absolute pointer-events-auto bg-gradient-to-br from-green-500/20 to-green-600/10 backdrop-blur-sm border-l-2 border-green-500 rounded-lg px-2 flex items-center hover:shadow-lg hover:shadow-green-500/30 cursor-pointer transition-all"
+                          className="absolute pointer-events-auto bg-gradient-to-br from-green-500/30 to-green-600/20 backdrop-blur-sm border-l-2 border-green-500 rounded-lg px-2 flex items-center hover:shadow-lg hover:shadow-green-500/30 cursor-pointer transition-all"
                           style={{
                             left: `${left}px`,
                             width: `${width}px`,
