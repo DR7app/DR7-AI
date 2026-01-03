@@ -419,7 +419,7 @@ export const handler: Handler = async (event) => {
                 console.log('[SDI] Sending to Invoicetronic SDI...')
 
                 // Send to Invoicetronic SDI
-                const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/invoices`, {
+                const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/send/file`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/xml',
