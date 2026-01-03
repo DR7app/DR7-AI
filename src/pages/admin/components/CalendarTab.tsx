@@ -532,13 +532,13 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
           <div className="relative min-w-max">
             {/* Layer 1: Availability Grid (Base) */}
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse table-fixed">
               <thead>
-                <tr>
-                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs min-w-[200px] shadow-lg">
+                <tr className="h-10">
+                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[200px] min-w-[200px] max-w-[200px] shadow-lg box-border">
                     Veicolo
                   </th>
-                  <th className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs min-w-[100px] shadow-lg">
+                  <th className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[100px] min-w-[100px] max-w-[100px] shadow-lg box-border">
                     Targa
                   </th>
                   {daysInMonth.map(day => {
@@ -551,7 +551,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return (
                       <th
                         key={day}
-                        className={`border border-gray-700/40 px-1 py-1 text-center text-[10px] font-semibold min-w-[40px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                        className={`border border-gray-700/40 px-1 py-1 text-center text-[10px] font-semibold w-[40px] min-w-[40px] max-w-[40px] relative group cursor-help box-border ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
                           holiday || isSundayDay ? 'bg-red-900/40 border-red-500/30 text-red-300' :
                             'text-gray-400 bg-gray-800/20'
                           }`}
