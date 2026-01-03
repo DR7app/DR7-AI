@@ -2865,11 +2865,11 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-yellow-600 rounded-lg p-6 max-w-md w-full shadow-2xl">
         <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-          <span>⚠️</span> {isLinking ? 'Cliente Non Identificato' : 'Dati Mancanti'}
+          <span>⚠️</span> {isLinking ? 'Dati Anagrafici Mancanti' : 'Dati Mancanti'}
         </h2>
         <p className="text-gray-400 mb-6 text-sm">
           {isLinking
-            ? 'Questa prenotazione non è associata a nessun cliente registrato. Seleziona un cliente per continuare.'
+            ? 'Per generare il documento è necessario completare la scheda del cliente. Puoi compilare i dati ora o collegare un cliente già esistente.'
             : (
               <>
                 Mancano i seguenti dati:
@@ -2895,16 +2895,18 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
                     customers={customers || []}
                     selectedCustomerId={selectedCustomerId || ''}
                     onSelectCustomer={(id) => setSelectedCustomerId(id)}
-                    placeholder="Cerca cliente..."
+                    placeholder="Cerca un altro cliente esistente..."
                     required={true}
                   />
-                  <div className="mt-2 text-center text-sm text-gray-400">oppure</div>
-                  <button
-                    onClick={onOpenCreate}
-                    className="w-full mt-2 py-2 border border-yellow-600 text-yellow-500 rounded hover:bg-yellow-900/30 transition-colors"
-                  >
-                    + Crea Nuovo Cliente
-                  </button>
+                  <div className="mt-4 text-center">
+                    <button
+                      onClick={onOpenCreate}
+                      className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-black font-bold rounded transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>📝</span> Inserisci Dati Cliente
+                    </button>
+                    <div className="mt-3 text-xs text-gray-500 uppercase tracking-widest">Oppure collega esistente</div>
+                  </div>
                 </div>
               ) : (
                 <input
