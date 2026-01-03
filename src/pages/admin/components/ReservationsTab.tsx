@@ -392,9 +392,20 @@ export default function ReservationsTab() {
         }
 
         // Check if this booking is for the same vehicle
-        // Check both vehicle_id (new field) and booking_details.vehicle_id (legacy)
+        // Priority 1: Check vehicle_id (new field) and booking_details.vehicle_id (legacy)
         const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
-        const isForThisVehicle = bookingVehicleId === vehicle.id
+        let isForThisVehicle = bookingVehicleId === vehicle.id
+
+        // Priority 2: Fallback to matching by vehicle name (for old bookings without vehicle_id)
+        if (!isForThisVehicle && !bookingVehicleId) {
+          // Match by display name
+          isForThisVehicle = booking.vehicle_name === vehicle.display_name
+
+          // Also try matching by plate if available
+          if (!isForThisVehicle && booking.vehicle_plate && (vehicle.plate || vehicle.targa)) {
+            isForThisVehicle = booking.vehicle_plate === vehicle.plate || booking.vehicle_plate === vehicle.targa
+          }
+        }
 
         if (!isForThisVehicle) {
           return false
@@ -412,6 +423,8 @@ export default function ReservationsTab() {
             vehicleName: vehicle.display_name,
             vehicleId: vehicle.id,
             bookingVehicleId,
+            bookingVehicleName: booking.vehicle_name,
+            matchedBy: bookingVehicleId ? 'vehicle_id' : 'name/plate',
             bookingPickup: bookingPickup.toISOString(),
             bookingDropoff: bookingDropoff.toISOString(),
             requestPickup: pickupDateTime.toISOString(),
