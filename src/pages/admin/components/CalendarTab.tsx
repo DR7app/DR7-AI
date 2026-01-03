@@ -600,8 +600,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return vehicleMatches && customerName.toLowerCase().includes(query)
                   })
                 }).map((vehicle) => (
-                  <tr key={vehicle.id} className="relative group/row hover:bg-white/5 transition-colors">
-                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-white font-semibold text-sm shadow-lg group-hover/row:bg-gray-800 transition-colors">
+                  <tr key={vehicle.id} className="relative group/row hover:bg-white/5 transition-colors h-10">
+                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-white font-semibold text-sm shadow-lg group-hover/row:bg-gray-800 transition-colors w-[200px] min-w-[200px] max-w-[200px] box-border overflow-hidden">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
                           <span className="truncate" title={vehicle.display_name}>{vehicle.display_name}</span>
@@ -618,7 +618,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
                       </div>
                     </td>
-                    <td className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-gray-300 text-xs font-mono shadow-lg group-hover/row:bg-gray-800 transition-colors">
+                    <td className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-gray-300 text-xs font-mono shadow-lg group-hover/row:bg-gray-800 transition-colors w-[100px] min-w-[100px] max-w-[100px] box-border overflow-hidden">
                       {vehicle.plate || '-'}
                     </td>
                     {daysInMonth.map(day => {
@@ -645,7 +645,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               setSelectedUnavailability(vehicle)
                             }
                           }}
-                          className={`border border-gray-700/30 h-10 min-w-[40px] transition-colors cursor-pointer ${status === 'rented'
+                          className={`border border-gray-700/30 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
                             ? 'bg-red-500/15' // Red for booked
                             : status === 'unavailable'
                               ? 'bg-gray-800/80'
