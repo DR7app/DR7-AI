@@ -35,13 +35,6 @@ interface Booking {
 
 type CellStatus = 'available' | 'rented' | 'unavailable'
 
-interface CellBookingInfo {
-  booking: Booking | null
-  isStart: boolean
-  isMiddle: boolean
-  isEnd: boolean
-}
-
 export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
@@ -553,14 +546,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
             <span className="text-sm text-gray-400">Tutti i Veicoli ({vehicles.length})</span>
           </h3>
 
-          <div className="min-w-max">
+          <div className="relative min-w-max">
+            {/* Layer 1: Availability Grid (Base) */}
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-2 py-1 text-left text-white font-bold text-xs min-w-[140px]">
+                  <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs min-w-[200px] shadow-lg">
                     Veicolo
                   </th>
-                  <th className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700/40 px-2 py-1 text-left text-white font-bold text-xs min-w-[90px]">
+                  <th className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs min-w-[100px] shadow-lg">
                     Targa
                   </th>
                   {daysInMonth.map(day => {
@@ -573,9 +567,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return (
                       <th
                         key={day}
-                        className={`border border-gray-700/40 px-1 py-1 text-center text-[10px] font-semibold min-w-[50px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
-                          holiday || isSundayDay ? 'bg-red-900/20 border-red-500/30 text-red-400' :
-                            'text-gray-400'
+                        className={`border border-gray-700/40 px-1 py-1 text-center text-[10px] font-semibold min-w-[40px] relative group cursor-help ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                          holiday || isSundayDay ? 'bg-red-900/40 border-red-500/30 text-red-300' :
+                            'text-gray-400 bg-gray-800/20'
                           }`}
                       >
                         <div className="flex flex-col items-center justify-between h-full py-0.5">
@@ -622,17 +616,17 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return vehicleMatches && customerName.toLowerCase().includes(query)
                   })
                 }).map((vehicle) => (
-                  <tr key={vehicle.id}>
-                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-2 py-1 text-white font-semibold text-sm">
+                  <tr key={vehicle.id} className="relative group/row hover:bg-white/5 transition-colors">
+                    <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-white font-semibold text-sm shadow-lg group-hover/row:bg-gray-800 transition-colors">
                       <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate">{vehicle.display_name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="truncate" title={vehicle.display_name}>{vehicle.display_name}</span>
                           {vehicle.category && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${vehicle.category === 'exotic'
-                              ? 'bg-purple-900 text-purple-200'
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${vehicle.category === 'exotic'
+                              ? 'bg-purple-600 text-white shadow-purple-500/20 shadow-sm'
                               : vehicle.category === 'urban'
-                                ? 'bg-cyan-900 text-cyan-200'
-                                : 'bg-orange-900 text-orange-200'
+                                ? 'bg-cyan-600 text-white shadow-cyan-500/20 shadow-sm'
+                                : 'bg-orange-600 text-white shadow-orange-500/20 shadow-sm'
                               }`}>
                               {vehicle.category}
                             </span>
@@ -640,61 +634,136 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
                       </div>
                     </td>
-                    <td className="sticky left-[140px] z-10 bg-gray-900 border border-gray-700/40 px-2 py-1 text-gray-300 text-sm font-mono">
+                    <td className="sticky left-[200px] z-10 bg-gray-900 border border-gray-700/40 px-3 py-2 text-gray-300 text-xs font-mono shadow-lg group-hover/row:bg-gray-800 transition-colors">
                       {vehicle.plate || '-'}
                     </td>
                     {daysInMonth.map(day => {
                       const status = getCellStatus(vehicle, day)
-                      const cellInfo = getCellBookingInfo(vehicle, day)
-
-                      // Determine border radius based on position
-                      const getBorderRadius = () => {
-                        if (!cellInfo.booking) return ''
-                        if (cellInfo.isStart && cellInfo.isEnd) return 'rounded-lg'
-                        if (cellInfo.isStart) return 'rounded-l-lg'
-                        if (cellInfo.isEnd) return 'rounded-r-lg'
-                        return ''
-                      }
 
                       return (
                         <td
                           key={day}
-                          onClick={() => {
-                            if (cellInfo.booking) {
-                              setSelectedCell({
-                                vehicle: vehicle.display_name,
-                                date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
-                                bookings: [cellInfo.booking]
-                              })
-                            } else if (status === 'unavailable') {
-                              setSelectedUnavailability(vehicle)
-                            }
-                          }}
-                          className={`relative border border-gray-700/40 min-w-[50px] h-10 transition-all cursor-pointer ${getBorderRadius()} ${status === 'rented'
-                            ? 'bg-green-500/90 hover:bg-green-500 shadow-sm'
+                          className={`border border-gray-700/30 h-10 min-w-[40px] transition-colors ${status === 'rented'
+                            ? 'bg-red-500/5' // Very subtle red for rented underlying
                             : status === 'unavailable'
-                              ? 'bg-orange-500/70 hover:bg-orange-500/80'
-                              : 'bg-green-500/5 hover:bg-green-500/10'
-                            } ${day === todayDay ? 'ring-2 ring-inset ring-dr7-gold' : ''}`}
-                        >
-                          {/* Show customer name + dates on start cell */}
-                          {cellInfo.isStart && cellInfo.booking && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center px-2 py-1">
-                              <span className="text-white text-xs font-bold truncate w-full text-center leading-tight">
-                                {cellInfo.booking.customer_name?.split(' ')[0] || 'N/A'}
-                              </span>
-                              <span className="text-white/70 text-[9px] truncate w-full text-center leading-tight mt-0.5">
-                                {new Date(cellInfo.booking.pickup_date).getDate()} → {new Date(cellInfo.booking.dropoff_date).getDate()}
-                              </span>
-                            </div>
-                          )}
-                        </td>
+                              ? 'bg-gray-800/80 pattern-diagonal-lines pattern-gray-700 pattern-bg-gray-800 pattern-opacity-20'
+                              : 'bg-transparent hover:bg-white/5'
+                            } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold/50 bg-dr7-gold/5' : ''}`}
+                        />
                       )
                     })}
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            {/* Layer 2: Booking Bars Overlay */}
+            <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ top: '40px' }}>
+              {vehicles.filter(vehicle => {
+                if (!searchQuery) return true
+                const query = searchQuery.toLowerCase()
+                return bookings.some(booking => {
+                  const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
+                  if (!customerName) return false
+                  const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
+                  const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
+                  if (vehicle.plate && booking.vehicle_plate && vehicle.plate === booking.vehicle_plate) {
+                    return customerName.toLowerCase().includes(query)
+                  }
+                  const vehicleMatches = bookingVehicle === vehicleDisplay ||
+                    (bookingVehicle && vehicleDisplay && (
+                      bookingVehicle.includes(vehicleDisplay) ||
+                      vehicleDisplay.includes(bookingVehicle)
+                    ))
+                  return vehicleMatches && customerName.toLowerCase().includes(query)
+                })
+              }).map((vehicle) => (
+                <div
+                  key={vehicle.id}
+                  className="relative h-10" // Matched row height
+                  style={{ marginLeft: '300px' }} // 200px (vehicle) + 100px (plate)
+                >
+                  {buildBookingSegments
+                    .filter(seg => seg.vehicleId === vehicle.id)
+                    .map(segment => {
+                      const cellWidth = 40 // min-w-[40px]
+                      const left = (segment.startDay - 1) * cellWidth
+                      const width = segment.columnSpan * cellWidth
+
+                      // Determine color based on booking type (matching DailyCalendarModal)
+                      let colorClass = "border-green-500"
+                      let gradientClass = "from-green-500/20 to-green-600/10"
+                      let glowClass = "hover:shadow-green-500/30"
+                      let textColorClass = "text-green-500"
+
+                      if (segment.booking.type === 'lavaggio') {
+                        colorClass = "border-blue-500"
+                        gradientClass = "from-blue-500/20 to-blue-600/10"
+                        glowClass = "hover:shadow-blue-500/30"
+                        textColorClass = "text-blue-500"
+                      } else if (segment.booking.type === 'meccanica') {
+                        colorClass = "border-orange-500"
+                        gradientClass = "from-orange-500/20 to-orange-600/10"
+                        glowClass = "hover:shadow-orange-500/30"
+                        textColorClass = "text-orange-500"
+                      }
+
+                      const getLabel = () => {
+                        switch (segment.booking.type) {
+                          case 'check-in': return 'USCITE'
+                          case 'check-out': return 'RIENTRI'
+                          case 'lavaggio': return 'LAVAGGIO'
+                          case 'meccanica': return 'MECCANICA'
+                          default: return 'NOLEGGIO'
+                        }
+                      }
+
+                      const getTarga = (booking: Booking): string => {
+                        return booking.vehicle_plate ||
+                          booking.booking_details?.vehicle?.targa ||
+                          booking.booking_details?.vehicle?.plate ||
+                          'N/A'
+                      }
+
+                      return (
+                        <div
+                          key={segment.bookingId}
+                          className={`absolute pointer-events-auto bg-gradient-to-br ${gradientClass} backdrop-blur-sm border-l-2 ${colorClass} rounded-lg p-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${glowClass} cursor-pointer z-20`}
+                          style={{
+                            left: `${left + 2}px`,
+                            width: `${width - 4}px`,
+                            top: '4px',
+                            height: '32px'
+                          }}
+                          onClick={() => {
+                            setSelectedCell({
+                              vehicle: vehicle.display_name,
+                              date: `${segment.startDay}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
+                              bookings: [segment.booking]
+                            })
+                          }}
+                          title={`${segment.booking.customer_name} - ${segment.booking.vehicle_name}`}
+                        >
+                          {/* Match DailyCalendarModal layout */}
+                          <div className="flex items-center gap-2 h-full">
+                            {/* Label badge */}
+                            <div className={`inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-semibold uppercase tracking-wide ${textColorClass} whitespace-nowrap`}>
+                              {getLabel()}
+                            </div>
+
+                            {/* Customer name */}
+                            {segment.columnSpan >= 3 && (
+                              <div className="text-white font-medium text-xs truncate">
+                                {segment.booking.customer_name?.split(' ')[0] || 'N/A'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
