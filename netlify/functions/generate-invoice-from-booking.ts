@@ -418,15 +418,18 @@ export const handler: Handler = async (event) => {
 
                 console.log('[SDI] Sending to Invoicetronic SDI...')
 
+                // Create FormData for file upload
+                const formData = new FormData()
+                const xmlBlob = new Blob([fatturaXML], { type: 'application/xml' })
+                formData.append('file', xmlBlob, `${invoice.numero_fattura}.xml`)
+
                 // Send to Invoicetronic SDI
                 const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/send/file`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/xml',
-                        'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`,
-                        'Accept': 'application/json'
+                        'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`
                     },
-                    body: fatturaXML
+                    body: formData
                 })
 
                 const responseData = await sdiResponse.json()
