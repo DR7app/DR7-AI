@@ -2672,7 +2672,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                   className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
                                   title="Segna come rientrato e crea lavaggio automatico"
                                 >
-                                  {markingAsReturned ? '...' : '🧼 Rientro'}
+                                  {markingAsReturned ? '...' : 'Rientro'}
                                 </button>
                               )}
                             </>
