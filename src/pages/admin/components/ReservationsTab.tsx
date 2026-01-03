@@ -1576,7 +1576,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const returnDate = new Date(returnYear, returnMonth - 1, returnDay, returnHour, returnMinute, 0)
 
       const bookingData = {
-        user_id: null, // Set to null for admin-created bookings
+        user_id: customerId || null, // Link to selected customer for contract/invoice generation
         guest_name: customerInfo?.full_name || 'N/A', // Required for guest bookings
         guest_email: customerInfo?.email || null,
         guest_phone: customerInfo?.phone || null,

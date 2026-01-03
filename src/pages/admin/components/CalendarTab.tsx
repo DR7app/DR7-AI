@@ -44,7 +44,7 @@ interface BookingSegment {
   booking: Booking
 }
 
-export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
+export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -613,7 +613,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       ))
                     return vehicleMatches && customerName.toLowerCase().includes(query)
                   })
-                }).map((vehicle, vehicleIndex) => (
+                }).map((vehicle) => (
                   <tr key={vehicle.id} className="relative">
                     <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-white font-semibold text-sm">
                       <div className="flex flex-col gap-0.5">
@@ -674,7 +674,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                     ))
                   return vehicleMatches && customerName.toLowerCase().includes(query)
                 })
-              }).map((vehicle, vehicleIndex) => (
+              }).map((vehicle) => (
                 <div
                   key={vehicle.id}
                   className="relative h-8"
