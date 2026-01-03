@@ -245,10 +245,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [editingId, setEditingId] = useState<string | null>(null)
 
   // Missing Data Modal State
+  // Missing Data Modal State
   const [showMissingDataModal, setShowMissingDataModal] = useState(false)
   const [missingFields, setMissingFields] = useState<string[]>([])
   const [tempCustomerData, setTempCustomerData] = useState<any>(null)
   const [currentValidationBooking, setCurrentValidationBooking] = useState<Booking | null>(null)
+  const [validationContext, setValidationContext] = useState<'contract' | 'invoice'>('contract')
 
   // Filter time options based on selected date
   const getFilteredTimeOptions = (dateStr: string) => {
@@ -913,7 +915,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   // Validate customer data before contract generation
-  async function validateForContract(booking: Booking): Promise<string[]> {
+  async function validateCustomerData(booking: Booking): Promise<string[]> {
     // Use user_id as customer_id
     const customerId = booking.user_id || booking.booking_details?.customer?.id
 
@@ -959,7 +961,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (!booking.id) return
 
     // 1. Validate Data
-    const missing = await validateForContract(booking)
+    const missing = await validateCustomerData(booking)
     if (missing.length > 0) {
       console.warn('⚠️ Missing fields for contract:', missing)
 
@@ -970,6 +972,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setMissingFields(missing)
       setTempCustomerData(customer || {})
       setCurrentValidationBooking(booking)
+      setValidationContext('contract')
       setShowMissingDataModal(true)
       return
     }
@@ -1023,6 +1026,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   async function handleGenerateInvoice(booking: Booking) {
     if (!booking.id) return
+
+    // 1. Validate Data for Invoice
+    const missing = await validateCustomerData(booking)
+    if (missing.length > 0) {
+      console.warn('⚠️ Missing fields for invoice:', missing)
+
+      const customerId = booking.user_id || booking.booking_details?.customer?.id
+      const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+
+      setMissingFields(missing)
+      setTempCustomerData(customer || {})
+      setCurrentValidationBooking(booking)
+      setValidationContext('invoice')
+      setShowMissingDataModal(true)
+      return
+    }
 
     // Include IVA (22%) in invoice breakdown
     const includeIVA = true
@@ -2713,10 +2732,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           <MissingDataModal
             isOpen={showMissingDataModal}
             missingFields={missingFields}
+            customers={customers}
             initialData={tempCustomerData}
             onClose={() => setShowMissingDataModal(false)}
-            onSave={async (updates: any) => {
+            onSave={async (updates: any, actionType: 'update' | 'link' = 'update') => {
               try {
+                if (actionType === 'link') {
+                  // Link customer to booking
+                  const { error } = await supabase
+                    .from('bookings')
+                    .update({
+                      user_id: updates.customer_id,
+                      customer_name: customers.find(c => c.id === updates.customer_id)?.full_name,
+                      customer_email: customers.find(c => c.id === updates.customer_id)?.email,
+                      customer_phone: customers.find(c => c.id === updates.customer_id)?.phone
+                    })
+                    .eq('id', currentValidationBooking?.id)
+
+                  if (error) throw error
+                  // Reload & Return to skip customer update
+                  await loadData()
+                  setShowMissingDataModal(false)
+                  if (currentValidationBooking) {
+                    const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
+                    if (fresh) {
+                      if (validationContext === 'invoice') handleGenerateInvoice(fresh)
+                      else handleGenerateContract(fresh, true)
+                    }
+                  }
+                  return
+                }
                 if (!tempCustomerData?.id) return
 
                 console.log('Updating customer with missing data:', updates)
@@ -2737,7 +2782,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 // Retry Generation
                 if (currentValidationBooking) {
-                  handleGenerateContract(currentValidationBooking, true)
+                  if (validationContext === 'invoice') {
+                    handleGenerateInvoice(currentValidationBooking)
+                  } else {
+                    handleGenerateContract(currentValidationBooking, true)
+                  }
                 }
 
               } catch (err: any) {
@@ -2751,8 +2800,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   )
 }
 
-function MissingDataModal({ isOpen, missingFields, initialData, onSave, onClose }: any) {
+function MissingDataModal({ isOpen, missingFields, initialData, customers, onSave, onClose }: any) {
   const [data, setData] = useState(initialData || {})
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
   if (!isOpen) return null
 
@@ -2765,18 +2815,32 @@ function MissingDataModal({ isOpen, missingFields, initialData, onSave, onClose 
       case 'luogo_nascita': return 'Luogo di Nascita *'
       case 'patente': return 'Numero Patente *'
       case 'partita_iva': return 'Partita IVA *'
+      case 'Cliente non identificato': return 'Associa Cliente'
       default: return field
     }
   }
+
+  const isLinking = missingFields.includes('Cliente non identificato')
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-yellow-600 rounded-lg p-6 max-w-md w-full shadow-2xl">
         <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-          <span>⚠️</span> Dati Mancanti
+          <span>⚠️</span> {isLinking ? 'Cliente Non Identificato' : 'Dati Mancanti'}
         </h2>
         <p className="text-gray-400 mb-6 text-sm">
-          Per generare un contratto valido, è necessario completare i seguenti dati mancanti per il cliente.
+          {isLinking
+            ? 'Questa prenotazione non è associata a nessun cliente registrato. Seleziona un cliente per continuare.'
+            : (
+              <>
+                Mancano i seguenti dati:
+                <strong className="text-white ml-1">
+                  {missingFields.map((f: string) => getLabel(f).replace(' *', '')).join(', ')}
+                </strong>
+                . Compilali qui sotto per generare il contratto.
+              </>
+            )
+          }
         </p>
 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
@@ -2785,13 +2849,26 @@ function MissingDataModal({ isOpen, missingFields, initialData, onSave, onClose 
               <label className="block text-sm font-medium text-gray-300 mb-1">
                 {getLabel(field)}
               </label>
-              <input
-                type={field === 'data_nascita' ? 'date' : 'text'}
-                className="w-full px-3 py-2 bg-black border border-gray-700 rounded text-white focus:border-yellow-500 focus:outline-none transition-colors"
-                value={data[field] || ''}
-                onChange={(e) => setData({ ...data, [field]: e.target.value })}
-                placeholder={`Inserisci ${getLabel(field).replace(' *', '')}`}
-              />
+
+              {field === 'Cliente non identificato' ? (
+                <div className="bg-black p-2 rounded border border-gray-700">
+                  <CustomerAutocomplete
+                    customers={customers || []}
+                    selectedCustomerId={selectedCustomerId || ''}
+                    onSelectCustomer={(id) => setSelectedCustomerId(id)}
+                    placeholder="Cerca cliente..."
+                    required={true}
+                  />
+                </div>
+              ) : (
+                <input
+                  type={field === 'data_nascita' ? 'date' : 'text'}
+                  className="w-full px-3 py-2 bg-black border border-gray-700 rounded text-white focus:border-yellow-500 focus:outline-none transition-colors"
+                  value={data[field] || ''}
+                  onChange={(e) => setData({ ...data, [field]: e.target.value })}
+                  placeholder={`Inserisci ${getLabel(field).replace(' *', '')}`}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -2804,10 +2881,17 @@ function MissingDataModal({ isOpen, missingFields, initialData, onSave, onClose 
             Annulla
           </button>
           <button
-            onClick={() => onSave(data)}
-            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-black font-semibold rounded transition-colors"
+            onClick={() => {
+              if (isLinking) {
+                if (selectedCustomerId) onSave({ customer_id: selectedCustomerId }, 'link')
+              } else {
+                onSave(data, 'update')
+              }
+            }}
+            disabled={isLinking && !selectedCustomerId}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-black font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Salva e Continua
+            {isLinking ? 'Salva e Collega' : 'Salva e Continua'}
           </button>
         </div>
       </div>
