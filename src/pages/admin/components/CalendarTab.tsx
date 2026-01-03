@@ -249,24 +249,29 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
     // Find bookings for this vehicle on this day
     const vehicleBookings = bookings.filter(booking => {
-      // PRIORITY 1: Match by plate if both have plates
-      if (booking.vehicle_plate && vehicle.plate) {
-        if (vehicle.plate === booking.vehicle_plate) {
-          const pickupDate = new Date(booking.pickup_date)
-          const dropoffDate = new Date(booking.dropoff_date)
-          pickupDate.setHours(0, 0, 0, 0)
-          dropoffDate.setHours(0, 0, 0, 0)
-          return checkDate >= pickupDate && checkDate < dropoffDate
+      let isMatch = false
+      const bookingVehicleId = booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
+
+      // 1. Match by Vehicle ID (most accurate)
+      if (bookingVehicleId && bookingVehicleId === vehicle.id) {
+        isMatch = true
+      }
+      // 2. Match by Plate (Strict)
+      else if (booking.vehicle_plate) {
+        if (vehicle.plate) {
+          isMatch = vehicle.plate.trim().toUpperCase() === booking.vehicle_plate.trim().toUpperCase()
+        } else {
+          // Booking has plate, Vehicle doesn't. 
+          // STRICTLY reject match to avoid duplicates across generic "Clio Blue" rows.
+          isMatch = false
         }
-        return false
+      }
+      // 3. Fallback to Name (Only if no ID and no Plate info on booking)
+      else {
+        isMatch = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
       }
 
-      // PRIORITY 2: Match by name (fallback for legacy bookings)
-      const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
-      const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-      const exactMatch = bookingVehicle === vehicleDisplay
-
-      if (!exactMatch) return false
+      if (!isMatch) return false
 
       const pickupDate = new Date(booking.pickup_date)
       const dropoffDate = new Date(booking.dropoff_date)
