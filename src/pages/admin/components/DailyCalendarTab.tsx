@@ -320,7 +320,7 @@ export default function DailyCalendarTab() {
 
                                 // Determine label text color based on booking type
                                 const labelColor =
-                                    booking.type === 'check-in' ? 'text-yellow-300' :
+                                    booking.type === 'check-in' ? 'text-yellow-400' :
                                         booking.type === 'check-out' ? 'text-purple-300' :
                                             'text-gray-100'
 

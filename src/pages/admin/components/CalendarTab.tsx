@@ -664,11 +664,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                               onNewBooking(vehicle.display_name, clickDate)
                             }
                           }}
-                          className={`relative border border-white/10 ${getBorderRadius()} p-0 min-w-[40px] h-8 transition-all duration-200 cursor-pointer overflow-hidden ${status === 'rented'
-                            ? 'bg-gradient-to-br from-red-500/20 to-red-600/10 border-l-2 border-red-500 hover:shadow-lg hover:shadow-red-500/30'
+                          className={`relative ${getBorderRadius()} p-0 min-w-[40px] h-8 transition-all duration-200 cursor-pointer overflow-hidden ${status === 'rented'
+                            ? 'bg-gradient-to-br from-green-500/20 to-green-600/10 backdrop-blur-sm border-l-2 border-green-500 hover:shadow-lg hover:shadow-green-500/30'
                             : status === 'unavailable'
-                              ? 'bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-l-2 border-orange-500 hover:shadow-lg hover:shadow-orange-500/30'
-                              : 'bg-gradient-to-br from-green-500/20 to-green-600/10 border-l-2 border-green-500 hover:shadow-lg hover:shadow-green-500/30'
+                              ? 'bg-gradient-to-br from-orange-500/20 to-orange-600/10 backdrop-blur-sm border-l-2 border-orange-500 hover:shadow-lg hover:shadow-orange-500/30'
+                              : 'border border-gray-700'
                             } ${day === todayDay ? 'ring-2 ring-dr7-gold shadow-lg shadow-dr7-gold/50' : ''}`}
                           title={
                             status === 'rented'

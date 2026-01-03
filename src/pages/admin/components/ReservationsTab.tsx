@@ -920,8 +920,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const customerId = booking.user_id || booking.booking_details?.customer?.id
 
     if (!customerId) {
-      // Return all fields to show them as missing, plus special flag
-      return ['Cliente non identificato', 'nome', 'cognome', 'email', 'telefono', 'codice_fiscale', 'indirizzo', 'citta_residenza']
+      // Check what data we have from the booking itself
+      const missing: string[] = ['Cliente non identificato']
+
+      // Only add fields that are truly missing from booking data
+      if (!booking.customer_name && !booking.booking_details?.customer?.fullName) {
+        missing.push('nome', 'cognome')
+      }
+      if (!booking.customer_email) missing.push('email')
+      if (!booking.customer_phone) missing.push('telefono')
+
+      // These are always required for contracts
+      missing.push('codice_fiscale', 'indirizzo', 'citta_residenza')
+
+      return missing
     }
 
     // Fetch full customer data
@@ -970,10 +982,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Fetch full customer data to populate modal
       const customerId = booking.user_id || booking.booking_details?.customer?.id
-      const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+      let customerData = {}
+
+      if (customerId) {
+        const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+        customerData = customer || {}
+      } else {
+        // No customer ID, but we might have data from booking
+        const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
+        customerData = {
+          nome: nameParts[0] || '',
+          cognome: nameParts.slice(1).join(' ') || '',
+          email: booking.customer_email || '',
+          telefono: booking.customer_phone || ''
+        }
+      }
 
       setMissingFields(missing)
-      setTempCustomerData(customer || {})
+      setTempCustomerData(customerData)
       setCurrentValidationBooking(booking)
       setValidationContext('contract')
       setShowMissingDataModal(true)
@@ -1036,10 +1062,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       console.warn('⚠️ Missing fields for invoice:', missing)
 
       const customerId = booking.user_id || booking.booking_details?.customer?.id
-      const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+      let customerData = {}
+
+      if (customerId) {
+        const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+        customerData = customer || {}
+      } else {
+        // No customer ID, but we might have data from booking
+        const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
+        customerData = {
+          nome: nameParts[0] || '',
+          cognome: nameParts.slice(1).join(' ') || '',
+          email: booking.customer_email || '',
+          telefono: booking.customer_phone || ''
+        }
+      }
 
       setMissingFields(missing)
-      setTempCustomerData(customer || {})
+      setTempCustomerData(customerData)
       setCurrentValidationBooking(booking)
       setValidationContext('invoice')
       setShowMissingDataModal(true)
@@ -2914,8 +2954,22 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
 
   if (!isOpen) return null
 
+  // Filter out fields that already have values in initialData
+  const actuallyMissingFields = missingFields.filter((field: string) => {
+    // Always show the "Cliente non identificato" option
+    if (field === 'Cliente non identificato') return true
+
+    // Check if the field has a value in initialData
+    const fieldValue = initialData?.[field]
+    return !fieldValue || fieldValue === ''
+  })
+
   const getLabel = (field: string) => {
     switch (field) {
+      case 'nome': return 'Nome *'
+      case 'cognome': return 'Cognome *'
+      case 'email': return 'Email *'
+      case 'telefono': return 'Telefono *'
       case 'codice_fiscale': return 'Codice Fiscale *'
       case 'indirizzo': return 'Indirizzo (Via e Civico) *'
       case 'citta_residenza': return 'Città di Residenza *'
@@ -2928,7 +2982,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
     }
   }
 
-  const isLinking = missingFields.includes('Cliente non identificato')
+  const isLinking = actuallyMissingFields.includes('Cliente non identificato')
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -2943,7 +2997,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
               <>
                 Mancano i seguenti dati:
                 <strong className="text-white ml-1">
-                  {missingFields.map((f: string) => getLabel(f).replace(' *', '')).join(', ')}
+                  {actuallyMissingFields.map((f: string) => getLabel(f).replace(' *', '')).join(', ')}
                 </strong>
                 . Compilali qui sotto per generare il contratto.
               </>
@@ -2952,7 +3006,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
         </p>
 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-          {missingFields.map((field: string) => (
+          {actuallyMissingFields.map((field: string) => (
             <div key={field}>
               <label className="block text-sm font-medium text-gray-300 mb-1">
                 {getLabel(field)}
