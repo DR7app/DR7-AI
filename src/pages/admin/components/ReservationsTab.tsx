@@ -368,14 +368,22 @@ export default function ReservationsTab() {
   const getAvailableVehicles = (): Vehicle[] => {
     // If no dates selected, return all vehicles
     if (!formData.pickup_date || !formData.return_date) {
+      console.log('[getAvailableVehicles] No dates selected, returning all vehicles')
       return vehicles
     }
 
     const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time || '00:00'}:00`)
     const returnDateTime = new Date(`${formData.return_date}T${formData.return_time || '23:59'}:00`)
 
+    console.log('[getAvailableVehicles] Filtering vehicles for dates:', {
+      pickup: pickupDateTime.toISOString(),
+      return: returnDateTime.toISOString(),
+      totalVehicles: vehicles.length,
+      totalBookings: bookings.length
+    })
+
     // Filter out vehicles that have conflicting bookings
-    return vehicles.filter(vehicle => {
+    const availableVehicles = vehicles.filter(vehicle => {
       // Check if this vehicle has any conflicting bookings
       const hasConflict = bookings.some(booking => {
         // Skip the current booking if we're editing
@@ -399,11 +407,30 @@ export default function ReservationsTab() {
         // Bookings conflict if they overlap
         const overlaps = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
 
+        if (overlaps) {
+          console.log('[getAvailableVehicles] CONFLICT FOUND:', {
+            vehicleName: vehicle.display_name,
+            vehicleId: vehicle.id,
+            bookingVehicleId,
+            bookingPickup: bookingPickup.toISOString(),
+            bookingDropoff: bookingDropoff.toISOString(),
+            requestPickup: pickupDateTime.toISOString(),
+            requestReturn: returnDateTime.toISOString()
+          })
+        }
+
         return overlaps
       })
 
       return !hasConflict
     })
+
+    console.log('[getAvailableVehicles] Result:', {
+      availableCount: availableVehicles.length,
+      availableVehicles: availableVehicles.map(v => ({ id: v.id, name: v.display_name }))
+    })
+
+    return availableVehicles
   }
 
 
