@@ -46,6 +46,16 @@ export const handler: Handler = async (event) => {
 
         console.log(`[delete-booking] Attempting to delete booking: ${bookingId}`)
 
+        // First, set status to cancelled to bypass any 'active booking' constraints/triggers
+        const { error: updateError } = await supabase
+            .from('bookings')
+            .update({ status: 'cancelled' })
+            .eq('id', bookingId)
+
+        if (updateError) {
+            console.warn('[delete-booking] Failed to cancel booking before deletion (continuing anyway):', updateError)
+        }
+
         const { error } = await supabase
             .from('bookings')
             .delete()

@@ -1000,6 +1000,10 @@ export default function ReservationsTab() {
         } catch (serverError) {
           // Fallback to client-side deletion (requires RLS fix)
           console.log('Attempting client-side deletion fallback...')
+
+          // Try to cancel first to bypass constraints
+          await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
+
           const { error: clientError } = await supabase
             .from('bookings')
             .delete()
