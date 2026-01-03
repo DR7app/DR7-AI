@@ -297,11 +297,24 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
     for (const vehicle of vehicles) {
       for (const booking of bookings) {
-        // Match booking to vehicle
-        const matchesByPlate = booking.vehicle_plate && vehicle.plate && vehicle.plate === booking.vehicle_plate
-        const matchesByName = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+        // Match booking to vehicle with strict priority:
+        // 1. If both have plates, they MUST match.
+        // 2. If plates are missing, fall back to name match.
 
-        if (!matchesByPlate && !matchesByName) continue
+        let isMatch = false
+
+        if (vehicle.plate && booking.vehicle_plate) {
+          isMatch = vehicle.plate === booking.vehicle_plate
+        } else {
+          // Fallback if one or both plates are missing
+          // But careful: if the vehicle has a plate, and booking doesn't, Name match might still act on wrong car.
+          // Ideally, we should require plate match if vehicle has one.
+          // However, old bookings might lack plate.
+          const matchesByName = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+          isMatch = matchesByName
+        }
+
+        if (!isMatch) continue
 
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
