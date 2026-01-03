@@ -712,12 +712,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       return (
                         <div
                           key={segment.bookingId}
-                          className={`absolute pointer-events-auto bg-gradient-to-br ${gradientClass} backdrop-blur-sm border-l-2 ${colorClass} rounded-lg p-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${glowClass} cursor-pointer z-20`}
+                          className={`absolute pointer-events-auto bg-gradient-to-br ${gradientClass} backdrop-blur-sm border-l-2 ${colorClass} rounded-lg px-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg ${glowClass} cursor-pointer z-20`}
                           style={{
-                            left: `${left + 2}px`,
-                            width: `${width - 4}px`,
-                            top: '4px',
-                            height: '32px'
+                            left: `${left + 1}px`,
+                            width: `${width - 2}px`, // Full width across all days
+                            top: '2px',
+                            height: '36px' // Fill the cell height
                           }}
                           onClick={() => {
                             setSelectedCell({
@@ -731,14 +731,14 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                           {/* Match DailyCalendarModal layout */}
                           <div className="flex items-center gap-2 h-full">
                             {/* Label badge */}
-                            <div className={`inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-semibold uppercase tracking-wide ${textColorClass} whitespace-nowrap`}>
+                            <div className={`inline-block px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold uppercase tracking-wide ${textColorClass} whitespace-nowrap`}>
                               {getLabel()}
                             </div>
 
-                            {/* Customer name */}
-                            {segment.columnSpan >= 3 && (
-                              <div className="text-white font-medium text-xs truncate">
-                                {segment.booking.customer_name?.split(' ')[0] || 'N/A'}
+                            {/* Customer name - always show if space allows */}
+                            {segment.columnSpan >= 2 && (
+                              <div className="text-white font-semibold text-sm truncate">
+                                {segment.booking.customer_name || 'N/A'}
                               </div>
                             )}
                           </div>
