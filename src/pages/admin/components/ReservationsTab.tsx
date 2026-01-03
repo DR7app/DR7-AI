@@ -239,9 +239,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [bookings, setBookings] = useState<Booking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+
+  // Filter time options based on selected date
+  const getFilteredTimeOptions = (dateStr: string) => {
+    if (!dateStr) return TIME_OPTIONS
+
+    const today = new Date().toISOString().split('T')[0]
+    if (dateStr === today) {
+      const now = new Date()
+      // Current HH:MM
+      const currentHM = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+      // Filter options that are in the future (or very recent past to be safe)
+      return TIME_OPTIONS.filter(t => t.value >= currentHM)
+    }
+    return TIME_OPTIONS
+  }
+
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
@@ -1852,7 +1869,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData({ ...formData, pickup_time: pickupTime, return_time: returnTime })
                     }}
-                    options={TIME_OPTIONS}
+                    options={getFilteredTimeOptions(formData.pickup_date)}
                   />
                   <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile</p>
                 </div>
@@ -1877,7 +1894,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     value={formData.return_time}
                     onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
-                    options={TIME_OPTIONS}
+                    options={getFilteredTimeOptions(formData.return_date)}
                   />
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
                   <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile</p>
