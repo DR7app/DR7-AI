@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
