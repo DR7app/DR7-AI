@@ -1227,6 +1227,64 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
+  const [markingAsReturned, setMarkingAsReturned] = useState(false)
+
+  async function handleMarkAsReturned(booking: Booking) {
+    // Only allow for confirmed/active rentals
+    if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical_service') {
+      alert('Questa funzione è solo per noleggi auto')
+      return
+    }
+
+    const dropoffDate = new Date(booking.dropoff_date)
+    const now = new Date()
+    const isPastDue = dropoffDate < now
+
+    const confirmMessage = isPastDue
+      ? `Confermi il rientro del veicolo ${booking.vehicle_name}?\n\nSarà creata automaticamente una prenotazione lavaggio di 45 minuti.`
+      : `Il rientro è previsto per ${dropoffDate.toLocaleString('it-IT')}.\n\nVuoi comunque segnare come rientrato ora?\n\nSarà creata automaticamente una prenotazione lavaggio di 45 minuti.`
+
+    if (!confirm(confirmMessage)) {
+      return
+    }
+
+    setMarkingAsReturned(true)
+    try {
+      // Call backend to create automatic car wash booking
+      const response = await fetch('/.netlify/functions/create-automatic-car-wash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Errore nella creazione del lavaggio automatico')
+      }
+
+      // Update booking status to completed
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({ status: 'completed' })
+        .eq('id', booking.id)
+
+      if (updateError) {
+        console.error('Failed to update booking status:', updateError)
+        // Don't fail the whole operation, car wash was created
+      }
+
+      alert(`✅ Rientro confermato!\n\n🧼 Prenotazione lavaggio automatica creata:\n- Veicolo: ${booking.vehicle_name}\n- Durata: 45 minuti\n- Orario: ${data.carWashBooking.appointment_time || 'ora corrente'}\n\nLa prenotazione è visibile nella tab "Prenotazioni Lavaggio" e nel calendario.`)
+
+      loadData()
+    } catch (error: any) {
+      console.error('Error marking as returned:', error)
+      alert(`❌ Errore durante il rientro:\n\n${error.message}\n\nIl veicolo non è stato segnato come rientrato.`)
+    } finally {
+      setMarkingAsReturned(false)
+    }
+  }
+
   function handleEditBooking(booking: Booking) {
     // Only handle car rental bookings - car wash bookings are in CarWashBookingsTab
     if (booking.service_type === 'car_wash') {
@@ -2566,6 +2624,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               >
                                 Cancella
                               </button>
+                              {/* Mark as Returned button - only show for confirmed/active rentals */}
+                              {booking.status !== 'cancelled' && booking.status !== 'completed' && !booking.service_type && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleMarkAsReturned(booking) }}
+                                  disabled={markingAsReturned}
+                                  className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
+                                  title="Segna come rientrato e crea lavaggio automatico"
+                                >
+                                  {markingAsReturned ? '...' : '🧼 Rientro'}
+                                </button>
+                              )}
                             </>
                           )}
                           <button
