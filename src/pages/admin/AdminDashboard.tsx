@@ -18,10 +18,11 @@ import ReviewsTab from './components/ReviewsTab'
 import FatturaTab from './components/FatturaTab'
 import ContrattoTab from './components/ContrattoTab'
 import DailyCalendarModal from './components/DailyCalendarModal'
+import RentalCalendarTab from './components/RentalCalendarTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'rental-calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -163,6 +164,13 @@ export default function AdminDashboard() {
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
                   }`}
               >
+                Calendario Flotta
+              </button>
+              <button
+                onClick={() => setActiveTab('rental-calendar')}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'rental-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                  }`}
+              >
                 Calendario Noleggio
               </button>
               <button
@@ -227,7 +235,7 @@ export default function AdminDashboard() {
               {/* Noleggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar'
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar' || activeTab === 'rental-calendar'
                     ? 'text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
@@ -235,7 +243,7 @@ export default function AdminDashboard() {
                   Noleggio
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-900 border border-gray-700 rounded-b-3xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <div className="absolute left-0 mt-0 w-56 bg-gray-900 border border-gray-700 rounded-b-3xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('reservations')}
                     className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
@@ -245,10 +253,17 @@ export default function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => setActiveTab('calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-3xl ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
-                    Calendario
+                    Calendario Flotta
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('rental-calendar')}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-3xl ${activeTab === 'rental-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                      }`}
+                  >
+                    Calendario Noleggio
                   </button>
                 </div>
               </div>
@@ -416,7 +431,8 @@ export default function AdminDashboard() {
             {activeTab === 'documents-verification' && 'Verifica Documenti'}
             {activeTab === 'customers' && 'Clienti'}
             {activeTab === 'vehicles' && 'Veicoli'}
-            {activeTab === 'calendar' && 'Calendario Noleggio'}
+            {activeTab === 'calendar' && 'Calendario Flotta'}
+            {activeTab === 'rental-calendar' && 'Calendario Noleggio'}
             {activeTab === 'carwash-calendar' && 'Calendario Lavaggi'}
             {activeTab === 'mechanical-calendar' && 'Calendario Meccanica'}
             {activeTab === 'lotteria' && 'Biglietti Lotteria'}
@@ -443,6 +459,7 @@ export default function AdminDashboard() {
               onNewBooking={handleCalendarBooking}
             />
           )}
+          {activeTab === 'rental-calendar' && <RentalCalendarTab />}
           {activeTab === 'carwash' && <CarWashBookingsTab />}
           {activeTab === 'carwash-calendar' && <CarWashCalendarTab />}
           {activeTab === 'mechanical' && <MechanicalBookingTab />}

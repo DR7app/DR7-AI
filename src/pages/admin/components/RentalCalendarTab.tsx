@@ -6,15 +6,12 @@ interface Booking {
     vehicle_name: string
     vehicle_plate?: string | null
     customer_name: string | null
-    pickup_date?: string
-    dropoff_date?: string
-    appointment_date?: string
-    appointment_time?: string
-    service_type?: string
-    service_name?: string
+    pickup_date: string
+    dropoff_date: string
     booking_details: any
     status: string
-    type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
+    price_total?: number
+    type: 'pickup' | 'dropoff'
 }
 
 // Generate 15-minute time slots for business hours (9 AM - 8 PM)
@@ -33,7 +30,7 @@ const generateTimeSlots = () => {
 
 const TIME_SLOTS = generateTimeSlots()
 
-export default function DailyCalendarTab() {
+export default function RentalCalendarTab() {
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedDate, setSelectedDate] = useState(new Date())
@@ -44,7 +41,7 @@ export default function DailyCalendarTab() {
 
         // Real-time subscription
         const subscription = supabase
-            .channel('daily-calendar-updates')
+            .channel('rental-calendar-updates')
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'bookings' },
                 () => loadDayBookings()
@@ -76,7 +73,6 @@ export default function DailyCalendarTab() {
             endOfDay.setHours(23, 59, 59, 999)
 
             // Convert to ISO strings for DB query - add buffer for timezone differences
-            // We look 1 day back and 1 day forward to be safe with UTC conversions
             const queryStart = new Date(startOfDay)
             queryStart.setDate(queryStart.getDate() - 1)
 
@@ -87,7 +83,7 @@ export default function DailyCalendarTab() {
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
-                .or(`pickup_date.gte.${queryStart.toISOString()},pickup_date.lt.${queryEnd.toISOString()},dropoff_date.gte.${queryStart.toISOString()},dropoff_date.lt.${queryEnd.toISOString()},appointment_date.gte.${queryStart.toISOString()},appointment_date.lt.${queryEnd.toISOString()}`)
+                .or(`pickup_date.gte.${queryStart.toISOString()},pickup_date.lt.${queryEnd.toISOString()},dropoff_date.gte.${queryStart.toISOString()},dropoff_date.lt.${queryEnd.toISOString()}`)
 
             if (error) throw error
 
@@ -103,48 +99,27 @@ export default function DailyCalendarTab() {
             }
 
             data?.forEach((booking: any) => {
-                // Check-In (Pickup)
+                // Only process rental bookings (not car wash, mechanical, etc.)
+                const isRental = !booking.service_type ||
+                    booking.service_type === 'rental' ||
+                    booking.service_type === 'car_rental'
+
+                if (!isRental) return
+
+                // Pickup
                 if (isSameDay(booking.pickup_date)) {
-                    const isRental = !booking.service_type ||
-                        booking.service_type === 'rental' ||
-                        booking.service_type === 'car_rental'
-                    if (isRental) {
-                        categorized.push({ ...booking, type: 'check-in' })
-                    }
+                    categorized.push({ ...booking, type: 'pickup' })
                 }
 
-                // Check-Out (Return)
+                // Dropoff
                 if (isSameDay(booking.dropoff_date)) {
-                    const isRental = !booking.service_type ||
-                        booking.service_type === 'rental' ||
-                        booking.service_type === 'car_rental'
-                    if (isRental) {
-                        categorized.push({ ...booking, type: 'check-out' })
-                    }
-                }
-
-                // Car Wash
-                if (booking.service_type === 'car_wash' &&
-                    isSameDay(booking.appointment_date)) {
-                    categorized.push({ ...booking, type: 'lavaggio' })
-                }
-
-                // Mechanical
-                if ((booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical') &&
-                    isSameDay(booking.appointment_date)) {
-                    categorized.push({ ...booking, type: 'meccanica' })
-                }
-
-                // Varie (miscellaneous)
-                if (booking.service_type === 'varie' &&
-                    (isSameDay(booking.pickup_date) || isSameDay(booking.appointment_date))) {
-                    categorized.push({ ...booking, type: 'varie' })
+                    categorized.push({ ...booking, type: 'dropoff' })
                 }
             })
 
             setBookings(categorized)
         } catch (error) {
-            console.error('Failed to load day bookings:', error)
+            console.error('Failed to load rental bookings:', error)
         } finally {
             setLoading(false)
         }
@@ -152,15 +127,12 @@ export default function DailyCalendarTab() {
 
     // Get booking time
     const getBookingTime = (booking: Booking): string => {
-        if (booking.type === 'check-in') {
+        if (booking.type === 'pickup') {
             return booking.booking_details?.pickupTime ||
-                new Date(booking.pickup_date!).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                new Date(booking.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
         }
-        if (booking.type === 'check-out') {
-            return booking.booking_details?.returnTime ||
-                new Date(booking.dropoff_date!).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-        }
-        return booking.appointment_time || '00:00'
+        return booking.booking_details?.returnTime ||
+            new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
     }
 
     // Map booking to time slot
@@ -195,6 +167,15 @@ export default function DailyCalendarTab() {
             'N/A'
     }
 
+    // Calculate rental duration in days
+    const getRentalDuration = (booking: Booking): number => {
+        const pickup = new Date(booking.pickup_date)
+        const dropoff = new Date(booking.dropoff_date)
+        const diffTime = Math.abs(dropoff.getTime() - pickup.getTime())
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        return diffDays
+    }
+
     // Get current time slot
     const getCurrentTimeSlot = (): string => {
         const now = new Date()
@@ -221,7 +202,7 @@ export default function DailyCalendarTab() {
         return (
             <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-                <p className="text-white">Caricamento calendario giornaliero...</p>
+                <p className="text-white">Caricamento calendario noleggio...</p>
             </div>
         )
     }
@@ -231,7 +212,7 @@ export default function DailyCalendarTab() {
             {/* Header */}
             <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 shadow-lg">
                 <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-xl font-bold text-white">Calendario Giornaliero</h2>
+                    <h2 className="text-xl font-bold text-white">Calendario Noleggio</h2>
                     <div className="flex gap-2">
                         <button
                             onClick={() => navigateDay('prev')}
@@ -261,35 +242,37 @@ export default function DailyCalendarTab() {
                         day: 'numeric'
                     })}
                 </p>
+                <div className="flex gap-4 text-xs">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 bg-green-600 rounded"></div>
+                        <span className="text-gray-300">
+                            {bookings.filter(b => b.type === 'pickup').length} Uscite
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 bg-blue-600 rounded"></div>
+                        <span className="text-gray-300">
+                            {bookings.filter(b => b.type === 'dropoff').length} Rientri
+                        </span>
+                    </div>
+                </div>
             </div>
 
             {/* Calendar Grid */}
             <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-lg overflow-x-auto">
                 {/* Header Row with Categories */}
-                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-gray-700 bg-gray-800 sticky top-0">
+                <div className="grid grid-cols-[80px_1fr_1fr] border-b-2 border-gray-700 bg-gray-800 sticky top-0">
                     <div className="p-2 text-xs font-bold text-gray-400">ORA</div>
                     <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-green-600 rounded"></div>
-                            <span className="text-gray-200">NOLEGGIO</span>
+                            <span className="text-gray-200">USCITE (PICKUP)</span>
                         </div>
                     </div>
                     <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                            <span className="text-gray-200">LAVAGGIO</span>
-                        </div>
-                    </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
-                        <div className="flex items-center justify-center gap-1.5">
-                            <div className="w-3 h-3 bg-orange-600 rounded"></div>
-                            <span className="text-gray-200">MECCANICA</span>
-                        </div>
-                    </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
-                        <div className="flex items-center justify-center gap-1.5">
-                            <div className="w-3 h-3 bg-purple-600 rounded"></div>
-                            <span className="text-gray-200">VARIE</span>
+                            <span className="text-gray-200">RIENTRI (DROPOFF)</span>
                         </div>
                     </div>
                 </div>
@@ -301,28 +284,17 @@ export default function DailyCalendarTab() {
                         const isCurrentSlot = isToday && slot === currentSlot
 
                         // Separate bookings by type
-                        const noleggioBookings = slotBookings.filter(b => b.type === 'check-in' || b.type === 'check-out')
-                        const lavaggioBookings = slotBookings.filter(b => b.type === 'lavaggio')
-                        const meccanicaBookings = slotBookings.filter(b => b.type === 'meccanica')
-                        const varieBookings = slotBookings.filter(b => b.type === 'varie')
+                        const pickupBookings = slotBookings.filter(b => b.type === 'pickup')
+                        const dropoffBookings = slotBookings.filter(b => b.type === 'dropoff')
 
-                        const renderBookings = (bookings: Booking[], bgColor: string) => {
+                        const renderBookings = (bookings: Booking[], bgColor: string, label: string, labelColor: string) => {
                             if (bookings.length === 0) {
                                 return <span className="text-gray-700 text-xs">—</span>
                             }
                             return bookings.map((booking) => {
-                                const label =
-                                    booking.type === 'check-in' ? 'USCITE' :
-                                        booking.type === 'check-out' ? 'RIENTRI' :
-                                            booking.type === 'lavaggio' ? 'LAVAGGIO' :
-                                                booking.type === 'meccanica' ? 'MECCANICA' :
-                                                    'VARIE'
-
-                                // Determine label text color based on booking type
-                                const labelColor =
-                                    booking.type === 'check-in' ? 'text-yellow-300' :
-                                        booking.type === 'check-out' ? 'text-purple-300' :
-                                            'text-gray-100'
+                                const duration = getRentalDuration(booking)
+                                const pickupDate = new Date(booking.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
+                                const dropoffDate = new Date(booking.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
 
                                 return (
                                     <div
@@ -332,12 +304,13 @@ export default function DailyCalendarTab() {
                                         <div className={`font-bold text-[10px] mb-0.5 opacity-90 ${labelColor}`}>{label}</div>
                                         <div className="font-bold text-sm leading-tight">{parseCustomerName(booking.customer_name)}</div>
                                         <div className="text-white/90 text-xs mt-0.5">{booking.vehicle_name}</div>
-                                        {booking.type !== 'lavaggio' && (
-                                            <div className="text-white/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
-                                        )}
-                                        {booking.service_name && (
-                                            <div className="text-white/70 text-[10px] mt-1 italic">{booking.service_name}</div>
-                                        )}
+                                        <div className="text-white/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
+                                        <div className="text-white/70 text-[10px] mt-1 flex items-center justify-between">
+                                            <span className="font-semibold">📅 {duration} {duration === 1 ? 'giorno' : 'giorni'}</span>
+                                        </div>
+                                        <div className="text-white/60 text-[9px] mt-0.5">
+                                            {pickupDate} → {dropoffDate}
+                                        </div>
                                     </div>
                                 )
                             })
@@ -347,7 +320,7 @@ export default function DailyCalendarTab() {
                             <div
                                 key={slot}
                                 ref={isCurrentSlot ? currentTimeRef : null}
-                                className={`grid grid-cols-[80px_1fr_1fr_1fr_1fr] ${isCurrentSlot ? 'bg-gray-800/50 border-l-2 border-dr7-gold' : ''
+                                className={`grid grid-cols-[80px_1fr_1fr] ${isCurrentSlot ? 'bg-gray-800/50 border-l-2 border-dr7-gold' : ''
                                     } hover:bg-gray-800/30 transition-colors`}
                             >
                                 {/* Time Column */}
@@ -355,24 +328,14 @@ export default function DailyCalendarTab() {
                                     {slot}
                                 </div>
 
-                                {/* Noleggio Column */}
+                                {/* Pickup Column */}
                                 <div className="p-1.5 border-l border-gray-800">
-                                    {renderBookings(noleggioBookings, 'bg-green-600')}
+                                    {renderBookings(pickupBookings, 'bg-green-600', 'USCITA', 'text-yellow-300')}
                                 </div>
 
-                                {/* Lavaggio Column */}
+                                {/* Dropoff Column */}
                                 <div className="p-1.5 border-l border-gray-800">
-                                    {renderBookings(lavaggioBookings, 'bg-blue-600')}
-                                </div>
-
-                                {/* Meccanica Column */}
-                                <div className="p-1.5 border-l border-gray-800">
-                                    {renderBookings(meccanicaBookings, 'bg-orange-600')}
-                                </div>
-
-                                {/* Varie Column */}
-                                <div className="p-1.5 border-l border-gray-800">
-                                    {renderBookings(varieBookings, 'bg-purple-600')}
+                                    {renderBookings(dropoffBookings, 'bg-blue-600', 'RIENTRO', 'text-purple-300')}
                                 </div>
                             </div>
                         )
