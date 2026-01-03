@@ -316,12 +316,18 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
         let isMatch = false
         const bookingVehicleId = booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
 
+        // Get plate from any possible source
+        const bookingPlate = booking.vehicle_plate ||
+          booking.booking_details?.vehicle?.plate ||
+          booking.booking_details?.vehicle?.targa ||
+          booking.booking_details?.targa
+
         if (bookingVehicleId && bookingVehicleId === vehicle.id) {
           isMatch = true
-        } else if (booking.vehicle_plate) {
+        } else if (bookingPlate) {
           // If booking has a plate, REQUIRES strictly matching vehicle plate
           if (vehicle.plate) {
-            isMatch = vehicle.plate.trim().toUpperCase() === booking.vehicle_plate.trim().toUpperCase()
+            isMatch = vehicle.plate.trim().toUpperCase() === bookingPlate.trim().toUpperCase()
           } else {
             // Vehicle has no plate, but booking does. Do NOT match by name to avoid duplicates.
             isMatch = false
