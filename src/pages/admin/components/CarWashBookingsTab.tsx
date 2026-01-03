@@ -983,10 +983,26 @@ export default function CarWashBookingsTab() {
               )}
             </div>
 
-            {/* Service Details */}
+            {/* Service Details - REORDERED: Date first, then service, then time */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* DATE FIRST */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Servizio</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Data *</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.appointment_date}
+                  onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                />
+              </div>
+
+              {/* SERVICE TYPE SECOND */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Tipo Servizio *
+                  {!formData.appointment_date && <span className="text-yellow-400 text-xs ml-2">(Seleziona prima la data)</span>}
+                </label>
                 <select
                   required
                   value={formData.service_name}
@@ -1000,8 +1016,9 @@ export default function CarWashBookingsTab() {
                     })
                   }}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                  disabled={!formData.appointment_date}
                 >
-                  <option value="">Seleziona servizio</option>
+                  <option value="">{formData.appointment_date ? 'Seleziona servizio' : 'Seleziona prima la data'}</option>
                   {CAR_WASH_SERVICES.map(service => (
                     <option key={service.id} value={service.name}>
                       {service.name} - EUR {service.price} ({service.duration})
@@ -1009,51 +1026,52 @@ export default function CarWashBookingsTab() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Data</label>
-                <input
-                  type="date"
-                  required
-                  value={formData.appointment_date}
-                  onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Ora</label>
-                <select
-                  required
-                  value={formData.appointment_time}
-                  onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                  disabled={!formData.service_name}
-                >
-                  <option value="">{formData.service_name ? 'Seleziona orario' : 'Seleziona prima il servizio'}</option>
-                  {formData.service_name && (() => {
-                    const availableSlots = getAvailableTimeSlotsForService(formData.service_name)
-                    const morningSlots = availableSlots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
-                    const afternoonSlots = availableSlots.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
 
-                    return (
-                      <>
-                        {morningSlots.length > 0 && (
-                          <optgroup label="Mattina">
-                            {morningSlots.map(time => (
-                              <option key={time} value={time}>{time}</option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {afternoonSlots.length > 0 && (
-                          <optgroup label="Pomeriggio">
-                            {afternoonSlots.map(time => (
-                              <option key={time} value={time}>{time}</option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </>
-                    )
-                  })()}
-                </select>
+              {/* AVAILABLE HOURS THIRD - Only shown after date and service are selected */}
+              <div className="md:col-span-2">
+                {!formData.appointment_date || !formData.service_name ? (
+                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
+                    <p className="text-yellow-400 text-sm">
+                      ⚠️ Seleziona la data e il tipo di servizio per vedere gli orari disponibili
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Ora Appuntamento *</label>
+                    <select
+                      required
+                      value={formData.appointment_time}
+                      onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                    >
+                      <option value="">Seleziona orario</option>
+                      {(() => {
+                        const availableSlots = getAvailableTimeSlotsForService(formData.service_name)
+                        const morningSlots = availableSlots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
+                        const afternoonSlots = availableSlots.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
+
+                        return (
+                          <>
+                            {morningSlots.length > 0 && (
+                              <optgroup label="Mattina">
+                                {morningSlots.map(time => (
+                                  <option key={time} value={time}>{time}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {afternoonSlots.length > 0 && (
+                              <optgroup label="Pomeriggio">
+                                {afternoonSlots.map(time => (
+                                  <option key={time} value={time}>{time}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 
