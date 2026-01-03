@@ -43,6 +43,18 @@ export default function AdminDashboard() {
     setActiveTab('reservations')
   }
 
+  useEffect(() => {
+    const handleOpenBookingForm = (event: CustomEvent) => {
+      const { vehicleName, date } = event.detail
+      handleCalendarBooking(vehicleName, date)
+    }
+
+    window.addEventListener('openBookingForm', handleOpenBookingForm as EventListener)
+    return () => {
+      window.removeEventListener('openBookingForm', handleOpenBookingForm as EventListener)
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-black">
       <header className="bg-black">
