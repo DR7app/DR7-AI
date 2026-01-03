@@ -383,7 +383,9 @@ export default function ReservationsTab() {
         }
 
         // Check if this booking is for the same vehicle
-        const isForThisVehicle = booking.booking_details?.vehicle_id === vehicle.id
+        // Check both vehicle_id (new field) and booking_details.vehicle_id (legacy)
+        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
+        const isForThisVehicle = bookingVehicleId === vehicle.id
 
         if (!isForThisVehicle) {
           return false
@@ -1263,6 +1265,7 @@ export default function ReservationsTab() {
         guest_email: customerInfo?.email || null,
         guest_phone: customerInfo?.phone || null,
         vehicle_type: 'car',
+        vehicle_id: formData.vehicle_id, // CRITICAL: Store vehicle_id for availability filtering
         vehicle_name: vehicle?.display_name || 'N/A',
         vehicle_plate: vehicle?.plate || null,
         vehicle_image_url: null,
@@ -1288,6 +1291,7 @@ export default function ReservationsTab() {
             phone: customerInfo?.phone || '',
             customerId: customerId
           },
+          vehicle_id: formData.vehicle_id, // Also store in booking_details for backward compatibility
           pickupLocation: formData.pickup_location,
           dropoffLocation: formData.dropoff_location,
           amountPaid: Math.round(parseFloat(formData.amount_paid) * 100), // Store amount paid in cents
