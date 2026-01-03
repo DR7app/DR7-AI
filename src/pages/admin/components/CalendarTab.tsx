@@ -627,11 +627,29 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       return (
                         <td
                           key={day}
-                          className={`border border-gray-700/30 h-10 min-w-[40px] transition-colors ${status === 'rented'
+                          onClick={() => {
+                            if (status === 'available') {
+                              // Open booking form for available days
+                              const year = currentDate.getFullYear()
+                              const month = currentDate.getMonth()
+                              const selectedDate = new Date(year, month, day)
+                              // Trigger the onNewBooking callback if provided
+                              // This will open the booking form in the parent component
+                              window.dispatchEvent(new CustomEvent('openBookingForm', {
+                                detail: {
+                                  vehicleName: vehicle.display_name,
+                                  date: selectedDate
+                                }
+                              }))
+                            } else if (status === 'unavailable') {
+                              setSelectedUnavailability(vehicle)
+                            }
+                          }}
+                          className={`border border-gray-700/30 h-10 min-w-[40px] transition-colors cursor-pointer ${status === 'rented'
                             ? 'bg-red-500/15' // Red for booked
                             : status === 'unavailable'
                               ? 'bg-gray-800/80'
-                              : 'bg-green-500/15' // Green for available
+                              : 'bg-green-500/15 hover:bg-green-500/25' // Green for available with hover
                             } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold/50 bg-dr7-gold/5' : ''}`}
                         />
                       )
@@ -675,10 +693,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       const width = segment.columnSpan * cellWidth
 
                       // Determine color based on booking type (matching DailyCalendarModal)
-                      let colorClass = "border-green-500"
-                      let gradientClass = "from-green-500/20 to-green-600/10"
-                      let glowClass = "hover:shadow-green-500/30"
-                      let textColorClass = "text-green-500"
+                      let colorClass = "border-red-500"
+                      let gradientClass = "from-red-500/20 to-red-600/10"
+                      let glowClass = "hover:shadow-red-500/30"
+                      let textColorClass = "text-red-500"
 
                       if (segment.booking.type === 'lavaggio') {
                         colorClass = "border-blue-500"
