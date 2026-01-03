@@ -919,7 +919,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Use user_id as customer_id
     const customerId = booking.user_id || booking.booking_details?.customer?.id
 
-    if (!customerId) return ['Cliente non identificato']
+    if (!customerId) {
+      // Return all fields to show them as missing, plus special flag
+      return ['Cliente non identificato', 'nome', 'cognome', 'email', 'telefono', 'codice_fiscale', 'indirizzo', 'citta_residenza']
+    }
 
     // Fetch full customer data
     const { data: customer, error } = await supabase
@@ -1777,8 +1780,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           isOpen={editModalOpen}
           onClose={() => setEditModalOpen(false)}
           initialData={customerToEdit}
-          onClientCreated={() => {
-            loadData()
+          onClientCreated={async (newClientId) => {
+            await loadData()
+            // If we were validating a booking, link the new client and retry
+            if (currentValidationBooking && newClientId) {
+              try {
+                const { error } = await supabase
+                  .from('bookings')
+                  .update({
+                    user_id: newClientId,
+                    // Update denormalized fields too
+                    customer_name: customerToEdit?.full_name || customerToEdit?.nome + ' ' + customerToEdit?.cognome,
+                  })
+                  .eq('id', currentValidationBooking.id)
+
+                if (!error) {
+                  // Fetch fresh and retry
+                  const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
+                  if (fresh) {
+                    if (validationContext === 'invoice') handleGenerateInvoice(fresh)
+                    else handleGenerateContract(fresh, true)
+                  }
+                }
+              } catch (e) {
+                console.error('Error auto-linking new client:', e)
+              }
+            }
           }}
         />
 
@@ -2735,6 +2762,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             customers={customers}
             initialData={tempCustomerData}
             onClose={() => setShowMissingDataModal(false)}
+            onOpenCreate={() => {
+              // Pre-fill data from booking
+              setCustomerToEdit({
+                nome: currentValidationBooking?.customer_name?.split(' ')[0] || '',
+                cognome: currentValidationBooking?.customer_name?.split(' ').slice(1).join(' ') || '',
+                email: currentValidationBooking?.customer_email || '',
+                phone: currentValidationBooking?.customer_phone || '',
+                tipo_cliente: 'persona_fisica' // Default
+              })
+              setShowMissingDataModal(false)
+              setEditModalOpen(true)
+            }}
             onSave={async (updates: any, actionType: 'update' | 'link' = 'update') => {
               try {
                 if (actionType === 'link') {
@@ -2800,7 +2839,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   )
 }
 
-function MissingDataModal({ isOpen, missingFields, initialData, customers, onSave, onClose }: any) {
+function MissingDataModal({ isOpen, missingFields, initialData, customers, onSave, onOpenCreate, onClose }: any) {
   const [data, setData] = useState(initialData || {})
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
@@ -2859,6 +2898,13 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
                     placeholder="Cerca cliente..."
                     required={true}
                   />
+                  <div className="mt-2 text-center text-sm text-gray-400">oppure</div>
+                  <button
+                    onClick={onOpenCreate}
+                    className="w-full mt-2 py-2 border border-yellow-600 text-yellow-500 rounded hover:bg-yellow-900/30 transition-colors"
+                  >
+                    + Crea Nuovo Cliente
+                  </button>
                 </div>
               ) : (
                 <input
