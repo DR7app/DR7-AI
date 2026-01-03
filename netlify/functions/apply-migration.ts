@@ -10,7 +10,22 @@ export async function handler() {
     // Execute the migration SQL
     const { error } = await supabase.rpc('exec_sql', {
       sql: `
-        -- Fix Alarm Visibility / RLS for Bookings
+        -- ============================================
+        -- COMPREHENSIVE FIX SCRIPT
+        -- 1. Ensure 'vehicle_id' column exists (Validation Error Fix)
+        -- 2. Fix RLS Policies (Alarm Visibility Fix)
+        -- ============================================
+
+        -- 1. ADD MISSING COLUMN
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'vehicle_id') THEN
+                ALTER TABLE bookings ADD COLUMN vehicle_id UUID REFERENCES vehicles(id);
+                RAISE NOTICE 'Added vehicle_id column';
+            END IF;
+        END $$;
+
+        -- 2. FIX ALARM VISIBILITY / RLS
         
         -- Drop existing policies
         DROP POLICY IF EXISTS "Allow admins to view all" ON bookings;
@@ -24,7 +39,7 @@ export async function handler() {
         ON bookings FOR SELECT
         TO authenticated
         USING (
-            auth.email() IN ('admin@dr7.app', 'dubai.rent7.0srl@gmail.com', 'opheliegiraud@gmail.com') OR
+            auth.email() IN ('admin@dr7.app', 'dubai.rent7.0srl@gmail.com', 'opheliegiraud@gmail.com', 'ophelie.giraud@hotmail.fr') OR
             EXISTS (SELECT 1 FROM user_profiles WHERE user_id = auth.uid() AND (role = 'admin' OR role = 'superadmin')) OR
             EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid() AND (role = 'admin' OR role = 'superadmin')) OR
             auth.uid() = user_id OR 
