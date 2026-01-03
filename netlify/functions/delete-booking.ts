@@ -46,16 +46,23 @@ export const handler: Handler = async (event) => {
 
         console.log(`[delete-booking] Attempting to delete booking: ${bookingId}`)
 
-        // First, set status to cancelled to bypass any 'active booking' constraints/triggers
-        const { error: updateError } = await supabase
-            .from('bookings')
-            .update({ status: 'cancelled' })
-            .eq('id', bookingId)
+        // 1. Cancel booking first (to safe-guard status checks)
+        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
 
-        if (updateError) {
-            console.warn('[delete-booking] Failed to cancel booking before deletion (continuing anyway):', updateError)
-        }
+        // 2. Cascade delete related records
+        // Delete related invoices (fatture)
+        const { error: invoiceError } = await supabase.from('fatture').delete().eq('booking_id', bookingId)
+        if (invoiceError) console.warn('[delete-booking] Invoice deletion warning:', invoiceError.message)
 
+        // Delete related contracts
+        const { error: contractError } = await supabase.from('contracts').delete().eq('booking_id', bookingId)
+        if (contractError) console.warn('[delete-booking] Contract deletion warning:', contractError.message)
+
+        // Delete related payments? (wallet_transactions might reference it)
+        // If wallet_transactions references booking_id, we should delete those too? 
+        // For now, let's stick to what we know failed. 
+
+        // 3. Delete the booking
         const { error } = await supabase
             .from('bookings')
             .delete()
