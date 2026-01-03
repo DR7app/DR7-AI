@@ -313,6 +313,36 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
     })
   }
 
+  // VISUAL HELPER: Determine if this cell is start/middle/end of a booking span
+  const getBookingSpanPosition = (day: number, booking: Booking): 'start' | 'middle' | 'end' | 'single' => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+
+    const pickupDate = new Date(booking.pickup_date)
+    const dropoffDate = new Date(booking.dropoff_date)
+    pickupDate.setHours(0, 0, 0, 0)
+    dropoffDate.setHours(0, 0, 0, 0)
+
+    const currentDay = new Date(year, month, day)
+    currentDay.setHours(0, 0, 0, 0)
+
+    const prevDay = new Date(year, month, day - 1)
+    prevDay.setHours(0, 0, 0, 0)
+
+    const nextDay = new Date(year, month, day + 1)
+    nextDay.setHours(0, 0, 0, 0)
+
+    const isStart = currentDay.getTime() === pickupDate.getTime()
+    const isEnd = nextDay.getTime() === dropoffDate.getTime()
+    const isPrevDayInBooking = prevDay >= pickupDate && prevDay < dropoffDate
+    const isNextDayInBooking = nextDay >= pickupDate && nextDay < dropoffDate
+
+    if (isStart && isEnd) return 'single'
+    if (isStart || !isPrevDayInBooking) return 'start'
+    if (isEnd || !isNextDayInBooking) return 'end'
+    return 'middle'
+  }
+
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
       const newDate = new Date(prev)
@@ -601,6 +631,20 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                     {daysInMonth.map(day => {
                       const status = getCellStatus(vehicle, day)
                       const cellBookings = getCellBookings(vehicle, day)
+                      const booking = cellBookings[0] // Get first booking for this cell
+                      const spanPosition = booking ? getBookingSpanPosition(day, booking) : null
+
+                      // Visual styling based on span position
+                      const getBorderRadius = () => {
+                        if (!spanPosition) return 'rounded-lg'
+                        if (spanPosition === 'single') return 'rounded-lg'
+                        if (spanPosition === 'start') return 'rounded-l-lg rounded-r-none'
+                        if (spanPosition === 'end') return 'rounded-r-lg rounded-l-none'
+                        return 'rounded-none' // middle
+                      }
+
+                      const showBookingText = spanPosition === 'start' || spanPosition === 'single'
+
                       return (
                         <td
                           key={day}
@@ -614,18 +658,17 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                             } else if (status === 'unavailable') {
                               setSelectedUnavailability(vehicle)
                             } else if (status === 'available' && onNewBooking) {
-                              // Click on green slot -> New Booking
                               const year = currentDate.getFullYear()
                               const month = currentDate.getMonth()
                               const clickDate = new Date(year, month, day)
                               onNewBooking(vehicle.display_name, clickDate)
                             }
                           }}
-                          className={`border border-white/10 rounded-lg p-0.5 min-w-[24px] h-6 transition-all duration-200 cursor-pointer ${status === 'rented'
-                            ? 'bg-gradient-to-br from-red-500/20 to-red-600/10 border-l-2 border-red-500 hover:scale-105 hover:shadow-lg hover:shadow-red-500/30'
+                          className={`relative border border-white/10 ${getBorderRadius()} p-0 min-w-[40px] h-8 transition-all duration-200 cursor-pointer overflow-hidden ${status === 'rented'
+                            ? 'bg-gradient-to-br from-red-500/20 to-red-600/10 border-l-2 border-red-500 hover:shadow-lg hover:shadow-red-500/30'
                             : status === 'unavailable'
-                              ? 'bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-l-2 border-orange-500 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/30'
-                              : 'bg-gradient-to-br from-green-500/20 to-green-600/10 border-l-2 border-green-500 hover:scale-105 hover:shadow-lg hover:shadow-green-500/30'
+                              ? 'bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-l-2 border-orange-500 hover:shadow-lg hover:shadow-orange-500/30'
+                              : 'bg-gradient-to-br from-green-500/20 to-green-600/10 border-l-2 border-green-500 hover:shadow-lg hover:shadow-green-500/30'
                             } ${day === todayDay ? 'ring-2 ring-dr7-gold shadow-lg shadow-dr7-gold/50' : ''}`}
                           title={
                             status === 'rented'
@@ -634,7 +677,16 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                                 ? `${vehicle.display_name} - Non Disponibile`
                                 : `${vehicle.display_name} - Disponibile`
                           }
-                        />
+                        >
+                          {/* Render booking text only on start/single cells */}
+                          {showBookingText && booking && status === 'rented' && (
+                            <div className="absolute inset-0 flex items-center px-1.5 text-[10px] leading-tight">
+                              <div className="truncate text-white font-medium">
+                                {booking.customer_name?.split(' ')[0] || 'N/A'}
+                              </div>
+                            </div>
+                          )}
+                        </td>
                       )
                     })}
                   </tr>
