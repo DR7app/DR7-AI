@@ -151,6 +151,7 @@ interface Reservation {
 interface Booking {
   id: string
   user_id: string | null
+  vehicle_id?: string | null // Vehicle ID for availability filtering
   vehicle_name: string
   vehicle_plate?: string | null
   vehicle_image_url: string | null
