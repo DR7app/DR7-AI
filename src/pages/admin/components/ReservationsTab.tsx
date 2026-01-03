@@ -2986,9 +2986,9 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-yellow-600 rounded-lg p-6 max-w-md w-full shadow-2xl">
-        <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-          <span>⚠️</span> {isLinking ? 'Dati Anagrafici Mancanti' : 'Dati Mancanti'}
+      <div className="bg-zinc-900 border border-gray-600 rounded-lg p-6 max-w-md w-full shadow-2xl">
+        <h2 className="text-xl font-bold text-white mb-2">
+          {isLinking ? 'Dati Anagrafici Mancanti' : 'Dati Mancanti'}
         </h2>
         <p className="text-gray-400 mb-6 text-sm">
           {isLinking
@@ -3024,9 +3024,9 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
                   <div className="mt-4 text-center">
                     <button
                       onClick={onOpenCreate}
-                      className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-black font-bold rounded transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-white hover:bg-gray-200 text-black font-bold rounded transition-colors"
                     >
-                      <span>📝</span> Inserisci Dati Cliente
+                      Inserisci Dati Cliente
                     </button>
                     <div className="mt-3 text-xs text-gray-500 uppercase tracking-widest">Oppure collega esistente</div>
                   </div>
@@ -3034,7 +3034,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
               ) : (
                 <input
                   type={field === 'data_nascita' ? 'date' : 'text'}
-                  className="w-full px-3 py-2 bg-black border border-gray-700 rounded text-white focus:border-yellow-500 focus:outline-none transition-colors"
+                  className="w-full px-3 py-2 bg-black border border-gray-700 rounded text-white focus:border-white focus:outline-none transition-colors"
                   value={data[field] || ''}
                   onChange={(e) => setData({ ...data, [field]: e.target.value })}
                   placeholder={`Inserisci ${getLabel(field).replace(' *', '')}`}
@@ -3060,7 +3060,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
               }
             }}
             disabled={isLinking && !selectedCustomerId}
-            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-black font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-white hover:bg-gray-200 text-black font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLinking ? 'Salva e Collega' : 'Salva e Continua'}
           </button>

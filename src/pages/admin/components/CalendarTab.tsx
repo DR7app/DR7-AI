@@ -285,47 +285,80 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return vehicleBookings.length > 0 ? 'rented' : 'available'
   }
 
-  // Get booking info for a cell including span position
-  const getCellBookingInfo = (vehicle: Vehicle, day: number): CellBookingInfo => {
+  interface BookingSegment {
+    bookingId: string
+    vehicleId: string
+    startDay: number
+    endDay: number
+    columnSpan: number
+    booking: Booking
+  }
+
+  // Build booking segments for overlay bars
+  const buildBookingSegments = useMemo(() => {
+    const segments: BookingSegment[] = []
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-    const checkDate = new Date(year, month, day)
-    checkDate.setHours(0, 0, 0, 0)
+    const lastDay = new Date(year, month + 1, 0).getDate()
 
-    const booking = bookings.find(b => {
-      // Match by plate or name
-      const matchesByPlate = b.vehicle_plate && vehicle.plate && vehicle.plate === b.vehicle_plate
-      const matchesByName = b.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+    for (const vehicle of vehicles) {
+      for (const booking of bookings) {
+        // Match booking to vehicle
+        const matchesByPlate = booking.vehicle_plate && vehicle.plate && vehicle.plate === booking.vehicle_plate
+        const matchesByName = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
 
-      if (!matchesByPlate && !matchesByName) return false
+        if (!matchesByPlate && !matchesByName) continue
 
-      const pickupDate = new Date(b.pickup_date)
-      const dropoffDate = new Date(b.dropoff_date)
-      pickupDate.setHours(0, 0, 0, 0)
-      dropoffDate.setHours(0, 0, 0, 0)
+        const pickupDate = new Date(booking.pickup_date)
+        const dropoffDate = new Date(booking.dropoff_date)
+        pickupDate.setHours(0, 0, 0, 0)
+        dropoffDate.setHours(0, 0, 0, 0)
 
-      return checkDate >= pickupDate && checkDate < dropoffDate
-    })
+        const monthStart = new Date(year, month, 1)
+        const monthEnd = new Date(year, month + 1, 0)
+        monthStart.setHours(0, 0, 0, 0)
+        monthEnd.setHours(23, 59, 59, 999)
 
-    if (!booking) {
-      return { booking: null, isStart: false, isMiddle: false, isEnd: false }
+        // Skip if booking doesn't overlap this month
+        if (dropoffDate <= monthStart || pickupDate > monthEnd) continue
+
+        // Calculate start/end days within month
+        const startDay = pickupDate.getMonth() === month ? pickupDate.getDate() : 1
+        const endDay = dropoffDate.getMonth() === month ? Math.min(dropoffDate.getDate() - 1, lastDay) : lastDay
+
+        if (startDay <= endDay) {
+          segments.push({
+            bookingId: booking.id,
+            vehicleId: vehicle.id,
+            startDay,
+            endDay,
+            columnSpan: endDay - startDay + 1,
+            booking
+          })
+        }
+      }
     }
 
-    const pickupDate = new Date(booking.pickup_date)
-    const dropoffDate = new Date(booking.dropoff_date)
-    pickupDate.setHours(0, 0, 0, 0)
-    dropoffDate.setHours(0, 0, 0, 0)
+    return segments
+  }, [vehicles, bookings, currentDate])
 
-    const prevDay = new Date(year, month, day - 1)
-    const nextDay = new Date(year, month, day + 1)
-    prevDay.setHours(0, 0, 0, 0)
-    nextDay.setHours(0, 0, 0, 0)
+  // Helper: Get initials from name
+  const getInitials = (name: string | null): string => {
+    if (!name) return 'N/A'
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  }
 
-    const isStart = checkDate.getTime() === pickupDate.getTime()
-    const isEnd = nextDay.getTime() === dropoffDate.getTime()
-    const isMiddle = !isStart && !isEnd
+  // Helper: Get booking label based on bar width
+  const getBookingLabel = (booking: Booking, columnSpan: number): string => {
+    const customerName = booking.customer_name || 'N/A'
 
-    return { booking, isStart, isMiddle, isEnd }
+    if (columnSpan >= 3) {
+      // Medium/wide bars: show customer name
+      return customerName
+    } else {
+      // Narrow bars: show initials only
+      return getInitials(customerName)
+    }
   }
 
 
@@ -638,10 +671,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             }
                           }}
                           className={`relative border border-gray-700/40 min-w-[50px] h-10 transition-all cursor-pointer ${getBorderRadius()} ${status === 'rented'
-                              ? 'bg-green-500/90 hover:bg-green-500 shadow-sm'
-                              : status === 'unavailable'
-                                ? 'bg-orange-500/70 hover:bg-orange-500/80'
-                                : 'bg-green-500/5 hover:bg-green-500/10'
+                            ? 'bg-green-500/90 hover:bg-green-500 shadow-sm'
+                            : status === 'unavailable'
+                              ? 'bg-orange-500/70 hover:bg-orange-500/80'
+                              : 'bg-green-500/5 hover:bg-green-500/10'
                             } ${day === todayDay ? 'ring-2 ring-inset ring-dr7-gold' : ''}`}
                         >
                           {/* Show customer name + dates on start cell */}
