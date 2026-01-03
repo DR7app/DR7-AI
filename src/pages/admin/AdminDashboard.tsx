@@ -27,12 +27,20 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
+  // State to pass data from Calendar to Reservations tab
+  const [initialReservationData, setInitialReservationData] = useState<{ vehicleName?: string, pickupDate?: Date } | null>(null)
+
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
 
   async function handleSignOut() {
     await supabase.auth.signOut()
     navigate('/login')
+  }
+
+  function handleCalendarBooking(vehicleName: string, date: Date) {
+    setInitialReservationData({ vehicleName, pickupDate: date })
+    setActiveTab('reservations')
   }
 
   return (
@@ -420,12 +428,21 @@ export default function AdminDashboard() {
         </div>
 
         <div className="mt-8">
-          {activeTab === 'reservations' && <ReservationsTab />}
+          {activeTab === 'reservations' && (
+            <ReservationsTab
+              initialData={initialReservationData}
+              onDataConsumed={() => setInitialReservationData(null)}
+            />
+          )}
           {activeTab === 'unpaid' && <UnpaidBookingsTab />}
           {activeTab === 'documents-verification' && <DocumentsVerificationTab />}
           {activeTab === 'customers' && <CustomersTab />}
           {activeTab === 'vehicles' && <VehiclesTab />}
-          {activeTab === 'calendar' && <CalendarTab />}
+          {activeTab === 'calendar' && (
+            <CalendarTab
+              onNewBooking={handleCalendarBooking}
+            />
+          )}
           {activeTab === 'carwash' && <CarWashBookingsTab />}
           {activeTab === 'carwash-calendar' && <CarWashCalendarTab />}
           {activeTab === 'mechanical' && <MechanicalBookingTab />}

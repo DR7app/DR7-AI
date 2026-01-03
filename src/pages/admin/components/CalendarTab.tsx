@@ -35,7 +35,7 @@ interface Booking {
 
 type CellStatus = 'available' | 'rented' | 'unavailable'
 
-export default function CalendarTab() {
+export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -613,6 +613,12 @@ export default function CalendarTab() {
                               })
                             } else if (status === 'unavailable') {
                               setSelectedUnavailability(vehicle)
+                            } else if (status === 'available' && onNewBooking) {
+                              // Click on green slot -> New Booking
+                              const year = currentDate.getFullYear()
+                              const month = currentDate.getMonth()
+                              const clickDate = new Date(year, month, day)
+                              onNewBooking(vehicle.display_name, clickDate)
                             }
                           }}
                           className={`border border-gray-700 p-0.5 min-w-[24px] h-6 transition-all ${status === 'rented'

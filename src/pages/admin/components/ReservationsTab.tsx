@@ -212,7 +212,7 @@ function calculateCarWashEndTime(appointmentDate: string, appointmentTime: strin
 const API_BASE = '/.netlify/functions/admin'
 const API_TOKEN = import.meta.env.VITE_ADMIN_UI_TOKEN
 
-export default function ReservationsTab() {
+export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleName?: string; pickupDate?: Date } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -278,6 +278,39 @@ export default function ReservationsTab() {
     unlimited_km: false,
     km_limit: '0', // Default KM limit when not unlimited
   })
+
+  // Handle initial data from Calendar click
+  useEffect(() => {
+    if (initialData && vehicles.length > 0) {
+      const { vehicleName, pickupDate } = initialData
+
+      // Find vehicle by name (rough match)
+      const vehicle = vehicles.find(v => v.display_name === vehicleName)
+
+      if (vehicle) {
+        // Format date as YYYY-MM-DD
+        const dateStr = pickupDate ? pickupDate.toISOString().split('T')[0] : ''
+
+        console.log('📅 Prefilling booking form:', { vehicle: vehicle.display_name, date: dateStr })
+
+        setFormData(prev => ({
+          ...prev,
+          vehicle_id: vehicle.id,
+          pickup_date: dateStr,
+          pickup_time: '10:00', // Default start time
+          return_date: dateStr, // Default same day return? Or +1? Let's say +1 day default
+          return_time: '18:00',
+          // Recalculate based on logic if needed, but simple is better for now
+          category: vehicle.category,
+        }));
+
+        setShowForm(true)
+
+        // Notify parent to clear data
+        if (onDataConsumed) onDataConsumed()
+      }
+    }
+  }, [initialData, vehicles])
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
   const [newCustomerData, setNewCustomerData] = useState({
@@ -1791,6 +1824,7 @@ export default function ReservationsTab() {
                   <Input
                     label="Ora Ritiro"
                     type="time"
+                    step="900" // 15 minute intervals
                     required
                     value={formData.pickup_time}
                     onChange={(e) => {
@@ -1820,6 +1854,7 @@ export default function ReservationsTab() {
                   <Input
                     label="Ora Riconsegna"
                     type="time"
+                    step="900" // 15 minute intervals
                     required
                     value={formData.return_time}
                     onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
