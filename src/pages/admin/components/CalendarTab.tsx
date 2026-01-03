@@ -702,12 +702,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         }
                       }
 
-                      const getTarga = (booking: Booking): string => {
-                        return booking.vehicle_plate ||
-                          booking.booking_details?.vehicle?.targa ||
-                          booking.booking_details?.vehicle?.plate ||
-                          'N/A'
-                      }
+
 
                       return (
                         <div
