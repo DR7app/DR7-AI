@@ -31,6 +31,7 @@ interface Booking {
   customer_email: string
   price_total: number
   booking_details?: any
+  type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
 
 type CellStatus = 'available' | 'rented' | 'unavailable'
@@ -335,24 +336,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return segments
   }, [vehicles, bookings, currentDate])
 
-  // Helper: Get initials from name
-  const getInitials = (name: string | null): string => {
-    if (!name) return 'N/A'
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-  }
 
-  // Helper: Get booking label based on bar width
-  const getBookingLabel = (booking: Booking, columnSpan: number): string => {
-    const customerName = booking.customer_name || 'N/A'
-
-    if (columnSpan >= 3) {
-      // Medium/wide bars: show customer name
-      return customerName
-    } else {
-      // Narrow bars: show initials only
-      return getInitials(customerName)
-    }
-  }
 
 
 
