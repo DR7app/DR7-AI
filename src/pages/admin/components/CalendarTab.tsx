@@ -298,20 +298,26 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     for (const vehicle of vehicles) {
       for (const booking of bookings) {
         // Match booking to vehicle with strict priority:
-        // 1. If both have plates, they MUST match.
-        // 2. If plates are missing, fall back to name match.
+        // 1. Match by Vehicle ID (most accurate)
+        // 2. Match by Plate (Strict)
+        // 3. Match by Name (Fallback only if ID and Plate are missing)
 
         let isMatch = false
+        const bookingVehicleId = booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
 
-        if (vehicle.plate && booking.vehicle_plate) {
-          isMatch = vehicle.plate === booking.vehicle_plate
+        if (bookingVehicleId && bookingVehicleId === vehicle.id) {
+          isMatch = true
+        } else if (booking.vehicle_plate) {
+          // If booking has a plate, REQUIRES strictly matching vehicle plate
+          if (vehicle.plate) {
+            isMatch = vehicle.plate.trim().toUpperCase() === booking.vehicle_plate.trim().toUpperCase()
+          } else {
+            // Vehicle has no plate, but booking does. Do NOT match by name to avoid duplicates.
+            isMatch = false
+          }
         } else {
-          // Fallback if one or both plates are missing
-          // But careful: if the vehicle has a plate, and booking doesn't, Name match might still act on wrong car.
-          // Ideally, we should require plate match if vehicle has one.
-          // However, old bookings might lack plate.
-          const matchesByName = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
-          isMatch = matchesByName
+          // Fallback to name match only if absolutely no other ID info
+          isMatch = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
         }
 
         if (!isMatch) continue
