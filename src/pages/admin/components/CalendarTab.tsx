@@ -683,10 +683,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             }
                           }}
                           className={`border border-gray-300/50 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
-                            ? 'bg-red-100/80' // Light red for booked
+                            ? 'bg-gray-100/90' // Light grey for booked cells
                             : status === 'unavailable'
                               ? 'bg-gray-300/70'
-                              : 'bg-green-100/80 hover:bg-green-200/80' // Light green for available
+                              : 'bg-white/80 hover:bg-white/90' // White for available
                             } ${day === todayDay ? 'ring-2 ring-inset ring-dr7-gold bg-dr7-gold/10' : ''}`}
                         />
                       )
