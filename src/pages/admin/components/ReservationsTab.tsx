@@ -2967,15 +2967,8 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
 
   if (!isOpen) return null
 
-  // Filter out fields that already have values in initialData
-  const actuallyMissingFields = missingFields.filter((field: string) => {
-    // Always show the "Cliente non identificato" option
-    if (field === 'Cliente non identificato') return true
-
-    // Check if the field has a value in initialData
-    const fieldValue = initialData?.[field]
-    return !fieldValue || fieldValue === ''
-  })
+  // The validation function already returns ONLY missing fields, so use them directly
+  const actuallyMissingFields = missingFields
 
   const getLabel = (field: string) => {
     switch (field) {
@@ -3023,8 +3016,8 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
         </p>
 
         <div className="space-y-4 pr-2">
-          {/* Only show Search option if NO name or explicitly requested */}
-          {isLinking && !data.nome && !data.cognome && (
+          {/* Only show Search option if truly no client (no name in data) */}
+          {isLinking && !initialData?.nome && !initialData?.cognome && (
             <div className="bg-black p-2 rounded border border-gray-700 mb-4">
               <h4 className="text-gray-400 text-xs uppercase mb-2">Associa Cliente</h4>
               <CustomerAutocomplete
