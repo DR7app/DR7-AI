@@ -63,7 +63,7 @@ export default function ContrattoTab() {
       const { data, error } = await supabase
         .from('contracts')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
 
       if (error) throw error
       setContracts(data || [])

@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import {
+  fetchConflictingBookings,
+  filterAvailableTimeSlots,
+  findNextAvailableSlots,
+  formatTimeSlotWithDuration
+} from '../../../utils/bookingConflictUtils'
 
 interface Customer {
   id: string
@@ -137,6 +143,10 @@ export default function CarWashBookingsTab() {
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const [newCustomerMode, setNewCustomerMode] = useState(false)
 
+  // New state for conflict detection
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
+  const [conflictingBookings, setConflictingBookings] = useState<any[]>([])
+
   const [formData, setFormData] = useState({
     customer_id: '',
     service_name: '',
@@ -172,6 +182,38 @@ export default function CarWashBookingsTab() {
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
+
+  // Fetch conflicting bookings when date or service changes
+  useEffect(() => {
+    async function fetchAvailableSlots() {
+      if (!formData.appointment_date || !formData.service_name) {
+        setAvailableTimeSlots([])
+        return
+      }
+
+      // Fetch all conflicting bookings (both car_wash and mechanical_service)
+      const bookings = await fetchConflictingBookings(formData.appointment_date)
+      setConflictingBookings(bookings)
+
+      // Get the duration of the selected service
+      const selectedService = CAR_WASH_SERVICES.find(s => s.name === formData.service_name)
+      if (!selectedService) return
+
+      // Get base time slots for this service
+      const baseSlots = getAvailableTimeSlotsForService(formData.service_name)
+
+      // Filter out conflicting slots
+      const available = filterAvailableTimeSlots(
+        baseSlots,
+        bookings,
+        selectedService.durationMinutes
+      )
+
+      setAvailableTimeSlots(available)
+    }
+
+    fetchAvailableSlots()
+  }, [formData.appointment_date, formData.service_name])
 
   async function openEditCustomer(customerId: string) {
     if (!customerId) return
@@ -1035,9 +1077,56 @@ export default function CarWashBookingsTab() {
                       ⚠️ Seleziona la data e il tipo di servizio per vedere gli orari disponibili
                     </p>
                   </div>
+                ) : availableTimeSlots.length === 0 ? (
+                  <div className="p-4 bg-red-900/20 border border-red-600/50 rounded-lg">
+                    <p className="text-red-400 text-sm font-semibold mb-2">
+                      ❌ Nessun orario disponibile per questa data
+                    </p>
+                    <p className="text-gray-300 text-sm mb-3">
+                      Tutti gli orari sono occupati da prenotazioni di lavaggio o meccanica.
+                    </p>
+                    {(() => {
+                      const selectedService = CAR_WASH_SERVICES.find(s => s.name === formData.service_name)
+                      if (!selectedService) return null
+
+                      const baseSlots = getAvailableTimeSlotsForService(formData.service_name)
+                      const nextSlots = findNextAvailableSlots(
+                        baseSlots,
+                        conflictingBookings,
+                        selectedService.durationMinutes,
+                        3
+                      )
+
+                      if (nextSlots.length > 0) {
+                        return (
+                          <div className="mt-2">
+                            <p className="text-green-400 text-sm font-semibold mb-1">
+                              ✅ Prossimi orari disponibili:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {nextSlots.map(slot => (
+                                <span key={slot} className="px-3 py-1 bg-green-900/30 border border-green-600/50 rounded text-green-300 text-sm">
+                                  {formatTimeSlotWithDuration(slot, selectedService.durationMinutes)}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-gray-400 text-xs mt-2">
+                              Seleziona una data diversa per prenotare in questi orari
+                            </p>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
+                  </div>
                 ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Ora Appuntamento *</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Ora Appuntamento *
+                      <span className="text-green-400 text-xs ml-2">
+                        ({availableTimeSlots.length} orari disponibili)
+                      </span>
+                    </label>
                     <select
                       required
                       value={formData.appointment_time}
@@ -1046,9 +1135,8 @@ export default function CarWashBookingsTab() {
                     >
                       <option value="">Seleziona orario</option>
                       {(() => {
-                        const availableSlots = getAvailableTimeSlotsForService(formData.service_name)
-                        const morningSlots = availableSlots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
-                        const afternoonSlots = availableSlots.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
+                        const morningSlots = availableTimeSlots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
+                        const afternoonSlots = availableTimeSlots.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
 
                         return (
                           <>

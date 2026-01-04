@@ -375,7 +375,8 @@ export const handler: Handler = async (event) => {
             subtotal,
             vat_amount: vatAmount,
             exempt_amount: exemptAmount,
-            sdi_status: 'draft'
+            sdi_status: 'draft',
+            updated_at: new Date().toISOString()
         }
 
         const { data: invoice, error: insertError } = existingInvoice

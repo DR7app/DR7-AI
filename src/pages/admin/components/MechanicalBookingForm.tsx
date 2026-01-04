@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NewClientModal from './NewClientModal'
 import CustomerAutocomplete from './CustomerAutocomplete'
+import {
+    fetchConflictingBookings,
+    filterAvailableTimeSlots,
+    findNextAvailableSlots,
+    formatTimeSlotWithDuration
+} from '../../../utils/bookingConflictUtils'
 
 interface Customer {
     id: string
@@ -82,6 +88,10 @@ const TIME_SLOTS = generateTimeSlots()
 export default function MechanicalBookingForm({ initialData, customers, onSave, onCancel, editingId }: MechanicalBookingFormProps) {
     const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false)
 
+    // New state for conflict detection
+    const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
+    const [conflictingBookings, setConflictingBookings] = useState<any[]>([])
+
     const [formData, setFormData] = useState({
         customer_id: '',
         service_name: '',
@@ -119,6 +129,34 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
             }
         }
     }, [initialData, editingId, customers])
+
+    // Fetch conflicting bookings when date changes
+    useEffect(() => {
+        async function fetchAvailableSlots() {
+            if (!formData.appointment_date) {
+                setAvailableTimeSlots([])
+                return
+            }
+
+            // Fetch all conflicting bookings (both car_wash and mechanical_service)
+            const bookings = await fetchConflictingBookings(formData.appointment_date, editingId || undefined)
+            setConflictingBookings(bookings)
+
+            // Mechanical services default to 60 minutes duration
+            const mechanicalDuration = 60
+
+            // Filter out conflicting slots
+            const available = filterAvailableTimeSlots(
+                TIME_SLOTS,
+                bookings,
+                mechanicalDuration
+            )
+
+            setAvailableTimeSlots(available)
+        }
+
+        fetchAvailableSlots()
+    }, [formData.appointment_date, editingId])
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -357,17 +395,64 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     </div>
                     <div>
                         <label className="block text-white font-semibold mb-2">Ora</label>
-                        <select
-                            required
-                            value={formData.appointment_time}
-                            onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-                        >
-                            <option value="">Seleziona orario...</option>
-                            {TIME_SLOTS.map(slot => (
-                                <option key={slot} value={slot}>{slot}</option>
-                            ))}
-                        </select>
+                        {!formData.appointment_date ? (
+                            <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
+                                <p className="text-yellow-400 text-sm">
+                                    ⚠️ Seleziona prima la data per vedere gli orari disponibili
+                                </p>
+                            </div>
+                        ) : availableTimeSlots.length === 0 ? (
+                            <div className="p-4 bg-red-900/20 border border-red-600/50 rounded-lg">
+                                <p className="text-red-400 text-sm font-semibold mb-2">
+                                    ❌ Nessun orario disponibile per questa data
+                                </p>
+                                <p className="text-gray-300 text-sm mb-3">
+                                    Tutti gli orari sono occupati da prenotazioni di lavaggio o meccanica.
+                                </p>
+                                {(() => {
+                                    const mechanicalDuration = 60
+                                    const nextSlots = findNextAvailableSlots(
+                                        TIME_SLOTS,
+                                        conflictingBookings,
+                                        mechanicalDuration,
+                                        3
+                                    )
+
+                                    if (nextSlots.length > 0) {
+                                        return (
+                                            <div className="mt-2">
+                                                <p className="text-green-400 text-sm font-semibold mb-1">
+                                                    ✅ Prossimi orari disponibili:
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {nextSlots.map(slot => (
+                                                        <span key={slot} className="px-3 py-1 bg-green-900/30 border border-green-600/50 rounded text-green-300 text-sm">
+                                                            {formatTimeSlotWithDuration(slot, mechanicalDuration)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <p className="text-gray-400 text-xs mt-2">
+                                                    Seleziona una data diversa per prenotare in questi orari
+                                                </p>
+                                            </div>
+                                        )
+                                    }
+                                    return null
+                                })()}
+                            </div>
+                        ) : (
+                            <select
+                                required
+                                value={formData.appointment_time}
+                                onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                            >
+                                <option value="">Seleziona orario... ({availableTimeSlots.length} disponibili)</option>
+                                {availableTimeSlots.map(slot => (
+                                    <option key={slot} value={slot}>{slot}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                 </div>
 

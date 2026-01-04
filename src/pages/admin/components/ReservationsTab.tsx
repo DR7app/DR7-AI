@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import {
+  fetchRentalEvents,
+  filterRentalTimeSlots,
+  findNextRentalSlots
+} from '../../../utils/bookingConflictUtils'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
@@ -252,6 +257,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [currentValidationBooking, setCurrentValidationBooking] = useState<Booking | null>(null)
   const [validationContext, setValidationContext] = useState<'contract' | 'invoice'>('contract')
 
+  // Conflict Detection State
+  const [rentalEventsPickupDate, setRentalEventsPickupDate] = useState<any[]>([])
+  const [rentalEventsReturnDate, setRentalEventsReturnDate] = useState<any[]>([])
+
+
+
   // Filter time options based on selected date
   const getFilteredTimeOptions = (dateStr: string) => {
     if (!dateStr) return TIME_OPTIONS
@@ -324,6 +335,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     unlimited_km: false,
     km_limit: '0', // Default KM limit when not unlimited
   })
+
+  // Conflict Detection Effects
+  useEffect(() => {
+    if (formData.pickup_date) {
+      fetchRentalEvents(formData.pickup_date, editingId || undefined).then(setRentalEventsPickupDate)
+    } else {
+      setRentalEventsPickupDate([])
+    }
+  }, [formData.pickup_date, editingId])
+
+  useEffect(() => {
+    if (formData.return_date) {
+      fetchRentalEvents(formData.return_date, editingId || undefined).then(setRentalEventsReturnDate)
+    } else {
+      setRentalEventsReturnDate([])
+    }
+  }, [formData.return_date, editingId])
 
   // Handle initial data from Calendar click
   useEffect(() => {
@@ -1398,11 +1426,51 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const BUFFER_MINUTES = 90
         const pickupWithBuffer = new Date(pickupDateTime.getTime() - BUFFER_MINUTES * 60 * 1000)
 
+        // First, check if the vehicle is currently in the car wash
+        const { data: carWashBookings, error: carWashError } = await supabase
+          .from('bookings')
+          .select('id, service_type, service_name, vehicle_name, appointment_date, appointment_time, pickup_date, dropoff_date')
+          .eq('service_type', 'car_wash')
+          .neq('status', 'cancelled')
+          .or(`vehicle_name.ilike.%${vehicle?.display_name}%`)
+          .or(`and(pickup_date.lte.${pickupDateTime.toISOString()},dropoff_date.gte.${pickupDateTime.toISOString()})`)
+
+        if (!carWashError && carWashBookings && carWashBookings.length > 0) {
+          // Check if any car wash booking overlaps with the pickup time
+          for (const carWash of carWashBookings) {
+            const carWashStart = new Date(carWash.pickup_date || carWash.appointment_date)
+            const carWashEnd = new Date(carWash.dropoff_date || carWash.appointment_date)
+
+            // If car wash hasn't ended yet, calculate end time (45 minutes from start)
+            if (carWashEnd.getTime() === carWashStart.getTime()) {
+              carWashEnd.setMinutes(carWashEnd.getMinutes() + 45)
+            }
+
+            // Check if pickup time conflicts with car wash
+            if (pickupDateTime >= carWashStart && pickupDateTime < carWashEnd) {
+              const availableTime = carWashEnd.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
+              const availableDate = carWashEnd.toLocaleDateString('it-IT')
+
+              alert(
+                `VEICOLO IN LAVAGGIO\\n\\n` +
+                `Il veicolo ${vehicle?.display_name} è attualmente in lavaggio.\\n\\n` +
+                `Sarà disponibile alle ${availableTime} del ${availableDate}\\n\\n` +
+                `Tempo rimanente: circa ${Math.ceil((carWashEnd.getTime() - new Date().getTime()) / (1000 * 60))} minuti\\n\\n` +
+                `Si prega di selezionare un orario di ritiro dopo le ${availableTime}.`
+              )
+
+              setIsSubmitting(false)
+              return // Block the booking
+            }
+          }
+        }
+
         // Check for overlapping bookings AND bookings that violate the 1h30 buffer
         let query = supabase
           .from('bookings')
-          .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status')
+          .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, service_type')
           .neq('status', 'cancelled')
+          .neq('service_type', 'car_wash') // Exclude car wash bookings from rental conflicts
           .or(`and(pickup_date.lte.${returnDateTime.toISOString()},dropoff_date.gte.${pickupWithBuffer.toISOString()})`)
 
         if (vehicle?.plate || vehicle?.targa) {
@@ -2080,8 +2148,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData({ ...formData, pickup_time: pickupTime, return_time: returnTime })
                     }}
-                    options={getFilteredTimeOptions(formData.pickup_date)}
+                    options={(() => {
+                      const base = getFilteredTimeOptions(formData.pickup_date)
+                      const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsPickupDate)
+                      return base.filter(o => available.includes(o.value) || o.value === formData.pickup_time)
+                    })()}
                   />
+                  {/* Warning if no slots or few slots */}
+                  {(() => {
+                    const base = getFilteredTimeOptions(formData.pickup_date)
+                    const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsPickupDate)
+                    if (available.length === 0 && formData.pickup_date) {
+                      return <p className="text-xs text-red-400 mt-1">⚠️ Nessun orario disponibile!</p>
+                    }
+                    return null
+                  })()}
                   <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile</p>
                 </div>
                 <Select
@@ -2105,8 +2186,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     value={formData.return_time}
                     onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
-                    options={getFilteredTimeOptions(formData.return_date)}
+                    options={(() => {
+                      const base = getFilteredTimeOptions(formData.return_date)
+                      const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsReturnDate)
+                      return base.filter(o => available.includes(o.value) || o.value === formData.return_time)
+                    })()}
                   />
+                  {(() => {
+                    const base = getFilteredTimeOptions(formData.return_date)
+                    const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsReturnDate)
+                    if (available.length === 0 && formData.return_date) {
+                      return <p className="text-xs text-red-400 mt-1">⚠️ Nessun orario disponibile!</p>
+                    }
+                    return null
+                  })()}
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
                   <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile</p>
                 </div>

@@ -697,7 +697,8 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
                 total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
                 total_amount: booking.price_total / 100,
                 status: 'active',
-                pdf_url: publicUrl
+                pdf_url: publicUrl,
+                updated_at: new Date().toISOString()
             }, { onConflict: 'booking_id' })
 
         if (dbError) {

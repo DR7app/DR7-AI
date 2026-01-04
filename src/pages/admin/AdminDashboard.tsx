@@ -17,11 +17,12 @@ import MarketingTab from './components/MarketingTab'
 import ReviewsTab from './components/ReviewsTab'
 import FatturaTab from './components/FatturaTab'
 import ContrattoTab from './components/ContrattoTab'
+import CargosTab from './components/CargosTab'
 import DailyCalendarModal from './components/DailyCalendarModal'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -213,6 +214,13 @@ export default function AdminDashboard() {
                 Contratti
               </button>
               <button
+                onClick={() => setActiveTab('cargos')}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                  }`}
+              >
+                Cargos
+              </button>
+              <button
                 onClick={() => setActiveTab('marketing')}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'marketing' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
                   }`}
@@ -397,6 +405,15 @@ export default function AdminDashboard() {
                 Contratti
               </button>
               <button
+                onClick={() => setActiveTab('cargos')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'cargos'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  }`}
+              >
+                Cargos
+              </button>
+              <button
                 onClick={() => setActiveTab('marketing')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
                   ? 'text-white'
@@ -434,6 +451,7 @@ export default function AdminDashboard() {
             {activeTab === 'lotteria' && 'Biglietti Lotteria'}
             {activeTab === 'fattura' && 'Fatture'}
             {activeTab === 'contratto' && 'Contratti'}
+            {activeTab === 'cargos' && 'Cargos'}
             {activeTab === 'marketing' && 'Marketing'}
             {activeTab === 'reviews' && 'Recensioni'}
           </h2>
@@ -462,6 +480,7 @@ export default function AdminDashboard() {
           {activeTab === 'lotteria' && <LotteriaBoard />}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
+          {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'reviews' && <ReviewsTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
