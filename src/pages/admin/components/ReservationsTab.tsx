@@ -2958,6 +2958,13 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
   const [data, setData] = useState(initialData || {})
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
+  // Sync data with initialData when it changes
+  useEffect(() => {
+    if (initialData) {
+      setData(initialData)
+    }
+  }, [initialData])
+
   if (!isOpen) return null
 
   // Filter out fields that already have values in initialData
