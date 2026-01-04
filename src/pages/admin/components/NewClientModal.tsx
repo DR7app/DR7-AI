@@ -373,8 +373,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         telefono: formData.telefono,
         nazione: formData.nazione,
         source: 'admin',
-        created_at: new Date().toISOString(),
-        note: formData.note
+        created_at: new Date().toISOString()
       }
 
       // Populate data based on type
