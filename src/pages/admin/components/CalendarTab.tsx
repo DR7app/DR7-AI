@@ -541,7 +541,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       </div>
                       <div className="text-right">
                         <p className="text-gray-300 text-sm">
-                          {booking.pickup_date ? `${new Date(booking.pickup_date).toLocaleDateString('it-IT')} → ${new Date(booking.dropoff_date).toLocaleDateString('it-IT')}` : 'Date non valide'}
+                          {booking.dropoff_date ? `Rientro: ${new Date(booking.dropoff_date).toLocaleDateString('it-IT')} ${new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}` : 'Data rientro non valida'}
                         </p>
                         <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
                           booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
@@ -764,8 +764,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                           ''
                       }
 
-                      const pickupDay = new Date(segment.booking.pickup_date).getDate()
-                      const dropoffDay = new Date(segment.booking.dropoff_date).getDate()
+                      const dropoffDate = new Date(segment.booking.dropoff_date)
+                      const dropoffDay = dropoffDate.getDate()
+                      const dropoffTime = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 
                       return (
                         <div
@@ -800,10 +801,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               {segment.booking.customer_name || 'N/A'}
                             </div>
 
-                            {/* Dates - show if space allows */}
+                            {/* Return date and time - show if space allows */}
                             {segment.columnSpan >= 4 && (
                               <div className="text-white/80 text-xs whitespace-nowrap">
-                                {pickupDay}→{dropoffDay}
+                                {dropoffDay}/{currentDate.getMonth() + 1} {dropoffTime}
                               </div>
                             )}
 
