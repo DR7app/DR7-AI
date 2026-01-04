@@ -376,11 +376,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         created_at: new Date().toISOString()
       }
 
-      // Add note if provided (column may not exist yet in DB)
-      if (formData.note) {
-        customerData.note = formData.note
-      }
-
       // Populate data based on type
       if (formData.tipo_cliente === 'persona_fisica') {
         customerData.nome = formData.nome
