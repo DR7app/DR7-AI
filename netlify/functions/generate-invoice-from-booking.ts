@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { generateFatturaXML } from './xml-utils'
+import { generateInvoicetronicPayload } from './invoicetronic-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -400,38 +400,21 @@ export const handler: Handler = async (event) => {
         let sdiResult = null
         if (INVOICETRONIC_API_KEY && invoice) {
             try {
-                console.log('[SDI] Generating FatturaPA XML...')
+                console.log('[SDI] Generating Invoicetronic JSON Payload...')
 
-                // Generate FatturaPA XML
-                const fatturaXML = generateFatturaXML({
-                    numero_fattura: invoice.numero_fattura,
-                    data_emissione: invoice.data_emissione,
-                    customer_name: invoice.customer_name,
-                    customer_address: invoice.customer_address,
-                    customer_tax_code: invoice.customer_tax_code,
-                    customer_vat: invoice.customer_vat,
-                    items: items,
-                    subtotal: subtotal,
-                    vat_amount: vatAmount,
-                    exempt_amount: exemptAmount,
-                    importo_totale: total
-                })
+                // Generate JSON Payload
+                const invoicePayload = generateInvoicetronicPayload(invoice)
 
-                console.log('[SDI] Sending to Invoicetronic SDI...')
-
-                // Create FormData for file upload
-                const formData = new FormData()
-                const xmlBlob = new Blob([fatturaXML], { type: 'application/xml' })
-                formData.append('file', xmlBlob, `${invoice.numero_fattura}.xml`)
+                console.log('[SDI] Sending to Invoicetronic SDI (JSON)...')
 
                 // Send to Invoicetronic SDI
-                // Send to Invoicetronic SDI
-                const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/send/file`, {
+                const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/invoices`, {
                     method: 'POST',
                     headers: {
+                        'Content-Type': 'application/json',
                         'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`
                     },
-                    body: formData
+                    body: JSON.stringify(invoicePayload)
                 })
 
                 const responseText = await sdiResponse.text()
@@ -459,10 +442,10 @@ export const handler: Handler = async (event) => {
                     .from('fatture')
                     .update({
                         sdi_status: sdiResponse.ok ? 'sent' : 'error',
-                        sdi_id: responseData.data?.uuid || responseData.uuid,
+                        sdi_id: responseData.id || responseData.data?.uuid || responseData.uuid, // ID returned by JSON endpoint might be different
                         sdi_sent_at: new Date().toISOString(),
-                        sdi_response: responseData,
-                        xml_fattura_pa: fatturaXML
+                        sdi_response: responseData
+                        // xml_fattura_pa: ... Invoicetronic generates this now
                     })
                     .eq('id', invoice.id)
 

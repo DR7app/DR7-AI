@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-
+import { generateInvoicetronicPayload } from './invoicetronic-utils'
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -112,42 +112,5 @@ export const handler: Handler = async (event) => {
                 message: error.message
             })
         }
-    }
-}
-
-function generateInvoicetronicPayload(invoice: any) {
-    // Basic mapping to Invoicetronic JSON model
-    // This is a simplified version. Ideally we should use the same XML generation logic as the other function.
-    // But for now, let's map what we have.
-
-    return {
-        // Invoicetronic specific fields if needed
-        external_id: invoice.id,
-        print_template: true, // Auto-generate PDF
-
-        // FatturaPA core data
-        header: {
-            date: invoice.data_emissione, // YYYY-MM-DD
-            number: invoice.numero_fattura,
-            currency: 'EUR'
-        },
-        company: {
-            vat: invoice.customer_vat || '',
-            fiscal_code: invoice.customer_tax_code || '',
-            name: invoice.customer_name,
-            address: {
-                street: invoice.customer_address || '',
-                city: '', // would need parsing
-                province: '',
-                zip: '',
-                country: 'IT'
-            }
-        },
-        items: (invoice.items || []).map((item: any) => ({
-            name: item.description,
-            price: item.unit_price,
-            quantity: item.quantity,
-            vat: item.vat_rate
-        }))
     }
 }
