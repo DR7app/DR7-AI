@@ -254,7 +254,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [missingFields, setMissingFields] = useState<string[]>([])
   const [tempCustomerData, setTempCustomerData] = useState<any>(null)
   const [currentValidationBooking, setCurrentValidationBooking] = useState<Booking | null>(null)
-  const [validationContext, setValidationContext] = useState<'contract' | 'invoice'>('contract')
+  const [validationContext, setValidationContext] = useState<'contract' | 'invoice' | 'booking'>('contract')
 
   // Conflict Detection State
   const [rentalEventsPickupDate, setRentalEventsPickupDate] = useState<any[]>([])
@@ -414,7 +414,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     telefono: '',
     email: '',
     indirizzo: '',
-    driver_license_number: ''
+    driver_license_number: '',
+    patente: ''
   })
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
@@ -1409,8 +1410,93 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function processBookingSubmission(skipValidation = false) {
+    if (isSubmitting) return
+
+    // VALIDATION LOGIC
+    if (!skipValidation) {
+      let missing: string[] = []
+      let tempCustData: any = {}
+      let targetCustomerId = ''
+
+      if (newCustomerMode) {
+        // Validate newCustomerData
+        if (!newCustomerData.tipo_cliente) missing.push('tipo_cliente')
+
+        if (newCustomerData.tipo_cliente === 'persona_fisica') {
+          if (!newCustomerData.nome) missing.push('nome')
+          if (!newCustomerData.cognome) missing.push('cognome')
+          if (!newCustomerData.codice_fiscale) missing.push('codice_fiscale')
+          if (!newCustomerData.data_nascita) missing.push('data_nascita')
+          if (!newCustomerData.luogo_nascita) missing.push('luogo_nascita')
+          if (!newCustomerData.indirizzo) missing.push('indirizzo')
+          if (!newCustomerData.citta_residenza) missing.push('citta_residenza')
+          if (!newCustomerData.patente) missing.push('patente')
+        } else if (newCustomerData.tipo_cliente === 'azienda') {
+          if (!newCustomerData.denominazione) missing.push('denominazione')
+          if (!newCustomerData.partita_iva) missing.push('partita_iva')
+          if (!newCustomerData.indirizzo) missing.push('indirizzo')
+          if (!newCustomerData.citta) missing.push('citta')
+        }
+
+        // Common
+        if (!newCustomerData.email) missing.push('email')
+        if (!newCustomerData.telefono) missing.push('telefono')
+
+        tempCustData = { ...newCustomerData }
+      } else {
+        // Existing customer
+        if (!formData.customer_id) {
+          alert('Seleziona un cliente')
+          return
+        }
+
+        targetCustomerId = formData.customer_id
+
+        // Fetch fresh customer data to be sure
+        const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', targetCustomerId).single()
+
+        if (customer) {
+          tempCustData = customer
+
+          // Validate fields
+          if (customer.tipo_cliente === 'persona_fisica') {
+            if (!customer.nome) missing.push('nome')
+            if (!customer.cognome) missing.push('cognome')
+            if (!customer.codice_fiscale) missing.push('codice_fiscale')
+            if (!customer.data_nascita) missing.push('data_nascita')
+            if (!customer.luogo_nascita) missing.push('luogo_nascita')
+            if (!customer.indirizzo) missing.push('indirizzo')
+            if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
+            if (!customer.patente) missing.push('patente')
+          } else if (customer.tipo_cliente === 'azienda') {
+            if (!customer.denominazione) missing.push('denominazione')
+            if (!customer.partita_iva) missing.push('partita_iva')
+            if (!customer.indirizzo) missing.push('indirizzo')
+          }
+
+          // Common
+          if (!customer.email) missing.push('email')
+          if (!customer.telefono) missing.push('telefono')
+        } else {
+          // Customer not found in DB ?
+          alert('Errore: Cliente non trovato')
+          return
+        }
+      }
+
+      if (missing.length > 0) {
+        setMissingFields(missing)
+        setTempCustomerData(tempCustData)
+        setValidationContext('booking')
+        setCurrentValidationBooking(null) // No booking ID yet if creating new, or avoiding linking issues
+        setShowMissingDataModal(true)
+        return
+      }
+    }
+
+    // Call the original submit logic (embedded here or separate)
+
     if (isSubmitting) return
 
     setIsSubmitting(true)
@@ -1851,6 +1937,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    processBookingSubmission(false)
+  }
+
   function resetForm() {
     setFormData({
       customer_id: '',
@@ -1908,7 +1999,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       telefono: '',
       email: '',
       indirizzo: '',
-      driver_license_number: ''
+      driver_license_number: '',
+      patente: ''
     })
   }
 
@@ -2966,20 +3058,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             initialData={tempCustomerData}
             onClose={() => setShowMissingDataModal(false)}
             onOpenCreate={() => {
-              // Pre-fill data from booking
+              // Pre-fill data from tempCustomerData (which holds the existing customer data we validated)
+              // or fall back to booking data
               setCustomerToEdit({
-                nome: currentValidationBooking?.customer_name?.split(' ')[0] || '',
-                cognome: currentValidationBooking?.customer_name?.split(' ').slice(1).join(' ') || '',
-                email: currentValidationBooking?.customer_email || '',
-                phone: currentValidationBooking?.customer_phone || '',
-                tipo_cliente: 'persona_fisica' // Default
+                ...tempCustomerData, // Use the fetched/validated customer data!
+                nome: tempCustomerData?.nome || currentValidationBooking?.customer_name?.split(' ')[0] || '',
+                cognome: tempCustomerData?.cognome || currentValidationBooking?.customer_name?.split(' ').slice(1).join(' ') || '',
+                email: tempCustomerData?.email || currentValidationBooking?.customer_email || '',
+                phone: tempCustomerData?.telefono || tempCustomerData?.phone || currentValidationBooking?.customer_phone || '',
+                tipo_cliente: tempCustomerData?.tipo_cliente || 'persona_fisica'
               })
               setShowMissingDataModal(false)
               setEditModalOpen(true)
             }}
             onSave={async (updates: any, actionType: 'update' | 'link' | 'create' = 'update') => {
               try {
-                if (!currentValidationBooking) return
+                // If validation context is booking, we might not have a currentValidationBooking yet
+                if (!currentValidationBooking && validationContext !== 'booking') return
 
                 if (actionType === 'link') {
                   const { error } = await supabase
@@ -2988,7 +3083,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       user_id: updates.customer_id,
                       customer_name: customers.find((c: any) => c.id === updates.customer_id)?.full_name
                     })
-                    .eq('id', currentValidationBooking.id)
+                    .eq('id', currentValidationBooking!.id)
 
                   if (error) throw error
                 } else if (actionType === 'create') {
@@ -3004,20 +3099,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   if (createError) throw createError
 
-                  // Link to booking
-                  const { error: linkError } = await supabase
-                    .from('bookings')
-                    .update({
-                      user_id: newClient.id,
-                      customer_name: newClient.full_name
-                    })
-                    .eq('id', currentValidationBooking.id)
+                  // If in booking context, update local state to use this new client
+                  if (validationContext === 'booking') {
+                    setFormData(prev => ({ ...prev, customer_id: newClient.id }))
+                    setNewCustomerMode(false)
+                    // No need to link to booking yet, processBookingSubmission will do it
+                  } else if (currentValidationBooking) {
+                    // Link to booking
+                    const { error: linkError } = await supabase
+                      .from('bookings')
+                      .update({
+                        user_id: newClient.id,
+                        customer_name: newClient.full_name
+                      })
+                      .eq('id', currentValidationBooking.id)
 
-                  if (linkError) throw linkError
+                    if (linkError) throw linkError
+                  }
 
                 } else {
                   // Regular update for existing client
-                  const customerId = currentValidationBooking.user_id || currentValidationBooking.booking_details?.customer?.id
+                  // Get ID from updates or currentValidationBooking or formData
+                  const customerId = updates.id ||
+                    (currentValidationBooking ? (currentValidationBooking.user_id || currentValidationBooking.booking_details?.customer?.id) : null) ||
+                    formData.customer_id
+
+                  if (!customerId) throw new Error('Customer ID missing for update')
+
                   const { error } = await supabase
                     .from('customers_extended')
                     .update(updates)
@@ -3030,10 +3138,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 await loadData()
                 setShowMissingDataModal(false)
 
-                const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
-                if (fresh) {
-                  if (validationContext === 'invoice') handleGenerateInvoice(fresh)
-                  else handleGenerateContract(fresh, true)
+                if (validationContext === 'booking') {
+                  // Retry booking submission skipping validation
+                  setTimeout(() => processBookingSubmission(true), 100)
+                } else if (currentValidationBooking) {
+                  const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
+                  if (fresh) {
+                    if (validationContext === 'invoice') handleGenerateInvoice(fresh)
+                    else handleGenerateContract(fresh, true)
+                  }
                 }
 
               } catch (err: any) {
@@ -3078,7 +3191,12 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
       case 'patente': return 'Numero Patente *'
       case 'partita_iva': return 'Partita IVA *'
       case 'Cliente non identificato': return 'Associa Cliente'
-      default: return field
+      case 'denominazione': return 'Ragione Sociale *'
+      case 'citta': return 'Città *'
+      case 'ente_o_ufficio': return 'Ente / Ufficio *'
+      case 'codice_univoco_pa': return 'Codice Univoco *'
+      case 'codice_fiscale_pa': return 'CF / P.IVA PA *'
+      default: return field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ')
     }
   }
 
@@ -3094,8 +3212,8 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
           {isLinking
             ? (
               data.nome || data.cognome
-                ? <span>Stai completando la scheda per <strong className="text-white">{data.nome} {data.cognome}</strong>. Inserisci i dati mancanti per generare il documento.</span>
-                : 'Per generare il documento è necessario completare la scheda del cliente. Puoi compilare i dati ora o collegare un cliente già esistente.'
+                ? <span>Stai completando la scheda per <strong className="text-white">{data.nome} {data.cognome}</strong>. Inserisci i dati mancanti per continuare.</span>
+                : 'Per continuare è necessario completare la scheda del cliente. Puoi compilare i dati ora o collegare un cliente già esistente.'
             )
             : (
               <>
@@ -3103,7 +3221,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
                 <strong className="text-white ml-1">
                   {actuallyMissingFields.map((f: string) => getLabel(f).replace(' *', '')).join(', ')}
                 </strong>
-                . Compilali qui sotto per generare il contratto.
+                . Compilali qui sotto per continuare.
               </>
             )
           }

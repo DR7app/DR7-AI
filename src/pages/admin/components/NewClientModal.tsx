@@ -59,6 +59,7 @@ interface ClientFormData {
   rappresentante_doc_tipo: string
   rappresentante_doc_numero: string
   rappresentante_doc_rilascio: string
+  rappresentante_doc_scadenza: string
   rappresentante_doc_luogo: string
 
   // Pubblica Amministrazione
@@ -68,6 +69,7 @@ interface ClientFormData {
   citta: string
   partita_iva_pa: string
   pec_pa: string
+  note: string // Added note field
 }
 
 export default function NewClientModal({ isOpen, onClose, onClientCreated, initialData }: NewClientModalProps) {
@@ -111,13 +113,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     rappresentante_doc_tipo: '',
     rappresentante_doc_numero: '',
     rappresentante_doc_rilascio: '',
+    rappresentante_doc_scadenza: '',
     rappresentante_doc_luogo: '',
     codice_univoco: '',
     cf_pa: '',
     ente_ufficio: '',
     citta: '',
     partita_iva_pa: '',
-    pec_pa: ''
+    pec_pa: '',
+    note: ''
   })
 
   // Populate form data when initialData changes
@@ -198,6 +202,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         rappresentante_doc_tipo: metadata.rappresentante?.documento?.tipo || '',
         rappresentante_doc_numero: metadata.rappresentante?.documento?.numero || '',
         rappresentante_doc_rilascio: metadata.rappresentante?.documento?.rilascio || '',
+        rappresentante_doc_scadenza: metadata.rappresentante?.documento?.scadenza || '',
         rappresentante_doc_luogo: metadata.rappresentante?.documento?.luogo || '',
 
         // PA
@@ -206,7 +211,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         ente_ufficio: initialData.ente_ufficio || initialData.denominazione || '',
         citta: initialData.citta || '',
         partita_iva_pa: initialData.partita_iva || '',
-        pec_pa: initialData.pec || ''
+        pec_pa: initialData.pec || '',
+        note: initialData.notes || initialData.note || ''
       })
     } else if (isOpen && !initialData) {
       // Reset if opening empty
@@ -250,13 +256,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         rappresentante_doc_tipo: '',
         rappresentante_doc_numero: '',
         rappresentante_doc_rilascio: '',
+        rappresentante_doc_scadenza: '',
         rappresentante_doc_luogo: '',
         codice_univoco: '',
         cf_pa: '',
         ente_ufficio: '',
         citta: '',
         partita_iva_pa: '',
-        pec_pa: ''
+        pec_pa: '',
+        note: ''
       })
     }
   }, [initialData, isOpen])
@@ -365,7 +373,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         telefono: formData.telefono,
         nazione: formData.nazione,
         source: 'admin',
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        note: formData.note
       }
 
       // Populate data based on type
@@ -426,6 +435,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               tipo: formData.rappresentante_doc_tipo,
               numero: formData.rappresentante_doc_numero,
               rilascio: formData.rappresentante_doc_rilascio,
+              scadenza: formData.rappresentante_doc_scadenza,
               luogo: formData.rappresentante_doc_luogo
             }
           }
@@ -460,7 +470,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           // This will trigger the else block below
         } else {
           // UPDATE Existing - ID is a valid UUID
-          console.log('Updating existing customer:', initialData.id)
+          console.log('🔄 Updating existing customer:', initialData.id)
+          console.log('📝 Customer data to save:', customerData)
 
           // 1. Update customers_extended (Upsert is safer as it might not exist there yet)
           const { data: updatedExtended, error: extendedError } = await supabase
@@ -469,7 +480,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             .select()
             .single()
 
-          if (extendedError) throw extendedError
+          if (extendedError) {
+            console.error('❌ Error updating customers_extended:', extendedError)
+            throw extendedError
+          }
+
+          console.log('✅ customers_extended updated successfully:', updatedExtended)
           resultData = updatedExtended
           createdClientId = initialData.id
 
@@ -485,12 +501,17 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             updated_at: new Date().toISOString()
           }
 
+          console.log('📝 Updating basic customers table with:', basicData)
           const { error: basicError } = await supabase
             .from('customers')
             .update(basicData)
             .eq('id', initialData.id)
 
-          if (basicError) console.warn('Could not update basic customers table:', basicError)
+          if (basicError) {
+            console.warn('⚠️ Could not update basic customers table:', basicError)
+          } else {
+            console.log('✅ Basic customers table updated successfully')
+          }
 
           alert('Cliente aggiornato con successo!')
 
@@ -601,6 +622,33 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           // Upload Codice Fiscale
           if (codiceFiscaleFront) await uploadFile(codiceFiscaleFront, 'codice-fiscale', 'codice_fiscale', '_front')
           if (codiceFiscaleBack) await uploadFile(codiceFiscaleBack, 'codice-fiscale', 'codice_fiscale', '_back')
+        }
+      }
+
+      // [FIX] LINK BOOKINGS TO NEW/UPDATED CUSTOMER
+      // Now that we have a valid createdClientId (UUID), we must find any bookings 
+      // with this customer's email (or phone) and update their user_id to this UUID.
+      // This ensures the "temp" customer merges into this real one in the UI.
+      if (createdClientId && (formData.email || formData.telefono)) {
+        console.log('Linking bookings to customer:', createdClientId)
+        const conditions = []
+        if (formData.email) conditions.push(`customer_email.eq.${formData.email}`)
+        // Optional: also link by phone if email is missing in booking, but email is safer
+        // if (formData.telefono) conditions.push(`customer_phone.eq.${formData.telefono}`)
+
+        if (conditions.length > 0) {
+          const orQuery = conditions.join(',')
+          // We perform the update
+          const { error: linkError } = await supabase
+            .from('bookings')
+            .update({ user_id: createdClientId })
+            .or(orQuery)
+
+          if (linkError) {
+            console.error('Error linking bookings:', linkError)
+          } else {
+            console.log('✅ Bookings successfully linked to', createdClientId)
+          }
         }
       }
 
@@ -1062,6 +1110,63 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase font-mono"
                     />
                   </div>
+
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-gray-300 mb-3">Documento Rappresentante</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Tipo Documento</label>
+                        <select
+                          value={formData.rappresentante_doc_tipo}
+                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_tipo: e.target.value })}
+                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        >
+                          <option value="">Seleziona...</option>
+                          <option value="Carta d'Identità">Carta d'Identità</option>
+                          <option value="Patente">Patente</option>
+                          <option value="Passaporto">Passaporto</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Numero Documento</label>
+                        <input
+                          type="text"
+                          value={formData.rappresentante_doc_numero}
+                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_numero: e.target.value.toUpperCase() })}
+                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase"
+                          placeholder="es. CA12345AB"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Data Rilascio</label>
+                        <input
+                          type="date"
+                          value={formData.rappresentante_doc_rilascio}
+                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_rilascio: e.target.value })}
+                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Data Scadenza</label>
+                        <input
+                          type="date"
+                          value={formData.rappresentante_doc_scadenza}
+                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_scadenza: e.target.value })}
+                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Luogo Rilascio</label>
+                        <input
+                          type="text"
+                          value={formData.rappresentante_doc_luogo}
+                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_luogo: e.target.value })}
+                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                          placeholder="es. Comune di Roma"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1142,6 +1247,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               </div>
             )}
 
+          </div>
+
+
+
+          {/* Note Field - GLOBAL */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Note</label>
+            <textarea
+              value={formData.note}
+              onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+              rows={3}
+              className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none resize-none"
+              placeholder="Note interne sul cliente..."
+            />
           </div>
 
           {/* OPTIONAL DOCUMENT UPLOAD SECTION */}
@@ -1333,6 +1452,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         </div>
       </div>
-    </div>
+    </div >
   )
 }
