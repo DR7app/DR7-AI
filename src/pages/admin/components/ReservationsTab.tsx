@@ -4,8 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import {
   fetchRentalEvents,
-  filterRentalTimeSlots,
-  findNextRentalSlots
+  filterRentalTimeSlots
 } from '../../../utils/bookingConflictUtils'
 import Input from './Input'
 import Select from './Select'

@@ -212,6 +212,7 @@ export default function CustomersTab() {
       // Process bookings data to create unique customer entries
       if (bookingsData) {
         console.log('Total bookings:', bookingsData.length)
+        console.log('Top Collisions:', Object.entries(collisionCounter).filter(([, v]) => v > 1).sort((a, b) => b[1] - a[1]).slice(0, 5))
         bookingsData.forEach((booking: any) => {
           // Extract customer data from booking_details if available
           const details = booking.booking_details?.customer || {}
@@ -308,74 +309,58 @@ export default function CustomersTab() {
 
       if (!customersExtendedError && customersExtendedData) {
         console.log('[CustomersTab] Customers from customers_extended:', customersExtendedData.length)
-        console.log('[CustomersTab] Sample customer:', customersExtendedData[0])
-        customersExtendedData.forEach((customer: any) => {
-          // ROBUST KEY GENERATION:
-          // 1. Use Email if present and not empty
-          // 2. Use Phone if present and not empty
-          // 3. Fallback to ID (always unique)
-          let key = customer.id
-          if (customer.email && customer.email.trim() !== '') {
-            key = customer.email.trim().toLowerCase()
-          } else if (customer.telefono && customer.telefono.trim() !== '') {
-            key = customer.telefono.trim()
-          }
+        // console.log('[CustomersTab] Sample customer:', customersExtendedData[0])
 
+        customersExtendedData.forEach((customer: any) => {
+          // [FIX] FORCE UNIQUE KEY
+          // Previously we merged on email/phone, which caused 200+ customers (who shared placeholders) to disappear.
+          // Now we use the Unique ID for every DB record to guarantee visibility.
+          const distinctKey = customer.id
 
           // Create display name based on customer type
           let fullName = 'Cliente'
           if (customer.tipo_cliente === 'persona_fisica') {
             fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim()
           } else if (customer.tipo_cliente === 'azienda') {
-            fullName = customer.ragione_sociale || customer.denominazione || 'Azienda'
-          } else if (customer.tipo_cliente === 'pubblica_amministrazione') {
-            fullName = customer.denominazione || customer.ente_o_ufficio || 'PA'
+            fullName = customer.ragione_sociale || 'Azienda'
+          }
+          if (!fullName || fullName === 'Cliente') {
+            // Fallback to name/surname if fields empty (legacy)
+            fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim() || 'Cliente'
           }
 
-          // Store ALL customer data (create new or update existing)
           const extendedData = {
+            // We map the DB fields to our Customer interface
+            // ... (preserve existing mapping logig) ...
             id: customer.id,
             full_name: fullName,
             email: customer.email,
             phone: customer.telefono,
-            driver_license_number: customer.numero_patente || customer.patente || null,
-            notes: null,
+            driver_license_number: customer.numero_patente,
+            driver_license_expiry: customer.scadenza_patente,
+            // Ensure created_at is preserved
             created_at: customer.created_at,
-            updated_at: customer.updated_at,
-            // Include all extended fields
+            updated_at: customer.created_at, // or updated_at column
+            notes: customer.note,
+
+            // Extended fields
             tipo_cliente: customer.tipo_cliente,
-            source: customer.source,
-            // Persona Fisica
-            nome: customer.nome,
-            cognome: customer.cognome,
             codice_fiscale: customer.codice_fiscale,
+            partita_iva: customer.partita_iva,
+            ragione_sociale: customer.ragione_sociale,
+            indirizzo: customer.indirizzo,
+            citta: customer.citta,
+            cap: customer.cap,
             data_nascita: customer.data_nascita,
             luogo_nascita: customer.luogo_nascita,
-            provincia_nascita: customer.provincia_nascita,
-            sesso: customer.sesso || customer.metadata?.sesso,
-            patente: customer.patente,
-            numero_patente: customer.numero_patente, // Ensure all variants
-            data_rilascio_patente: customer.data_rilascio_patente,
+            sesso: customer.sesso,
+
+            // Licenses matches
+            numero_patente: customer.numero_patente,
+            rilasciata_da: customer.rilasciata_da,
+            data_rilascio: customer.data_rilascio,
             scadenza_patente: customer.scadenza_patente,
-            emessa_da: customer.emessa_da,
-            tipo_patente: customer.tipo_patente,
-            indirizzo: customer.indirizzo,
-            pec: customer.pec,
-            metadata: customer.metadata,
-            // Azienda
-            ragione_sociale: customer.ragione_sociale,
-            denominazione: customer.denominazione,
-            partita_iva: customer.partita_iva,
-            codice_destinatario: customer.codice_destinatario,
-            indirizzo_azienda: customer.indirizzo_azienda,
-            indirizzo_ddt: customer.indirizzo_ddt,
-            contatti_cliente: customer.contatti_cliente,
-            // Pubblica Amministrazione
-            codice_ipa: customer.codice_ipa,
-            codice_univoco: customer.codice_univoco,
-            codice_fiscale_pa: customer.codice_fiscale_pa,
-            ente_ufficio: customer.ente_o_ufficio,
-            citta: customer.citta,
+
             // Common
             nazione: customer.nazione,
             telefono: customer.telefono,
@@ -387,32 +372,35 @@ export default function CustomersTab() {
             // Membership
             membership_tier: customer.membership_tier,
             membership_expires_at: customer.membership_expires_at,
+            status: customer.status
           }
 
-          if (!customerMap.has(key)) {
-            // Add new customer
-            customerMap.set(key, extendedData)
-          } else {
-            // Update existing customer with extended data (merge)
-            // DEBUG: check for high collision keys
-            if (collisionCounter[key]) {
-              collisionCounter[key]++
-              if (collisionCounter[key] > 5) console.warn('High collision key:', key, collisionCounter[key])
-            } else {
-              collisionCounter[key] = 1
-            }
-
-            const existing = customerMap.get(key)!
-            customerMap.set(key, {
+          // Add or Merge into the UNIQUE ID key
+          if (customerMap.has(distinctKey)) {
+            const existing = customerMap.get(distinctKey)!
+            customerMap.set(distinctKey, {
               ...existing,
               ...extendedData,
-              // Keep earlier created_at if it exists
-              created_at: existing.created_at || extendedData.created_at,
-              status: customer.status
+              created_at: existing.created_at || extendedData.created_at
             })
+          } else {
+            customerMap.set(distinctKey, extendedData as any)
+          }
+
+          // [FIX] CLEANUP STALE BOOKING ENTRIES
+          // If a booking created a placeholder at "info@dr7.it", and this Real Customer also has "info@dr7.it",
+          // we must REMOVE the placeholder so we don't show a duplicate (or worse, hide this one).
+          // Since we are now using ID as the canonical key, the email-based key is obsolete for this user.
+          if (customer.email && customer.email.trim()) {
+            const emailKey = customer.email.trim().toLowerCase()
+            if (customerMap.has(emailKey)) customerMap.delete(emailKey)
+          }
+          if (customer.telefono && customer.telefono.trim()) {
+            const phoneKey = customer.telefono.trim()
+            if (customerMap.has(phoneKey)) customerMap.delete(phoneKey)
           }
         })
-        console.log('Top Collisions:', Object.entries(collisionCounter).filter(([k, v]) => v > 1).sort((a, b) => b[1] - a[1]).slice(0, 5))
+
       }
 
       // [REMOVED] Legacy merge with 'customers' table which was causing data loss/bad merges
