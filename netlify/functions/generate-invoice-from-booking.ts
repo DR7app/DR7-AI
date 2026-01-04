@@ -7,7 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 // Invoicetronic SDI Configuration
-const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || 'ik_live_z7Wzq9ySqSfX5AbNUzlVpRJXJY4AXdGU'
+const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || 'ik_test_34pBxEz0zsb2qPP1w5I6NBnT7GZi8i5R'
 const INVOICETRONIC_BASE_URL = process.env.INVOICETRONIC_BASE_URL || 'https://api.invoicetronic.com/v1'
 
 export const handler: Handler = async (event) => {
@@ -425,6 +425,7 @@ export const handler: Handler = async (event) => {
                 formData.append('file', xmlBlob, `${invoice.numero_fattura}.xml`)
 
                 // Send to Invoicetronic SDI
+                // Send to Invoicetronic SDI
                 const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/send/file`, {
                     method: 'POST',
                     headers: {
@@ -433,10 +434,25 @@ export const handler: Handler = async (event) => {
                     body: formData
                 })
 
-                const responseData = await sdiResponse.json()
+                const responseText = await sdiResponse.text()
+                let responseData: any = {}
+
+                if (responseText && responseText.trim()) {
+                    try {
+                        responseData = JSON.parse(responseText)
+                    } catch (parseError) {
+                        console.error('[SDI] Failed to parse response JSON:', parseError)
+                        console.error('[SDI] Raw Response:', responseText)
+                        responseData = { error: 'Invalid JSON response', raw: responseText }
+                    }
+                } else {
+                    console.log('[SDI] Received empty response from API')
+                }
+
                 sdiResult = responseData
 
-                console.log('[SDI] Response:', responseData)
+                console.log('[SDI] Status:', sdiResponse.status, sdiResponse.statusText)
+                console.log('[SDI] Response Data:', JSON.stringify(responseData))
 
                 // Update Invoice Status
                 await supabase

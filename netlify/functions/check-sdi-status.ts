@@ -5,31 +5,23 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyira
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// Fattura Elettronica API credentials
-const FATTURA_API_USERNAME = process.env.FATTURA_API_USERNAME || ''
-const FATTURA_API_PASSWORD = process.env.FATTURA_API_PASSWORD || ''
-const FATTURA_API_BASE_URL = process.env.FATTURA_API_BASE_URL || 'https://fattura-elettronica-api.it/ws2.0/test'
+// Invoicetronic Configuration
+const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || 'ik_test_34pBxEz0zsb2qPP1w5I6NBnT7GZi8i5R'
+const INVOICETRONIC_BASE_URL = process.env.INVOICETRONIC_BASE_URL || 'https://api.invoicetronic.com/v1'
 
 export const handler: Handler = async (event) => {
-    // Only allow POST requests
     if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        }
+        return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
     }
 
     try {
         const { invoiceId } = JSON.parse(event.body || '{}')
 
         if (!invoiceId) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Invoice ID is required' })
-            }
+            return { statusCode: 400, body: JSON.stringify({ error: 'Invoice ID is required' }) }
         }
 
-        // Fetch invoice from database
+        // Fetch invoice
         const { data: invoice, error: fetchError } = await supabase
             .from('fatture')
             .select('*')
@@ -37,26 +29,18 @@ export const handler: Handler = async (event) => {
             .single()
 
         if (fetchError || !invoice) {
-            return {
-                statusCode: 404,
-                body: JSON.stringify({ error: 'Invoice not found' })
-            }
+            return { statusCode: 404, body: JSON.stringify({ error: 'Invoice not found' }) }
         }
 
         if (!invoice.sdi_id) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Invoice has not been sent to SDI yet' })
-            }
+            return { statusCode: 400, body: JSON.stringify({ error: 'Invoice has not been sent to Invoicetronic yet' }) }
         }
 
-        // Check status from Fattura Elettronica API
-        const authString = Buffer.from(`${FATTURA_API_USERNAME}:${FATTURA_API_PASSWORD}`).toString('base64')
-
-        const response = await fetch(`${FATTURA_API_BASE_URL}/fatture/${invoice.sdi_id}`, {
+        // Check status from Invoicetronic API
+        const response = await fetch(`${INVOICETRONIC_BASE_URL}/invoices/${invoice.sdi_id}`, {
             method: 'GET',
             headers: {
-                'Authorization': `Basic ${authString}`
+                'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`
             }
         })
 
@@ -64,28 +48,33 @@ export const handler: Handler = async (event) => {
             return {
                 statusCode: response.status,
                 body: JSON.stringify({
-                    error: 'Failed to check invoice status',
+                    error: 'Failed to check invoice status from Invoicetronic',
                     details: await response.text()
                 })
             }
         }
 
-        const statusData = await response.json()
+        const remoteInvoice = await response.json()
 
-        // Map API status to our status
+        // Map Invoicetronic status to our internal status
+        // Invoicetronic statuses: Draft, Sent, Rejected, Delivered, etc.
         let sdiStatus = 'sent'
-        if (statusData.Stato === 'Accettata' || statusData.status === 'accepted') {
+        const remoteStatus = (remoteInvoice.status || '').toLowerCase()
+
+        if (remoteStatus.includes('delivered') || remoteStatus.includes('accettat')) {
             sdiStatus = 'accepted'
-        } else if (statusData.Stato === 'Rifiutata' || statusData.status === 'rejected') {
+        } else if (remoteStatus.includes('rejected') || remoteStatus.includes('scartat') || remoteStatus.includes('rifiutat')) {
             sdiStatus = 'rejected'
+        } else if (remoteStatus.includes('error') || remoteStatus.includes('failed')) {
+            sdiStatus = 'error'
         }
 
-        // Update invoice with latest status
+        // Update DB
         await supabase
             .from('fatture')
             .update({
                 sdi_status: sdiStatus,
-                sdi_response: statusData
+                sdi_response: remoteInvoice
             })
             .eq('id', invoiceId)
 
@@ -94,17 +83,15 @@ export const handler: Handler = async (event) => {
             body: JSON.stringify({
                 success: true,
                 status: sdiStatus,
-                details: statusData
+                details: remoteInvoice
             })
         }
+
     } catch (error: any) {
-        console.error('Error checking SDI status:', error)
+        console.error('Error checking Invoicetronic status:', error)
         return {
             statusCode: 500,
-            body: JSON.stringify({
-                error: 'Internal server error',
-                message: error.message
-            })
+            body: JSON.stringify({ error: error.message })
         }
     }
 }
