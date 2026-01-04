@@ -682,12 +682,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               setSelectedUnavailability(vehicle)
                             }
                           }}
-                          className={`border border-gray-300/50 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
-                            ? 'bg-gray-100/90' // Light grey for booked cells
+                          className={`border border-gray-700/30 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
+                            ? 'bg-red-500/15' // Red for booked
                             : status === 'unavailable'
-                              ? 'bg-gray-300/70'
-                              : 'bg-white/80 hover:bg-white/90' // White for available
-                            } ${day === todayDay ? 'ring-2 ring-inset ring-dr7-gold bg-dr7-gold/10' : ''}`}
+                              ? 'bg-gray-800/60'
+                              : 'bg-green-500/30 hover:bg-green-500/40' // Green for available
+                            } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold/50 bg-dr7-gold/5' : ''}`}
                         />
                       )
                     })}
@@ -731,18 +731,18 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
                       // Determine color based on booking type (matching DailyCalendarModal)
                       let colorClass = "border-red-500"
-                      let gradientClass = "from-red-500/20 to-red-600/10"
+                      let gradientClass = "from-red-500/70 to-red-600/60"
                       let glowClass = "hover:shadow-red-500/30"
                       let textColorClass = "text-red-500"
 
                       if (segment.booking.type === 'lavaggio') {
                         colorClass = "border-blue-500"
-                        gradientClass = "from-blue-500/20 to-blue-600/10"
+                        gradientClass = "from-blue-500/70 to-blue-600/60"
                         glowClass = "hover:shadow-blue-500/30"
                         textColorClass = "text-blue-500"
                       } else if (segment.booking.type === 'meccanica') {
                         colorClass = "border-orange-500"
-                        gradientClass = "from-orange-500/20 to-orange-600/10"
+                        gradientClass = "from-orange-500/70 to-orange-600/60"
                         glowClass = "hover:shadow-orange-500/30"
                         textColorClass = "text-orange-500"
                       }
