@@ -916,8 +916,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Validate customer data before contract generation
   async function validateCustomerData(booking: Booking): Promise<string[]> {
-    // Use user_id as customer_id
-    const customerId = booking.user_id || booking.booking_details?.customer?.id
+    // Check multiple possible locations for customer ID
+    const customerId = booking.user_id ||
+      booking.booking_details?.customer?.id ||
+      booking.booking_details?.customer_id
 
     if (!customerId) {
       // Check what data we have from the booking itself
@@ -981,7 +983,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       console.warn('⚠️ Missing fields for contract:', missing)
 
       // Fetch full customer data to populate modal
-      const customerId = booking.user_id || booking.booking_details?.customer?.id
+      const customerId = booking.user_id || booking.booking_details?.customer?.id || booking.booking_details?.customer_id
       let customerData = {}
 
       if (customerId) {
@@ -1061,7 +1063,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (missing.length > 0) {
       console.warn('⚠️ Missing fields for invoice:', missing)
 
-      const customerId = booking.user_id || booking.booking_details?.customer?.id
+      const customerId = booking.user_id || booking.booking_details?.customer?.id || booking.booking_details?.customer_id
       let customerData = {}
 
       if (customerId) {
