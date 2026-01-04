@@ -682,12 +682,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               setSelectedUnavailability(vehicle)
                             }
                           }}
-                          className={`border border-gray-700/30 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
-                            ? 'bg-red-500/15' // Red for booked (Reverted to original)
+                          className={`border border-gray-300/50 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
+                            ? 'bg-red-100/80' // Light red for booked
                             : status === 'unavailable'
-                              ? 'bg-gray-800/60'
-                              : 'bg-green-500/30 hover:bg-green-500/40' // Green for available (Brighter)
-                            } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold/50 bg-dr7-gold/5' : ''}`}
+                              ? 'bg-gray-300/70'
+                              : 'bg-green-100/80 hover:bg-green-200/80' // Light green for available
+                            } ${day === todayDay ? 'ring-2 ring-inset ring-dr7-gold bg-dr7-gold/10' : ''}`}
                         />
                       )
                     })}
@@ -801,19 +801,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               {segment.booking.customer_name || 'N/A'}
                             </div>
 
-                            {/* Return date and time - show if space allows */}
-                            {segment.columnSpan >= 4 && (
-                              <div className="text-white/80 text-xs whitespace-nowrap">
-                                {dropoffDay}/{currentDate.getMonth() + 1} {dropoffTime}
-                              </div>
-                            )}
+                            {/* Return date and time - always show */}
+                            <div className="text-white/80 text-xs whitespace-nowrap">
+                              {dropoffDay} {dropoffTime}
+                            </div>
 
-                            {/* Targa - show if space allows */}
-                            {segment.columnSpan >= 5 && getTarga() && (
-                              <div className="text-white/70 text-xs font-mono">
-                                {getTarga()}
-                              </div>
-                            )}
+
                           </div>
                         </div>
                       )
