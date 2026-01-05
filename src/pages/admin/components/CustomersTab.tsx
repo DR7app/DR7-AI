@@ -601,15 +601,15 @@ export default function CustomersTab() {
           .from('customers_extended')
           .select('*')
           .eq('id', customer.id)
-          .single()
+          .limit(1)
 
         if (error) {
           console.error('Error fetching fresh customer data:', error)
           // Fallback to cached data if fetch fails
           setViewingCustomerDetails(customer)
-        } else {
-          // Use fresh data from database
-          setViewingCustomerDetails(freshCustomer as any)
+        } else if (freshCustomer && freshCustomer.length > 0) {
+          // Use fresh data from database (first result)
+          setViewingCustomerDetails(freshCustomer[0] as any)
         }
       } catch (err) {
         console.error('Error:', err)
