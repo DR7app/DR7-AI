@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -473,25 +473,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   // Get available vehicles based on selected dates
-  const getAvailableVehicles = (): Vehicle[] => {
+  const getAvailableVehicles = useMemo((): Vehicle[] => {
     // If no dates selected, return all vehicles
     if (!formData.pickup_date || !formData.return_date) {
-      console.log('[getAvailableVehicles] No dates selected, returning all vehicles')
       return vehicles
     }
 
     const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time || '00:00'}:00`)
     const returnDateTime = new Date(`${formData.return_date}T${formData.return_time || '23:59'}:00`)
 
-    console.log('[getAvailableVehicles] Filtering vehicles for dates:', {
-      pickup: pickupDateTime.toISOString(),
-      return: returnDateTime.toISOString(),
-      totalVehicles: vehicles.length,
-      totalBookings: bookings.length
-    })
-
     // Filter out vehicles that have conflicting bookings
-    const availableVehicles = vehicles.filter(vehicle => {
+    return vehicles.filter(vehicle => {
       // Check if this vehicle has any conflicting bookings
       const hasConflict = bookings.some(booking => {
         // Skip the current booking if we're editing
@@ -513,7 +505,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
 
         // Priority 3: ONLY if both booking and vehicle lack plate data, fall back to name matching
-        // This prevents false positives for vehicles with duplicate names (e.g., "Renault Clio Blue")
         if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
           isForThisVehicle = booking.vehicle_name === vehicle.display_name
         }
@@ -524,7 +515,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         // Ignore cancelled bookings
         if (booking.status === 'cancelled') {
-          console.log(`[getAvailableVehicles] Ignoring cancelled booking ${booking.id} for vehicle ${vehicle.display_name}`)
           return false
         }
 
@@ -532,36 +522,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const bookingPickup = new Date(booking.pickup_date)
         const bookingDropoff = new Date(booking.dropoff_date)
 
-        const overlaps = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
-
-        if (overlaps) {
-          console.log('[getAvailableVehicles] CONFLICT FOUND:', {
-            vehicleName: vehicle.display_name,
-            vehicleId: vehicle.id,
-            vehiclePlate: vehicle.plate || vehicle.targa,
-            bookingId: booking.id,
-            bookingStatus: booking.status,
-            bookingPickup: bookingPickup.toISOString(),
-            bookingDropoff: bookingDropoff.toISOString(),
-            requestPickup: pickupDateTime.toISOString(),
-            requestReturn: returnDateTime.toISOString()
-          })
-        }
-
-        return overlaps
+        return (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
       })
 
       return !hasConflict
     })
-
-    console.log('[getAvailableVehicles] Result:', {
-      totalVehicles: vehicles.length,
-      availableCount: availableVehicles.length,
-      availableVehicles: availableVehicles.map(v => ({ id: v.id, name: v.display_name }))
-    })
-
-    return availableVehicles
-  }
+  }, [formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, vehicles, bookings, editingId])
 
 
   const LOCATIONS = [
