@@ -47,6 +47,9 @@ export default function MissingFieldsModal({
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [isSaving, setIsSaving] = useState(false)
 
+    console.log('[MissingFieldsModal] 🟢 RENDERED', { isOpen, customerId, missingFieldsCount: missingFields?.length })
+
+
     // Initialize form data with existing customer data
     useEffect(() => {
         if (isOpen && customerData) {
@@ -85,6 +88,12 @@ export default function MissingFieldsModal({
 
     const handleSave = async () => {
         if (!validateForm()) {
+            return
+        }
+
+        if (!customerId) {
+            console.error('[MissingFieldsModal] Critical Error: No customer ID provided!')
+            alert('Errore interno: ID cliente mancante. Riprova o contatta il supporto.')
             return
         }
 

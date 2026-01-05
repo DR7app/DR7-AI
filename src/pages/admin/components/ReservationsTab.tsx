@@ -556,6 +556,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const hasOverlap = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
 
         if (hasOverlap) {
+          // If the return time is after the booking ends, it's a "soft" conflict (available after dropoff)
+          // So we do NOT filter it out (return false for conflict) unless strictly blocked
+          if (returnDateTime > bookingDropoff) {
+            return false
+          }
+
           conflictingBookings.push({
             bookingId: booking.id,
             customer: booking.customer_name,
@@ -648,8 +654,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const times = new Map<string, Date>()
 
     vehicles.forEach(vehicle => {
-      // Find all service bookings for this vehicle that OVERLAP with request
-      const services = carWashBookings.filter(booking => {
+      // Find all bookings (service AND rental) for this vehicle that OVERLAP with request
+      const relevantBookings = [...bookings, ...carWashBookings].filter(booking => {
         // Vehicle matching logic
         const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
         let isForThisVehicle = bookingVehicleId === vehicle.id
@@ -672,19 +678,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return (pickupDateTime < serviceEnd && returnDateTime > serviceStart)
       })
 
-      // Get the latest service end time
-      const latestServiceEnd = services.reduce((latest, service) => {
-        const end = new Date(service.dropoff_date)
+      // Get the latest end time
+      const latestEnd = relevantBookings.reduce((latest, booking) => {
+        const end = new Date(booking.dropoff_date)
         return end > latest ? end : latest
       }, new Date(0))
 
-      if (latestServiceEnd.getTime() > 0) {
-        times.set(vehicle.id, latestServiceEnd)
+      if (latestEnd.getTime() > 0) {
+        times.set(vehicle.id, latestEnd)
       }
     })
 
     return times
-  }, [vehicles, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
+  }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
 
   // Auto-adjust pickup time when vehicle is selected if it conflicts with service
   useEffect(() => {
@@ -3428,7 +3434,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
         {/* Missing Fields Modal - Shows only the missing fields */}
-        {showMissingDataModal && tempCustomerData?.id && (
+        {showMissingDataModal && (
           <MissingFieldsModal
             isOpen={showMissingDataModal}
             customerId={tempCustomerData.id}
