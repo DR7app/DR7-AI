@@ -990,7 +990,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (customerId) {
         const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
-        customerData = customer || {}
+        console.log('[handleGenerateContract] Fetched customer for ID:', customerId, customer)
+        customerData = customer || { id: customerId } // CRITICAL: Always include the ID even if fetch fails
       } else {
         // No customer ID, but we might have data from booking
         const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
