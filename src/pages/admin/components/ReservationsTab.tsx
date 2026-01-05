@@ -1529,7 +1529,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               nome: customerFromList.full_name.split(' ')[0] || '',
               cognome: customerFromList.full_name.split(' ').slice(1).join(' ') || '',
               email: customerFromList.email || '',
-              telefono: customerFromList.phone || ''
+              telefono: customerFromList.phone || '',
+              _isNew: true // Explicitly mark as new to guide the save logic
             }
 
             // Mark ALL required fields as missing since this is a new customer
@@ -3192,22 +3193,43 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   if (error) throw error
                 } else if (actionType === 'create') {
                   // Create new client from the provided data
-                  const { data: newClient, error: createError } = await supabase
-                    .from('customers_extended')
-                    .insert([{
-                      full_name: `${updates.nome} ${updates.cognome}`,
-                      ...updates
-                    }])
-                    .select()
-                    .single()
+                  console.log('[MissingDataModal] Attempting to CREATE customer:', updates)
 
-                  if (createError) throw createError
+                  // Filter out internal flags like _isNew
+                  const { _isNew, ...cleanUpdates } = updates
 
-                  resolvedCustomerId = newClient.id
+                  try {
+                    const { data: newClient, error: createError } = await supabase
+                      .from('customers_extended')
+                      .insert([{
+                        full_name: `${cleanUpdates.nome} ${cleanUpdates.cognome}`,
+                        ...cleanUpdates
+                      }])
+                      .select()
+                      .single()
+
+                    if (createError) throw createError
+                    resolvedCustomerId = newClient.id
+                  } catch (err: any) {
+                    // Failover: If record already exists (duplicates), try UPDATE instead
+                    if (err.code === '23505') {
+                      console.log('[MissingDataModal] Creation failed with duplicate key, falling back to UPDATE')
+                      const { _isNew, ...cleanUpdates } = updates
+                      const { error: updateError } = await supabase
+                        .from('customers_extended')
+                        .update(cleanUpdates)
+                        .eq('id', cleanUpdates.id)
+
+                      if (updateError) throw updateError
+                      resolvedCustomerId = cleanUpdates.id
+                    } else {
+                      throw err
+                    }
+                  }
 
                   // If in booking context, update local state to use this new client
                   if (validationContext === 'booking') {
-                    setFormData(prev => ({ ...prev, customer_id: newClient.id }))
+                    setFormData(prev => ({ ...prev, customer_id: resolvedCustomerId }))
                     setNewCustomerMode(false)
                     // No need to link to booking yet, processBookingSubmission will do it
                   } else if (currentValidationBooking) {
@@ -3215,8 +3237,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     const { error: linkError } = await supabase
                       .from('bookings')
                       .update({
-                        user_id: newClient.id,
-                        customer_name: newClient.full_name
+                        user_id: resolvedCustomerId,
+                        customer_name: `${updates.nome} ${updates.cognome}`
                       })
                       .eq('id', currentValidationBooking.id)
 
@@ -3243,34 +3265,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   console.log('[MissingDataModal onSave] Updating customer:', customerId, 'with data:', updates)
 
+                  // Filter out internal flags
+                  const { _isNew, ...cleanUpdates } = updates
+
                   const { error } = await supabase
                     .from('customers_extended')
-                    .update(updates)
+                    .update(cleanUpdates)
                     .eq('id', customerId)
 
                   if (error) throw error
-
-                  // Store the customer ID for retry
-                  resolvedCustomerId = customerId
-                }
+                }   // Store the customer ID for retry
+                resolvedCustomerId = customerId
+              }
 
                 // Success: Reload and Retry
                 await loadData()
-                setShowMissingDataModal(false)
+              setShowMissingDataModal(false)
 
-                if (validationContext === 'booking') {
-                  // Retry booking submission skipping validation, passing the NEW/UPDATED customer ID
-                  setTimeout(() => processBookingSubmission(true, resolvedCustomerId), 100)
-                } else if (currentValidationBooking) {
-                  const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
-                  if (fresh) {
-                    if (validationContext === 'invoice') handleGenerateInvoice(fresh)
-                    else handleGenerateContract(fresh, true)
-                  }
+              if (validationContext === 'booking') {
+                // Retry booking submission skipping validation, passing the NEW/UPDATED customer ID
+                setTimeout(() => processBookingSubmission(true, resolvedCustomerId), 100)
+              } else if (currentValidationBooking) {
+                const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
+                if (fresh) {
+                  if (validationContext === 'invoice') handleGenerateInvoice(fresh)
+                  else handleGenerateContract(fresh, true)
                 }
+              }
 
-              } catch (err: any) {
-                console.error('Error saving customer data:', err)
+            } catch (err: any) {
+          console.error('Error saving customer data:', err)
                 alert('Errore salvataggio dati: ' + err.message)
               }
             }}
