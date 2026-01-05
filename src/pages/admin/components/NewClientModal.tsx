@@ -458,6 +458,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       let createdClientId: string | null = null;
 
       // UPDATE EXISTING CUSTOMER
+      console.log('🔍 DEBUG: initialData:', initialData)
+      console.log('🔍 DEBUG: initialData?.id:', initialData?.id)
+      console.log('🔍 DEBUG: Has initialData?.id?', !!initialData?.id)
+
       if (initialData?.id) {
         console.log('🔄 Updating existing customer:', initialData.id)
         console.log('📝 Customer data to save:', customerData)
