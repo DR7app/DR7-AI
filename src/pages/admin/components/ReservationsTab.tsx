@@ -485,15 +485,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const getAvailableVehicles = useMemo((): Vehicle[] => {
     // If no dates selected, return all vehicles
     if (!formData.pickup_date || !formData.return_date) {
+      console.log('[Vehicle Availability] No dates selected, showing all vehicles:', vehicles.length)
       return vehicles
     }
 
     const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time || '00:00'}:00`)
     const returnDateTime = new Date(`${formData.return_date}T${formData.return_time || '23:59'}:00`)
 
+    console.log('[Vehicle Availability] Filtering vehicles for date range:', {
+      pickup: pickupDateTime.toISOString(),
+      return: returnDateTime.toISOString(),
+      totalVehicles: vehicles.length,
+      totalBookings: bookings.length,
+      editingId
+    })
+
     // Filter out vehicles that have conflicting bookings
-    return vehicles.filter(vehicle => {
+    const availableVehicles = vehicles.filter(vehicle => {
       // Check if this vehicle has any conflicting bookings
+      const conflictingBookings: any[] = []
+
       const hasConflict = bookings.some(booking => {
         // Skip the current booking if we're editing
         if (editingId && booking.id === editingId) {
@@ -504,18 +515,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Priority 1: Check vehicle_id (new field) and booking_details.vehicle_id (legacy)
         const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
         let isForThisVehicle = bookingVehicleId === vehicle.id
+        let matchMethod = ''
 
         // Priority 2: If no vehicle_id, try matching by plate/targa FIRST (more reliable than name)
         if (!isForThisVehicle && !bookingVehicleId && booking.vehicle_plate) {
           const vehiclePlate = vehicle.plate || vehicle.targa
           if (vehiclePlate) {
             isForThisVehicle = booking.vehicle_plate === vehiclePlate
+            if (isForThisVehicle) matchMethod = 'plate'
           }
         }
 
         // Priority 3: ONLY if both booking and vehicle lack plate data, fall back to name matching
         if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
           isForThisVehicle = booking.vehicle_name === vehicle.display_name
+          if (isForThisVehicle) matchMethod = 'name'
+        } else if (isForThisVehicle && !matchMethod) {
+          matchMethod = 'id'
         }
 
         if (!isForThisVehicle) {
@@ -531,11 +547,37 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const bookingPickup = new Date(booking.pickup_date)
         const bookingDropoff = new Date(booking.dropoff_date)
 
-        return (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
+        const hasOverlap = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
+
+        if (hasOverlap) {
+          conflictingBookings.push({
+            bookingId: booking.id,
+            customer: booking.customer_name,
+            pickup: booking.pickup_date,
+            dropoff: booking.dropoff_date,
+            status: booking.status,
+            matchMethod
+          })
+        }
+
+        return hasOverlap
       })
+
+      if (hasConflict) {
+        console.log(`[Vehicle Availability] ❌ ${vehicle.display_name} (${vehicle.plate || vehicle.targa || 'no plate'}) - UNAVAILABLE`, {
+          conflicts: conflictingBookings
+        })
+      }
 
       return !hasConflict
     })
+
+    console.log('[Vehicle Availability] ✅ Available vehicles:', {
+      count: availableVehicles.length,
+      vehicles: availableVehicles.map(v => ({ name: v.display_name, plate: v.plate || v.targa, id: v.id }))
+    })
+
+    return availableVehicles
   }, [formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, vehicles, bookings, editingId])
 
 
@@ -814,7 +856,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (vehiclesError) {
         console.error('Failed to load vehicles:', vehiclesError)
       } else {
-        console.log('VEHICLES LOADED:', vehiclesData?.length || 0, vehiclesData)
+        console.log('[Vehicle Loading] Total vehicles loaded:', vehiclesData?.length || 0)
+        console.log('[Vehicle Loading] Vehicle details:', vehiclesData?.map(v => ({
+          name: v.display_name,
+          plate: v.plate || v.targa,
+          status: v.status,
+          category: v.category,
+          id: v.id
+        })))
         setVehicles(vehiclesData || [])
       }
 

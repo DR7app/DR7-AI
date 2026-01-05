@@ -637,18 +637,18 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         // if (formData.telefono) conditions.push(`customer_phone.eq.${formData.telefono}`)
 
         if (conditions.length > 0) {
-          const orQuery = conditions.join(',')
-          // We perform the update
-          const { error: linkError } = await supabase
-            .from('bookings')
-            .update({ user_id: createdClientId })
-            .or(orQuery)
+          // const orQuery = conditions.join(',')
+          // DISABLED: This causes foreign key constraint errors
+          // const { error: linkError } = await supabase
+          //   .from('bookings')
+          //   .update({ user_id: createdClientId })
+          //   .or(orQuery)
 
-          if (linkError) {
-            console.error('Error linking bookings:', linkError)
-          } else {
-            console.log('✅ Bookings successfully linked to', createdClientId)
-          }
+          // if (linkError) {
+          //   console.error('Error linking bookings:', linkError)
+          // } else {
+          //   console.log('✅ Bookings successfully linked to', createdClientId)
+          // }
         }
       }
 
