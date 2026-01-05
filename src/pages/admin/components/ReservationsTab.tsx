@@ -11,6 +11,7 @@ import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 
 // --- Kasko Constants & Types ---
@@ -243,6 +244,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [bookings, setBookings] = useState<Booking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [carWashBookings, setCarWashBookings] = useState<Booking[]>([]) // Car wash & mechanical bookings for availability checking
 
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -497,6 +499,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return: returnDateTime.toISOString(),
       totalVehicles: vehicles.length,
       totalBookings: bookings.length,
+      totalCarWashBookings: carWashBookings.length,
       editingId
     })
 
@@ -505,7 +508,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Check if this vehicle has any conflicting bookings
       const conflictingBookings: any[] = []
 
-      const hasConflict = bookings.some(booking => {
+      const hasRentalConflict = bookings.some(booking => {
         // Skip the current booking if we're editing
         if (editingId && booking.id === editingId) {
           return false
@@ -563,13 +566,51 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return hasOverlap
       })
 
-      if (hasConflict) {
-        console.log(`[Vehicle Availability] ❌ ${vehicle.display_name} (${vehicle.plate || vehicle.targa || 'no plate'}) - UNAVAILABLE`, {
+      if (hasRentalConflict) {
+        console.log(`[Vehicle Availability] ❌ ${vehicle.display_name} (${vehicle.plate || vehicle.targa || 'no plate'}) - UNAVAILABLE (rental conflict)`, {
           conflicts: conflictingBookings
         })
+        return false
       }
 
-      return !hasConflict
+      // Check car wash/mechanical bookings (soft conflicts - available AFTER service ends)
+      const hasServiceConflict = carWashBookings.some(booking => {
+        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
+        let isForThisVehicle = bookingVehicleId === vehicle.id
+
+        if (!isForThisVehicle && !bookingVehicleId && booking.vehicle_plate) {
+          const vehiclePlate = vehicle.plate || vehicle.targa
+          if (vehiclePlate) {
+            isForThisVehicle = booking.vehicle_plate === vehiclePlate
+          }
+        }
+
+        if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
+          isForThisVehicle = booking.vehicle_name === vehicle.display_name
+        }
+
+        if (!isForThisVehicle) return false
+        if (booking.status === 'cancelled') return false
+
+        const serviceEnd = new Date(booking.dropoff_date)
+        if (pickupDateTime < serviceEnd) {
+          conflictingBookings.push({
+            bookingId: booking.id,
+            serviceType: booking.service_type,
+            serviceEnd: booking.dropoff_date,
+            type: 'service'
+          })
+          return true
+        }
+        return false
+      })
+
+      if (hasServiceConflict) {
+        console.log(`[Vehicle Availability] ❌ ${vehicle.display_name} - UNAVAILABLE (pickup before service ends)`, { conflicts: conflictingBookings })
+        return false
+      }
+
+      return true
     })
 
     console.log('[Vehicle Availability] ✅ Available vehicles:', {
@@ -578,7 +619,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     })
 
     return availableVehicles
-  }, [formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, vehicles, bookings, editingId])
+  }, [formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, vehicles, bookings, carWashBookings, editingId])
 
 
   const LOCATIONS = [
@@ -713,6 +754,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Client-side filter: 
       // Keep if service_type is NOT 'car_wash' AND NOT 'mechanical_service'
       // We removed the !b.service_name check because some rental bookings might have it populated now
+
+      // First, extract car wash and mechanical bookings for availability checking
+      const carWashAndMechanicalBookings = (allBookings || []).filter(b =>
+        b.service_type === 'car_wash' ||
+        b.service_type === 'mechanical_service' ||
+        b.service_type === 'mechanical'
+      )
+
+      console.log('[ReservationsTab] Car wash/mechanical bookings:', carWashAndMechanicalBookings.length)
+      setCarWashBookings(carWashAndMechanicalBookings)
+
+      // Then filter out service bookings from main bookings display
       const filteredBookings = (allBookings || []).filter(b =>
         b.service_type !== 'car_wash' &&
         b.service_type !== 'mechanical_service' &&
@@ -3246,148 +3299,62 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           </div>
         )}
 
-        {/* Missing Data Modal */}
-        {showMissingDataModal && (
-          <MissingDataModal
+        {/* Missing Fields Modal - Shows only the missing fields */}
+        {showMissingDataModal && tempCustomerData?.id && (
+          <MissingFieldsModal
             isOpen={showMissingDataModal}
+            customerId={tempCustomerData.id}
+            customerData={tempCustomerData}
             missingFields={missingFields}
-            customers={customers}
-            initialData={tempCustomerData}
-            validationContext={validationContext}
             onClose={() => setShowMissingDataModal(false)}
-            onOpenCreate={() => {
-              // Pre-fill data from tempCustomerData (which holds the existing customer data we validated)
-              // or fall back to booking data
-              console.log('[ReservationsTab] Opening NewClientModal with tempCustomerData:', tempCustomerData)
-              console.log('[ReservationsTab] tempCustomerData.id:', tempCustomerData?.id)
-              setCustomerToEdit({
-                id: tempCustomerData?.id, // CRITICAL: Pass the customer ID so modal knows to UPDATE not CREATE
-                ...tempCustomerData, // Use the fetched/validated customer data!
-                nome: tempCustomerData?.nome || currentValidationBooking?.customer_name?.split(' ')[0] || '',
-                cognome: tempCustomerData?.cognome || currentValidationBooking?.customer_name?.split(' ').slice(1).join(' ') || '',
-                email: tempCustomerData?.email || currentValidationBooking?.customer_email || '',
-                phone: tempCustomerData?.telefono || tempCustomerData?.phone || currentValidationBooking?.customer_phone || '',
-                tipo_cliente: tempCustomerData?.tipo_cliente || 'persona_fisica'
-              })
-              setShowMissingDataModal(false)
-              setEditModalOpen(true)
-            }}
-            onSave={async (updates: any) => {
+            onSave={async (updatedData: any) => {
               try {
-                // updates will now contain at least { id: string } coming from the wrapped NewClientModal
-                console.log('[ReservationsTab] Missing Data Saved. Updates:', updates)
+                console.log('[ReservationsTab] Missing fields saved:', updatedData)
 
-                // Keep track of the resolved customer ID
-                let resolvedCustomerId = updates.id || updates.customer_id
+                const resolvedCustomerId = updatedData.id
 
-                if (!resolvedCustomerId) {
-                  console.error('No customer ID returned from save')
-                  return
-                }
-
-                // If in booking context, update local state to use this new/updated client
+                // If in booking context, update form to use this customer
                 if (validationContext === 'booking') {
                   console.log('[ReservationsTab] Resuming booking with customer:', resolvedCustomerId)
                   setFormData(prev => ({ ...prev, customer_id: resolvedCustomerId }))
                   setNewCustomerMode(false)
                 }
 
-                // If context was linking to existing booking (e.g. from table)
-                else if (currentValidationBooking) {
-                  // If we just created/updated a client, we might need to link it
-                  // But NewClientModal already saved the client. We just need to link the booking.
-                  const { error: linkError } = await supabase
-                    .from('bookings')
-                    .update({
-                      user_id: resolvedCustomerId,
-                      // Update cache fields for display
-                      customer_name: updates.full_name || customers.find((c: any) => c.id === resolvedCustomerId)?.full_name
-                    })
-                    .eq('id', currentValidationBooking.id)
-
-                  if (linkError) throw linkError
-                }
-
-                // Success: Reload and Retry
+                // Reload data to refresh customer list
                 await loadData()
                 setShowMissingDataModal(false)
 
+                // If in booking context, automatically continue with booking submission
                 if (validationContext === 'booking') {
-                  // Retry booking submission skipping validation (true), passing the NEW/UPDATED customer ID
-                  // We add a small delay to ensure state updates propagate
+                  console.log('[ReservationsTab] Auto-resuming booking submission...')
+                  // Use setTimeout to ensure state updates have propagated
                   setTimeout(() => {
-                    console.log('[ReservationsTab] Retrying booking submission...')
                     processBookingSubmission(true, resolvedCustomerId)
-                  }, 500)
-                } else if (currentValidationBooking) {
-                  const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
-                  if (fresh) {
-                    if (validationContext === 'invoice') handleGenerateInvoice(fresh)
-                    else handleGenerateContract(fresh, true)
-                  }
+                  }, 100)
                 }
-
-              } catch (err: any) {
-                console.error('Error post-save:', err)
-                alert('Errore dopo il salvataggio: ' + err.message)
+                // If in contract/invoice context, retry generation
+                else if (validationContext === 'contract' && currentValidationBooking) {
+                  console.log('[ReservationsTab] Retrying contract generation...')
+                  setTimeout(() => {
+                    handleGenerateContract(currentValidationBooking, true)
+                  }, 100)
+                } else if (validationContext === 'invoice' && currentValidationBooking) {
+                  console.log('[ReservationsTab] Retrying invoice generation...')
+                  setTimeout(() => {
+                    handleGenerateInvoice(currentValidationBooking)
+                  }, 100)
+                }
+              } catch (error: any) {
+                console.error('[ReservationsTab] Error after saving missing fields:', error)
+                alert(`Errore: ${error.message}`)
               }
             }}
           />
         )}
+
       </div >
     </>
   )
 }
 
-function MissingDataModal({ isOpen, initialData, onSave, onClose }: any) {
-  // Instead of a custom partial form, we reuse the robust NewClientModal logic
-  // but wrap it to handle the specific "saving" and "resuming" flow required here.
 
-  // We need to map the "missing fields" concept to letting the user edit the profile.
-  // Since we already have NewClientModal imported in this file, we can simply render it!
-
-  // However, NewClientModal manages its own open/close state. 
-  // We can just proxy the props.
-
-  const [data, setData] = useState(initialData || {})
-
-  // Sync data with initialData
-  useEffect(() => {
-    if (initialData) setData(initialData)
-  }, [initialData])
-
-  // Helper to convert our specialized 'missing data' save to the generic 'onClientCreated' callback
-  const handleClientSaved = (clientId: string) => {
-    // Determine action type based on context (update vs create)
-    // If we have an ID in initialData, it's likely an update.
-    const action = (initialData?.id && !initialData?._isNew) ? 'update' : 'create'
-
-    // Call the parent's onSave handler which handles the resume flow
-    // We pass the ID and let the parent re-fetch if needed, or we pass the data if we had it.
-    // The previous implementation expected fully formed data object.
-    // But since NewClientModal handles the DB saving itself, we just need to notify the parent 
-    // that "hey, client X is ready now".
-
-    // We construct a minimal object that onSave expects sufficient to resume
-    const payload = {
-      id: clientId,
-      customer_id: clientId // Alias often used
-    }
-
-    onSave(payload, action)
-  }
-
-  // If NewClientModal is already imported and used in the main component, 
-  // we should arguably just use IT instead of this separate MissingDataModal component.
-  // But to minimize refactor risk of the main component structure, we'll implement this modal
-  // as a wrapper around NewClientModal.
-
-  return (
-    <NewClientModal
-      isOpen={isOpen}
-      onClose={onClose}
-      initialData={data}
-      onClientCreated={handleClientSaved}
-    />
-  )
-}
