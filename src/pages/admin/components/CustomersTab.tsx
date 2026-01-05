@@ -1874,7 +1874,10 @@ export default function CustomersTab() {
         isOpen={showNewClientModal}
         onClose={() => {
           setShowNewClientModal(false)
-          setSelectedCustomer(null)
+          // Defer resetting selectedCustomer to prevent race condition
+          // The modal's useEffect depends on initialData, so if we reset it immediately,
+          // it will trigger the "new mode" path and reset editingId
+          setTimeout(() => setSelectedCustomer(null), 100)
         }}
         onClientCreated={() => {
           setShowNewClientModal(false)
