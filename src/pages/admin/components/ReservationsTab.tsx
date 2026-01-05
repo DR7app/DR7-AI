@@ -428,6 +428,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [penaltyModalOpen, setPenaltyModalOpen] = useState(false)
   const [selectedBookingForPenalty, setSelectedBookingForPenalty] = useState<Booking | null>(null)
 
+  // Confirmation Modal State
+  const [confirmationModalOpen, setConfirmationModalOpen] = useState(false)
+  const [confirmationModalConfig, setConfirmationModalConfig] = useState<{
+    title: string
+    message: string
+    isDangerous?: boolean
+    onConfirm: () => void | Promise<void>
+  } | null>(null)
+
   async function openEditCustomer(customerId: string) {
     if (!customerId || customerId === 'undefined') {
       alert("ID cliente non valido. Impossibile aprire la scheda cliente.")
@@ -3166,6 +3175,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 } else if (actionType === 'create') {
                   // Create new client from the provided data
                   console.log('[MissingDataModal] Attempting to CREATE customer:', updates)
+
+                  // Filter out internal flags like _isNew
+                  const { _isNew, ...cleanUpdates } = updates
 
                   try {
                     // Construct proper full_name
