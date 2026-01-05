@@ -3193,6 +3193,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               // Pre-fill data from tempCustomerData (which holds the existing customer data we validated)
               // or fall back to booking data
               setCustomerToEdit({
+                id: tempCustomerData?.id, // CRITICAL: Pass the customer ID so modal knows to UPDATE not CREATE
                 ...tempCustomerData, // Use the fetched/validated customer data!
                 nome: tempCustomerData?.nome || currentValidationBooking?.customer_name?.split(' ')[0] || '',
                 cognome: tempCustomerData?.cognome || currentValidationBooking?.customer_name?.split(' ').slice(1).join(' ') || '',
