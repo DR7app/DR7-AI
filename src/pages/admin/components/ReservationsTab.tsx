@@ -3440,6 +3440,10 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, valid
                 // Check if this customer actually exists in customers_extended
                 // If initialData has an ID but no other fields, it means we created a minimal record
                 // and this should be a CREATE, not an UPDATE
+
+                // Also check for explicit _isNew flag
+                const isExplicitlyNew = data._isNew || initialData?._isNew
+
                 const hasExistingData = initialData && (
                   initialData.codice_fiscale ||
                   initialData.data_nascita ||
@@ -3447,7 +3451,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, valid
                   initialData.indirizzo
                 )
 
-                if (!hasExistingData && (data.nome || data.cognome)) {
+                if (isExplicitlyNew || (!hasExistingData && (data.nome || data.cognome))) {
                   // This is a new customer - create it
                   console.log('[MissingDataModal] Creating new customer with data:', data)
                   onSave({ ...initialData, ...data }, 'create')
