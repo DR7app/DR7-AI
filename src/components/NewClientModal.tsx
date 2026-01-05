@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 
 interface NewClientModalProps {
@@ -119,58 +119,110 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   const [isSaving, setIsSaving] = useState(false)
 
   // Load initial data when editing
-  useState(() => {
-    if (initialData && isOpen) {
-      setEditingId(initialData.id || null)
-      setFormData({
-        tipo_cliente: initialData.tipo_cliente || 'persona_fisica',
-        nazione: initialData.nazione || 'Italia',
-        telefono: initialData.telefono || '',
-        email: initialData.email || '',
-        nome: initialData.nome || '',
-        cognome: initialData.cognome || '',
-        codice_fiscale: initialData.codice_fiscale || '',
-        sesso: initialData.sesso || '',
-        data_nascita: initialData.data_nascita || '',
-        citta_nascita: initialData.citta_nascita || '',
-        provincia_nascita: initialData.provincia_nascita || '',
-        indirizzo: initialData.indirizzo || '',
-        numero_civico: initialData.numero_civico || '',
-        codice_postale: initialData.codice_postale || '',
-        citta_residenza: initialData.citta_residenza || '',
-        provincia_residenza: initialData.provincia_residenza || '',
-        pec_persona: initialData.pec || '',
-        tipo_patente: initialData.tipo_patente || '',
-        numero_patente: initialData.numero_patente || '',
-        emessa_da: initialData.emessa_da || '',
-        data_rilascio_patente: initialData.data_rilascio_patente || '',
-        scadenza_patente: initialData.scadenza_patente || '',
-        denominazione: initialData.ragione_sociale || initialData.denominazione || '',
-        partita_iva: initialData.partita_iva || '',
-        cf_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.codice_fiscale || '') : '',
-        sede_legale: initialData.sede_legale || '',
-        sede_operativa: initialData.sede_operativa || '',
-        codice_destinatario: initialData.codice_destinatario || '',
-        pec_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.pec || '') : '',
-        nome_rappresentante: initialData.nome_rappresentante || '',
-        cognome_rappresentante: initialData.cognome_rappresentante || '',
-        cf_rappresentante: initialData.cf_rappresentante || '',
-        ruolo_rappresentante: initialData.ruolo_rappresentante || '',
-        tipo_documento_rappresentante: initialData.tipo_documento_rappresentante || '',
-        numero_documento_rappresentante: initialData.numero_documento_rappresentante || '',
-        data_rilascio_documento: initialData.data_rilascio_documento || '',
-        luogo_rilascio_documento: initialData.luogo_rilascio_documento || '',
-        indirizzo_ddt: initialData.metadata?.indirizzo_ddt || '',
-        contatti_cliente: initialData.metadata?.contatti_cliente || '',
-        codice_univoco: initialData.codice_univoco || '',
-        cf_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.codice_fiscale || '') : '',
-        ente_ufficio: initialData.ente_o_ufficio || initialData.ente_ufficio || '',
-        citta: initialData.citta || '',
-        partita_iva_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.partita_iva || '') : '',
-        pec_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.pec || '') : ''
-      })
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setEditingId(initialData.id || null)
+        setFormData({
+          tipo_cliente: initialData.tipo_cliente || 'persona_fisica',
+          nazione: initialData.nazione || 'Italia',
+          telefono: initialData.telefono || '',
+          email: initialData.email || '',
+          nome: initialData.nome || '',
+          cognome: initialData.cognome || '',
+          codice_fiscale: initialData.codice_fiscale || '',
+          sesso: initialData.sesso || '',
+          data_nascita: initialData.data_nascita || '',
+          citta_nascita: initialData.citta_nascita || '',
+          provincia_nascita: initialData.provincia_nascita || '',
+          indirizzo: initialData.indirizzo || '',
+          numero_civico: initialData.numero_civico || '',
+          codice_postale: initialData.codice_postale || '',
+          citta_residenza: initialData.citta_residenza || '',
+          provincia_residenza: initialData.provincia_residenza || '',
+          pec_persona: initialData.pec || '',
+          tipo_patente: initialData.tipo_patente || '',
+          numero_patente: initialData.numero_patente || '',
+          emessa_da: initialData.emessa_da || '',
+          data_rilascio_patente: initialData.data_rilascio_patente || '',
+          scadenza_patente: initialData.scadenza_patente || '',
+          denominazione: initialData.ragione_sociale || initialData.denominazione || '',
+          partita_iva: initialData.partita_iva || '',
+          cf_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.codice_fiscale || '') : '',
+          sede_legale: initialData.sede_legale || '',
+          sede_operativa: initialData.sede_operativa || '',
+          codice_destinatario: initialData.codice_destinatario || '',
+          pec_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.pec || '') : '',
+          nome_rappresentante: initialData.nome_rappresentante || '',
+          cognome_rappresentante: initialData.cognome_rappresentante || '',
+          cf_rappresentante: initialData.cf_rappresentante || '',
+          ruolo_rappresentante: initialData.ruolo_rappresentante || '',
+          tipo_documento_rappresentante: initialData.tipo_documento_rappresentante || '',
+          numero_documento_rappresentante: initialData.numero_documento_rappresentante || '',
+          data_rilascio_documento: initialData.data_rilascio_documento || '',
+          luogo_rilascio_documento: initialData.luogo_rilascio_documento || '',
+          indirizzo_ddt: initialData.metadata?.indirizzo_ddt || '',
+          contatti_cliente: initialData.metadata?.contatti_cliente || '',
+          codice_univoco: initialData.codice_univoco || '',
+          cf_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.codice_fiscale || '') : '',
+          ente_ufficio: initialData.ente_o_ufficio || initialData.ente_ufficio || '',
+          citta: initialData.citta || '',
+          partita_iva_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.partita_iva || '') : '',
+          pec_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.pec || '') : ''
+        })
+      } else {
+        // Reset if opening in "New" mode (though handleClose usually does this, it's safer here too)
+        setEditingId(null)
+        setFormData({
+          tipo_cliente: 'persona_fisica',
+          nazione: 'Italia',
+          telefono: '',
+          email: '',
+          nome: '',
+          cognome: '',
+          codice_fiscale: '',
+          sesso: '',
+          data_nascita: '',
+          citta_nascita: '',
+          provincia_nascita: '',
+          indirizzo: '',
+          numero_civico: '',
+          codice_postale: '',
+          citta_residenza: '',
+          provincia_residenza: '',
+          pec_persona: '',
+          tipo_patente: '',
+          numero_patente: '',
+          emessa_da: '',
+          data_rilascio_patente: '',
+          scadenza_patente: '',
+          denominazione: '',
+          partita_iva: '',
+          cf_azienda: '',
+          sede_legale: '',
+          sede_operativa: '',
+          codice_destinatario: '',
+          pec_azienda: '',
+          nome_rappresentante: '',
+          cognome_rappresentante: '',
+          cf_rappresentante: '',
+          ruolo_rappresentante: '',
+          tipo_documento_rappresentante: '',
+          numero_documento_rappresentante: '',
+          data_rilascio_documento: '',
+          luogo_rilascio_documento: '',
+          indirizzo_ddt: '',
+          contatti_cliente: '',
+          codice_univoco: '',
+          cf_pa: '',
+          ente_ufficio: '',
+          citta: '',
+          partita_iva_pa: '',
+          pec_pa: ''
+        })
+      }
     }
-  })
+  }, [isOpen, initialData])
 
   // Validation functions
   const validateEmail = (email: string): boolean => {

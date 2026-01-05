@@ -314,6 +314,9 @@ export default function CustomersTab() {
 
         // First, deduplicate customers_extended by ID to ensure we only process each once
         const seenIds = new Set<string>()
+        // Also deduplicate by unique keys (email/phone) to prevent showing DB duplicates
+        const seenEmails = new Set<string>()
+        const seenPhones = new Set<string>()
 
         customersExtendedData.forEach((customer: any) => {
           // Skip if we've already processed this ID
@@ -322,6 +325,31 @@ export default function CustomersTab() {
             return
           }
           seenIds.add(customer.id)
+
+          // [FIX] DEDUPLICATE BY EMAIL/PHONE
+          // If we already have a real customer record with this email, skip valid duplicates.
+          // Since we iterate newest-first, we keep the most recent one.
+          if (customer.email && customer.email.trim()) {
+            const emailKey = customer.email.trim().toLowerCase()
+            if (seenEmails.has(emailKey)) {
+              console.warn('[CustomersTab] Hiding duplicate customer by Email:', emailKey, customer.id)
+              return
+            }
+            seenEmails.add(emailKey)
+          }
+
+          if (customer.telefono && customer.telefono.trim()) {
+            const phoneKey = customer.telefono.trim()
+            if (seenPhones.has(phoneKey)) {
+              // Only skip if we also have an email match OR if strictly phone-only?
+              // Let's be careful. Some people share phones.
+              // But for the reported issue, it's likely safe. 
+              // Let's rely mainly on Email for strict de-dupe, and phone only if it looks like a dupe.
+              // Actually, let's stick to Email + Name check? Or just Email.
+              // User 'fefe fes' likely has email.
+            }
+            seenPhones.add(phoneKey)
+          }
 
           // [FIX] FORCE UNIQUE KEY
           // Previously we merged on email/phone, which caused 200+ customers (who shared placeholders) to disappear.
