@@ -406,9 +406,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         }
       } else if (formData.tipo_cliente === 'pubblica_amministrazione') {
         customerData.denominazione = formData.ente_ufficio
+        customerData.ente_ufficio = formData.ente_ufficio  // Also save to ente_ufficio field
         customerData.codice_univoco = formData.codice_univoco.toUpperCase()
         customerData.codice_fiscale = formData.cf_pa.toUpperCase()
         customerData.indirizzo = formData.citta
+        customerData.citta = formData.citta  // Also save to citta field
         if (formData.partita_iva_pa) customerData.partita_iva = formData.partita_iva_pa
         if (formData.pec_pa) customerData.pec = formData.pec_pa
       }
