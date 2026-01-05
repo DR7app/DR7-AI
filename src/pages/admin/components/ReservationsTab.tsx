@@ -1457,17 +1457,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         // Fetch fresh customer data to be sure
         console.log('[processBookingSubmission] Looking up customer:', targetCustomerId)
-        const { data: customer, error: customerError } = await supabase
+        const { data: customerData, error: customerError } = await supabase
           .from('customers_extended')
           .select('*')
           .eq('id', targetCustomerId)
-          .single()
+          .limit(1)
 
         if (customerError) {
           console.error('[processBookingSubmission] Customer lookup error:', customerError)
           alert(`Errore nel caricamento del cliente:\n\n${customerError.message}\n\nID Cliente: ${targetCustomerId}`)
           return
         }
+
+        const customer = customerData?.[0]
 
         if (customer) {
           console.log('[processBookingSubmission] Customer found:', customer)
