@@ -73,6 +73,7 @@ interface ClientFormData {
 }
 
 export default function NewClientModal({ isOpen, onClose, onClientCreated, initialData }: NewClientModalProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<ClientFormData>({
     tipo_cliente: 'persona_fisica',
     nazione: 'Italia',
@@ -126,146 +127,152 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   // Populate form data when initialData changes
   useEffect(() => {
-    if (initialData && isOpen) {
-      console.log('Populating modal with data:', initialData)
+    if (isOpen) {
+      if (initialData) {
+        console.log('[NewClientModal] Populating modal with data:', initialData)
+        console.log('[NewClientModal] Setting editingId to:', initialData.id)
+        setEditingId(initialData.id || null)
 
-      // Determine type
-      let type: ClientType = initialData.tipo_cliente || 'persona_fisica'
+        // Determine type
+        let type: ClientType = initialData.tipo_cliente || 'persona_fisica'
 
-      // Parse metadata safely
-      const metadata = initialData.metadata || {}
+        // Parse metadata safely
+        const metadata = initialData.metadata || {}
 
-      setFormData({
-        tipo_cliente: type,
-        // Global
-        nazione: initialData.nazione || 'Italia',
-        telefono: initialData.phone || initialData.telefono || '',
-        email: initialData.email || '',
+        setFormData({
+          tipo_cliente: type,
+          // Global
+          nazione: initialData.nazione || 'Italia',
+          telefono: initialData.phone || initialData.telefono || '',
+          email: initialData.email || '',
 
-        // Persona Fisica
-        nome: initialData.nome || (initialData.full_name ? initialData.full_name.split(' ')[0] : ''),
-        cognome: initialData.cognome || (initialData.full_name ? initialData.full_name.split(' ').slice(1).join(' ') : ''),
-        codice_fiscale: initialData.codice_fiscale || '',
-        sesso: metadata.sesso || initialData.sesso || '',
-        data_nascita: initialData.data_nascita || '',
-        luogo_nascita: initialData.luogo_nascita || '',
-        provincia_nascita: metadata.provincia_nascita || initialData.provincia_nascita || '',
-        // Parse address to separate street number if needed
-        indirizzo: (() => {
-          const fullAddress = initialData.indirizzo || '';
-          const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
-          // If there's a number at the end and no numero_civico, extract just the street
-          if (numberMatch && !initialData.numero_civico) {
-            return fullAddress.replace(/\s+\d+[a-zA-Z]?$/, '').trim();
-          }
-          return fullAddress;
-        })(),
-        numero_civico: (() => {
-          // If numero_civico exists, use it
-          if (initialData.numero_civico) {
-            return initialData.numero_civico;
-          }
-          // Otherwise try to extract from indirizzo
-          const fullAddress = initialData.indirizzo || '';
-          const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
-          return numberMatch ? numberMatch[1] : '';
-        })(),
-        codice_postale: initialData.codice_postale || '',
-        citta_residenza: initialData.citta_residenza || '',
-        provincia_residenza: initialData.provincia_residenza || '',
-        pec_persona: initialData.pec || '',
+          // Persona Fisica
+          nome: initialData.nome || (initialData.full_name ? initialData.full_name.split(' ')[0] : ''),
+          cognome: initialData.cognome || (initialData.full_name ? initialData.full_name.split(' ').slice(1).join(' ') : ''),
+          codice_fiscale: initialData.codice_fiscale || '',
+          sesso: metadata.sesso || initialData.sesso || '',
+          data_nascita: initialData.data_nascita || '',
+          luogo_nascita: initialData.luogo_nascita || '',
+          provincia_nascita: metadata.provincia_nascita || initialData.provincia_nascita || '',
+          // Parse address to separate street number if needed
+          indirizzo: (() => {
+            const fullAddress = initialData.indirizzo || '';
+            const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
+            // If there's a number at the end and no numero_civico, extract just the street
+            if (numberMatch && !initialData.numero_civico) {
+              return fullAddress.replace(/\s+\d+[a-zA-Z]?$/, '').trim();
+            }
+            return fullAddress;
+          })(),
+          numero_civico: (() => {
+            // If numero_civico exists, use it
+            if (initialData.numero_civico) {
+              return initialData.numero_civico;
+            }
+            // Otherwise try to extract from indirizzo
+            const fullAddress = initialData.indirizzo || '';
+            const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
+            return numberMatch ? numberMatch[1] : '';
+          })(),
+          codice_postale: initialData.codice_postale || '',
+          citta_residenza: initialData.citta_residenza || '',
+          provincia_residenza: initialData.provincia_residenza || '',
+          pec_persona: initialData.pec || '',
 
-        // Patente
-        patente_numero: metadata.patente?.numero || initialData.numero_patente || initialData.driver_license_number || initialData.patente || '',
-        patente_tipo: metadata.patente?.tipo || initialData.tipo_patente || '',
-        patente_ente: metadata.patente?.ente || initialData.emessa_da || '',
-        patente_rilascio: metadata.patente?.rilascio || initialData.data_rilascio_patente || '',
-        patente_scadenza: metadata.patente?.scadenza || initialData.scadenza_patente || '',
+          // Patente
+          patente_numero: metadata.patente?.numero || initialData.numero_patente || initialData.driver_license_number || initialData.patente || '',
+          patente_tipo: metadata.patente?.tipo || initialData.tipo_patente || '',
+          patente_ente: metadata.patente?.ente || initialData.emessa_da || '',
+          patente_rilascio: metadata.patente?.rilascio || initialData.data_rilascio_patente || '',
+          patente_scadenza: metadata.patente?.scadenza || initialData.scadenza_patente || '',
 
-        // Azienda
-        denominazione: initialData.ragione_sociale || initialData.denominazione || '',
-        partita_iva: initialData.partita_iva || '',
-        codice_destinatario: initialData.codice_destinatario || '',
-        indirizzo_azienda: initialData.indirizzo_azienda || initialData.indirizzo || '',
-        sede_operativa: metadata.sede_operativa || '',
-        cf_azienda: initialData.codice_fiscale || '',
-        sede_legale: initialData.sede_legale || initialData.indirizzo || '',
-        pec_azienda: initialData.pec || '',
-        indirizzo_ddt: metadata.indirizzo_ddt || initialData.indirizzo_ddt || '',
-        contatti_cliente: metadata.contatti_cliente || initialData.contatti_cliente || '',
+          // Azienda
+          denominazione: initialData.ragione_sociale || initialData.denominazione || '',
+          partita_iva: initialData.partita_iva || '',
+          codice_destinatario: initialData.codice_destinatario || '',
+          indirizzo_azienda: initialData.indirizzo_azienda || initialData.indirizzo || '',
+          sede_operativa: metadata.sede_operativa || '',
+          cf_azienda: initialData.codice_fiscale || '',
+          sede_legale: initialData.sede_legale || initialData.indirizzo || '',
+          pec_azienda: initialData.pec || '',
+          indirizzo_ddt: metadata.indirizzo_ddt || initialData.indirizzo_ddt || '',
+          contatti_cliente: metadata.contatti_cliente || initialData.contatti_cliente || '',
 
-        // Rappresentante
-        rappresentante_nome: metadata.rappresentante?.nome || '',
-        rappresentante_cognome: metadata.rappresentante?.cognome || '',
-        rappresentante_cf: metadata.rappresentante?.cf || '',
-        rappresentante_ruolo: metadata.rappresentante?.ruolo || '',
-        rappresentante_doc_tipo: metadata.rappresentante?.documento?.tipo || '',
-        rappresentante_doc_numero: metadata.rappresentante?.documento?.numero || '',
-        rappresentante_doc_rilascio: metadata.rappresentante?.documento?.rilascio || '',
-        rappresentante_doc_scadenza: metadata.rappresentante?.documento?.scadenza || '',
-        rappresentante_doc_luogo: metadata.rappresentante?.documento?.luogo || '',
+          // Rappresentante
+          rappresentante_nome: metadata.rappresentante?.nome || '',
+          rappresentante_cognome: metadata.rappresentante?.cognome || '',
+          rappresentante_cf: metadata.rappresentante?.cf || '',
+          rappresentante_ruolo: metadata.rappresentante?.ruolo || '',
+          rappresentante_doc_tipo: metadata.rappresentante?.documento?.tipo || '',
+          rappresentante_doc_numero: metadata.rappresentante?.documento?.numero || '',
+          rappresentante_doc_rilascio: metadata.rappresentante?.documento?.rilascio || '',
+          rappresentante_doc_scadenza: metadata.rappresentante?.documento?.scadenza || '',
+          rappresentante_doc_luogo: metadata.rappresentante?.documento?.luogo || '',
 
-        // PA
-        codice_univoco: initialData.codice_univoco || '',
-        cf_pa: initialData.codice_fiscale_pa || initialData.codice_fiscale || '',
-        ente_ufficio: initialData.ente_ufficio || initialData.denominazione || '',
-        citta: initialData.citta || '',
-        partita_iva_pa: initialData.partita_iva || '',
-        pec_pa: initialData.pec || '',
-        note: initialData.notes || initialData.note || ''
-      })
-    } else if (isOpen && !initialData) {
-      // Reset if opening empty
-      setFormData({
-        tipo_cliente: 'persona_fisica',
-        nazione: 'Italia',
-        telefono: '',
-        email: '',
-        nome: '',
-        cognome: '',
-        codice_fiscale: '',
-        sesso: '',
-        data_nascita: '',
-        luogo_nascita: '',
-        provincia_nascita: '',
-        indirizzo: '',
-        numero_civico: '',
-        codice_postale: '',
-        citta_residenza: '',
-        provincia_residenza: '',
-        pec_persona: '',
-        patente_numero: '',
-        patente_tipo: '',
-        patente_ente: '',
-        patente_rilascio: '',
-        patente_scadenza: '',
-        denominazione: '',
-        partita_iva: '',
-        codice_destinatario: '',
-        indirizzo_azienda: '',
-        sede_operativa: '',
-        cf_azienda: '',
-        sede_legale: '',
-        pec_azienda: '',
-        indirizzo_ddt: '',
-        contatti_cliente: '',
-        rappresentante_nome: '',
-        rappresentante_cognome: '',
-        rappresentante_cf: '',
-        rappresentante_ruolo: '',
-        rappresentante_doc_tipo: '',
-        rappresentante_doc_numero: '',
-        rappresentante_doc_rilascio: '',
-        rappresentante_doc_scadenza: '',
-        rappresentante_doc_luogo: '',
-        codice_univoco: '',
-        cf_pa: '',
-        ente_ufficio: '',
-        citta: '',
-        partita_iva_pa: '',
-        pec_pa: '',
-        note: ''
-      })
+          // PA
+          codice_univoco: initialData.codice_univoco || '',
+          cf_pa: initialData.codice_fiscale_pa || initialData.codice_fiscale || '',
+          ente_ufficio: initialData.ente_ufficio || initialData.denominazione || '',
+          citta: initialData.citta || '',
+          partita_iva_pa: initialData.partita_iva || '',
+          pec_pa: initialData.pec || '',
+          note: initialData.notes || initialData.note || ''
+        })
+      } else {
+        // Reset if opening in new mode
+        console.log('[NewClientModal] Opening in NEW mode - resetting form')
+        setEditingId(null)
+        setFormData({
+          tipo_cliente: 'persona_fisica',
+          nazione: 'Italia',
+          telefono: '',
+          email: '',
+          nome: '',
+          cognome: '',
+          codice_fiscale: '',
+          sesso: '',
+          data_nascita: '',
+          luogo_nascita: '',
+          provincia_nascita: '',
+          indirizzo: '',
+          numero_civico: '',
+          codice_postale: '',
+          citta_residenza: '',
+          provincia_residenza: '',
+          pec_persona: '',
+          patente_numero: '',
+          patente_tipo: '',
+          patente_ente: '',
+          patente_rilascio: '',
+          patente_scadenza: '',
+          denominazione: '',
+          partita_iva: '',
+          codice_destinatario: '',
+          indirizzo_azienda: '',
+          sede_operativa: '',
+          cf_azienda: '',
+          sede_legale: '',
+          pec_azienda: '',
+          indirizzo_ddt: '',
+          contatti_cliente: '',
+          rappresentante_nome: '',
+          rappresentante_cognome: '',
+          rappresentante_cf: '',
+          rappresentante_ruolo: '',
+          rappresentante_doc_tipo: '',
+          rappresentante_doc_numero: '',
+          rappresentante_doc_rilascio: '',
+          rappresentante_doc_scadenza: '',
+          rappresentante_doc_luogo: '',
+          codice_univoco: '',
+          cf_pa: '',
+          ente_ufficio: '',
+          citta: '',
+          partita_iva_pa: '',
+          pec_pa: '',
+          note: ''
+        })
+      }
     }
   }, [initialData, isOpen])
 
@@ -457,12 +464,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       let resultData;
       let createdClientId: string | null = null;
 
-      // UPDATE EXISTING CUSTOMER
       console.log('🔍 DEBUG: initialData:', initialData)
       console.log('🔍 DEBUG: initialData?.id:', initialData?.id)
-      console.log('🔍 DEBUG: Has initialData?.id?', !!initialData?.id)
+      console.log('🔍 DEBUG: editingId state:', editingId)
+      console.log('🔍 DEBUG: Will UPDATE?', !!editingId)
 
-      if (initialData?.id) {
+      if (editingId) {
         console.log('🔄 Updating existing customer:', initialData.id)
         console.log('📝 Customer data to save:', customerData)
 
@@ -480,7 +487,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         console.log('✅ customers_extended updated successfully:', updatedExtended)
         resultData = updatedExtended
-        createdClientId = initialData.id
+        createdClientId = editingId
 
         // 2. Also update basic 'customers' table to keep sync
         const basicData = {
@@ -498,7 +505,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         const { error: basicError } = await supabase
           .from('customers')
           .update(basicData)
-          .eq('id', initialData.id)
+          .eq('id', editingId)
 
         if (basicError) {
           console.warn('⚠️ Could not update basic customers table:', basicError)
@@ -516,7 +523,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
 
       // CREATE NEW CUSTOMER
-      if (!initialData?.id) {
+      if (!editingId) {
         // CREATE New
         const { data: newClient, error } = await supabase
           .from('customers_extended')
