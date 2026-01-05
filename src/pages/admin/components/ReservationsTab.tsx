@@ -3225,12 +3225,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 } else {
                   // Regular update for existing client
-                  // Get ID from updates or currentValidationBooking or formData
+                  // Get ID from updates or currentValidationBooking or formData or tempCustomerData
                   const customerId = updates.id ||
+                    tempCustomerData?.id ||
                     (currentValidationBooking ? (currentValidationBooking.user_id || currentValidationBooking.booking_details?.customer?.id) : null) ||
                     formData.customer_id
 
-                  if (!customerId) throw new Error('Customer ID missing for update')
+                  if (!customerId) {
+                    console.error('[MissingDataModal onSave] Customer ID missing for update. Available data:', {
+                      updates,
+                      tempCustomerData,
+                      currentValidationBooking,
+                      formData: { customer_id: formData.customer_id }
+                    })
+                    throw new Error('Customer ID missing for update')
+                  }
+
+                  console.log('[MissingDataModal onSave] Updating customer:', customerId, 'with data:', updates)
 
                   const { error } = await supabase
                     .from('customers_extended')
@@ -3238,6 +3249,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     .eq('id', customerId)
 
                   if (error) throw error
+
+                  // Store the customer ID for retry
+                  resolvedCustomerId = customerId
                 }
 
                 // Success: Reload and Retry
@@ -3415,8 +3429,13 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, valid
                   onSave({ ...initialData, ...data }, 'create')
                 } else {
                   // This is an existing customer - update it
-                  console.log('[MissingDataModal] Updating existing customer with data:', data)
-                  onSave(data, 'update')
+                  // Make sure to include the ID from initialData
+                  const updateData = {
+                    ...data,
+                    id: data.id || initialData?.id // Preserve the customer ID
+                  }
+                  console.log('[MissingDataModal] Updating existing customer with data:', updateData)
+                  onSave(updateData, 'update')
                 }
               }
             }}
