@@ -2380,20 +2380,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   </div>
                 ) : (
                   <Select
-                    label={`Veicolo (${getAvailableVehicles().length} disponibili)`}
+                    label={`Veicolo (${getAvailableVehicles.length} disponibili)`}
                     required
                     value={formData.vehicle_id}
                     onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
                     options={[
                       { value: '', label: 'Seleziona veicolo...' },
-                      ...getAvailableVehicles().map(v => ({
+                      ...getAvailableVehicles.map(v => ({
                         value: v.id,
                         label: v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
                       }))
                     ]}
                   />
                 )}
-                {formData.pickup_date && formData.return_date && getAvailableVehicles().length === 0 && (
+                {formData.pickup_date && formData.return_date && getAvailableVehicles.length === 0 && (
                   <p className="text-red-400 text-sm mt-2">
                     ❌ Nessun veicolo disponibile per le date selezionate
                   </p>
