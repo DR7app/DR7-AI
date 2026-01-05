@@ -1828,18 +1828,13 @@ export default function CustomersTab() {
           setShowNewClientModal(false)
           setSelectedCustomer(null)
         }}
-        onClientCreated={(clientId) => {
+        onClientCreated={() => {
           setShowNewClientModal(false)
           setSelectedCustomer(null)
           loadCustomers()
-
-          // If we're viewing details for this customer, refresh the details view
-          if (viewingCustomerDetails?.id === clientId) {
-            handleViewCustomerDetails({ ...viewingCustomerDetails, id: clientId } as Customer)
-          }
         }}
         initialData={selectedCustomer}
       />
-    </div >
+    </div>
   )
 }

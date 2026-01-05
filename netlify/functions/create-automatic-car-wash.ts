@@ -79,7 +79,7 @@ export const handler: Handler = async (event) => {
             appointment_date: appointmentDate,
             appointment_time: appointmentTime,
             pickup_date: appointmentDate,
-            dropoff_date: appointmentDate,
+            dropoff_date: endDateTime.toISOString(), // Fixed: Use end time (appointment + 45 min)
             pickup_location: 'DR7 Empire - Car Wash Interno',
             dropoff_location: 'DR7 Empire - Car Wash Interno',
             price_total: 0, // Free internal booking
