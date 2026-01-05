@@ -5,6 +5,7 @@ interface NewClientModalProps {
   isOpen: boolean
   onClose: () => void
   onClientCreated?: (clientId: string) => void
+  initialData?: any // Customer data for editing
 }
 
 type ClientType = 'persona_fisica' | 'azienda' | 'pubblica_amministrazione'
@@ -64,7 +65,8 @@ interface ClientFormData {
   pec_pa: string
 }
 
-export default function NewClientModal({ isOpen, onClose, onClientCreated }: NewClientModalProps) {
+export default function NewClientModal({ isOpen, onClose, onClientCreated, initialData }: NewClientModalProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<ClientFormData>({
     tipo_cliente: 'persona_fisica',
     nazione: 'Italia',
@@ -115,6 +117,60 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
+
+  // Load initial data when editing
+  useState(() => {
+    if (initialData && isOpen) {
+      setEditingId(initialData.id || null)
+      setFormData({
+        tipo_cliente: initialData.tipo_cliente || 'persona_fisica',
+        nazione: initialData.nazione || 'Italia',
+        telefono: initialData.telefono || '',
+        email: initialData.email || '',
+        nome: initialData.nome || '',
+        cognome: initialData.cognome || '',
+        codice_fiscale: initialData.codice_fiscale || '',
+        sesso: initialData.sesso || '',
+        data_nascita: initialData.data_nascita || '',
+        citta_nascita: initialData.citta_nascita || '',
+        provincia_nascita: initialData.provincia_nascita || '',
+        indirizzo: initialData.indirizzo || '',
+        numero_civico: initialData.numero_civico || '',
+        codice_postale: initialData.codice_postale || '',
+        citta_residenza: initialData.citta_residenza || '',
+        provincia_residenza: initialData.provincia_residenza || '',
+        pec_persona: initialData.pec || '',
+        tipo_patente: initialData.tipo_patente || '',
+        numero_patente: initialData.numero_patente || '',
+        emessa_da: initialData.emessa_da || '',
+        data_rilascio_patente: initialData.data_rilascio_patente || '',
+        scadenza_patente: initialData.scadenza_patente || '',
+        denominazione: initialData.ragione_sociale || initialData.denominazione || '',
+        partita_iva: initialData.partita_iva || '',
+        cf_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.codice_fiscale || '') : '',
+        sede_legale: initialData.sede_legale || '',
+        sede_operativa: initialData.sede_operativa || '',
+        codice_destinatario: initialData.codice_destinatario || '',
+        pec_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.pec || '') : '',
+        nome_rappresentante: initialData.nome_rappresentante || '',
+        cognome_rappresentante: initialData.cognome_rappresentante || '',
+        cf_rappresentante: initialData.cf_rappresentante || '',
+        ruolo_rappresentante: initialData.ruolo_rappresentante || '',
+        tipo_documento_rappresentante: initialData.tipo_documento_rappresentante || '',
+        numero_documento_rappresentante: initialData.numero_documento_rappresentante || '',
+        data_rilascio_documento: initialData.data_rilascio_documento || '',
+        luogo_rilascio_documento: initialData.luogo_rilascio_documento || '',
+        indirizzo_ddt: initialData.metadata?.indirizzo_ddt || '',
+        contatti_cliente: initialData.metadata?.contatti_cliente || '',
+        codice_univoco: initialData.codice_univoco || '',
+        cf_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.codice_fiscale || '') : '',
+        ente_ufficio: initialData.ente_o_ufficio || initialData.ente_ufficio || '',
+        citta: initialData.citta || '',
+        partita_iva_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.partita_iva || '') : '',
+        pec_pa: initialData.tipo_cliente === 'pubblica_amministrazione' ? (initialData.pec || '') : ''
+      })
+    }
+  })
 
   // Validation functions
   const validateEmail = (email: string): boolean => {
@@ -241,8 +297,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
         email: formData.email,
         telefono: formData.telefono,
         nazione: formData.nazione,
-        source: 'admin',
-        created_at: new Date().toISOString()
+        source: 'admin'
+      }
+
+      // Only set created_at for new customers
+      if (!editingId) {
+        customerData.created_at = new Date().toISOString()
+      } else {
+        customerData.updated_at = new Date().toISOString()
       }
 
       // Add type-specific fields
@@ -299,24 +361,40 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
         if (formData.pec_pa) customerData.pec = formData.pec_pa
       }
 
-      const { data: newClient, error } = await supabase
-        .from('customers_extended')
-        .insert([customerData])
-        .select()
-        .single()
+      let result
+      if (editingId) {
+        // UPDATE existing customer
+        const { data: updatedClient, error } = await supabase
+          .from('customers_extended')
+          .update(customerData)
+          .eq('id', editingId)
+          .select()
+          .single()
 
-      if (error) throw error
+        if (error) throw error
+        result = updatedClient
+        alert('Cliente aggiornato con successo!')
+      } else {
+        // INSERT new customer
+        const { data: newClient, error } = await supabase
+          .from('customers_extended')
+          .insert([customerData])
+          .select()
+          .single()
 
-      alert('Cliente creato con successo!')
+        if (error) throw error
+        result = newClient
+        alert('Cliente creato con successo!')
+      }
 
-      if (onClientCreated && newClient) {
-        onClientCreated(newClient.id)
+      if (onClientCreated && result) {
+        onClientCreated(result.id)
       }
 
       handleClose()
     } catch (error) {
-      console.error('Errore durante la creazione del cliente:', error)
-      alert('Errore durante la creazione del cliente')
+      console.error('Errore durante il salvataggio del cliente:', error)
+      alert('Errore durante il salvataggio del cliente: ' + (error as Error).message)
     } finally {
       setIsSaving(false)
     }
@@ -371,6 +449,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
       pec_pa: ''
     })
     setErrors({})
+    setEditingId(null) // Reset editing mode
     onClose()
   }
 
@@ -403,7 +482,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-900">Nuovo Cliente</h2>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {editingId ? 'Modifica Cliente' : 'Nuovo Cliente'}
+            </h2>
             <button
               onClick={handleClose}
               className="text-gray-400 hover:text-gray-600 transition-colors text-3xl leading-none"
@@ -1120,8 +1201,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated }: New
               onClick={handleSave}
               disabled={isSaveDisabled() || isSaving}
               className={`px-6 py-2 rounded-lg font-medium transition-colors ${isSaveDisabled() || isSaving
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
             >
               {isSaving ? 'Salvataggio...' : 'Salva Cliente'}

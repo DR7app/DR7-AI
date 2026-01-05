@@ -1410,7 +1410,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  async function processBookingSubmission(skipValidation = false) {
+  async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
     if (isSubmitting) return
 
     // VALIDATION LOGIC
@@ -1446,12 +1446,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         tempCustData = { ...newCustomerData }
       } else {
         // Existing customer
-        if (!formData.customer_id) {
+        // If we have an override ID (from modal), use it. Otherwise verify formData.
+        const targetId = overrideCustomerId || formData.customer_id
+
+        if (!targetId) {
           alert('Seleziona un cliente')
           return
         }
 
-        targetCustomerId = formData.customer_id
+        targetCustomerId = targetId
 
         // Fetch fresh customer data to be sure
         const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', targetCustomerId).single()
@@ -1701,7 +1704,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      const customerInfo = newCustomerMode ? {
+      let customerInfo: any = newCustomerMode && !overrideCustomerId ? {
         ...newCustomerData,
         id: customerId,
         full_name: newCustomerData.tipo_cliente === 'persona_fisica'
@@ -1710,7 +1713,42 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             ? newCustomerData.denominazione
             : newCustomerData.ente_o_ufficio,
         phone: newCustomerData.telefono
-      } : customers.find(c => c.id === customerId)
+      } : null
+
+      // If we didn't just create it in memory (or even if we did, but we want to be safe),
+      // let's fetch the definitive record from DB if we have an ID
+      if (!customerInfo && customerId) {
+        const { data: dbCustomer } = await supabase
+          .from('customers_extended')
+          .select('*')
+          .eq('id', customerId)
+          .single()
+
+        if (dbCustomer) {
+          // Map DB fields to customerInfo shape expected below
+          const fullName = dbCustomer.tipo_cliente === 'azienda'
+            ? dbCustomer.denominazione
+            : dbCustomer.tipo_cliente === 'pubblica_amministrazione'
+              ? dbCustomer.ente_o_ufficio
+              : `${dbCustomer.nome} ${dbCustomer.cognome}`
+
+          customerInfo = {
+            ...dbCustomer,
+            full_name: fullName,
+            phone: dbCustomer.telefono,
+            email: dbCustomer.email
+          }
+        } else {
+          // Fallback to local state if DB fetch fails (unlikely)
+          const local = customers.find(c => c.id === customerId)
+          if (local) customerInfo = local
+        }
+      }
+
+      // Final Check
+      if (!customerInfo) {
+        customerInfo = customers.find(c => c.id === customerId)
+      }
 
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
       const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
@@ -3073,6 +3111,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }}
             onSave={async (updates: any, actionType: 'update' | 'link' | 'create' = 'update') => {
               try {
+                // Keep track of the resolved customer ID
+                let resolvedCustomerId = updates.id || updates.customer_id
+
                 // If validation context is booking, we might not have a currentValidationBooking yet
                 if (!currentValidationBooking && validationContext !== 'booking') return
 
@@ -3098,6 +3139,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     .single()
 
                   if (createError) throw createError
+
+                  resolvedCustomerId = newClient.id
 
                   // If in booking context, update local state to use this new client
                   if (validationContext === 'booking') {
@@ -3139,8 +3182,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 setShowMissingDataModal(false)
 
                 if (validationContext === 'booking') {
-                  // Retry booking submission skipping validation
-                  setTimeout(() => processBookingSubmission(true), 100)
+                  // Retry booking submission skipping validation, passing the NEW/UPDATED customer ID
+                  setTimeout(() => processBookingSubmission(true, resolvedCustomerId), 100)
                 } else if (currentValidationBooking) {
                   const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
                   if (fresh) {

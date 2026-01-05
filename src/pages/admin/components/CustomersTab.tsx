@@ -1161,6 +1161,19 @@ export default function CustomersTab() {
                 </div>
               </div>
 
+
+              {/* Note */}
+              {(viewingCustomerDetails.notes || (viewingCustomerDetails.metadata as any)?.note || (viewingCustomerDetails as any).note) && (
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+                    Note
+                  </h4>
+                  <p className="text-sm text-white whitespace-pre-wrap">
+                    {viewingCustomerDetails.notes || (viewingCustomerDetails.metadata as any)?.note || (viewingCustomerDetails as any).note}
+                  </p>
+                </div>
+              )}
+
               {/* Action Button */}
               <div className="flex justify-end pt-4 border-t border-gray-700">
                 <Button
@@ -1173,295 +1186,298 @@ export default function CustomersTab() {
             </div>
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* Documents Modal */}
-      {viewingDocuments && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-white">
-                Documenti - {viewingDocuments.full_name}
-              </h3>
-              <button
-                onClick={() => setViewingDocuments(null)}
-                className="text-gray-400 hover:text-white"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-6">
-              {/* Customer Info */}
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-300 mb-3">Informazioni Cliente</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-400">Email:</span>
-                    <span className="text-sm text-white">{viewingDocuments.email || '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-400">Telefono:</span>
-                    <span className="text-sm text-white">{viewingDocuments.phone || '-'}</span>
+      {
+        viewingDocuments && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
+                <h3 className="text-xl font-bold text-white">
+                  Documenti - {viewingDocuments.full_name}
+                </h3>
+                <button
+                  onClick={() => setViewingDocuments(null)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-6 space-y-6">
+                {/* Customer Info */}
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-300 mb-3">Informazioni Cliente</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-400">Email:</span>
+                      <span className="text-sm text-white">{viewingDocuments.email || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-400">Telefono:</span>
+                      <span className="text-sm text-white">{viewingDocuments.phone || '-'}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Uploaded Documents */}
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-300 mb-3">Documenti Caricati</h4>
-                {loadingDocuments ? (
-                  <div className="text-center py-4">
-                    <p className="text-gray-400">Caricamento documenti...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Driver's License */}
-                    <div className="border border-gray-700 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-medium text-gray-300">
-                          📄 Patente di Guida ({documentsUrls.licenses.length}/2)
-                        </span>
-                      </div>
-                      {documentsUrls.licenses.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                          {documentsUrls.licenses.map((doc, index) => (
-                            <div key={index} className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-400">
-                                  {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
-                                </span>
-                                <div className="flex gap-2">
-                                  <a
-                                    href={doc.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-blue-400 hover:text-blue-300"
-                                  >
-                                    👁️ Apri
-                                  </a>
-                                  <button
-                                    onClick={() => viewingDocuments?.id && handleDeleteLicense(doc.fileName, viewingDocuments.id)}
-                                    className="text-xs text-red-400 hover:text-red-300"
-                                  >
-                                    🗑️ Elimina
-                                  </button>
-                                </div>
-                              </div>
-                              <img
-                                src={doc.url}
-                                alt={`Patente di guida - ${index === 0 ? 'Fronte' : 'Retro'}`}
-                                className="w-full rounded border border-gray-600"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
-                      )}
-                      {/* Upload Section */}
-                      {viewingDocuments.id && viewingDocuments.id.length > 10 && (
-                        <div className="mt-3 pt-3 border-t border-gray-700">
-                          <label className="block">
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file && viewingDocuments.id) {
-                                  handleUploadLicense(file, viewingDocuments.id)
-                                  e.target.value = '' // Reset input to allow same file again
-                                }
-                              }}
-                              className="hidden"
-                              disabled={uploadingLicense}
-                              id="license-upload"
-                            />
-                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
-                              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                              : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
-                              }`}>
-                              {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
-                            </span>
-                          </label>
-                          {documentsUrls.licenses.length < 2 && (
-                            <p className="text-xs text-yellow-400 mt-2 text-center">
-                              ⚠️ Ricorda di caricare entrambi i lati della patente (fronte e retro)
-                            </p>
-                          )}
-                        </div>
-                      )}
+                {/* Uploaded Documents */}
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-300 mb-3">Documenti Caricati</h4>
+                  {loadingDocuments ? (
+                    <div className="text-center py-4">
+                      <p className="text-gray-400">Caricamento documenti...</p>
                     </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Driver's License */}
+                      <div className="border border-gray-700 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-300">
+                            📄 Patente di Guida ({documentsUrls.licenses.length}/2)
+                          </span>
+                        </div>
+                        {documentsUrls.licenses.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            {documentsUrls.licenses.map((doc, index) => (
+                              <div key={index} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-gray-400">
+                                    {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
+                                  </span>
+                                  <div className="flex gap-2">
+                                    <a
+                                      href={doc.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-400 hover:text-blue-300"
+                                    >
+                                      👁️ Apri
+                                    </a>
+                                    <button
+                                      onClick={() => viewingDocuments?.id && handleDeleteLicense(doc.fileName, viewingDocuments.id)}
+                                      className="text-xs text-red-400 hover:text-red-300"
+                                    >
+                                      🗑️ Elimina
+                                    </button>
+                                  </div>
+                                </div>
+                                <img
+                                  src={doc.url}
+                                  alt={`Patente di guida - ${index === 0 ? 'Fronte' : 'Retro'}`}
+                                  className="w-full rounded border border-gray-600"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
+                        )}
+                        {/* Upload Section */}
+                        {viewingDocuments.id && viewingDocuments.id.length > 10 && (
+                          <div className="mt-3 pt-3 border-t border-gray-700">
+                            <label className="block">
+                              <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file && viewingDocuments.id) {
+                                    handleUploadLicense(file, viewingDocuments.id)
+                                    e.target.value = '' // Reset input to allow same file again
+                                  }
+                                }}
+                                className="hidden"
+                                disabled={uploadingLicense}
+                                id="license-upload"
+                              />
+                              <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
+                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                }`}>
+                                {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
+                              </span>
+                            </label>
+                            {documentsUrls.licenses.length < 2 && (
+                              <p className="text-xs text-yellow-400 mt-2 text-center">
+                                ⚠️ Ricorda di caricare entrambi i lati della patente (fronte e retro)
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
-                    {/* ID Card / Passport */}
-                    <div className="border border-gray-700 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-medium text-gray-300">
-                          🆔 Carta d'Identità / Passaporto ({documentsUrls.ids.length}/2)
-                        </span>
-                      </div>
-                      {documentsUrls.ids.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                          {documentsUrls.ids.map((doc, index) => (
-                            <div key={index} className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-400">
-                                  {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
-                                </span>
-                                <div className="flex gap-2">
-                                  <a
-                                    href={doc.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-blue-400 hover:text-blue-300"
-                                  >
-                                    👁️ Apri
-                                  </a>
-                                  <button
-                                    onClick={() => viewingDocuments?.id && handleDeleteId(doc.fileName, viewingDocuments.id)}
-                                    className="text-xs text-red-400 hover:text-red-300"
-                                  >
-                                    🗑️ Elimina
-                                  </button>
+                      {/* ID Card / Passport */}
+                      <div className="border border-gray-700 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-300">
+                            🆔 Carta d'Identità / Passaporto ({documentsUrls.ids.length}/2)
+                          </span>
+                        </div>
+                        {documentsUrls.ids.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            {documentsUrls.ids.map((doc, index) => (
+                              <div key={index} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-gray-400">
+                                    {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
+                                  </span>
+                                  <div className="flex gap-2">
+                                    <a
+                                      href={doc.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-400 hover:text-blue-300"
+                                    >
+                                      👁️ Apri
+                                    </a>
+                                    <button
+                                      onClick={() => viewingDocuments?.id && handleDeleteId(doc.fileName, viewingDocuments.id)}
+                                      className="text-xs text-red-400 hover:text-red-300"
+                                    >
+                                      🗑️ Elimina
+                                    </button>
+                                  </div>
                                 </div>
+                                <img
+                                  src={doc.url}
+                                  alt={`Carta d'identità - ${index === 0 ? 'Fronte' : 'Retro'}`}
+                                  className="w-full rounded border border-gray-600"
+                                />
                               </div>
-                              <img
-                                src={doc.url}
-                                alt={`Carta d'identità - ${index === 0 ? 'Fronte' : 'Retro'}`}
-                                className="w-full rounded border border-gray-600"
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
+                        )}
+                        {/* Upload Section */}
+                        {viewingDocuments.id && viewingDocuments.id.length > 10 && (
+                          <div className="mt-3 pt-3 border-t border-gray-700">
+                            <label className="block">
+                              <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file && viewingDocuments.id) {
+                                    handleUploadId(file, viewingDocuments.id)
+                                    e.target.value = '' // Reset input to allow same file again
+                                  }
+                                }}
+                                className="hidden"
+                                disabled={uploadingId}
+                                id="id-upload"
                               />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
-                      )}
-                      {/* Upload Section */}
-                      {viewingDocuments.id && viewingDocuments.id.length > 10 && (
-                        <div className="mt-3 pt-3 border-t border-gray-700">
-                          <label className="block">
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file && viewingDocuments.id) {
-                                  handleUploadId(file, viewingDocuments.id)
-                                  e.target.value = '' // Reset input to allow same file again
-                                }
-                              }}
-                              className="hidden"
-                              disabled={uploadingId}
-                              id="id-upload"
-                            />
-                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingId
-                              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                              : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
-                              }`}>
-                              {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
-                            </span>
-                          </label>
-                          {documentsUrls.ids.length < 2 && (
-                            <p className="text-xs text-yellow-400 mt-2 text-center">
-                              ⚠️ Ricorda di caricare entrambi i lati del documento (fronte e retro)
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                              <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingId
+                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                }`}>
+                                {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
+                              </span>
+                            </label>
+                            {documentsUrls.ids.length < 2 && (
+                              <p className="text-xs text-yellow-400 mt-2 text-center">
+                                ⚠️ Ricorda di caricare entrambi i lati del documento (fronte e retro)
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Codice Fiscale */}
-                    <div className="border border-gray-700 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-medium text-gray-300">
-                          📋 Codice Fiscale ({documentsUrls.codiceFiscale.length}/2)
-                        </span>
-                      </div>
-                      {documentsUrls.codiceFiscale.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                          {documentsUrls.codiceFiscale.map((doc, index) => (
-                            <div key={index} className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-400">
-                                  {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
-                                </span>
-                                <div className="flex gap-2">
-                                  <a
-                                    href={doc.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-blue-400 hover:text-blue-300"
-                                  >
-                                    👁️ Apri
-                                  </a>
-                                  <button
-                                    onClick={() => viewingDocuments?.id && handleDeleteCodiceFiscale(doc.fileName, viewingDocuments.id)}
-                                    className="text-xs text-red-400 hover:text-red-300"
-                                  >
-                                    🗑️ Elimina
-                                  </button>
+                      {/* Codice Fiscale */}
+                      <div className="border border-gray-700 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-300">
+                            📋 Codice Fiscale ({documentsUrls.codiceFiscale.length}/2)
+                          </span>
+                        </div>
+                        {documentsUrls.codiceFiscale.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            {documentsUrls.codiceFiscale.map((doc, index) => (
+                              <div key={index} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-gray-400">
+                                    {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
+                                  </span>
+                                  <div className="flex gap-2">
+                                    <a
+                                      href={doc.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-400 hover:text-blue-300"
+                                    >
+                                      👁️ Apri
+                                    </a>
+                                    <button
+                                      onClick={() => viewingDocuments?.id && handleDeleteCodiceFiscale(doc.fileName, viewingDocuments.id)}
+                                      className="text-xs text-red-400 hover:text-red-300"
+                                    >
+                                      🗑️ Elimina
+                                    </button>
+                                  </div>
                                 </div>
+                                <img
+                                  src={doc.url}
+                                  alt={`Codice Fiscale - ${index === 0 ? 'Fronte' : 'Retro'}`}
+                                  className="w-full rounded border border-gray-600"
+                                />
                               </div>
-                              <img
-                                src={doc.url}
-                                alt={`Codice Fiscale - ${index === 0 ? 'Fronte' : 'Retro'}`}
-                                className="w-full rounded border border-gray-600"
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
+                        )}
+                        {/* Upload Section */}
+                        {viewingDocuments.id && viewingDocuments.id.length > 10 && (
+                          <div className="mt-3 pt-3 border-t border-gray-700">
+                            <label className="block">
+                              <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file && viewingDocuments.id) {
+                                    handleUploadCodiceFiscale(file, viewingDocuments.id)
+                                    e.target.value = '' // Reset input to allow same file again
+                                  }
+                                }}
+                                className="hidden"
+                                disabled={uploadingCodiceFiscale}
+                                id="codice-fiscale-upload"
                               />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
-                      )}
-                      {/* Upload Section */}
-                      {viewingDocuments.id && viewingDocuments.id.length > 10 && (
-                        <div className="mt-3 pt-3 border-t border-gray-700">
-                          <label className="block">
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file && viewingDocuments.id) {
-                                  handleUploadCodiceFiscale(file, viewingDocuments.id)
-                                  e.target.value = '' // Reset input to allow same file again
-                                }
-                              }}
-                              className="hidden"
-                              disabled={uploadingCodiceFiscale}
-                              id="codice-fiscale-upload"
-                            />
-                            <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
-                              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                              : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
-                              }`}>
-                              {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
-                            </span>
-                          </label>
-                          {documentsUrls.codiceFiscale.length < 2 && (
-                            <p className="text-xs text-yellow-400 mt-2 text-center">
-                              ⚠️ Ricorda di caricare entrambi i lati del Codice Fiscale (fronte e retro)
-                            </p>
-                          )}
-                        </div>
-                      )}
+                              <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
+                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                }`}>
+                                {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
+                              </span>
+                            </label>
+                            {documentsUrls.codiceFiscale.length < 2 && (
+                              <p className="text-xs text-yellow-400 mt-2 text-center">
+                                ⚠️ Ricorda di caricare entrambi i lati del Codice Fiscale (fronte e retro)
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  )}
+                </div>
+
+                {/* Note */}
+                {viewingDocuments.notes && (
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Note</h4>
+                    <p className="text-sm text-white whitespace-pre-wrap">{viewingDocuments.notes}</p>
                   </div>
                 )}
               </div>
-
-              {/* Note */}
-              {viewingDocuments.notes && (
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-2">Note</h4>
-                  <p className="text-sm text-white whitespace-pre-wrap">{viewingDocuments.notes}</p>
-                </div>
-              )}
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
       {/* Stats Card */}
       <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-lg p-6">
         <div className="flex items-center justify-between">
@@ -1791,6 +1807,6 @@ export default function CustomersTab() {
         }}
         initialData={selectedCustomer}
       />
-    </div>
+    </div >
   )
 }
