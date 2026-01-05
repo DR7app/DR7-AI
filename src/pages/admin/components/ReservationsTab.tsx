@@ -428,14 +428,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [penaltyModalOpen, setPenaltyModalOpen] = useState(false)
   const [selectedBookingForPenalty, setSelectedBookingForPenalty] = useState<Booking | null>(null)
 
-  // Confirmation Modal State
-  const [confirmationModalOpen, setConfirmationModalOpen] = useState(false)
-  const [confirmationModalConfig, setConfirmationModalConfig] = useState<{
-    title: string
-    message: string
-    isDangerous?: boolean
-    onConfirm: () => void | Promise<void>
-  } | null>(null)
+  // Confirmation Modal State (commented out - unused, causing build errors)
+  // const [confirmationModalOpen, setConfirmationModalOpen] = useState(false)
+  // const [confirmationModalConfig, setConfirmationModalConfig] = useState<{
+  //   title: string
+  //   message: string
+  //   isDangerous?: boolean
+  //   onConfirm: () => void | Promise<void>
+  // } | null>(null)
 
   async function openEditCustomer(customerId: string) {
     if (!customerId || customerId === 'undefined') {
