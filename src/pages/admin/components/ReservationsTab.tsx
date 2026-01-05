@@ -3192,6 +3192,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             onOpenCreate={() => {
               // Pre-fill data from tempCustomerData (which holds the existing customer data we validated)
               // or fall back to booking data
+              console.log('[ReservationsTab] Opening NewClientModal with tempCustomerData:', tempCustomerData)
+              console.log('[ReservationsTab] tempCustomerData.id:', tempCustomerData?.id)
               setCustomerToEdit({
                 id: tempCustomerData?.id, // CRITICAL: Pass the customer ID so modal knows to UPDATE not CREATE
                 ...tempCustomerData, // Use the fetched/validated customer data!
