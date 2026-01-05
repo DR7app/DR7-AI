@@ -1640,7 +1640,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      let customerId = formData.customer_id
+      let customerId = formData.customer_id || null
 
       // If creating new customer, create them in customers_extended table
       if (newCustomerMode) {
