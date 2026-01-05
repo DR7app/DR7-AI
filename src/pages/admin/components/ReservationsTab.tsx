@@ -1463,11 +1463,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           .eq('id', targetCustomerId)
           .limit(1)
 
-        if (customerError && customerError.code !== 'PGRST116') {
-          // Real error (not just "no rows")
+        if (customerError) {
           console.error('[processBookingSubmission] Customer lookup error:', customerError)
-          const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
-          alert(`Errore nel caricamento del cliente:\n\n${errorMsg}\n\nID Cliente: ${targetCustomerId}\n\nDettagli completi nella console (F12)`)
+
+          // Distinguish between "not found" (PGRST116) vs other errors
+          if (customerError.code === 'PGRST116' || customerError.message?.includes('no rows')) {
+            // Client truly doesn't exist - this is the correct "not found" case
+            alert(
+              'Cliente non trovato nel database.\n\n' +
+              'Verifica che l\'ID cliente sia corretto o crea un nuovo cliente.\n\n' +
+              `ID Cliente: ${targetCustomerId}`
+            )
+          } else {
+            // Other errors (network, permissions, etc.)
+            const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
+            alert(
+              `Errore nel caricamento del cliente:\n\n${errorMsg}\n\n` +
+              `ID Cliente: ${targetCustomerId}\n\n` +
+              'Riprova o contatta il supporto tecnico.'
+            )
+          }
           return
         }
 
@@ -1524,7 +1539,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             console.log('[processBookingSubmission] Customer exists in bookings but not in customers_extended. Will create new profile with missing fields:', missing)
           } else {
-            alert('Errore: Cliente non trovato nel database.\n\nIl cliente selezionato non esiste nel sistema.\n\nPer favore, crea prima il profilo del cliente nella tab "Clienti".')
+            alert(
+              'Cliente non trovato nel database.\n\n' +
+              'Il cliente selezionato non esiste nel sistema.\n\n' +
+              'Per favore, crea prima il profilo del cliente nella tab "Clienti".'
+            )
             return
           }
         }
@@ -3137,6 +3156,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             missingFields={missingFields}
             customers={customers}
             initialData={tempCustomerData}
+            validationContext={validationContext}
             onClose={() => setShowMissingDataModal(false)}
             onOpenCreate={() => {
               // Pre-fill data from tempCustomerData (which holds the existing customer data we validated)
@@ -3247,7 +3267,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   )
 }
 
-function MissingDataModal({ isOpen, missingFields, initialData, customers, onSave, onOpenCreate, onClose }: any) {
+function MissingDataModal({ isOpen, missingFields, initialData, customers, validationContext, onSave, onOpenCreate, onClose }: any) {
   const [data, setData] = useState(initialData || {})
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
@@ -3303,11 +3323,14 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
             )
             : (
               <>
-                Mancano i seguenti dati:
+                {validationContext === 'booking'
+                  ? 'Ok, alcune informazioni del cliente sono mancanti: '
+                  : 'Mancano i seguenti dati: '
+                }
                 <strong className="text-white ml-1">
                   {actuallyMissingFields.map((f: string) => getLabel(f).replace(' *', '')).join(', ')}
                 </strong>
-                . Compilali qui sotto per continuare.
+                . Compilali qui sotto per {validationContext === 'booking' ? 'procedere con la prenotazione' : 'continuare'}.
               </>
             )
           }
@@ -3367,7 +3390,7 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
             Annulla
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               if (isLinking) {
                 if (data.nome || data.cognome) {
                   // Implicit creation mode
@@ -3376,7 +3399,25 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, onSav
                   onSave({ customer_id: selectedCustomerId }, 'link')
                 }
               } else {
-                onSave(data, 'update')
+                // Check if this customer actually exists in customers_extended
+                // If initialData has an ID but no other fields, it means we created a minimal record
+                // and this should be a CREATE, not an UPDATE
+                const hasExistingData = initialData && (
+                  initialData.codice_fiscale ||
+                  initialData.data_nascita ||
+                  initialData.luogo_nascita ||
+                  initialData.indirizzo
+                )
+
+                if (!hasExistingData && (data.nome || data.cognome)) {
+                  // This is a new customer - create it
+                  console.log('[MissingDataModal] Creating new customer with data:', data)
+                  onSave({ ...initialData, ...data }, 'create')
+                } else {
+                  // This is an existing customer - update it
+                  console.log('[MissingDataModal] Updating existing customer with data:', data)
+                  onSave(data, 'update')
+                }
               }
             }}
             disabled={isLinking && !selectedCustomerId && !data.nome && !data.cognome}
