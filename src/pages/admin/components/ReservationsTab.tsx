@@ -3161,16 +3161,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   // Create new client from the provided data
                   console.log('[MissingDataModal] Attempting to CREATE customer:', updates)
 
-                  // Filter out internal flags like _isNew
-                  const { _isNew, ...cleanUpdates } = updates
-
                   try {
+                    // Construct proper full_name
+                    let calculatedFullName = ''
+                    if (cleanUpdates.tipo_cliente === 'azienda' || cleanUpdates.tipo_cliente === 'pubblica_amministrazione') {
+                      calculatedFullName = cleanUpdates.denominazione || cleanUpdates.full_name || ''
+                    } else {
+                      calculatedFullName = `${cleanUpdates.nome || ''} ${cleanUpdates.cognome || ''}`.trim()
+                    }
+
+                    // Fallback if still empty
+                    if (!calculatedFullName && cleanUpdates.full_name) calculatedFullName = cleanUpdates.full_name
+
+                    const insertPayload = {
+                      ...cleanUpdates,
+                      full_name: calculatedFullName
+                    }
+
+                    console.log('[MissingDataModal] Final INSERT payload:', insertPayload)
+
                     const { data: newClient, error: createError } = await supabase
                       .from('customers_extended')
-                      .insert([{
-                        full_name: `${cleanUpdates.nome} ${cleanUpdates.cognome}`,
-                        ...cleanUpdates
-                      }])
+                      .insert([insertPayload])
                       .select()
                       .single()
 
