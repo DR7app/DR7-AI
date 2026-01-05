@@ -549,6 +549,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Check for date overlap
         const bookingPickup = new Date(booking.pickup_date)
         const bookingDropoff = new Date(booking.dropoff_date)
+        // Truncate seconds for cleaner matching
+        bookingPickup.setSeconds(0, 0)
+        bookingDropoff.setSeconds(0, 0)
 
         const hasOverlap = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
 
@@ -559,7 +562,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             pickup: booking.pickup_date,
             dropoff: booking.dropoff_date,
             status: booking.status,
-            matchMethod
+            matchMethod,
+            type: 'rental'
           })
         }
 
@@ -1580,6 +1584,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
+    console.log('[processBookingSubmission] 🚀 STARTING SUBMISSION PROCESS', { skipValidation, overrideCustomerId })
+
     if (isSubmitting) return
 
     // VALIDATION LOGIC
@@ -1676,8 +1682,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           tempCustData = customer
 
+
           // Validate fields - STRICT validation for ALL required fields
-          if (customer.tipo_cliente === 'persona_fisica') {
+          console.log('[processBookingSubmission] Validating customer data:', customer)
+          console.log('[processBookingSubmission] Customer Type:', customer.tipo_cliente)
+
+          if (customer.tipo_cliente === 'persona_fisica' || !customer.tipo_cliente) { // Default to persona_fisica if undefined
+            // Log individual fields checks
+            if (!customer.nome) console.log('❌ Missing name')
+            if (!customer.cognome) console.log('❌ Missing surname')
+
             if (!customer.nome) missing.push('nome')
             if (!customer.cognome) missing.push('cognome')
             if (!customer.codice_fiscale) missing.push('codice_fiscale')
@@ -1691,14 +1705,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
             if (!customer.partita_iva) missing.push('partita_iva')
             if (!customer.indirizzo) missing.push('indirizzo')
+            if (!customer.citta && !customer.citta_residenza) missing.push('citta')
+          } else if (customer.tipo_cliente === 'pubblica_amministrazione') {
+            if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
+            if (!customer.codice_univoco) missing.push('codice_univoco')
+            if (!customer.indirizzo) missing.push('indirizzo')
+            if (!customer.citta && !customer.citta_residenza) missing.push('citta')
+          } else {
+            // Fallback for unknown types (e.g. 'privato' or mixed case) - Treat as strict Persona Fisica
+            console.warn('[processBookingSubmission] Unknown customer type:', customer.tipo_cliente, '- Defaulting to strict validation')
+            if (!customer.nome) missing.push('nome')
+            if (!customer.cognome) missing.push('cognome')
+            if (!customer.codice_fiscale) missing.push('codice_fiscale')
+            if (!customer.data_nascita) missing.push('data_nascita')
+            if (!customer.luogo_nascita) missing.push('luogo_nascita')
+            if (!customer.indirizzo) missing.push('indirizzo')
+            if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
+            if (!customer.patente && !customer.numero_patente) missing.push('patente')
           }
 
           // Common
           if (!customer.email) missing.push('email')
           if (!customer.telefono) missing.push('telefono')
 
-          console.log('[processBookingSubmission] Missing fields:', missing)
-          console.log('[processBookingSubmission] Missing fields count:', missing.length)
+          console.log('[processBookingSubmission] Missing fields found:', missing)
         } else {
           // Customer not found in customers_extended, but exists in autocomplete (from bookings)
           // This means the customer was created via the website but never got a full profile
