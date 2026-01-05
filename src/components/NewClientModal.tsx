@@ -121,7 +121,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   // Load initial data when editing
   useEffect(() => {
     if (isOpen) {
+      console.log('[NewClientModal] Modal opened. initialData:', initialData)
       if (initialData) {
+        console.log('[NewClientModal] Setting editingId to:', initialData.id)
         setEditingId(initialData.id || null)
         setFormData({
           tipo_cliente: initialData.tipo_cliente || 'persona_fisica',
@@ -414,6 +416,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.partita_iva_pa) customerData.partita_iva = formData.partita_iva_pa
         if (formData.pec_pa) customerData.pec = formData.pec_pa
       }
+
+      console.log('[NewClientModal] Saving customer. editingId:', editingId)
+      console.log('[NewClientModal] Customer data to save:', customerData)
 
       let result
       if (editingId) {
