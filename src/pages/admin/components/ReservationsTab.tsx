@@ -3180,20 +3180,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const { _isNew, ...cleanUpdates } = updates
 
                   try {
-                    // Construct proper full_name
-                    let calculatedFullName = ''
-                    if (cleanUpdates.tipo_cliente === 'azienda' || cleanUpdates.tipo_cliente === 'pubblica_amministrazione') {
-                      calculatedFullName = cleanUpdates.denominazione || cleanUpdates.full_name || ''
-                    } else {
-                      calculatedFullName = `${cleanUpdates.nome || ''} ${cleanUpdates.cognome || ''}`.trim()
-                    }
+                    // Construct proper full_name - No longer needed for DB logic, but might be useful for logging if enabled
+                    // Removed to avoid unused variable warning since we don't send full_name to DB anymore
 
-                    // Fallback if still empty
-                    if (!calculatedFullName && cleanUpdates.full_name) calculatedFullName = cleanUpdates.full_name
+                    // Remove full_name from payload as it's not a column in customers_extended
+                    const { full_name, ...validPayload } = cleanUpdates
 
                     const insertPayload = {
-                      ...cleanUpdates,
-                      full_name: calculatedFullName
+                      ...validPayload,
+                      // full_name: calculatedFullName // REMOVE THIS - causing schema error
                     }
 
                     console.log('[MissingDataModal] Final INSERT payload:', insertPayload)
@@ -3210,7 +3205,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     // Failover: If record already exists (duplicates), try UPDATE instead
                     if (err.code === '23505') {
                       console.log('[MissingDataModal] Creation failed with duplicate key, falling back to UPDATE')
-                      const { _isNew, ...cleanUpdates } = updates
+                      const { _isNew, full_name, ...cleanUpdates } = updates
                       const { error: updateError } = await supabase
                         .from('customers_extended')
                         .update(cleanUpdates)
@@ -3261,8 +3256,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   console.log('[MissingDataModal onSave] Updating customer:', customerId, 'with data:', updates)
 
-                  // Filter out internal flags
-                  const { _isNew, ...cleanUpdates } = updates
+                  // Filter out internal flags and non-existent columns
+                  const { _isNew, full_name, ...cleanUpdates } = updates
+
+                  // Also ensure no other calculated fields if any
+                  if ('full_name' in cleanUpdates) delete cleanUpdates.full_name
 
                   const { error } = await supabase
                     .from('customers_extended')
@@ -3304,6 +3302,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 function MissingDataModal({ isOpen, missingFields, initialData, customers, validationContext, onSave, onOpenCreate, onClose }: any) {
   const [data, setData] = useState(initialData || {})
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Sync data with initialData when it changes
   useEffect(() => {
@@ -3425,48 +3424,56 @@ function MissingDataModal({ isOpen, missingFields, initialData, customers, valid
           </button>
           <button
             onClick={async () => {
-              if (isLinking) {
-                if (data.nome || data.cognome) {
-                  // Implicit creation mode
-                  onSave(data, 'create')
-                } else if (selectedCustomerId) {
-                  onSave({ customer_id: selectedCustomerId }, 'link')
-                }
-              } else {
-                // Check if this customer actually exists in customers_extended
-                // If initialData has an ID but no other fields, it means we created a minimal record
-                // and this should be a CREATE, not an UPDATE
-
-                // Also check for explicit _isNew flag
-                const isExplicitlyNew = data._isNew || initialData?._isNew
-
-                const hasExistingData = initialData && (
-                  initialData.codice_fiscale ||
-                  initialData.data_nascita ||
-                  initialData.luogo_nascita ||
-                  initialData.indirizzo
-                )
-
-                if (isExplicitlyNew || (!hasExistingData && (data.nome || data.cognome))) {
-                  // This is a new customer - create it
-                  console.log('[MissingDataModal] Creating new customer with data:', data)
-                  onSave({ ...initialData, ...data }, 'create')
-                } else {
-                  // This is an existing customer - update it
-                  // Make sure to include the ID from initialData
-                  const updateData = {
-                    ...data,
-                    id: data.id || initialData?.id // Preserve the customer ID
+              setIsSaving(true)
+              try {
+                if (isLinking) {
+                  if (data.nome || data.cognome) {
+                    // Implicit creation mode
+                    await onSave(data, 'create')
+                  } else if (selectedCustomerId) {
+                    await onSave({ customer_id: selectedCustomerId }, 'link')
                   }
-                  console.log('[MissingDataModal] Updating existing customer with data:', updateData)
-                  onSave(updateData, 'update')
+                } else {
+                  // Check if this customer actually exists in customers_extended
+                  // If initialData has an ID but no other fields, it means we created a minimal record
+                  // and this should be a CREATE, not an UPDATE
+
+                  // Also check for explicit _isNew flag
+                  const isExplicitlyNew = data._isNew || initialData?._isNew
+
+                  const hasExistingData = initialData && (
+                    initialData.codice_fiscale ||
+                    initialData.data_nascita ||
+                    initialData.luogo_nascita ||
+                    initialData.indirizzo
+                  )
+
+                  if (isExplicitlyNew || (!hasExistingData && (data.nome || data.cognome))) {
+                    // This is a new customer - create it
+                    console.log('[MissingDataModal] Creating new customer with data:', data)
+                    await onSave({ ...initialData, ...data }, 'create')
+                  } else {
+                    // This is an existing customer - update it
+                    // Make sure to include the ID from initialData
+                    const updateData = {
+                      ...data,
+                      id: data.id || initialData?.id // Preserve the customer ID
+                    }
+                    console.log('[MissingDataModal] Updating existing customer with data:', updateData)
+                    await onSave(updateData, 'update')
+                  }
                 }
+              } catch (error: any) {
+                console.error('Save error:', error)
+                alert('Errore durante il salvataggio: ' + (error.message || 'Riprova'))
+              } finally {
+                setIsSaving(false)
               }
             }}
-            disabled={isLinking && !selectedCustomerId && !data.nome && !data.cognome}
+            disabled={isSaving || (isLinking && !selectedCustomerId && !data.nome && !data.cognome)}
             className="px-4 py-2 bg-white hover:bg-gray-200 text-black font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLinking && (!data.nome && !data.cognome) ? 'Salva e Collega' : 'Salva e Continua'}
+            {isSaving ? 'Salvataggio...' : (isLinking && (!data.nome && !data.cognome) ? 'Salva e Collega' : 'Salva e Continua')}
           </button>
         </div>
       </div>
