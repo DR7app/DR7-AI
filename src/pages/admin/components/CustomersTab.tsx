@@ -84,6 +84,7 @@ interface Customer {
         tipo?: string
         numero?: string
         rilascio?: string
+        scadenza?: string
         luogo?: string
       }
     }
@@ -311,7 +312,17 @@ export default function CustomersTab() {
         console.log('[CustomersTab] Customers from customers_extended:', customersExtendedData.length)
         // console.log('[CustomersTab] Sample customer:', customersExtendedData[0])
 
+        // First, deduplicate customers_extended by ID to ensure we only process each once
+        const seenIds = new Set<string>()
+
         customersExtendedData.forEach((customer: any) => {
+          // Skip if we've already processed this ID
+          if (seenIds.has(customer.id)) {
+            console.warn('[CustomersTab] Skipping duplicate ID:', customer.id)
+            return
+          }
+          seenIds.add(customer.id)
+
           // [FIX] FORCE UNIQUE KEY
           // Previously we merged on email/phone, which caused 200+ customers (who shared placeholders) to disappear.
           // Now we use the Unique ID for every DB record to guarantee visibility.
@@ -331,8 +342,7 @@ export default function CustomersTab() {
 
           const extendedData = {
             // We map the DB fields to our Customer interface
-            // ... (preserve existing mapping logig) ...
-            id: customer.id,
+            // ... (preserve existing mapping logig) ...\n            id: customer.id,
             full_name: fullName,
             email: customer.email,
             phone: customer.telefono,
@@ -375,17 +385,8 @@ export default function CustomersTab() {
             status: customer.status
           }
 
-          // Add or Merge into the UNIQUE ID key
-          if (customerMap.has(distinctKey)) {
-            const existing = customerMap.get(distinctKey)!
-            customerMap.set(distinctKey, {
-              ...existing,
-              ...extendedData,
-              created_at: existing.created_at || extendedData.created_at
-            })
-          } else {
-            customerMap.set(distinctKey, extendedData as any)
-          }
+          // Always use ID as key - this prevents duplicates
+          customerMap.set(distinctKey, extendedData as any)
 
           // [FIX] CLEANUP STALE BOOKING ENTRIES
           // If a booking created a placeholder at "info@dr7.it", and this Real Customer also has "info@dr7.it",
@@ -393,11 +394,17 @@ export default function CustomersTab() {
           // Since we are now using ID as the canonical key, the email-based key is obsolete for this user.
           if (customer.email && customer.email.trim()) {
             const emailKey = customer.email.trim().toLowerCase()
-            if (customerMap.has(emailKey)) customerMap.delete(emailKey)
+            // Only delete if it's NOT the same as our ID key
+            if (emailKey !== distinctKey && customerMap.has(emailKey)) {
+              customerMap.delete(emailKey)
+            }
           }
           if (customer.telefono && customer.telefono.trim()) {
             const phoneKey = customer.telefono.trim()
-            if (customerMap.has(phoneKey)) customerMap.delete(phoneKey)
+            // Only delete if it's NOT the same as our ID key
+            if (phoneKey !== distinctKey && customerMap.has(phoneKey)) {
+              customerMap.delete(phoneKey)
+            }
           }
         })
 
@@ -555,6 +562,34 @@ export default function CustomersTab() {
     setViewingDocuments(customer)
     if (customer.id && customer.id.length > 10) {
       await fetchCustomerDocuments(customer.id)
+    }
+  }
+
+  async function handleViewCustomerDetails(customer: Customer) {
+    // Fetch fresh data from database to ensure all fields are populated
+    if (customer.id && customer.id.length > 10) {
+      try {
+        const { data: freshCustomer, error } = await supabase
+          .from('customers_extended')
+          .select('*')
+          .eq('id', customer.id)
+          .single()
+
+        if (error) {
+          console.error('Error fetching fresh customer data:', error)
+          // Fallback to cached data if fetch fails
+          setViewingCustomerDetails(customer)
+        } else {
+          // Use fresh data from database
+          setViewingCustomerDetails(freshCustomer as any)
+        }
+      } catch (err) {
+        console.error('Error:', err)
+        setViewingCustomerDetails(customer)
+      }
+    } else {
+      // No valid ID, use cached data
+      setViewingCustomerDetails(customer)
     }
   }
 
@@ -870,7 +905,12 @@ export default function CustomersTab() {
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">Sesso:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.sesso || viewingCustomerDetails.metadata?.sesso || '-'}</p>
+                      <p className="text-sm text-white font-medium">
+                        {(() => {
+                          const val = viewingCustomerDetails.sesso || viewingCustomerDetails.metadata?.sesso;
+                          return val === 'M' ? 'Maschio' : val === 'F' ? 'Femmina' : val || '-';
+                        })()}
+                      </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">Codice Fiscale:</span>
@@ -939,6 +979,10 @@ export default function CustomersTab() {
                     <div>
                       <span className="text-sm text-gray-400">Città di Residenza:</span>
                       <p className="text-sm text-white font-medium">{viewingCustomerDetails.citta_residenza || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-400">Provincia:</span>
+                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.provincia_residenza || '-'}</p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-400">CAP:</span>
@@ -1023,6 +1067,11 @@ export default function CustomersTab() {
                       </p>
                       <p className="text-xs text-gray-400">
                         Rilasciato il {viewingCustomerDetails.metadata?.rappresentante?.documento?.rilascio} a {viewingCustomerDetails.metadata?.rappresentante?.documento?.luogo}
+                        {viewingCustomerDetails.metadata?.rappresentante?.documento?.scadenza && (
+                          <span className="block text-gray-400 mt-1">
+                            Scadenza: <span className="text-white">{viewingCustomerDetails.metadata?.rappresentante?.documento?.scadenza}</span>
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1605,7 +1654,7 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">
                       <Button
-                        onClick={() => setViewingCustomerDetails(customer)}
+                        onClick={() => handleViewCustomerDetails(customer)}
                         variant="secondary"
                         className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold"
                       >
