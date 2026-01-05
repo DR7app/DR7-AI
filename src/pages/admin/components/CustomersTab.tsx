@@ -557,6 +557,9 @@ export default function CustomersTab() {
 
 
   function handleEdit(customer: Customer) {
+    console.log('[handleEdit] Customer object:', customer)
+    console.log('[handleEdit] Customer ID:', customer.id)
+    console.log('[handleEdit] Customer keys:', Object.keys(customer))
     setSelectedCustomer(customer)
     setShowNewClientModal(true)
   }
