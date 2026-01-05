@@ -3155,7 +3155,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               setShowMissingDataModal(false)
               setEditModalOpen(true)
             }}
-            onSave={async (updates: any, actionType: 'update' | 'link' | 'create' = 'update') => {
+            onSave={async (updates: any) => {
               try {
                 // updates will now contain at least { id: string } coming from the wrapped NewClientModal
                 console.log('[ReservationsTab] Missing Data Saved. Updates:', updates)
@@ -3222,7 +3222,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   )
 }
 
-function MissingDataModal({ isOpen, missingFields, initialData, customers, validationContext, onSave, onOpenCreate, onClose }: any) {
+function MissingDataModal({ isOpen, initialData, onSave, onClose }: any) {
   // Instead of a custom partial form, we reuse the robust NewClientModal logic
   // but wrap it to handle the specific "saving" and "resuming" flow required here.
 
