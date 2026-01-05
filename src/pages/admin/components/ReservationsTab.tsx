@@ -3274,27 +3274,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     .eq('id', customerId)
 
                   if (error) throw error
-                }   // Store the customer ID for retry
-                resolvedCustomerId = customerId
-              }
+
+                  resolvedCustomerId = customerId
+                }
 
                 // Success: Reload and Retry
                 await loadData()
-              setShowMissingDataModal(false)
+                setShowMissingDataModal(false)
 
-              if (validationContext === 'booking') {
-                // Retry booking submission skipping validation, passing the NEW/UPDATED customer ID
-                setTimeout(() => processBookingSubmission(true, resolvedCustomerId), 100)
-              } else if (currentValidationBooking) {
-                const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
-                if (fresh) {
-                  if (validationContext === 'invoice') handleGenerateInvoice(fresh)
-                  else handleGenerateContract(fresh, true)
+                if (validationContext === 'booking') {
+                  // Retry booking submission skipping validation, passing the NEW/UPDATED customer ID
+                  setTimeout(() => processBookingSubmission(true, resolvedCustomerId), 100)
+                } else if (currentValidationBooking) {
+                  const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
+                  if (fresh) {
+                    if (validationContext === 'invoice') handleGenerateInvoice(fresh)
+                    else handleGenerateContract(fresh, true)
+                  }
                 }
-              }
 
-            } catch (err: any) {
-          console.error('Error saving customer data:', err)
+              } catch (err: any) {
+                console.error('Error saving customer data:', err)
                 alert('Errore salvataggio dati: ' + err.message)
               }
             }}
