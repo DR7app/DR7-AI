@@ -137,7 +137,9 @@ export default function MissingFieldsModal({
 
             // 2. ALSO update the basic 'customers' table to ensure the main list view updates
             // We merge existing data with updates to ensure we have full name components
-            const mergedData = { ...customerData, ...updateData }
+            // 2. ALSO update the basic 'customers' table to ensure the main list view updates
+            // We merge existing data with updates to ensure we have full name components
+            const mergedData = { ...customerData, ...formData }
 
             const basicData: any = {
                 updated_at: new Date().toISOString()
@@ -158,10 +160,10 @@ export default function MissingFieldsModal({
             }
 
             // Sync other common fields if they are in the update
-            if (updateData.email) basicData.email = updateData.email
-            if (updateData.telefono) basicData.phone = updateData.telefono
-            if (updateData.patente || updateData.numero_patente) {
-                basicData.driver_license_number = updateData.patente || updateData.numero_patente
+            if (formData.email) basicData.email = formData.email
+            if (formData.telefono) basicData.phone = formData.telefono
+            if (formData.patente || formData.numero_patente) {
+                basicData.driver_license_number = formData.patente || formData.numero_patente
             }
 
             if (Object.keys(basicData).length > 1) { // more than just updated_at
