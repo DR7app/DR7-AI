@@ -1465,7 +1465,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         if (customerError) {
           console.error('[processBookingSubmission] Customer lookup error:', customerError)
-          alert(`Errore nel caricamento del cliente:\n\n${customerError.message}\n\nID Cliente: ${targetCustomerId}`)
+          const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
+          alert(`Errore nel caricamento del cliente:\n\n${errorMsg}\n\nID Cliente: ${targetCustomerId}\n\nDettagli completi nella console (F12)`)
           return
         }
 
