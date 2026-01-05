@@ -1466,9 +1466,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         if (customer) {
           console.log('[processBookingSubmission] Customer found:', customer)
+          console.log('[processBookingSubmission] Customer tipo_cliente:', customer.tipo_cliente)
+          console.log('[processBookingSubmission] Customer nome:', customer.nome)
+          console.log('[processBookingSubmission] Customer cognome:', customer.cognome)
+          console.log('[processBookingSubmission] Customer codice_fiscale:', customer.codice_fiscale)
+          console.log('[processBookingSubmission] Customer data_nascita:', customer.data_nascita)
+          console.log('[processBookingSubmission] Customer luogo_nascita:', customer.luogo_nascita)
+          console.log('[processBookingSubmission] Customer indirizzo:', customer.indirizzo)
+          console.log('[processBookingSubmission] Customer citta_residenza:', customer.citta_residenza)
+          console.log('[processBookingSubmission] Customer citta:', customer.citta)
+          console.log('[processBookingSubmission] Customer patente:', customer.patente)
+          console.log('[processBookingSubmission] Customer numero_patente:', customer.numero_patente)
+          console.log('[processBookingSubmission] Customer email:', customer.email)
+          console.log('[processBookingSubmission] Customer telefono:', customer.telefono)
+
           tempCustData = customer
 
-          // Validate fields
+          // Validate fields - STRICT validation for ALL required fields
           if (customer.tipo_cliente === 'persona_fisica') {
             if (!customer.nome) missing.push('nome')
             if (!customer.cognome) missing.push('cognome')
@@ -1477,9 +1491,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (!customer.luogo_nascita) missing.push('luogo_nascita')
             if (!customer.indirizzo) missing.push('indirizzo')
             if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
-            if (!customer.patente) missing.push('patente')
+            // Check both patente and numero_patente fields
+            if (!customer.patente && !customer.numero_patente) missing.push('patente')
           } else if (customer.tipo_cliente === 'azienda') {
-            if (!customer.denominazione) missing.push('denominazione')
+            if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
             if (!customer.partita_iva) missing.push('partita_iva')
             if (!customer.indirizzo) missing.push('indirizzo')
           }
@@ -1489,6 +1504,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!customer.telefono) missing.push('telefono')
 
           console.log('[processBookingSubmission] Missing fields:', missing)
+          console.log('[processBookingSubmission] Missing fields count:', missing.length)
         } else {
           // Customer not found in customers_extended, but exists in autocomplete (from bookings)
           // This means the customer was created via the website but never got a full profile
