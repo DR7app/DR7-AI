@@ -614,6 +614,7 @@ export default function CustomersTab() {
           // Fallback to cached data if fetch fails
           setViewingCustomerDetails(customer)
         } else if (freshCustomerData) {
+          console.log('[handleViewCustomerDetails] Raw DB Fetch:', freshCustomerData)
           // Apply the same mapping logic as loadCustomers to ensure consistent display
           const raw = freshCustomerData;
 

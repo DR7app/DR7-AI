@@ -474,6 +474,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         console.log('📝 Customer data to save:', customerData)
 
         // 1. Update customers_extended (Upsert is safer as it might not exist there yet)
+        console.log('[NewClientModal] Upserting to customers_extended with ID:', initialData.id, 'Data:', customerData)
         const { data: updatedExtended, error: extendedError } = await supabase
           .from('customers_extended')
           .upsert({ ...customerData, id: initialData.id })
