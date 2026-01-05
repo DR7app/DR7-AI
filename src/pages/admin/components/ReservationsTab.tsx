@@ -592,8 +592,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!isForThisVehicle) return false
         if (booking.status === 'cancelled') return false
 
+        const serviceStart = new Date(booking.pickup_date)
         const serviceEnd = new Date(booking.dropoff_date)
-        if (pickupDateTime < serviceEnd) {
+
+        // Check for overlap
+        const hasOverlap = (pickupDateTime < serviceEnd && returnDateTime > serviceStart)
+
+        if (hasOverlap) {
+          // If the return time is after the service ends, it's a "soft" conflict (available after service)
+          // So we do NOT filter it out (return false for conflict)
+          if (returnDateTime > serviceEnd) {
+            return false
+          }
+
+          // Hard conflict (rental entirely inside or effectively blocked by service)
           conflictingBookings.push({
             bookingId: booking.id,
             serviceType: booking.service_type,
@@ -620,6 +632,86 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     return availableVehicles
   }, [formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, vehicles, bookings, carWashBookings, editingId])
+
+  // Calculate earliest available time for each vehicle based on car wash/mechanical bookings
+  const vehicleEarliestTimes = useMemo(() => {
+    // If no dates selected, return empty map
+    if (!formData.pickup_date || !formData.return_date) return new Map<string, Date>()
+
+    const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time || '00:00'}:00`)
+    const returnDateTime = new Date(`${formData.return_date}T${formData.return_time || '23:59'}:00`)
+
+    const times = new Map<string, Date>()
+
+    vehicles.forEach(vehicle => {
+      // Find all service bookings for this vehicle that OVERLAP with request
+      const services = carWashBookings.filter(booking => {
+        // Vehicle matching logic
+        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
+        let isForThisVehicle = bookingVehicleId === vehicle.id
+
+        if (!isForThisVehicle && !bookingVehicleId && booking.vehicle_plate) {
+          const vehiclePlate = vehicle.plate || vehicle.targa
+          if (vehiclePlate) isForThisVehicle = booking.vehicle_plate === vehiclePlate
+        }
+
+        if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
+          isForThisVehicle = booking.vehicle_name === vehicle.display_name
+        }
+
+        if (!isForThisVehicle || booking.status === 'cancelled') return false
+
+        const serviceStart = new Date(booking.pickup_date)
+        const serviceEnd = new Date(booking.dropoff_date)
+
+        // Only consider overlapping services
+        return (pickupDateTime < serviceEnd && returnDateTime > serviceStart)
+      })
+
+      // Get the latest service end time
+      const latestServiceEnd = services.reduce((latest, service) => {
+        const end = new Date(service.dropoff_date)
+        return end > latest ? end : latest
+      }, new Date(0))
+
+      if (latestServiceEnd.getTime() > 0) {
+        times.set(vehicle.id, latestServiceEnd)
+      }
+    })
+
+    return times
+  }, [vehicles, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
+
+  // Auto-adjust pickup time when vehicle is selected if it conflicts with service
+  useEffect(() => {
+    if (formData.vehicle_id && formData.pickup_date) {
+      const earliestTime = vehicleEarliestTimes.get(formData.vehicle_id)
+
+      if (earliestTime) {
+        // Check if selected pickup time is before earliest available
+        const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
+
+        // Give a 1-minute buffer to avoid tight timing issues
+        const bufferTime = new Date(earliestTime.getTime())
+
+        if (pickupDateTime < bufferTime) {
+          // Auto-adjust to earliest available time
+          const hours = bufferTime.getHours().toString().padStart(2, '0')
+          const minutes = bufferTime.getMinutes().toString().padStart(2, '0')
+          const newTime = `${hours}:${minutes}`
+
+          console.log(`[Vehicle Availability] Auto-adjusting pickup time for vehicle ${formData.vehicle_id} to ${newTime}`)
+
+          setFormData(prev => ({ ...prev, pickup_time: newTime }))
+
+          // Show notification only if the change is significant (more than 1 minute diff)
+          if (Math.abs(pickupDateTime.getTime() - bufferTime.getTime()) > 60000) {
+            alert(`Orario di ritiro aggiornato alle ${newTime} perché il veicolo è in lavaggio/manutenzione fino a quell'ora.`)
+          }
+        }
+      }
+    }
+  }, [formData.vehicle_id, formData.pickup_date, vehicleEarliestTimes])
 
 
   const LOCATIONS = [
@@ -2568,10 +2660,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
                     options={[
                       { value: '', label: 'Seleziona veicolo...' },
-                      ...getAvailableVehicles.map(v => ({
-                        value: v.id,
-                        label: v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
-                      }))
+                      ...getAvailableVehicles.map(v => {
+                        let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
+                        const earliestTime = vehicleEarliestTimes.get(v.id)
+                        if (earliestTime) {
+                          const hours = earliestTime.getHours().toString().padStart(2, '0')
+                          const minutes = earliestTime.getMinutes().toString().padStart(2, '0')
+                          label += ` (disponibile dalle ${hours}:${minutes})`
+                        }
+                        return { value: v.id, label }
+                      })
                     ]}
                   />
                 )}
