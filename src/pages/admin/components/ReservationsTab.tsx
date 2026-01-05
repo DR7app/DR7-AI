@@ -802,12 +802,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           // Use ID, email, or phone as key to merge with existing inferred customers
+          // IMPORTANT: customers_extended is the authoritative source, so we ALWAYS set it
+          // This overwrites any inferred customer data from bookings table
           const key = c.email || c.telefono || c.id
-          if (key && !customerMap.has(key)) {
+          if (key) {
             customerMap.set(key, mappedCustomer)
-          } else if (key && customerMap.has(key)) {
-            // Optional: Upgrade existing inferred customer with real data if needed
-            // But let's keep it simple for now and just fill gaps
           }
         })
       }
@@ -1457,9 +1456,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         targetCustomerId = targetId
 
         // Fetch fresh customer data to be sure
-        const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', targetCustomerId).single()
+        console.log('[processBookingSubmission] Looking up customer:', targetCustomerId)
+        const { data: customer, error: customerError } = await supabase
+          .from('customers_extended')
+          .select('*')
+          .eq('id', targetCustomerId)
+          .single()
+
+        if (customerError) {
+          console.error('[processBookingSubmission] Customer lookup error:', customerError)
+          alert(`Errore nel caricamento del cliente:\n\n${customerError.message}\n\nID Cliente: ${targetCustomerId}`)
+          return
+        }
 
         if (customer) {
+          console.log('[processBookingSubmission] Customer found:', customer)
           tempCustData = customer
 
           // Validate fields
@@ -1481,14 +1492,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Common
           if (!customer.email) missing.push('email')
           if (!customer.telefono) missing.push('telefono')
+
+          console.log('[processBookingSubmission] Missing fields:', missing)
         } else {
           // Customer not found in DB ?
+          console.error('[processBookingSubmission] Customer not found in database. ID:', targetCustomerId)
           alert('Errore: Cliente non trovato')
           return
         }
       }
 
       if (missing.length > 0) {
+        console.log('[processBookingSubmission] 🚨 Missing data detected! Opening modal for fields:', missing)
         setMissingFields(missing)
         setTempCustomerData(tempCustData)
         setValidationContext('booking')
