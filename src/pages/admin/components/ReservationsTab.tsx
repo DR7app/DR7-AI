@@ -1745,8 +1745,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           if (customerFromList) {
             // Create a minimal customer record to trigger the missing data modal
+
+            // ENSURE ID IS A VALID UUID
+            // If the booking has a "temp" ID or non-UUID, we must generate a real UUID 
+            // so the database accepts the insert into customers_extended (which requires UUID type)
+            let safeId = targetCustomerId
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            if (!uuidRegex.test(safeId)) {
+              console.warn('[processBookingSubmission] Detected non-UUID ID:', safeId, 'Generating new valid UUID.')
+              safeId = crypto.randomUUID()
+            }
+
             tempCustData = {
-              id: targetCustomerId,
+              id: safeId,
               tipo_cliente: 'persona_fisica',
               nome: customerFromList.full_name.split(' ')[0] || '',
               cognome: customerFromList.full_name.split(' ').slice(1).join(' ') || '',
