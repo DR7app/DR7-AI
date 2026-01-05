@@ -372,6 +372,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         email: formData.email,
         telefono: formData.telefono,
         nazione: formData.nazione,
+        note: formData.note,
         source: 'admin',
         created_at: new Date().toISOString()
       }
@@ -397,7 +398,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         }
         if (formData.patente_rilascio) customerData.data_rilascio_patente = formData.patente_rilascio
         if (formData.patente_scadenza) customerData.scadenza_patente = formData.patente_scadenza
+
         if (formData.patente_ente) customerData.emessa_da = formData.patente_ente
+        if (formData.sesso) customerData.sesso = formData.sesso
 
         // Metadata
         customerData.metadata = {
