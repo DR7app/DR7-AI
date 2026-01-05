@@ -2933,16 +2933,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                 Cancella
                               </button>
                               {/* Mark as Returned button - only show for confirmed/active rentals */}
-                              {booking.status !== 'cancelled' && booking.status !== 'completed' && !booking.service_type && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleMarkAsReturned(booking) }}
-                                  disabled={markingAsReturned}
-                                  className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
-                                  title="Segna come rientrato e crea lavaggio automatico"
-                                >
-                                  {markingAsReturned ? '...' : 'Rientro'}
-                                </button>
-                              )}
+                              {booking.status !== 'cancelled' && booking.status !== 'completed' &&
+                                (!booking.service_type || booking.service_type === 'rental' || booking.service_type === 'car_rental') && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleMarkAsReturned(booking) }}
+                                    disabled={markingAsReturned}
+                                    className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
+                                    title="Segna come rientrato e crea lavaggio automatico"
+                                  >
+                                    {markingAsReturned ? '...' : 'Rientro'}
+                                  </button>
+                                )}
                             </>
                           )}
                           <button
@@ -3156,120 +3157,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }}
             onSave={async (updates: any, actionType: 'update' | 'link' | 'create' = 'update') => {
               try {
+                // updates will now contain at least { id: string } coming from the wrapped NewClientModal
+                console.log('[ReservationsTab] Missing Data Saved. Updates:', updates)
+
                 // Keep track of the resolved customer ID
                 let resolvedCustomerId = updates.id || updates.customer_id
 
-                // If validation context is booking, we might not have a currentValidationBooking yet
-                if (!currentValidationBooking && validationContext !== 'booking') return
+                if (!resolvedCustomerId) {
+                  console.error('No customer ID returned from save')
+                  return
+                }
 
-                if (actionType === 'link') {
-                  const { error } = await supabase
+                // If in booking context, update local state to use this new/updated client
+                if (validationContext === 'booking') {
+                  console.log('[ReservationsTab] Resuming booking with customer:', resolvedCustomerId)
+                  setFormData(prev => ({ ...prev, customer_id: resolvedCustomerId }))
+                  setNewCustomerMode(false)
+                }
+
+                // If context was linking to existing booking (e.g. from table)
+                else if (currentValidationBooking) {
+                  // If we just created/updated a client, we might need to link it
+                  // But NewClientModal already saved the client. We just need to link the booking.
+                  const { error: linkError } = await supabase
                     .from('bookings')
                     .update({
-                      user_id: updates.customer_id,
-                      customer_name: customers.find((c: any) => c.id === updates.customer_id)?.full_name
+                      user_id: resolvedCustomerId,
+                      // Update cache fields for display
+                      customer_name: updates.full_name || customers.find((c: any) => c.id === resolvedCustomerId)?.full_name
                     })
-                    .eq('id', currentValidationBooking!.id)
+                    .eq('id', currentValidationBooking.id)
 
-                  if (error) throw error
-                } else if (actionType === 'create') {
-                  // Create new client from the provided data
-                  console.log('[MissingDataModal] Attempting to CREATE customer:', updates)
-
-                  // Filter out internal flags like _isNew
-                  const { _isNew, ...cleanUpdates } = updates
-
-                  try {
-                    // Construct proper full_name - No longer needed for DB logic, but might be useful for logging if enabled
-                    // Removed to avoid unused variable warning since we don't send full_name to DB anymore
-
-                    // Remove full_name from payload as it's not a column in customers_extended
-                    const { full_name, ...validPayload } = cleanUpdates
-
-                    const insertPayload = {
-                      ...validPayload,
-                      // full_name: calculatedFullName // REMOVE THIS - causing schema error
-                    }
-
-                    console.log('[MissingDataModal] Final INSERT payload:', insertPayload)
-
-                    const { data: newClient, error: createError } = await supabase
-                      .from('customers_extended')
-                      .insert([insertPayload])
-                      .select()
-                      .single()
-
-                    if (createError) throw createError
-                    resolvedCustomerId = newClient.id
-                  } catch (err: any) {
-                    // Failover: If record already exists (duplicates), try UPDATE instead
-                    if (err.code === '23505') {
-                      console.log('[MissingDataModal] Creation failed with duplicate key, falling back to UPDATE')
-                      const { _isNew, full_name, ...cleanUpdates } = updates
-                      const { error: updateError } = await supabase
-                        .from('customers_extended')
-                        .update(cleanUpdates)
-                        .eq('id', cleanUpdates.id)
-
-                      if (updateError) throw updateError
-                      resolvedCustomerId = cleanUpdates.id
-                    } else {
-                      throw err
-                    }
-                  }
-
-                  // If in booking context, update local state to use this new client
-                  if (validationContext === 'booking') {
-                    setFormData(prev => ({ ...prev, customer_id: resolvedCustomerId }))
-                    setNewCustomerMode(false)
-                    // No need to link to booking yet, processBookingSubmission will do it
-                  } else if (currentValidationBooking) {
-                    // Link to booking
-                    const { error: linkError } = await supabase
-                      .from('bookings')
-                      .update({
-                        user_id: resolvedCustomerId,
-                        customer_name: `${updates.nome} ${updates.cognome}`
-                      })
-                      .eq('id', currentValidationBooking.id)
-
-                    if (linkError) throw linkError
-                  }
-
-                } else {
-                  // Regular update for existing client
-                  // Get ID from updates or currentValidationBooking or formData or tempCustomerData
-                  const customerId = updates.id ||
-                    tempCustomerData?.id ||
-                    (currentValidationBooking ? (currentValidationBooking.user_id || currentValidationBooking.booking_details?.customer?.id) : null) ||
-                    formData.customer_id
-
-                  if (!customerId) {
-                    console.error('[MissingDataModal onSave] Customer ID missing for update. Available data:', {
-                      updates,
-                      tempCustomerData,
-                      currentValidationBooking,
-                      formData: { customer_id: formData.customer_id }
-                    })
-                    throw new Error('Customer ID missing for update')
-                  }
-
-                  console.log('[MissingDataModal onSave] Updating customer:', customerId, 'with data:', updates)
-
-                  // Filter out internal flags and non-existent columns
-                  const { _isNew, full_name, ...cleanUpdates } = updates
-
-                  // Also ensure no other calculated fields if any
-                  if ('full_name' in cleanUpdates) delete cleanUpdates.full_name
-
-                  const { error } = await supabase
-                    .from('customers_extended')
-                    .update(cleanUpdates)
-                    .eq('id', customerId)
-
-                  if (error) throw error
-
-                  resolvedCustomerId = customerId
+                  if (linkError) throw linkError
                 }
 
                 // Success: Reload and Retry
@@ -3277,8 +3196,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 setShowMissingDataModal(false)
 
                 if (validationContext === 'booking') {
-                  // Retry booking submission skipping validation, passing the NEW/UPDATED customer ID
-                  setTimeout(() => processBookingSubmission(true, resolvedCustomerId), 100)
+                  // Retry booking submission skipping validation (true), passing the NEW/UPDATED customer ID
+                  // We add a small delay to ensure state updates propagate
+                  setTimeout(() => {
+                    console.log('[ReservationsTab] Retrying booking submission...')
+                    processBookingSubmission(true, resolvedCustomerId)
+                  }, 500)
                 } else if (currentValidationBooking) {
                   const { data: fresh } = await supabase.from('bookings').select('*').eq('id', currentValidationBooking.id).single()
                   if (fresh) {
@@ -3288,8 +3211,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }
 
               } catch (err: any) {
-                console.error('Error saving customer data:', err)
-                alert('Errore salvataggio dati: ' + err.message)
+                console.error('Error post-save:', err)
+                alert('Errore dopo il salvataggio: ' + err.message)
               }
             }}
           />
@@ -3300,183 +3223,54 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 }
 
 function MissingDataModal({ isOpen, missingFields, initialData, customers, validationContext, onSave, onOpenCreate, onClose }: any) {
-  const [data, setData] = useState(initialData || {})
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
+  // Instead of a custom partial form, we reuse the robust NewClientModal logic
+  // but wrap it to handle the specific "saving" and "resuming" flow required here.
 
-  // Sync data with initialData when it changes
+  // We need to map the "missing fields" concept to letting the user edit the profile.
+  // Since we already have NewClientModal imported in this file, we can simply render it!
+
+  // However, NewClientModal manages its own open/close state. 
+  // We can just proxy the props.
+
+  const [data, setData] = useState(initialData || {})
+
+  // Sync data with initialData
   useEffect(() => {
-    if (initialData) {
-      setData(initialData)
-    }
+    if (initialData) setData(initialData)
   }, [initialData])
 
-  if (!isOpen) return null
+  // Helper to convert our specialized 'missing data' save to the generic 'onClientCreated' callback
+  const handleClientSaved = (clientId: string) => {
+    // Determine action type based on context (update vs create)
+    // If we have an ID in initialData, it's likely an update.
+    const action = (initialData?.id && !initialData?._isNew) ? 'update' : 'create'
 
-  // The validation function already returns ONLY missing fields, so use them directly
-  const actuallyMissingFields = missingFields
+    // Call the parent's onSave handler which handles the resume flow
+    // We pass the ID and let the parent re-fetch if needed, or we pass the data if we had it.
+    // The previous implementation expected fully formed data object.
+    // But since NewClientModal handles the DB saving itself, we just need to notify the parent 
+    // that "hey, client X is ready now".
 
-  const getLabel = (field: string) => {
-    switch (field) {
-      case 'nome': return 'Nome *'
-      case 'cognome': return 'Cognome *'
-      case 'email': return 'Email *'
-      case 'telefono': return 'Telefono *'
-      case 'codice_fiscale': return 'Codice Fiscale *'
-      case 'indirizzo': return 'Indirizzo (Via e Civico) *'
-      case 'citta_residenza': return 'Città di Residenza *'
-      case 'data_nascita': return 'Data di Nascita *'
-      case 'luogo_nascita': return 'Luogo di Nascita *'
-      case 'patente': return 'Numero Patente *'
-      case 'partita_iva': return 'Partita IVA *'
-      case 'Cliente non identificato': return 'Associa Cliente'
-      case 'denominazione': return 'Ragione Sociale *'
-      case 'citta': return 'Città *'
-      case 'ente_o_ufficio': return 'Ente / Ufficio *'
-      case 'codice_univoco_pa': return 'Codice Univoco *'
-      case 'codice_fiscale_pa': return 'CF / P.IVA PA *'
-      default: return field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ')
+    // We construct a minimal object that onSave expects sufficient to resume
+    const payload = {
+      id: clientId,
+      customer_id: clientId // Alias often used
     }
+
+    onSave(payload, action)
   }
 
-  const isLinking = actuallyMissingFields.includes('Cliente non identificato')
+  // If NewClientModal is already imported and used in the main component, 
+  // we should arguably just use IT instead of this separate MissingDataModal component.
+  // But to minimize refactor risk of the main component structure, we'll implement this modal
+  // as a wrapper around NewClientModal.
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-gray-600 rounded-lg p-6 max-w-md w-full shadow-2xl overflow-y-auto max-h-[90vh]">
-        <h2 className="text-xl font-bold text-white mb-2">
-          {isLinking ? 'Dati Anagrafici Mancanti' : 'Dati Mancanti'}
-        </h2>
-        <p className="text-gray-400 mb-6 text-sm">
-          {isLinking
-            ? (
-              data.nome || data.cognome
-                ? <span>Stai completando la scheda per <strong className="text-white">{data.nome} {data.cognome}</strong>. Inserisci i dati mancanti per continuare.</span>
-                : 'Per continuare è necessario completare la scheda del cliente. Puoi compilare i dati ora o collegare un cliente già esistente.'
-            )
-            : (
-              <>
-                {validationContext === 'booking'
-                  ? 'Ok, alcune informazioni del cliente sono mancanti: '
-                  : 'Mancano i seguenti dati: '
-                }
-                <strong className="text-white ml-1">
-                  {actuallyMissingFields.map((f: string) => getLabel(f).replace(' *', '')).join(', ')}
-                </strong>
-                . Compilali qui sotto per {validationContext === 'booking' ? 'procedere con la prenotazione' : 'continuare'}.
-              </>
-            )
-          }
-        </p>
-
-        <div className="space-y-4 pr-2">
-          {/* Only show Search option if truly no client (no name in data) */}
-          {isLinking && !initialData?.nome && !initialData?.cognome && (
-            <div className="bg-black p-2 rounded border border-gray-700 mb-4">
-              <h4 className="text-gray-400 text-xs uppercase mb-2">Associa Cliente</h4>
-              <CustomerAutocomplete
-                customers={customers || []}
-                selectedCustomerId={selectedCustomerId || ''}
-                onSelectCustomer={(id) => setSelectedCustomerId(id)}
-                placeholder="Cerca un altro cliente esistente..."
-                required={true}
-              />
-              <div className="mt-4 text-center">
-                <button
-                  onClick={onOpenCreate}
-                  className="w-full py-3 bg-white hover:bg-gray-200 text-black font-bold rounded transition-colors"
-                >
-                  Inserisci Dati Cliente
-                </button>
-                <div className="mt-3 text-xs text-gray-500 uppercase tracking-widest">Oppure collega esistente</div>
-              </div>
-            </div>
-          )}
-
-          {/* If we have a name/data, just show the inputs directly */}
-          {(actuallyMissingFields.map((field: string) => {
-            // Skip the 'Cliente non identificato' field in the loop
-            if (field === 'Cliente non identificato') return null
-
-            return (
-              <div key={field}>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  {getLabel(field)}
-                </label>
-                <input
-                  type={field === 'data_nascita' ? 'date' : 'text'}
-                  className="w-full px-3 py-2 bg-black border border-gray-700 rounded text-white focus:border-white focus:outline-none transition-colors"
-                  value={data[field] || ''}
-                  onChange={(e) => setData({ ...data, [field]: e.target.value })}
-                  placeholder={`Inserisci ${getLabel(field).replace(' *', '')}`}
-                />
-              </div>
-            )
-          }))}
-        </div>
-
-        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-800">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 hover:bg-gray-800 text-gray-300 rounded transition-colors"
-          >
-            Annulla
-          </button>
-          <button
-            onClick={async () => {
-              setIsSaving(true)
-              try {
-                if (isLinking) {
-                  if (data.nome || data.cognome) {
-                    // Implicit creation mode
-                    await onSave(data, 'create')
-                  } else if (selectedCustomerId) {
-                    await onSave({ customer_id: selectedCustomerId }, 'link')
-                  }
-                } else {
-                  // Check if this customer actually exists in customers_extended
-                  // If initialData has an ID but no other fields, it means we created a minimal record
-                  // and this should be a CREATE, not an UPDATE
-
-                  // Also check for explicit _isNew flag
-                  const isExplicitlyNew = data._isNew || initialData?._isNew
-
-                  const hasExistingData = initialData && (
-                    initialData.codice_fiscale ||
-                    initialData.data_nascita ||
-                    initialData.luogo_nascita ||
-                    initialData.indirizzo
-                  )
-
-                  if (isExplicitlyNew || (!hasExistingData && (data.nome || data.cognome))) {
-                    // This is a new customer - create it
-                    console.log('[MissingDataModal] Creating new customer with data:', data)
-                    await onSave({ ...initialData, ...data }, 'create')
-                  } else {
-                    // This is an existing customer - update it
-                    // Make sure to include the ID from initialData
-                    const updateData = {
-                      ...data,
-                      id: data.id || initialData?.id // Preserve the customer ID
-                    }
-                    console.log('[MissingDataModal] Updating existing customer with data:', updateData)
-                    await onSave(updateData, 'update')
-                  }
-                }
-              } catch (error: any) {
-                console.error('Save error:', error)
-                alert('Errore durante il salvataggio: ' + (error.message || 'Riprova'))
-              } finally {
-                setIsSaving(false)
-              }
-            }}
-            disabled={isSaving || (isLinking && !selectedCustomerId && !data.nome && !data.cognome)}
-            className="px-4 py-2 bg-white hover:bg-gray-200 text-black font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? 'Salvataggio...' : (isLinking && (!data.nome && !data.cognome) ? 'Salva e Collega' : 'Salva e Continua')}
-          </button>
-        </div>
-      </div>
-    </div>
+    <NewClientModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialData={data}
+      onClientCreated={handleClientSaved}
+    />
   )
 }

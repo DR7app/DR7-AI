@@ -45,7 +45,8 @@ export const handler: Handler = async (event) => {
         const now = new Date()
 
         // If dropoff is in the past, use current time; otherwise use dropoff time
-        const appointmentDateTime = dropoffDate < now ? now : dropoffDate
+        // UPDATE: User wants it "directly" when car comes back, so we use NOW always for the wash appointment
+        const appointmentDateTime = now
 
         // Format appointment date and time
         const appointmentDate = appointmentDateTime.toISOString()
