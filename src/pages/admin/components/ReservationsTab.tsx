@@ -1128,17 +1128,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       booking.booking_details?.customer_id
 
     if (!customerId) {
-      // Check what data we have from the booking itself
-      const missing: string[] = ['Cliente non identificato']
+      // If we don't have a customer ID, we can't validate against the DB.
+      // But we can check if the booking has basic info.
+
+      const missing: string[] = []
 
       // Only add fields that are truly missing from booking data
+      // We map these to the keys expected by MissingFieldsModal (e.g. 'nome', 'cognome')
       if (!booking.customer_name && !booking.booking_details?.customer?.fullName) {
         missing.push('nome', 'cognome')
       }
       if (!booking.customer_email) missing.push('email')
       if (!booking.customer_phone) missing.push('telefono')
 
-      // These are always required for contracts
+      // These are always required for contracts, so if we don't have a customer ID, they are definitely "missing" from a DB perspective
+      // But adding them here allows the modal to capture them and create the customer!
       missing.push('codice_fiscale', 'indirizzo', 'citta_residenza')
 
       return missing
