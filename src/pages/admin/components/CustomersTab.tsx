@@ -361,11 +361,17 @@ export default function CustomersTab() {
           if (customer.tipo_cliente === 'persona_fisica') {
             fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim()
           } else if (customer.tipo_cliente === 'azienda') {
-            fullName = customer.ragione_sociale || 'Azienda'
+            fullName = customer.ragione_sociale || customer.denominazione || 'Azienda'
+          } else if (customer.tipo_cliente === 'pubblica_amministrazione') {
+            fullName = customer.ente_ufficio || customer.denominazione || 'Pubblica Amministrazione'
           }
+
           if (!fullName || fullName === 'Cliente') {
             // Fallback to name/surname if fields empty (legacy)
-            fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim() || 'Cliente'
+            fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim() ||
+              customer.ragione_sociale ||
+              customer.denominazione ||
+              'Cliente'
           }
 
           const extendedData = {
@@ -616,10 +622,16 @@ export default function CustomersTab() {
           if (raw.tipo_cliente === 'persona_fisica') {
             fullName = `${raw.nome || ''} ${raw.cognome || ''}`.trim()
           } else if (raw.tipo_cliente === 'azienda') {
-            fullName = raw.ragione_sociale || 'Azienda'
+            fullName = raw.ragione_sociale || raw.denominazione || 'Azienda'
+          } else if (raw.tipo_cliente === 'pubblica_amministrazione') {
+            fullName = raw.ente_ufficio || raw.denominazione || 'Pubblica Amministrazione'
           }
+
           if (!fullName || fullName === 'Cliente') {
-            fullName = `${raw.nome || ''} ${raw.cognome || ''}`.trim() || 'Cliente'
+            fullName = `${raw.nome || ''} ${raw.cognome || ''}`.trim() ||
+              raw.ragione_sociale ||
+              raw.denominazione ||
+              'Cliente'
           }
 
           const freshCustomer: Customer = {
