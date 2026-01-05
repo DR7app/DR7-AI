@@ -1463,7 +1463,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           .eq('id', targetCustomerId)
           .limit(1)
 
-        if (customerError) {
+        if (customerError && customerError.code !== 'PGRST116') {
+          // Real error (not just "no rows")
           console.error('[processBookingSubmission] Customer lookup error:', customerError)
           const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
           alert(`Errore nel caricamento del cliente:\n\n${errorMsg}\n\nID Cliente: ${targetCustomerId}\n\nDettagli completi nella console (F12)`)
@@ -1498,10 +1499,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           console.log('[processBookingSubmission] Missing fields:', missing)
         } else {
-          // Customer not found in DB ?
-          console.error('[processBookingSubmission] Customer not found in database. ID:', targetCustomerId)
-          alert('Errore: Cliente non trovato')
-          return
+          // Customer not found in customers_extended, but exists in autocomplete (from bookings)
+          // This means the customer was created via the website but never got a full profile
+          console.error('[processBookingSubmission] Customer not found in customers_extended. ID:', targetCustomerId)
+
+          // Try to get customer info from the autocomplete list
+          const customerFromList = customers.find(c => c.id === targetCustomerId)
+
+          if (customerFromList) {
+            // Create a minimal customer record to trigger the missing data modal
+            tempCustData = {
+              id: targetCustomerId,
+              tipo_cliente: 'persona_fisica',
+              nome: customerFromList.full_name.split(' ')[0] || '',
+              cognome: customerFromList.full_name.split(' ').slice(1).join(' ') || '',
+              email: customerFromList.email || '',
+              telefono: customerFromList.phone || ''
+            }
+
+            // Mark ALL required fields as missing since this is a new customer
+            missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza', 'patente']
+            if (!tempCustData.email) missing.push('email')
+            if (!tempCustData.telefono) missing.push('telefono')
+
+            console.log('[processBookingSubmission] Customer exists in bookings but not in customers_extended. Will create new profile with missing fields:', missing)
+          } else {
+            alert('Errore: Cliente non trovato nel database.\n\nIl cliente selezionato non esiste nel sistema.\n\nPer favore, crea prima il profilo del cliente nella tab "Clienti".')
+            return
+          }
         }
       }
 
