@@ -115,6 +115,50 @@ export default function MissingFieldsModal({
             }
 
             console.log('[MissingFieldsModal] Customer updated successfully:', data)
+
+            // 2. ALSO update the basic 'customers' table to ensure the main list view updates
+            // We merge existing data with updates to ensure we have full name components
+            const mergedData = { ...customerData, ...updateData }
+
+            const basicData: any = {
+                updated_at: new Date().toISOString()
+            }
+
+            // Reconstruct full name if relevant fields changed or exist
+            if (mergedData.tipo_cliente === 'persona_fisica') {
+                const nome = mergedData.nome || ''
+                const cognome = mergedData.cognome || ''
+                if (nome || cognome) {
+                    basicData.full_name = `${nome} ${cognome}`.trim()
+                }
+            } else {
+                const companyName = mergedData.ragione_sociale || mergedData.denominazione
+                if (companyName) {
+                    basicData.full_name = companyName
+                }
+            }
+
+            // Sync other common fields if they are in the update
+            if (updateData.email) basicData.email = updateData.email
+            if (updateData.telefono) basicData.phone = updateData.telefono
+            if (updateData.patente || updateData.numero_patente) {
+                basicData.driver_license_number = updateData.patente || updateData.numero_patente
+            }
+
+            if (Object.keys(basicData).length > 1) { // more than just updated_at
+                console.log('[MissingFieldsModal] Syncing basic customers table:', basicData)
+                const { error: basicError } = await supabase
+                    .from('customers')
+                    .update(basicData)
+                    .eq('id', customerId)
+
+                if (basicError) {
+                    console.warn('[MissingFieldsModal] Warning: Could not sync basic customers table:', basicError)
+                } else {
+                    console.log('[MissingFieldsModal] Basic customers table synced')
+                }
+            }
+
             alert('Dati aggiornati con successo!')
 
             // Call onSave callback with updated data
