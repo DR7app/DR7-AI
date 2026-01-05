@@ -597,19 +597,54 @@ export default function CustomersTab() {
     // Fetch fresh data from database to ensure all fields are populated
     if (customer.id && customer.id.length > 10) {
       try {
-        const { data: freshCustomer, error } = await supabase
+        const { data: freshCustomerData, error } = await supabase
           .from('customers_extended')
           .select('*')
           .eq('id', customer.id)
-          .limit(1)
+          .single()
 
         if (error) {
           console.error('Error fetching fresh customer data:', error)
           // Fallback to cached data if fetch fails
           setViewingCustomerDetails(customer)
-        } else if (freshCustomer && freshCustomer.length > 0) {
-          // Use fresh data from database (first result)
-          setViewingCustomerDetails(freshCustomer[0] as any)
+        } else if (freshCustomerData) {
+          // Apply the same mapping logic as loadCustomers to ensure consistent display
+          const raw = freshCustomerData;
+
+          // Reconstruct full name
+          let fullName = 'Cliente'
+          if (raw.tipo_cliente === 'persona_fisica') {
+            fullName = `${raw.nome || ''} ${raw.cognome || ''}`.trim()
+          } else if (raw.tipo_cliente === 'azienda') {
+            fullName = raw.ragione_sociale || 'Azienda'
+          }
+          if (!fullName || fullName === 'Cliente') {
+            fullName = `${raw.nome || ''} ${raw.cognome || ''}`.trim() || 'Cliente'
+          }
+
+          const freshCustomer: Customer = {
+            // ... spread existing customer to keep local props if any
+            ...customer,
+            // Overwrite with fresh DB data
+            id: raw.id,
+            full_name: fullName,
+            email: raw.email,
+            phone: raw.telefono,
+
+            // Fields mapping
+            driver_license_number: raw.numero_patente,
+            // ... other specific mappings that loadCustomers does
+
+            // Spread raw data to cover all matching columns (nome, cognome, etc)
+            ...raw,
+
+            // Explicit overrides for mapped fields
+            telefono: raw.telefono,
+            numero_patente: raw.numero_patente,
+            scadenza_patente: raw.scadenza_patente,
+          }
+
+          setViewingCustomerDetails(freshCustomer)
         }
       } catch (err) {
         console.error('Error:', err)
