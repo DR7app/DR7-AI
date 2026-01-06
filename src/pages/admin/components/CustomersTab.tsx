@@ -618,6 +618,9 @@ export default function CustomersTab() {
           setViewingCustomerDetails(customer)
         } else if (freshCustomerData) {
           console.log('[handleViewCustomerDetails] Raw DB Fetch:', freshCustomerData)
+          console.log('[handleViewCustomerDetails] CF from DB:', freshCustomerData.codice_fiscale)
+          console.log('[handleViewCustomerDetails] Indirizzo from DB:', freshCustomerData.indirizzo)
+
           // Apply the same mapping logic as loadCustomers to ensure consistent display
           const raw = freshCustomerData;
 

@@ -123,8 +123,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     if (isOpen) {
       console.log('[NewClientModal] Modal opened. initialData:', initialData)
       if (initialData) {
-        console.log('[NewClientModal] Setting editingId to:', initialData.id)
-        setEditingId(initialData.id || null)
+        // CRITICAL FIX: If _isNew flag is present, force creation mode (editingId = null)
+        // This handles "phantom" clients from bookings that need to be created in customers_extended
+        const isNewRecord = initialData._isNew === true
+        console.log('[NewClientModal] Setting editingId. isNewRecord:', isNewRecord, 'ID:', initialData.id)
+
+        setEditingId(isNewRecord ? null : (initialData.id || null))
+
         setFormData({
           tipo_cliente: initialData.tipo_cliente || 'persona_fisica',
           nazione: initialData.nazione || 'Italia',
