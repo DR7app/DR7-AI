@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -305,6 +305,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
+
+  const isInitialEditLoad = useRef(false)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [newSecondDriverMode, setNewSecondDriverMode] = useState(false)
 
@@ -709,6 +711,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Auto-adjust pickup time when vehicle is selected if it conflicts with service
   useEffect(() => {
+    // Skip availability check on initial load of edit form
+    if (isInitialEditLoad.current) {
+      console.log('[Vehicle Availability] Skipping initial edit load check')
+      isInitialEditLoad.current = false
+      return
+    }
+
     if (formData.vehicle_id && formData.pickup_date) {
       const earliestTime = vehicleEarliestTimes.get(formData.vehicle_id)
 
@@ -1512,6 +1521,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       alert('Le prenotazioni lavaggio devono essere modificate nella tab "Prenotazioni Lavaggio"')
       return
     }
+
+    // Set flag to suppress initial availability check
+    isInitialEditLoad.current = true
 
     // Set customer data
     const customerId = booking.booking_details?.customer?.customerId || booking.user_id || ''
