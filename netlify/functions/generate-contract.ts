@@ -116,6 +116,28 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // AUTO-LINKING: If we found a customer but the booking wasn't linked, link it now!
+        if (customer && !customerId) {
+            console.log(`[generate-contract] 🔗 Auto-linking booking ${bookingId} to customer ${customer.id}`)
+            const { error: linkError } = await supabase
+                .from('bookings')
+                .update({
+                    user_id: customer.id,
+                    // If your schema uses customer_id column as well, update it too
+                    // based on schema typically used in this project:
+                    // customer_id might be in booking_details json, but some projects have it on root.
+                    // We'll update user_id which is standard, and if there's a specific column check schema.
+                    // Checking previous files, user_id is the main FK.
+                })
+                .eq('id', bookingId)
+
+            if (linkError) {
+                console.error('[generate-contract] ❌ Failed to auto-link booking:', linkError)
+            } else {
+                console.log('[generate-contract] ✅ Booking successfully auto-linked to customer')
+            }
+        }
+
         // Final fallback: Use booking data directly if no customer record exists
         if (!customer) {
             console.warn('[generate-contract] ⚠️ No customer record found in database. Using booking data as fallback.')
