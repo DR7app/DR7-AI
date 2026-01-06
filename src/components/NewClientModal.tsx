@@ -522,21 +522,57 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   }
 
   const isSaveDisabled = () => {
+    // Log validation status for debugging
+    const validationStatus = {
+      email: !!formData.email && validateEmail(formData.email),
+      phone: !!formData.telefono && validateItalianPhone(formData.telefono),
+      nazione: !!formData.nazione,
+      type_checks: {} as any
+    }
+
     // Check global fields
-    if (!formData.email || !formData.telefono || !formData.nazione) return true
-    if (!validateEmail(formData.email) || !validateItalianPhone(formData.telefono)) return true
+    if (!formData.email || !formData.telefono || !formData.nazione) {
+      console.log('[NewClientModal] Save disabled: Missing global fields', validationStatus)
+      return true
+    }
+    if (!validateEmail(formData.email) || !validateItalianPhone(formData.telefono)) {
+      console.log('[NewClientModal] Save disabled: Invalid email or phone', validationStatus)
+      return true
+    }
 
     // Check type-specific fields
     if (formData.tipo_cliente === 'persona_fisica') {
       // Codice Fiscale is required only for Italian clients
       const cfRequired = formData.nazione === 'Italia' ? !formData.codice_fiscale : false
-      return !formData.nome || !formData.cognome || cfRequired || !formData.indirizzo || !formData.citta_residenza || !formData.codice_postale || !formData.provincia_residenza
+
+      validationStatus.type_checks = {
+        nome: !!formData.nome,
+        cognome: !!formData.cognome,
+        cf_required: cfRequired
+      }
+
+      // RELAXED VALIDATION: Address fields are now optional for saving
+      if (!formData.nome || !formData.cognome || cfRequired) {
+        console.log('[NewClientModal] Save disabled: Missing persona_fisica fields', validationStatus)
+        return true
+      }
     }
+
     if (formData.tipo_cliente === 'azienda') {
-      return !formData.denominazione || !formData.partita_iva || !formData.sede_legale || !formData.nome_rappresentante || !formData.cognome_rappresentante || !formData.cf_rappresentante
+      validationStatus.type_checks = {
+        denominazione: !!formData.denominazione,
+        piva: !!formData.partita_iva
+      }
+
+      // RELAXED VALIDATION: Only Require Denominazione and P.IVA
+      if (!formData.denominazione || !formData.partita_iva) {
+        console.log('[NewClientModal] Save disabled: Missing azienda fields', validationStatus)
+        return true
+      }
     }
+
     if (formData.tipo_cliente === 'pubblica_amministrazione') {
-      return !formData.codice_univoco || !formData.cf_pa || !formData.ente_ufficio || !formData.citta
+      if (!formData.codice_univoco || !formData.cf_pa || !formData.ente_ufficio || !formData.citta) return true
     }
 
     return false
