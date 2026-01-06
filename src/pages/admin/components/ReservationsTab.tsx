@@ -344,7 +344,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     payment_status: 'paid',
     payment_method: 'Contanti',
     currency: 'EUR',
-    // 2nd Driver
+    // 2nd Driver - Required fields for contract generation validation
     has_second_driver: false,
     second_driver_id: '',
     second_driver_name: '',
