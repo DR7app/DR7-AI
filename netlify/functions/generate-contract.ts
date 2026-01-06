@@ -584,10 +584,13 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'SecondDriverBirthDate': (booking.booking_details?.second_driver?.birth_date && booking.booking_details?.second_driver?.name)
                 ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT')
                 : '',
-            'SecondDriverStatsCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || '') : '',
-            'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || '') : '',
-            'SecondDriverProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || '') : '',
-            'SecondDriverGender': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || '') : '',
+            'SecondDriverPlaceOfBirth': (booking.booking_details?.second_driver?.birth_place) ? booking.booking_details?.second_driver?.birth_place : '',
+            'SecondDriverBirthProvince': (booking.booking_details?.second_driver?.birth_provincia) ? booking.booking_details?.second_driver?.birth_provincia : (booking.booking_details?.second_driver?.birth_province || ''),
+            'SecondDriverStatsCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',
+            'SecondDriverTaxCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',
+            'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || booking.booking_details?.second_driver?.citta || '') : '',
+            'SecondDriverProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || booking.booking_details?.second_driver?.provincia || '') : '',
+            'SecondDriverGender': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || '') : '',
             'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || '') : '',
             'SecondDriverLicenseNumber': (booking.booking_details?.second_driver?.license_number && booking.booking_details?.second_driver?.name)
                 ? booking.booking_details.second_driver.license_number
@@ -596,15 +599,15 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'SecondDriverLicenseIssueDate': (booking.booking_details?.second_driver?.license_issue_date && booking.booking_details?.second_driver?.name)
                 ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT')
                 : '',
-            'SecondDriverLicenseExpiryDate': (booking.booking_details?.second_driver?.license_expiry_date && booking.booking_details?.second_driver?.name)
-                ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT')
-                : '',
-            'SecondDriverVAT': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || '') : '',
-            'SecondDriverSex': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || '') : '',
-            'SecondDriverAddress': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.address || '') : '',
-            'SecondDriverZipCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.zip_code || '') : '',
-            'SecondDriverBirthPlace': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.birth_city || '') : '',
-            'SecondDriverBirthProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.birth_province || '') : '',
+            'SecondDriverLicenseExpiryDate': (booking.booking_details?.second_driver?.license_expiry && booking.booking_details?.second_driver?.name)
+                ? new Date(booking.booking_details.second_driver.license_expiry).toLocaleDateString('it-IT')
+                : (booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : ''),
+            'SecondDriverVAT': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',
+            'SecondDriverSex': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || '') : '',
+            'SecondDriverAddress': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.address || booking.booking_details?.second_driver?.indirizzo || '') : '',
+            'SecondDriverZipCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.zip_code || booking.booking_details?.second_driver?.cap || '') : '',
+            'SecondDriverBirthPlace': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.birth_city || booking.booking_details?.second_driver?.birth_place || '') : '',
+            // 'SecondDriverBirthProvince' handled above
             'SecondDriverPhone': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || '') : '',
             'SecondDriverEmail': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || '') : '',
 
