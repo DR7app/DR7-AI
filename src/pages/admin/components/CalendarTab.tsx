@@ -683,7 +683,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             }
                           }}
                           className={`border border-gray-700/30 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
-                            ? 'bg-white' // White background for rented (so red bar stands out)
+                            ? 'bg-red-500' // Red for rented (background under the red bar)
                             : status === 'unavailable'
                               ? 'bg-orange-500' // Orange for unavailable
                               : 'bg-green-500' // Green for available
