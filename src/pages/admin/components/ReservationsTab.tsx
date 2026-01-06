@@ -349,11 +349,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     second_driver_id: '',
     second_driver_name: '',
     second_driver_surname: '',
-    second_driver_license_number: '',
-    second_driver_license_expiry: '',
-    second_driver_phone: '',
+    second_driver_codice_fiscale: '',
+    second_driver_sesso: '',
+    second_driver_indirizzo: '',
+    second_driver_cap: '',
+    second_driver_citta: '',
+    second_driver_provincia: '',
     second_driver_birth_date: '',
     second_driver_birth_place: '',
+    second_driver_birth_provincia: '',
+    second_driver_phone: '',
+    second_driver_email: '',
+    second_driver_license_type: '',
+    second_driver_license_number: '',
+    second_driver_license_issued_by: '',
+    second_driver_license_issue_date: '',
+    second_driver_license_expiry: '',
     // Kasko & Deposit
     insurance_option: 'KASKO_BASE' as KaskoTier,
     deposit: '0',
@@ -1779,14 +1790,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
 
         console.log('[processBookingSubmission] ✅ Customer ID validated:', tempCustData.id)
+        console.log('[processBookingSubmission] 🛑 BLOCKING booking creation - opening modal for missing fields')
         setMissingFields(missing)
         setTempCustomerData(tempCustData)
         setValidationContext('booking')
         setCurrentValidationBooking(null) // No booking ID yet if creating new, or avoiding linking issues
         setShowMissingDataModal(true)
-        return
+        setIsSubmitting(false) // CRITICAL: Reset submitting state to allow retry after modal
+        return // STOP HERE - do not create booking until missing data is provided
       }
     }
+
+    // DEFENSIVE CHECK: Ensure we don't proceed if validation triggered the modal
+    // This prevents race conditions where state updates haven't propagated yet
+    if (showMissingDataModal) {
+      console.log('[processBookingSubmission] ⚠️ Modal is open, aborting booking creation')
+      setIsSubmitting(false)
+      return
+    }
+
+    // ===== VALIDATION PASSED - PROCEEDING WITH BOOKING CREATION =====
+    console.log('[processBookingSubmission] ✅ All validation passed, proceeding with booking creation')
+    console.log('[processBookingSubmission] Customer ID:', formData.customer_id || 'new customer')
 
     // Call the original submit logic (embedded here or separate)
 
