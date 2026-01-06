@@ -278,10 +278,11 @@ export default function CustomersTab() {
       // We'll set total count after loading from all sources
 
       // Fetch all customers (we'll paginate client-side for proper alphabetical sorting)
+      // CRITICAL FIX: Sort by updated_at so we get the most recently modified version when deduplicating
       const { data: customersExtendedData, error: customersExtendedError } = await supabase
         .from('customers_extended')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
 
       if (customersExtendedError) {
         console.error('[CustomersTab] ❌ ERROR loading customers_extended:', customersExtendedError)
