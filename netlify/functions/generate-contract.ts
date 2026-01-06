@@ -603,9 +603,9 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
                 : '',
             'SecondDriverBirthDate': (booking.booking_details?.second_driver?.birth_date && booking.booking_details?.second_driver?.name)
                 ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT')
-                : '',
-            'SecondDriverPlaceOfBirth': (booking.booking_details?.second_driver?.birth_place) ? booking.booking_details?.second_driver?.birth_place : '',
-            'SecondDriverBirthProvince': (booking.booking_details?.second_driver?.birth_provincia) ? booking.booking_details?.second_driver?.birth_provincia : (booking.booking_details?.second_driver?.birth_province || ''),
+                : (secondDriverCustomer?.data_nascita ? new Date(secondDriverCustomer.data_nascita).toLocaleDateString('it-IT') : ''),
+            'SecondDriverPlaceOfBirth': (booking.booking_details?.second_driver?.birth_place) ? booking.booking_details?.second_driver?.birth_place : (secondDriverCustomer?.luogo_nascita || ''),
+            'SecondDriverBirthProvince': (booking.booking_details?.second_driver?.birth_provincia) ? booking.booking_details?.second_driver?.birth_provincia : (booking.booking_details?.second_driver?.birth_province || secondDriverCustomer?.provincia_nascita || ''),
             'SecondDriverStatsCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || secondDriverCustomer?.codice_fiscale || '') : '',
             'SecondDriverTaxCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || secondDriverCustomer?.codice_fiscale || '') : '',
             'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || booking.booking_details?.second_driver?.citta || secondDriverCustomer?.citta_residenza || secondDriverCustomer?.citta || '') : '',
