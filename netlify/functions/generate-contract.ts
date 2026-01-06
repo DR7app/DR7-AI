@@ -249,11 +249,11 @@ export const handler: Handler = async (event) => {
 
         // 4. Fetch Template from Supabase Storage
         // Based on user URL: .../public/templates/master_contract.pdf -> Bucket: 'templates', File: 'master_contract.pdf'
-        console.log(`[generate-contract] Fetching template from storage: bucket 'contracts', file 'templates/master_contract.pdf'`)
+        console.log(`[generate-contract] Fetching template from storage: bucket 'templates', file 'master_contract.pdf'`)
 
         const { data: templateData, error: templateError } = await supabase.storage
-            .from('contracts')
-            .download('templates/master_contract.pdf')
+            .from('templates')
+            .download('master_contract.pdf')
 
         if (templateError || !templateData) {
             console.error(`[generate-contract] Template fetch failed:`, templateError)
