@@ -123,12 +123,27 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     if (isOpen) {
       console.log('[NewClientModal] Modal opened. initialData:', initialData)
       if (initialData) {
-        // CRITICAL FIX: If _isNew flag is present, force creation mode (editingId = null)
-        // This handles "phantom" clients from bookings that need to be created in customers_extended
-        const isNewRecord = initialData._isNew === true
-        console.log('[NewClientModal] Setting editingId. isNewRecord:', isNewRecord, 'ID:', initialData.id)
+        console.log('[NewClientModal] Populating modal with data:', initialData)
+        console.log('[NewClientModal] initialData.id:', initialData.id)
 
-        setEditingId(isNewRecord ? null : (initialData.id || null))
+        // CRITICAL: Check if this is a "new" customer placeholder from booking
+        // If so, we want to CREATE a new record, not update the temp ID
+        if ((initialData as any)._isNew) {
+          console.log('[NewClientModal] _isNew flag detected -> Force CREATE mode')
+          setEditingId(null) // Force create mode
+        } else {
+          // If ID is a temp placeholder (starts with "temp-"), treat as CREATE 
+          // so we get a real UUID from DB. 
+          // The dedupe logic in CustomersTab will then hide the temp one.
+          if (initialData.id && String(initialData.id).startsWith('temp-')) {
+            console.log('[NewClientModal] Temp ID detected -> Force CREATE mode to generate real UUID')
+            setEditingId(null)
+          } else {
+            // Real UUID -> UPDATE mode
+            setEditingId(initialData.id || null)
+            console.log('[NewClientModal] Setting editingId to:', initialData.id)
+          }
+        }
 
         setFormData({
           tipo_cliente: initialData.tipo_cliente || 'persona_fisica',
