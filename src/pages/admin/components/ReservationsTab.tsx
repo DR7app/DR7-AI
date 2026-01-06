@@ -1537,11 +1537,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       second_driver_id: booking.booking_details?.second_driver?.customer_id || '',
       second_driver_name: booking.booking_details?.second_driver?.name || '',
       second_driver_surname: booking.booking_details?.second_driver?.surname || '',
-      second_driver_license_number: booking.booking_details?.second_driver?.license_number || '',
-      second_driver_license_expiry: booking.booking_details?.second_driver?.license_expiry || '',
-      second_driver_phone: booking.booking_details?.second_driver?.phone || '',
+      second_driver_codice_fiscale: booking.booking_details?.second_driver?.codice_fiscale || '',
+      second_driver_sesso: booking.booking_details?.second_driver?.sesso || '',
+      second_driver_indirizzo: booking.booking_details?.second_driver?.indirizzo || '',
+      second_driver_cap: booking.booking_details?.second_driver?.cap || '',
+      second_driver_citta: booking.booking_details?.second_driver?.citta || '',
+      second_driver_provincia: booking.booking_details?.second_driver?.provincia || '',
       second_driver_birth_date: booking.booking_details?.second_driver?.birth_date || '',
       second_driver_birth_place: booking.booking_details?.second_driver?.birth_place || '',
+      second_driver_birth_provincia: booking.booking_details?.second_driver?.birth_provincia || '',
+      second_driver_phone: booking.booking_details?.second_driver?.phone || '',
+      second_driver_email: booking.booking_details?.second_driver?.email || '',
+      second_driver_license_type: booking.booking_details?.second_driver?.license_type || '',
+      second_driver_license_number: booking.booking_details?.second_driver?.license_number || '',
+      second_driver_license_issued_by: booking.booking_details?.second_driver?.license_issued_by || '',
+      second_driver_license_issue_date: booking.booking_details?.second_driver?.license_issue_date || '',
+      second_driver_license_expiry: booking.booking_details?.second_driver?.license_expiry || '',
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
       deposit: booking.booking_details?.deposit || '0',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0'
@@ -2007,6 +2018,50 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       let customerId = formData.customer_id || null
+      let secondDriverId = formData.second_driver_id || null
+
+      // If creating new second driver, create them in customers_extended table first
+      if (formData.has_second_driver && newSecondDriverMode) {
+        console.log('[processBookingSubmission] Creating new customer for second driver...')
+        try {
+          const secondDriverData = {
+            tipo_cliente: 'persona_fisica',
+            nome: formData.second_driver_name,
+            cognome: formData.second_driver_surname,
+            codice_fiscale: formData.second_driver_codice_fiscale,
+            sesso: formData.second_driver_sesso,
+            indirizzo: formData.second_driver_indirizzo,
+            codice_postale: formData.second_driver_cap,
+            citta_residenza: formData.second_driver_citta,
+            provincia_residenza: formData.second_driver_provincia,
+            data_nascita: formData.second_driver_birth_date || null,
+            luogo_nascita: formData.second_driver_birth_place || null,
+            telefono: formData.second_driver_phone,
+            email: formData.second_driver_email,
+            patente: formData.second_driver_license_number,
+            scadenza_patente: formData.second_driver_license_expiry || null,
+            source: 'admin_second_driver',
+            created_at: new Date().toISOString()
+          }
+
+          const { data: newSecondDriver, error: secondDriverError } = await supabase
+            .from('customers_extended')
+            .insert([secondDriverData])
+            .select()
+            .single()
+
+          if (secondDriverError) {
+            console.error('Failed to create second driver customer:', secondDriverError)
+            throw new Error(`Failed to create second driver: ${secondDriverError.message}`)
+          }
+
+          secondDriverId = newSecondDriver.id
+          console.log('✅ New second driver created:', newSecondDriver)
+        } catch (error) {
+          console.error('Error creating second driver:', error)
+          throw new Error('Failed to create second driver: ' + (error as Error).message)
+        }
+      }
 
       // If creating new customer, create them in customers_extended table
       if (newCustomerMode) {
@@ -2175,14 +2230,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
           second_driver: formData.has_second_driver ? {
-            customer_id: formData.second_driver_id || null,
+            customer_id: secondDriverId || null,
             name: formData.second_driver_name,
             surname: formData.second_driver_surname,
-            license_number: formData.second_driver_license_number,
-            license_expiry: formData.second_driver_license_expiry,
-            phone: formData.second_driver_phone,
+            codice_fiscale: formData.second_driver_codice_fiscale,
+            sesso: formData.second_driver_sesso,
+            indirizzo: formData.second_driver_indirizzo,
+            cap: formData.second_driver_cap,
+            citta: formData.second_driver_citta,
+            provincia: formData.second_driver_provincia,
             birth_date: formData.second_driver_birth_date,
-            birth_place: formData.second_driver_birth_place
+            birth_place: formData.second_driver_birth_place,
+            birth_provincia: formData.second_driver_birth_provincia,
+            phone: formData.second_driver_phone,
+            email: formData.second_driver_email,
+            license_type: formData.second_driver_license_type,
+            license_number: formData.second_driver_license_number,
+            license_issued_by: formData.second_driver_license_issued_by,
+            license_issue_date: formData.second_driver_license_issue_date,
+            license_expiry: formData.second_driver_license_expiry
           } : null
         }
       }
@@ -2374,11 +2440,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       second_driver_id: '',
       second_driver_name: '',
       second_driver_surname: '',
-      second_driver_license_number: '',
-      second_driver_license_expiry: '',
-      second_driver_phone: '',
+      second_driver_codice_fiscale: '',
+      second_driver_sesso: '',
+      second_driver_indirizzo: '',
+      second_driver_cap: '',
+      second_driver_citta: '',
+      second_driver_provincia: '',
       second_driver_birth_date: '',
       second_driver_birth_place: '',
+      second_driver_birth_provincia: '',
+      second_driver_phone: '',
+      second_driver_email: '',
+      second_driver_license_type: '',
+      second_driver_license_number: '',
+      second_driver_license_issued_by: '',
+      second_driver_license_issue_date: '',
+      second_driver_license_expiry: '',
       // Kasko & Deposit
       insurance_option: 'KASKO_BASE',
       deposit: '0',
@@ -2788,43 +2865,133 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     // New Driver Mode - Manual Entry
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Input
-                        label="Nome"
+                        label="Nome *"
+                        required
                         value={formData.second_driver_name}
                         onChange={(e) => setFormData({ ...formData, second_driver_name: e.target.value })}
                       />
                       <Input
-                        label="Cognome"
+                        label="Cognome *"
+                        required
                         value={formData.second_driver_surname}
                         onChange={(e) => setFormData({ ...formData, second_driver_surname: e.target.value })}
                       />
                       <Input
-                        label="Data di Nascita"
+                        label="Codice Fiscale *"
+                        required
+                        value={formData.second_driver_codice_fiscale}
+                        onChange={(e) => setFormData({ ...formData, second_driver_codice_fiscale: e.target.value.toUpperCase() })}
+                      />
+                      <Select
+                        label="Sesso *"
+                        required
+                        value={formData.second_driver_sesso}
+                        onChange={(e) => setFormData({ ...formData, second_driver_sesso: e.target.value })}
+                        options={[
+                          { value: '', label: 'Seleziona...' },
+                          { value: 'M', label: 'Maschio' },
+                          { value: 'F', label: 'Femmina' }
+                        ]}
+                      />
+                      <Input
+                        label="Indirizzo *"
+                        required
+                        value={formData.second_driver_indirizzo}
+                        onChange={(e) => setFormData({ ...formData, second_driver_indirizzo: e.target.value })}
+                      />
+                      <Input
+                        label="CAP *"
+                        required
+                        value={formData.second_driver_cap}
+                        onChange={(e) => setFormData({ ...formData, second_driver_cap: e.target.value })}
+                      />
+                      <Input
+                        label="Città *"
+                        required
+                        value={formData.second_driver_citta}
+                        onChange={(e) => setFormData({ ...formData, second_driver_citta: e.target.value })}
+                      />
+                      <Input
+                        label="Provincia *"
+                        required
+                        value={formData.second_driver_provincia}
+                        onChange={(e) => setFormData({ ...formData, second_driver_provincia: e.target.value.toUpperCase() })}
+                        maxLength={2}
+                      />
+                      <Input
+                        label="Data di Nascita *"
                         type="date"
+                        required
                         value={formData.second_driver_birth_date}
                         onChange={(e) => setFormData({ ...formData, second_driver_birth_date: e.target.value })}
                       />
                       <Input
-                        label="Luogo di Nascita"
+                        label="Città di Nascita *"
+                        required
                         value={formData.second_driver_birth_place}
                         onChange={(e) => setFormData({ ...formData, second_driver_birth_place: e.target.value })}
                       />
                       <Input
-                        label="Telefono"
+                        label="Provincia di Nascita *"
+                        required
+                        value={formData.second_driver_birth_provincia}
+                        onChange={(e) => setFormData({ ...formData, second_driver_birth_provincia: e.target.value.toUpperCase() })}
+                        maxLength={2}
+                      />
+                      <Input
+                        label="Telefono *"
+                        type="tel"
+                        required
                         value={formData.second_driver_phone}
                         onChange={(e) => setFormData({ ...formData, second_driver_phone: e.target.value })}
                       />
-                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                          label="Numero Patente"
-                          value={formData.second_driver_license_number}
-                          onChange={(e) => setFormData({ ...formData, second_driver_license_number: e.target.value })}
-                        />
-                        <Input
-                          label="Scadenza Patente"
-                          type="date"
-                          value={formData.second_driver_license_expiry}
-                          onChange={(e) => setFormData({ ...formData, second_driver_license_expiry: e.target.value })}
-                        />
+                      <Input
+                        label="E-mail *"
+                        type="email"
+                        required
+                        value={formData.second_driver_email}
+                        onChange={(e) => setFormData({ ...formData, second_driver_email: e.target.value })}
+                      />
+
+                      {/* License Details */}
+                      <div className="md:col-span-2 border-t border-gray-600 pt-4 mt-2">
+                        <h4 className="text-white font-semibold mb-3">Dettagli Patente</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input
+                            label="Tipo di Patente *"
+                            required
+                            value={formData.second_driver_license_type}
+                            onChange={(e) => setFormData({ ...formData, second_driver_license_type: e.target.value })}
+                            placeholder="es. B"
+                          />
+                          <Input
+                            label="Numero Patente *"
+                            required
+                            value={formData.second_driver_license_number}
+                            onChange={(e) => setFormData({ ...formData, second_driver_license_number: e.target.value })}
+                          />
+                          <Input
+                            label="Emessa da *"
+                            required
+                            value={formData.second_driver_license_issued_by}
+                            onChange={(e) => setFormData({ ...formData, second_driver_license_issued_by: e.target.value })}
+                            placeholder="es. Motorizzazione Civile"
+                          />
+                          <Input
+                            label="Data di Rilascio *"
+                            type="date"
+                            required
+                            value={formData.second_driver_license_issue_date}
+                            onChange={(e) => setFormData({ ...formData, second_driver_license_issue_date: e.target.value })}
+                          />
+                          <Input
+                            label="Scadenza Patente *"
+                            type="date"
+                            required
+                            value={formData.second_driver_license_expiry}
+                            onChange={(e) => setFormData({ ...formData, second_driver_license_expiry: e.target.value })}
+                          />
+                        </div>
                       </div>
                     </div>
                   ) : (
