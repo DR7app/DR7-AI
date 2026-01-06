@@ -220,16 +220,15 @@ export default function CustomersTab() {
 
           // Get customer info from direct columns or booking_details
           const customerName = booking.customer_name || details.fullName || 'Cliente'
-          const customerEmail = booking.customer_email || details.email || null
-          const customerPhone = booking.customer_phone || details.phone || null
+          // CRITICAL FIX: Normalize email and phone to ensure keys match with customers_extended
+          const customerEmail = (booking.customer_email || details.email || '').toLowerCase().trim() || null
+          const customerPhone = (booking.customer_phone || details.phone || '').trim() || null
 
           // Debug log
-          if (!customerPhone) {
-            console.log('Missing phone for:', {
+          if (!customerPhone && !customerEmail) {
+            console.log('Missing contact info for:', {
               customerName,
-              customerEmail,
-              booking_details: booking.booking_details,
-              direct_phone: booking.customer_phone
+              booking_details: booking.booking_details
             })
           }
 
@@ -237,7 +236,7 @@ export default function CustomersTab() {
           const key = customerEmail || customerPhone || booking.user_id
 
           if (key) {
-            // If customer already exists, update phone and email if missing
+            // ... existing logic ...
             const existing = customerMap.get(key)
             if (existing) {
               if (!existing.phone && customerPhone) {

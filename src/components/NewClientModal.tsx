@@ -347,7 +347,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   }
 
   const handleSave = async () => {
-    if (!validateForm()) return
+    console.log('[NewClientModal] HandleSave triggered. FormData:', formData)
+    if (!validateForm()) {
+      console.log('[NewClientModal] Validation failed. Errors:', errors)
+      return
+    }
 
     setIsSaving(true)
     try {
