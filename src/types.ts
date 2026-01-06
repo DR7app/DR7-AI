@@ -46,6 +46,14 @@ export interface Vehicle {
   tax_expiry?: string
   inspection_expiry?: string
   leasing_expiry?: string
+  // Maintenance Tracking
+  last_tire_change_km?: number
+  maintenance_tires_interval_km?: number
+  last_brake_change_km?: number
+  maintenance_brake_interval_km?: number
+  last_service_km?: number
+  last_service_date?: string
+  maintenance_service_interval_km?: number
 }
 
 export interface VehicleMaintenance {
