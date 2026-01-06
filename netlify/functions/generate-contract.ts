@@ -297,6 +297,24 @@ export const handler: Handler = async (event) => {
                 console.log('[generate-contract] ✅ Found second driver customer data by codice_fiscale')
                 secondDriverCustomer = sdData
             }
+
+            // Last resort fallback: Try by name + surname
+            const secondDriverName = booking.booking_details?.second_driver?.name
+            const secondDriverSurname = booking.booking_details?.second_driver?.surname
+            if (!secondDriverCustomer && secondDriverName && secondDriverSurname) {
+                console.log(`[generate-contract] Last resort: Fetching second driver by name: ${secondDriverName} ${secondDriverSurname}`)
+                const { data: sdData, error: sdError } = await supabase
+                    .from('customers_extended')
+                    .select('*')
+                    .eq('nome', secondDriverName)
+                    .eq('cognome', secondDriverSurname)
+                    .maybeSingle()
+
+                if (sdData) {
+                    console.log('[generate-contract] ✅ Found second driver customer data by name+surname')
+                    secondDriverCustomer = sdData
+                }
+            }
         }
 
         // 4. Fetch Template from Supabase Storage
