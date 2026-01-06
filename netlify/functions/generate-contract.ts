@@ -661,7 +661,7 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || booking.booking_details?.second_driver?.citta || secondDriverCustomer?.citta_residenza || secondDriverCustomer?.citta || '') : '',
             'SecondDriverProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || booking.booking_details?.second_driver?.provincia || secondDriverCustomer?.provincia_residenza || secondDriverCustomer?.provincia || '') : '',
             'SecondDriverGender': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || secondDriverCustomer?.sesso || '') : '',
-            'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || secondDriverCustomer?.tipo_patente || '') : '',
+            'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || secondDriverCustomer?.tipo_patente || (secondDriverCustomer as any)?.metadata?.patente?.tipo || '') : '',
             'SecondDriverLicenseNumber': (booking.booking_details?.second_driver?.license_number && booking.booking_details?.second_driver?.name)
                 ? booking.booking_details.second_driver.license_number
                 : (secondDriverCustomer?.numero_patente || ''),
