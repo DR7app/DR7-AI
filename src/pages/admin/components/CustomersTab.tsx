@@ -314,9 +314,6 @@ export default function CustomersTab() {
 
         // First, deduplicate customers_extended by ID to ensure we only process each once
         const seenIds = new Set<string>()
-        // Also deduplicate by unique keys (email/phone) to prevent showing DB duplicates
-        const seenEmails = new Set<string>()
-        const seenPhones = new Set<string>()
 
         customersExtendedData.forEach((customer: any) => {
           // Skip if we've already processed this ID
@@ -326,35 +323,24 @@ export default function CustomersTab() {
           }
           seenIds.add(customer.id)
 
-          // [FIX] DEDUPLICATE BY EMAIL/PHONE
-          // If we already have a real customer record with this email, skip valid duplicates.
-          // Since we iterate newest-first, we keep the most recent one.
+          // CRITICAL: We want to overwrite any existing "booking entry" that matches this customer's email or phone
+          // because the DB record is the "real" one with the correct ID.
+
+          let matchedKey: string | null = null;
+
           if (customer.email && customer.email.trim()) {
             const emailKey = customer.email.trim().toLowerCase()
-            if (seenEmails.has(emailKey)) {
-              console.warn('[CustomersTab] Hiding duplicate customer by Email:', emailKey, customer.id)
-              return
-            }
-            seenEmails.add(emailKey)
+            if (customerMap.has(emailKey)) matchedKey = emailKey
           }
 
-          if (customer.telefono && customer.telefono.trim()) {
+          if (!matchedKey && customer.telefono && customer.telefono.trim()) {
             const phoneKey = customer.telefono.trim()
-            if (seenPhones.has(phoneKey)) {
-              // Only skip if we also have an email match OR if strictly phone-only?
-              // Let's be careful. Some people share phones.
-              // But for the reported issue, it's likely safe. 
-              // Let's rely mainly on Email for strict de-dupe, and phone only if it looks like a dupe.
-              // Actually, let's stick to Email + Name check? Or just Email.
-              // User 'fefe fes' likely has email.
-            }
-            seenPhones.add(phoneKey)
+            if (customerMap.has(phoneKey)) matchedKey = phoneKey
           }
 
-          // [FIX] FORCE UNIQUE KEY
-          // Previously we merged on email/phone, which caused 200+ customers (who shared placeholders) to disappear.
-          // Now we use the Unique ID for every DB record to guarantee visibility.
-          const distinctKey = customer.id
+          // Determine the key we will use for this customer in the map
+          // Ideally, we use the ID to be absolutely unique
+          const canonicalKey = customer.id
 
           // Create display name based on customer type
           let fullName = 'Cliente'
@@ -367,7 +353,6 @@ export default function CustomersTab() {
           }
 
           if (!fullName || fullName === 'Cliente') {
-            // Fallback to name/surname if fields empty (legacy)
             fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim() ||
               customer.ragione_sociale ||
               customer.denominazione ||
@@ -376,7 +361,8 @@ export default function CustomersTab() {
 
           const extendedData = {
             // We map the DB fields to our Customer interface
-            // ... (preserve existing mapping logig) ...\n            id: customer.id,
+            // ... (preserve existing mapping logig) ...
+            id: customer.id,
             full_name: fullName,
             email: customer.email,
             phone: customer.telefono,
@@ -384,8 +370,9 @@ export default function CustomersTab() {
             driver_license_expiry: customer.scadenza_patente,
             // Ensure created_at is preserved
             created_at: customer.created_at,
-            updated_at: customer.created_at, // or updated_at column
+            updated_at: customer.updated_at || customer.created_at,
             notes: customer.note,
+            source: 'db', // Flag to know this is from DB
 
             // Extended fields
             tipo_cliente: customer.tipo_cliente,
@@ -396,7 +383,7 @@ export default function CustomersTab() {
             citta: customer.citta,
             cap: customer.cap,
             data_nascita: customer.data_nascita,
-            luogo_nascita: customer.luogo_nascita,
+            luogo_nascita: customer.luogo_nascita, // ensure mapped
             sesso: customer.sesso,
 
             // Licenses matches
@@ -419,25 +406,21 @@ export default function CustomersTab() {
             status: customer.status
           }
 
-          // Always use ID as key - this prevents duplicates
-          customerMap.set(distinctKey, extendedData as any)
+          // INSERT the "Real" customer
+          customerMap.set(canonicalKey, extendedData as any)
 
-          // [FIX] CLEANUP STALE BOOKING ENTRIES
-          // If a booking created a placeholder at "info@dr7.it", and this Real Customer also has "info@dr7.it",
-          // we must REMOVE the placeholder so we don't show a duplicate (or worse, hide this one).
-          // Since we are now using ID as the canonical key, the email-based key is obsolete for this user.
+          // REMOVE any placeholder entries that were based on email or phone
+          // This ensures we don't have duplicates (one real, one from booking with temp ID)
+          if (matchedKey && matchedKey !== canonicalKey) {
+            // console.log(`[CustomersTab] Replacing placeholder ${matchedKey} with DB record ${canonicalKey}`)
+            customerMap.delete(matchedKey)
+          }
+
+          // Also check explicitly for email key again to be sure
           if (customer.email && customer.email.trim()) {
             const emailKey = customer.email.trim().toLowerCase()
-            // Only delete if it's NOT the same as our ID key
-            if (emailKey !== distinctKey && customerMap.has(emailKey)) {
+            if (emailKey !== canonicalKey && customerMap.has(emailKey)) {
               customerMap.delete(emailKey)
-            }
-          }
-          if (customer.telefono && customer.telefono.trim()) {
-            const phoneKey = customer.telefono.trim()
-            // Only delete if it's NOT the same as our ID key
-            if (phoneKey !== distinctKey && customerMap.has(phoneKey)) {
-              customerMap.delete(phoneKey)
             }
           }
         })
