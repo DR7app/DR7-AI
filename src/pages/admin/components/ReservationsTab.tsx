@@ -1156,9 +1156,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!booking.customer_email) missing.push('email')
       if (!booking.customer_phone) missing.push('telefono')
 
-      // These are always required for contracts, so if we don't have a customer ID, they are definitely "missing" from a DB perspective
-      // But adding them here allows the modal to capture them and create the customer!
-      missing.push('codice_fiscale', 'indirizzo', 'citta_residenza')
+      // If no customer ID, check if we can fall back to email lookup or booking details
+      if (booking.customer_email) {
+        console.log('[validateCustomerData] No ID but email found. Trusting backend/existing customer lookup.')
+        return []
+      }
+
+      // If we are here, we truly have no way to identify the customer (no ID, no email)
+      missing.push('codice_fiscale', 'indirizzo', 'citta_residenza', 'email')
 
       return missing
     }
@@ -1213,13 +1218,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Fetch full customer data to populate modal
       const customerId = booking.user_id || booking.booking_details?.customer?.id || booking.booking_details?.customer_id
-
-      if (!customerId) {
-        alert('⚠️ Questa prenotazione non è associata a un cliente registrato.\n\nÈ necessario creare o selezionare un cliente per generare il contratto.\n\nClicca OK per modificare la prenotazione.')
-        handleEditBooking(booking)
-        return
-      }
-
       let customerData = {}
 
       if (customerId) {
