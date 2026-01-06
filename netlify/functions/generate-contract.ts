@@ -247,6 +247,26 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
+        // 3.5. Fetch Second Driver Data from customers_extended if customer_id is present
+        let secondDriverCustomer = null
+        const secondDriverId = booking.booking_details?.second_driver?.customer_id
+
+        if (secondDriverId) {
+            console.log(`[generate-contract] Fetching second driver data for customer_id: ${secondDriverId}`)
+            const { data: sdData, error: sdError } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('id', secondDriverId)
+                .single()
+
+            if (sdError) {
+                console.error('[generate-contract] Error fetching second driver customer:', sdError)
+            } else if (sdData) {
+                console.log('[generate-contract] ✅ Found second driver customer data')
+                secondDriverCustomer = sdData
+            }
+        }
+
         // 4. Fetch Template from Supabase Storage
         // Based on user URL: .../public/templates/master_contract.pdf -> Bucket: 'templates', File: 'master_contract.pdf'
         console.log(`[generate-contract] Fetching template from storage: bucket 'templates', file 'master_contract.pdf'`)
@@ -586,30 +606,30 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
                 : '',
             'SecondDriverPlaceOfBirth': (booking.booking_details?.second_driver?.birth_place) ? booking.booking_details?.second_driver?.birth_place : '',
             'SecondDriverBirthProvince': (booking.booking_details?.second_driver?.birth_provincia) ? booking.booking_details?.second_driver?.birth_provincia : (booking.booking_details?.second_driver?.birth_province || ''),
-            'SecondDriverStatsCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',
-            'SecondDriverTaxCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',
-            'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || booking.booking_details?.second_driver?.citta || '') : '',
-            'SecondDriverProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || booking.booking_details?.second_driver?.provincia || '') : '',
-            'SecondDriverGender': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || '') : '',
-            'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || '') : '',
+            'SecondDriverStatsCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || secondDriverCustomer?.codice_fiscale || '') : '',
+            'SecondDriverTaxCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || secondDriverCustomer?.codice_fiscale || '') : '',
+            'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || booking.booking_details?.second_driver?.citta || secondDriverCustomer?.citta_residenza || secondDriverCustomer?.citta || '') : '',
+            'SecondDriverProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || booking.booking_details?.second_driver?.provincia || secondDriverCustomer?.provincia_residenza || secondDriverCustomer?.provincia || '') : '',
+            'SecondDriverGender': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || secondDriverCustomer?.sesso || '') : '',
+            'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || secondDriverCustomer?.categoria_patente || '') : '',
             'SecondDriverLicenseNumber': (booking.booking_details?.second_driver?.license_number && booking.booking_details?.second_driver?.name)
                 ? booking.booking_details.second_driver.license_number
-                : '',
-            'SecondDriverLicenseIssuedBy': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_issued_by || '') : '',
+                : (secondDriverCustomer?.numero_patente || ''),
+            'SecondDriverLicenseIssuedBy': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_issued_by || secondDriverCustomer?.ente_rilascio || '') : '',
             'SecondDriverLicenseIssueDate': (booking.booking_details?.second_driver?.license_issue_date && booking.booking_details?.second_driver?.name)
                 ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT')
-                : '',
+                : (secondDriverCustomer?.data_rilascio ? new Date(secondDriverCustomer.data_rilascio).toLocaleDateString('it-IT') : ''),
             'SecondDriverLicenseExpiryDate': (booking.booking_details?.second_driver?.license_expiry && booking.booking_details?.second_driver?.name)
                 ? new Date(booking.booking_details.second_driver.license_expiry).toLocaleDateString('it-IT')
-                : (booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : ''),
-            'SecondDriverVAT': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',
-            'SecondDriverSex': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || '') : '',
-            'SecondDriverAddress': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.address || booking.booking_details?.second_driver?.indirizzo || '') : '',
-            'SecondDriverZipCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.zip_code || booking.booking_details?.second_driver?.cap || '') : '',
-            'SecondDriverBirthPlace': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.birth_city || booking.booking_details?.second_driver?.birth_place || '') : '',
+                : (booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : (secondDriverCustomer?.data_scadenza ? new Date(secondDriverCustomer.data_scadenza).toLocaleDateString('it-IT') : '')),
+            'SecondDriverVAT': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || secondDriverCustomer?.codice_fiscale || '') : '',
+            'SecondDriverSex': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || secondDriverCustomer?.sesso || '') : '',
+            'SecondDriverAddress': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.address || booking.booking_details?.second_driver?.indirizzo || secondDriverCustomer?.indirizzo || '') : '',
+            'SecondDriverZipCode': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.zip_code || booking.booking_details?.second_driver?.cap || secondDriverCustomer?.codice_postale || secondDriverCustomer?.cap || '') : '',
+            'SecondDriverBirthPlace': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.birth_city || booking.booking_details?.second_driver?.birth_place || secondDriverCustomer?.luogo_nascita || '') : '',
             // 'SecondDriverBirthProvince' handled above
-            'SecondDriverPhone': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || '') : '',
-            'SecondDriverEmail': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || '') : '',
+            'SecondDriverPhone': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || secondDriverCustomer?.telefono || '') : '',
+            'SecondDriverEmail': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || secondDriverCustomer?.email || '') : '',
 
             // Italian Aliases for Second Driver (Robustness)
             'CodiceFiscaleSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',

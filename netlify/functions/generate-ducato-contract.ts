@@ -73,6 +73,26 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
+        // 2.5. Fetch Second Driver Data from customers_extended if customer_id is present
+        let secondDriverCustomer = null
+        const secondDriverId = booking.booking_details?.second_driver?.customer_id
+
+        if (secondDriverId) {
+            console.log(`[generate-ducato-contract] Fetching second driver data for customer_id: ${secondDriverId}`)
+            const { data: sdData, error: sdError } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('id', secondDriverId)
+                .single()
+
+            if (sdError) {
+                console.error('[generate-ducato-contract] Error fetching second driver customer:', sdError)
+            } else if (sdData) {
+                console.log('[generate-ducato-contract] ✅ Found second driver customer data')
+                secondDriverCustomer = sdData
+            }
+        }
+
         // 4. Fetch Template
         // In Netlify functions, we might need to rely on the deployed URL to fetch public assets 
         // if they are not bundled into the function via specific config.
