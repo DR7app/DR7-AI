@@ -661,6 +661,16 @@ export default function CustomersTab() {
             telefono: raw.telefono,
             numero_patente: raw.numero_patente,
             scadenza_patente: raw.scadenza_patente,
+
+            // CRITICAL FIX: Map DB columns to UI expected keys
+            luogo_nascita: raw.citta_nascita || raw.luogo_nascita,
+            indirizzo_azienda: raw.sede_legale || raw.indirizzo_azienda || raw.indirizzo,
+            patente: raw.numero_patente || raw.patente,
+
+            // Fix address display
+            indirizzo: raw.indirizzo || raw.sede_legale,
+            citta: raw.citta || raw.citta_residenza || raw.comune,
+            cap: raw.cap || raw.codice_postale
           }
 
           setViewingCustomerDetails(freshCustomer)
