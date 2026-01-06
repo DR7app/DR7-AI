@@ -398,18 +398,56 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (formData.second_driver_id && !newSecondDriverMode) {
       const selectedCustomer = customers.find(c => c.id === formData.second_driver_id)
       if (selectedCustomer) {
-        // Split full_name into name and surname (best effort)
-        const nameParts = selectedCustomer.full_name.trim().split(' ')
-        const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
-        const name = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
+        // Fetch full customer data from customers_extended to get all fields
+        const fetchFullCustomerData = async () => {
+          const { data: fullCustomer, error } = await supabase
+            .from('customers_extended')
+            .select('*')
+            .eq('id', formData.second_driver_id)
+            .single()
 
-        setFormData(prev => ({
-          ...prev,
-          second_driver_name: name,
-          second_driver_surname: surname,
-          second_driver_phone: selectedCustomer.phone || '',
-          second_driver_license_number: selectedCustomer.driver_license_number || ''
-        }))
+          if (error || !fullCustomer) {
+            console.error('Error fetching full customer data for second driver:', error)
+            // Fallback to basic data from customers table
+            const nameParts = selectedCustomer.full_name.trim().split(' ')
+            const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
+            const name = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
+
+            setFormData(prev => ({
+              ...prev,
+              second_driver_name: name,
+              second_driver_surname: surname,
+              second_driver_phone: selectedCustomer.phone || '',
+              second_driver_license_number: selectedCustomer.driver_license_number || ''
+            }))
+            return
+          }
+
+          // Full auto-population with all fields from customers_extended
+          setFormData(prev => ({
+            ...prev,
+            second_driver_name: fullCustomer.nome || '',
+            second_driver_surname: fullCustomer.cognome || '',
+            second_driver_codice_fiscale: fullCustomer.codice_fiscale || '',
+            second_driver_sesso: fullCustomer.sesso || '',
+            second_driver_indirizzo: fullCustomer.indirizzo || '',
+            second_driver_cap: fullCustomer.codice_postale || fullCustomer.cap || '',
+            second_driver_citta: fullCustomer.citta_residenza || fullCustomer.citta || '',
+            second_driver_provincia: fullCustomer.provincia_residenza || fullCustomer.provincia || '',
+            second_driver_birth_date: fullCustomer.data_nascita || '',
+            second_driver_birth_place: fullCustomer.luogo_nascita || '',
+            second_driver_birth_provincia: fullCustomer.provincia_nascita || '',
+            second_driver_phone: fullCustomer.telefono || selectedCustomer.phone || '',
+            second_driver_email: fullCustomer.email || selectedCustomer.email || '',
+            second_driver_license_type: fullCustomer.categoria_patente || '',
+            second_driver_license_number: fullCustomer.numero_patente || selectedCustomer.driver_license_number || '',
+            second_driver_license_issued_by: fullCustomer.ente_rilascio || '',
+            second_driver_license_issue_date: fullCustomer.data_rilascio || '',
+            second_driver_license_expiry: fullCustomer.data_scadenza || ''
+          }))
+        }
+
+        fetchFullCustomerData()
       }
     }
   }, [formData.second_driver_id, newSecondDriverMode, customers])
