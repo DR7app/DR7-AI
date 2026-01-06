@@ -1629,17 +1629,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           .limit(1)
 
         if (customerError) {
-          console.error('[processBookingSubmission] Customer lookup error:', customerError)
-
           // Distinguish between "not found" (PGRST116) vs other errors
           if (customerError.code === 'PGRST116' || customerError.message?.includes('no rows')) {
-            // Client truly doesn't exist - this is the correct "not found" case
-            alert(
-              'Cliente non trovato nel database.\n\n' +
-              'Verifica che l\'ID cliente sia corretto o crea un nuovo cliente.\n\n' +
-              `ID Cliente: ${targetCustomerId}`
-            )
+            // Client truly doesn't exist in customers_extended
+            // Don't alert yet - let it fall through to the autocomplete/local check below
+            console.log('[processBookingSubmission] Customer not found in DB (PGRST116), attempting fallback to autocomplete list...')
           } else {
+            console.error('[processBookingSubmission] Customer lookup error:', customerError)
             // Other errors (network, permissions, etc.)
             const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
             alert(
@@ -1647,8 +1643,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               `ID Cliente: ${targetCustomerId}\n\n` +
               'Riprova o contatta il supporto tecnico.'
             )
+            return
           }
-          return
         }
 
         const customer = customerData?.[0]
@@ -1773,7 +1769,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       if (missing.length > 0) {
-        console.log('[processBookingSubmission] 🚨 Missing data detected! Opening modal for fields:', missing)
+        console.log('[processBookingSubmission] 🚨 Missing data detected! Opening NewClientModal for fields:', missing)
 
         // CRITICAL VALIDATION: Ensure tempCustData has a valid ID before opening modal
         if (!tempCustData || !tempCustData.id) {
@@ -1801,12 +1797,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
 
         console.log('[processBookingSubmission] ✅ Customer ID validated:', tempCustData.id)
-        console.log('[processBookingSubmission] 🛑 BLOCKING booking creation - opening modal for missing fields')
-        setMissingFields(missing)
-        setTempCustomerData(tempCustData)
+        console.log('[processBookingSubmission] 🛑 BLOCKING booking creation - opening NewClientModal for completion')
+
+        // NEW LOGIC: Use NewClientModal
+        // Pass the partial/missing data as initialData so the user can fill it
+        setCustomerToEdit(tempCustData)
         setValidationContext('booking')
-        setCurrentValidationBooking(null) // No booking ID yet if creating new, or avoiding linking issues
-        setShowMissingDataModal(true)
+        setCurrentValidationBooking(null)
+        setEditModalOpen(true) // Open NewClientModal
+
         setIsSubmitting(false) // CRITICAL: Reset submitting state to allow retry after modal
         return // STOP HERE - do not create booking until missing data is provided
       }
@@ -2527,7 +2526,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           initialData={customerToEdit}
           onClientCreated={async (newClientId) => {
             await loadData()
-            // If we were validating a booking, link the new client and retry
+
+            // NEW: Resume booking creation flow if context is 'booking'
+            if (validationContext === 'booking' && newClientId) {
+              console.log('[ReservationsTab] NewClientModal finished. Resuming booking with:', newClientId)
+              setFormData(prev => ({ ...prev, customer_id: newClientId }))
+              // Small delay to ensure state updates
+              setTimeout(() => {
+                processBookingSubmission(true, newClientId)
+              }, 100)
+              return
+            }
+
+            // If we were validating a booking for contract/invoice (existing booking)
             if (currentValidationBooking && newClientId) {
               try {
                 const { error } = await supabase
