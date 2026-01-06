@@ -1200,7 +1200,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   async function handleGenerateContract(booking: Booking, showSuccessAlert = true) {
-    if (!booking.id) return
+    console.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
+    if (!booking.id) {
+      console.error('[ReservationsTab] ❌ No booking ID found')
+      return
+    }
 
     // 1. Validate Data
     const missing = await validateCustomerData(booking)
@@ -1209,6 +1213,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Fetch full customer data to populate modal
       const customerId = booking.user_id || booking.booking_details?.customer?.id || booking.booking_details?.customer_id
+
+      if (!customerId) {
+        alert('⚠️ Questa prenotazione non è associata a un cliente registrato.\n\nÈ necessario creare o selezionare un cliente per generare il contratto.\n\nClicca OK per modificare la prenotazione.')
+        handleEditBooking(booking)
+        return
+      }
+
       let customerData = {}
 
       if (customerId) {
