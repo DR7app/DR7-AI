@@ -306,6 +306,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
+  const [newSecondDriverMode, setNewSecondDriverMode] = useState(false)
 
   // Add custom scrollbar styles
   const scrollbarStyle = `
@@ -345,6 +346,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     currency: 'EUR',
     // 2nd Driver
     has_second_driver: false,
+    second_driver_id: '',
     second_driver_name: '',
     second_driver_surname: '',
     second_driver_license_number: '',
@@ -377,6 +379,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setRentalEventsReturnDate([])
     }
   }, [formData.return_date, editingId])
+
+  // Auto-populate second driver fields when customer is selected
+  useEffect(() => {
+    if (formData.second_driver_id && !newSecondDriverMode) {
+      const selectedCustomer = customers.find(c => c.id === formData.second_driver_id)
+      if (selectedCustomer) {
+        // Split full_name into name and surname (best effort)
+        const nameParts = selectedCustomer.full_name.trim().split(' ')
+        const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
+        const name = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
+
+        setFormData(prev => ({
+          ...prev,
+          second_driver_name: name,
+          second_driver_surname: surname,
+          second_driver_phone: selectedCustomer.phone || '',
+          second_driver_license_number: selectedCustomer.driver_license_number || ''
+        }))
+      }
+    }
+  }, [formData.second_driver_id, newSecondDriverMode, customers])
 
   // Handle initial data from Calendar click
   useEffect(() => {
@@ -1500,6 +1523,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       source: 'admin',
       // 2nd Driver
       has_second_driver: !!booking.booking_details?.second_driver,
+      second_driver_id: booking.booking_details?.second_driver?.customer_id || '',
       second_driver_name: booking.booking_details?.second_driver?.name || '',
       second_driver_surname: booking.booking_details?.second_driver?.surname || '',
       second_driver_license_number: booking.booking_details?.second_driver?.license_number || '',
@@ -1553,7 +1577,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!newCustomerData.email) missing.push('email')
         if (!newCustomerData.telefono) missing.push('telefono')
 
-        tempCustData = { ...newCustomerData }
+        // CRITICAL FIX: Generate UUID for new customer to ensure modal has valid ID
+        // This prevents "ID cliente mancante" error in MissingFieldsModal
+        const newCustomerId = crypto.randomUUID()
+        console.log('[processBookingSubmission] Generated new customer ID:', newCustomerId)
+
+        tempCustData = {
+          ...newCustomerData,
+          id: newCustomerId // Ensure ID is always present
+        }
       } else {
         // Existing customer
         // If we have an override ID (from modal), use it. Otherwise verify formData.
@@ -1601,6 +1633,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         if (customer) {
           console.log('[processBookingSubmission] Customer found:', customer)
+          console.log('[processBookingSubmission] Customer ID:', customer.id)
           console.log('[processBookingSubmission] Customer tipo_cliente:', customer.tipo_cliente)
           console.log('[processBookingSubmission] Customer nome:', customer.nome)
           console.log('[processBookingSubmission] Customer cognome:', customer.cognome)
@@ -1615,7 +1648,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           console.log('[processBookingSubmission] Customer email:', customer.email)
           console.log('[processBookingSubmission] Customer telefono:', customer.telefono)
 
-          tempCustData = customer
+          // CRITICAL FIX: Ensure customer ID is always present in tempCustData
+          // Even if the database result doesn't include it, we have it from targetCustomerId
+          tempCustData = {
+            ...customer,
+            id: customer.id || targetCustomerId // Fallback to targetCustomerId if customer.id is missing
+          }
 
 
           // Validate fields - STRICT validation for ALL required fields
@@ -1714,6 +1752,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (missing.length > 0) {
         console.log('[processBookingSubmission] 🚨 Missing data detected! Opening modal for fields:', missing)
+
+        // CRITICAL VALIDATION: Ensure tempCustData has a valid ID before opening modal
+        if (!tempCustData || !tempCustData.id) {
+          console.error('[processBookingSubmission] CRITICAL ERROR: tempCustData missing ID!', {
+            tempCustData,
+            targetCustomerId,
+            newCustomerMode,
+            formData_customer_id: formData.customer_id
+          })
+
+          alert(
+            '⚠️ ERRORE INTERNO: ID Cliente Mancante\n\n' +
+            'Si è verificato un errore nel recupero dei dati del cliente.\n\n' +
+            'Dettagli tecnici:\n' +
+            `- Modalità nuovo cliente: ${newCustomerMode ? 'Sì' : 'No'}\n` +
+            `- ID cliente selezionato: ${formData.customer_id || 'N/A'}\n` +
+            `- ID target: ${targetCustomerId || 'N/A'}\n\n` +
+            'Azioni suggerite:\n' +
+            '1. Riprova a selezionare il cliente\n' +
+            '2. Se il problema persiste, crea un nuovo cliente\n' +
+            '3. Contatta il supporto tecnico se necessario'
+          )
+          setIsSubmitting(false)
+          return
+        }
+
+        console.log('[processBookingSubmission] ✅ Customer ID validated:', tempCustData.id)
         setMissingFields(missing)
         setTempCustomerData(tempCustData)
         setValidationContext('booking')
@@ -2085,6 +2150,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
           second_driver: formData.has_second_driver ? {
+            customer_id: formData.second_driver_id || null,
             name: formData.second_driver_name,
             surname: formData.second_driver_surname,
             license_number: formData.second_driver_license_number,
@@ -2280,6 +2346,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       payment_method: 'Contanti',
       currency: 'EUR',
       has_second_driver: false,
+      second_driver_id: '',
       second_driver_name: '',
       second_driver_surname: '',
       second_driver_license_number: '',
@@ -2673,46 +2740,81 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               </div>
 
               {formData.has_second_driver && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
-                  <Input
-                    label="Nome"
-                    value={formData.second_driver_name}
-                    onChange={(e) => setFormData({ ...formData, second_driver_name: e.target.value })}
-                  />
-                  <Input
-                    label="Cognome"
-                    value={formData.second_driver_surname}
-                    onChange={(e) => setFormData({ ...formData, second_driver_surname: e.target.value })}
-                  />
-                  <Input
-                    label="Data di Nascita"
-                    type="date"
-                    value={formData.second_driver_birth_date}
-                    onChange={(e) => setFormData({ ...formData, second_driver_birth_date: e.target.value })}
-                  />
-                  <Input
-                    label="Luogo di Nascita"
-                    value={formData.second_driver_birth_place}
-                    onChange={(e) => setFormData({ ...formData, second_driver_birth_place: e.target.value })}
-                  />
-                  <Input
-                    label="Telefono"
-                    value={formData.second_driver_phone}
-                    onChange={(e) => setFormData({ ...formData, second_driver_phone: e.target.value })}
-                  />
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input
-                      label="Numero Patente"
-                      value={formData.second_driver_license_number}
-                      onChange={(e) => setFormData({ ...formData, second_driver_license_number: e.target.value })}
-                    />
-                    <Input
-                      label="Scadenza Patente"
-                      type="date"
-                      value={formData.second_driver_license_expiry}
-                      onChange={(e) => setFormData({ ...formData, second_driver_license_expiry: e.target.value })}
-                    />
+                <div className="space-y-4 animate-fadeIn">
+                  {/* Toggle between Select Customer and New Driver */}
+                  <div className="flex items-center gap-4 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setNewSecondDriverMode(false)}
+                      className={`px-4 py-2 rounded ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    >
+                      Seleziona Cliente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewSecondDriverMode(true)}
+                      className={`px-4 py-2 rounded ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    >
+                      Nuovo Guidatore
+                    </button>
                   </div>
+
+                  {newSecondDriverMode ? (
+                    // New Driver Mode - Manual Entry
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Nome"
+                        value={formData.second_driver_name}
+                        onChange={(e) => setFormData({ ...formData, second_driver_name: e.target.value })}
+                      />
+                      <Input
+                        label="Cognome"
+                        value={formData.second_driver_surname}
+                        onChange={(e) => setFormData({ ...formData, second_driver_surname: e.target.value })}
+                      />
+                      <Input
+                        label="Data di Nascita"
+                        type="date"
+                        value={formData.second_driver_birth_date}
+                        onChange={(e) => setFormData({ ...formData, second_driver_birth_date: e.target.value })}
+                      />
+                      <Input
+                        label="Luogo di Nascita"
+                        value={formData.second_driver_birth_place}
+                        onChange={(e) => setFormData({ ...formData, second_driver_birth_place: e.target.value })}
+                      />
+                      <Input
+                        label="Telefono"
+                        value={formData.second_driver_phone}
+                        onChange={(e) => setFormData({ ...formData, second_driver_phone: e.target.value })}
+                      />
+                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          label="Numero Patente"
+                          value={formData.second_driver_license_number}
+                          onChange={(e) => setFormData({ ...formData, second_driver_license_number: e.target.value })}
+                        />
+                        <Input
+                          label="Scadenza Patente"
+                          type="date"
+                          value={formData.second_driver_license_expiry}
+                          onChange={(e) => setFormData({ ...formData, second_driver_license_expiry: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    // Select Existing Customer Mode
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente per Secondo Guidatore</label>
+                      <CustomerAutocomplete
+                        customers={customers}
+                        selectedCustomerId={formData.second_driver_id}
+                        onSelectCustomer={(customerId) => setFormData({ ...formData, second_driver_id: customerId })}
+                        placeholder="Inizia a scrivere nome, email o telefono..."
+                        required={false}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -3362,7 +3464,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
         {/* Missing Fields Modal - Shows only the missing fields */}
-        {showMissingDataModal && (
+        {showMissingDataModal && tempCustomerData && tempCustomerData.id && (
           <MissingFieldsModal
             isOpen={showMissingDataModal}
             customerId={tempCustomerData.id}
