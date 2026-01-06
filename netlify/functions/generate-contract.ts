@@ -611,17 +611,17 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'SecondDriverCity': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || booking.booking_details?.second_driver?.citta || secondDriverCustomer?.citta_residenza || secondDriverCustomer?.citta || '') : '',
             'SecondDriverProvince': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || booking.booking_details?.second_driver?.provincia || secondDriverCustomer?.provincia_residenza || secondDriverCustomer?.provincia || '') : '',
             'SecondDriverGender': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || secondDriverCustomer?.sesso || '') : '',
-            'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || secondDriverCustomer?.categoria_patente || '') : '',
+            'SecondDriverLicenseType': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_type || secondDriverCustomer?.tipo_patente || '') : '',
             'SecondDriverLicenseNumber': (booking.booking_details?.second_driver?.license_number && booking.booking_details?.second_driver?.name)
                 ? booking.booking_details.second_driver.license_number
                 : (secondDriverCustomer?.numero_patente || ''),
-            'SecondDriverLicenseIssuedBy': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_issued_by || secondDriverCustomer?.ente_rilascio || '') : '',
+            'SecondDriverLicenseIssuedBy': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.license_issued_by || secondDriverCustomer?.emessa_da || '') : '',
             'SecondDriverLicenseIssueDate': (booking.booking_details?.second_driver?.license_issue_date && booking.booking_details?.second_driver?.name)
                 ? new Date(booking.booking_details.second_driver.license_issue_date).toLocaleDateString('it-IT')
-                : (secondDriverCustomer?.data_rilascio ? new Date(secondDriverCustomer.data_rilascio).toLocaleDateString('it-IT') : ''),
+                : (secondDriverCustomer?.data_rilascio_patente ? new Date(secondDriverCustomer.data_rilascio_patente).toLocaleDateString('it-IT') : ''),
             'SecondDriverLicenseExpiryDate': (booking.booking_details?.second_driver?.license_expiry && booking.booking_details?.second_driver?.name)
                 ? new Date(booking.booking_details.second_driver.license_expiry).toLocaleDateString('it-IT')
-                : (booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : (secondDriverCustomer?.data_scadenza ? new Date(secondDriverCustomer.data_scadenza).toLocaleDateString('it-IT') : '')),
+                : (booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : (secondDriverCustomer?.scadenza_patente ? new Date(secondDriverCustomer.scadenza_patente).toLocaleDateString('it-IT') : '')),
             'SecondDriverVAT': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || secondDriverCustomer?.codice_fiscale || '') : '',
             'SecondDriverSex': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || secondDriverCustomer?.sesso || '') : '',
             'SecondDriverAddress': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.address || booking.booking_details?.second_driver?.indirizzo || secondDriverCustomer?.indirizzo || '') : '',
