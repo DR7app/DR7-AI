@@ -6,6 +6,7 @@ import {
   fetchRentalEvents,
   filterRentalTimeSlots
 } from '../../../utils/bookingConflictUtils'
+import { validateRentalBooking } from '../../../utils/schedulingRules'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
@@ -1938,9 +1939,67 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
+      // ===== SCHEDULING RULES VALIDATION =====
+      // Enforce non-negotiable scheduling rules for DEPARTURE (pickup) and RETURN (dropoff)
+      const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
+
+      if (vehicle) {
+        console.log('🔍 Validating scheduling rules for rental booking...')
+        console.log(`  Vehicle: ${vehicle.display_name}`)
+        console.log(`  Pickup (DEPARTURE): ${testPickupDate.toISOString()}`)
+        console.log(`  Dropoff (RETURN): ${testReturnDate.toISOString()}`)
+
+        const schedulingValidation = await validateRentalBooking(
+          testPickupDate,
+          testReturnDate,
+          vehicle.id,
+          vehicle.display_name,
+          editingId || undefined
+        )
+
+        if (!schedulingValidation.isValid) {
+          console.error('❌ Scheduling validation failed:', schedulingValidation.errors)
+
+          // Build error message
+          let errorMessage = '🚫 CONFLITTO DI PROGRAMMAZIONE\n\n'
+          errorMessage += 'La prenotazione viola le regole di programmazione obbligatorie:\n\n'
+
+          schedulingValidation.errors.forEach((error, index) => {
+            errorMessage += `${index + 1}. ${error.message}\n\n`
+          })
+
+          errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+          errorMessage += '📋 REGOLE DI PROGRAMMAZIONE:\n\n'
+          errorMessage += '• RITIRO + RITIRO → Gap minimo 15 minuti\n'
+          errorMessage += '• RICONSEGNA + RICONSEGNA → Gap minimo 15 minuti\n'
+          errorMessage += '• RITIRO + RICONSEGNA → Gap minimo 15 minuti\n'
+          errorMessage += '• RICONSEGNA + LAVAGGIO → Gap minimo 30 minuti\n'
+          errorMessage += '• RITIRO + LAVAGGIO → Gap minimo 15 minuti\n'
+          errorMessage += '• Eventi simultanei → VIETATI\n\n'
+
+          // Add suggested slots if available
+          if (schedulingValidation.suggestedSlots && schedulingValidation.suggestedSlots.length > 0) {
+            errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+            errorMessage += '✅ ORARI DISPONIBILI SUGGERITI:\n\n'
+            schedulingValidation.suggestedSlots.slice(0, 3).forEach((slot, index) => {
+              const slotDate = new Date(slot)
+              errorMessage += `${index + 1}. ${slotDate.toLocaleDateString('it-IT')} alle ${slotDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`
+            })
+            errorMessage += '\n'
+          }
+
+          errorMessage += 'Modifica gli orari per rispettare le regole di programmazione.'
+
+          alert(errorMessage)
+          setIsSubmitting(false)
+          return
+        }
+
+        console.log('✅ Scheduling validation passed')
+      }
+
       // Check for existing bookings on the same vehicle and dates (only for new bookings, not edits)
       if (!editingId) {
-        const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
         const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
         const returnDateTime = new Date(`${formData.return_date}T${formData.return_time}:00`)
 
@@ -2229,7 +2288,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
-      const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
+      // Note: vehicle is already declared above in scheduling validation block
 
       // Get location labels
       const pickupLocationLabel = LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location

@@ -8,6 +8,7 @@ import {
   findNextAvailableSlots,
   formatTimeSlotWithDuration
 } from '../../../utils/bookingConflictUtils'
+import { validateScheduling } from '../../../utils/schedulingRules'
 
 interface Customer {
   id: string
@@ -680,6 +681,64 @@ export default function CarWashBookingsTab() {
         setSubmitting(false)
         return
       }
+
+      // ===== SCHEDULING RULES VALIDATION =====
+      // Enforce non-negotiable scheduling rules for WASH events
+      console.log('🔍 Validating scheduling rules for wash booking...')
+      console.log(`  Service: ${formData.service_name}`)
+      console.log(`  Date: ${formData.appointment_date}`)
+      console.log(`  Time: ${formData.appointment_time}`)
+
+      // Create wash event datetime
+      const [year, month, day] = formData.appointment_date.split('-').map(Number)
+      const [hours, minutes] = formData.appointment_time.split(':').map(Number)
+      const washDateTime = new Date(year, month - 1, day, hours, minutes, 0)
+
+      const washEvent = {
+        type: 'WASH' as const,
+        dateTime: washDateTime,
+        vehicleName: formData.service_name,
+        durationMinutes: selectedService.durationMinutes
+      }
+
+      const schedulingValidation = await validateScheduling(washEvent)
+
+      if (!schedulingValidation.isValid) {
+        console.error('❌ Scheduling validation failed:', schedulingValidation.errors)
+
+        // Build error message
+        let errorMessage = '🚫 CONFLITTO DI PROGRAMMAZIONE\n\n'
+        errorMessage += 'La prenotazione lavaggio viola le regole di programmazione obbligatorie:\n\n'
+
+        schedulingValidation.errors.forEach((error, index) => {
+          errorMessage += `${index + 1}. ${error.message}\n\n`
+        })
+
+        errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+        errorMessage += '📋 REGOLE DI PROGRAMMAZIONE:\n\n'
+        errorMessage += '• LAVAGGIO + RICONSEGNA → Gap minimo 30 minuti\n'
+        errorMessage += '• LAVAGGIO + RITIRO → Gap minimo 15 minuti\n'
+        errorMessage += '• LAVAGGIO + LAVAGGIO → Nessun evento simultaneo\n\n'
+
+        // Add suggested slots if available
+        if (schedulingValidation.suggestedSlots && schedulingValidation.suggestedSlots.length > 0) {
+          errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+          errorMessage += '✅ ORARI DISPONIBILI SUGGERITI:\n\n'
+          schedulingValidation.suggestedSlots.slice(0, 3).forEach((slot, index) => {
+            const slotDate = new Date(slot)
+            errorMessage += `${index + 1}. ${slotDate.toLocaleDateString('it-IT')} alle ${slotDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`
+          })
+          errorMessage += '\n'
+        }
+
+        errorMessage += 'Modifica l\'orario per rispettare le regole di programmazione.'
+
+        alert(errorMessage)
+        setSubmitting(false)
+        return
+      }
+
+      console.log('✅ Scheduling validation passed')
 
       // ADMIN PANEL: Always allow bookings, just show warning if there's a conflict
       console.log('🔧 ADMIN PANEL: Checking for conflicts (informational only)')

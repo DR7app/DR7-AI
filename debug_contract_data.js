@@ -1,124 +1,100 @@
-// Debug script to check booking and customer data for contract generation
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY
-
-if (!supabaseKey) {
-    console.error('❌ Missing VITE_SUPABASE_ANON_KEY environment variable')
-    process.exit(1)
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey)
-
-async function debugContractData() {
-    console.log('🔍 Fetching recent booking...\n')
-
-    // Get the most recent booking
-    const { data: bookings, error: bookingError } = await supabase
-        .from('bookings')
-        .select('*')
-        .not('pickup_date', 'is', null)
-        .neq('service_type', 'car_wash')
-        .neq('service_type', 'mechanical_service')
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-    if (bookingError) {
-        console.error('❌ Error fetching booking:', bookingError)
-        return
-    }
-
-    if (!bookings || bookings.length === 0) {
-        console.log('❌ No bookings found')
-        return
-    }
-
-    const booking = bookings[0]
-    console.log('📋 BOOKING DATA:')
-    console.log('  ID:', booking.id)
-    console.log('  Customer Name:', booking.customer_name)
-    console.log('  Customer Email:', booking.customer_email)
-    console.log('  Customer Phone:', booking.customer_phone)
-    console.log('  User ID:', booking.user_id)
-    console.log('  Vehicle:', booking.vehicle_name)
-    console.log('  Pickup:', booking.pickup_date)
-    console.log('  Dropoff:', booking.dropoff_date)
-    console.log('\n📦 BOOKING DETAILS:')
-    console.log(JSON.stringify(booking.booking_details, null, 2))
-
-    // Try to find customer
-    const customerId = booking.user_id || booking.booking_details?.customer?.customerId
-    console.log('\n🔍 Looking for customer with ID:', customerId)
-
-    if (customerId) {
-        const { data: customer, error: customerError } = await supabase
-            .from('customers_extended')
-            .select('*')
-            .eq('id', customerId)
-            .single()
-
-        if (customerError) {
-            console.log('❌ Error fetching customer by ID:', customerError.message)
-        } else if (customer) {
-            console.log('\n✅ CUSTOMER FOUND BY ID:')
-            console.log(JSON.stringify(customer, null, 2))
-        } else {
-            console.log('❌ No customer found by ID')
-        }
-    }
-
-    // Try by email
-    if (booking.customer_email) {
-        console.log('\n🔍 Looking for customer by email:', booking.customer_email)
-
-        const { data: customer, error: customerError } = await supabase
-            .from('customers_extended')
-            .select('*')
-            .eq('email', booking.customer_email)
-            .single()
-
-        if (customerError) {
-            console.log('❌ Error fetching customer by email:', customerError.message)
-        } else if (customer) {
-            console.log('\n✅ CUSTOMER FOUND BY EMAIL:')
-            console.log(JSON.stringify(customer, null, 2))
-        } else {
-            console.log('❌ No customer found by email in customers_extended')
-
-            // Try basic customers table
-            const { data: basicCustomer, error: basicError } = await supabase
-                .from('customers')
-                .select('*')
-                .eq('email', booking.customer_email)
-                .single()
-
-            if (basicError) {
-                console.log('❌ Error fetching from basic customers:', basicError.message)
-            } else if (basicCustomer) {
-                console.log('\n✅ CUSTOMER FOUND IN BASIC CUSTOMERS TABLE:')
-                console.log(JSON.stringify(basicCustomer, null, 2))
-            } else {
-                console.log('❌ No customer found in basic customers table either')
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this && this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
+    return g.next = verb(0), g["throw"] = verb(1), g["return"] = verb(2), typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (g && (g = 0, op[0] && (_ = 0)), _) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
             }
-        }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
-
-    // List all customers_extended to see what's there
-    console.log('\n📊 CHECKING CUSTOMERS_EXTENDED TABLE:')
-    const { data: allCustomers, error: allError } = await supabase
-        .from('customers_extended')
-        .select('id, email, nome, cognome, denominazione, tipo_cliente')
-        .limit(5)
-
-    if (allError) {
-        console.log('❌ Error fetching customers_extended:', allError.message)
-    } else {
-        console.log(`Found ${allCustomers?.length || 0} customers in customers_extended (showing first 5):`)
-        allCustomers?.forEach(c => {
-            console.log(`  - ${c.tipo_cliente}: ${c.nome || c.denominazione} (${c.email}) [ID: ${c.id}]`)
-        })
-    }
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+var supabase_js_1 = require("@supabase/supabase-js");
+var dotenv = require("dotenv");
+dotenv.config();
+var supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co';
+var supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+if (!supabaseServiceKey) {
+    console.error('Missing SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY');
+    process.exit(1);
 }
-
-debugContractData().catch(console.error)
+var supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseServiceKey);
+function debugLatestBooking() {
+    return __awaiter(this, void 0, void 0, function () {
+        var _a, bookings, error, bookingWithDriver, sd, secondDriverName;
+        return __generator(this, function (_b) {
+            switch (_b.label) {
+                case 0:
+                    console.log('Fetching latest booking with second driver data...');
+                    return [4 /*yield*/, supabase
+                            .from('bookings')
+                            .select('*')
+                            .order('created_at', { ascending: false })
+                            .limit(20)];
+                case 1:
+                    _a = _b.sent(), bookings = _a.data, error = _a.error;
+                    if (error) {
+                        console.error('Error fetching bookings:', error);
+                        return [2 /*return*/];
+                    }
+                    if (!bookings || bookings.length === 0) {
+                        console.log('No bookings found.');
+                        return [2 /*return*/];
+                    }
+                    bookingWithDriver = bookings.find(function (b) {
+                        return b.booking_details &&
+                            b.booking_details.second_driver &&
+                            (b.booking_details.second_driver.name || b.booking_details.second_driver.nome);
+                    });
+                    if (!bookingWithDriver) {
+                        console.log('No recent bookings found with second driver data.');
+                        console.log('Checked the last 20 bookings.');
+                        return [2 /*return*/];
+                    }
+                    console.log("FOUND BOOKING ID: ".concat(bookingWithDriver.id));
+                    console.log('--- BOOKING DETAILS (Raw JSON) ---');
+                    console.log(JSON.stringify(bookingWithDriver.booking_details, null, 2));
+                    console.log('--- SECOND DRIVER DATA ANALYSIS ---');
+                    sd = bookingWithDriver.booking_details.second_driver;
+                    console.log('Keys present in second_driver object:', Object.keys(sd));
+                    console.log('Name check:', sd.name || sd.nome || 'MISSING');
+                    console.log('Surname check:', sd.surname || sd.cognome || 'MISSING');
+                    console.log('Tax Code check:', sd.tax_code || sd.codice_fiscale || 'MISSING');
+                    console.log('City check:', sd.city || sd.citta || 'MISSING');
+                    // Simulate the logic from generate-contract.ts
+                    console.log('--- SIMULATED CONTRACT MAPPING ---');
+                    secondDriverName = ((sd === null || sd === void 0 ? void 0 : sd.name) && (sd === null || sd === void 0 ? void 0 : sd.surname)) ? "".concat(sd.name, " ").concat(sd.surname) : 'FAILED LOGIC';
+                    console.log("SecondDriverName would be: \"".concat(secondDriverName, "\""));
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+debugLatestBooking();

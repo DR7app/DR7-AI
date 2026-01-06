@@ -188,31 +188,21 @@ export default function VehiclesTab() {
     if (resError) console.error('Error deleting reservations:', resError)
 
     // Delete from bookings
-    // Convert to query builder to handle conditional logic
-    let query = supabase.from('bookings').delete()
+    // We use vehicle_name because that is what we used to check for dependencies
+    const { error: bookError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('vehicle_name', vehicleName)
 
-    if (vehiclePlate) {
-      // If we have a plate, use it as the primary key for deletion (safer)
-      // Trying 'targa' and 'plate' and 'vehicle_plate' is risky if we don't know the schema.
-      // But typically it's 'vehicle_plate' or just 'plate' in English schemas, or 'targa' in Italian.
-      // Let's assume 'vehicle_plate' based on common patterns or 'targa' if user said so.
-      // Using OR logic if unsure? No, delete doesn't support easy OR for columns unless we use .or().
-      // Let's look at the codebase search results first.
-      // Actually, relying on the User's words: "NOT the targa (licence plate)".
-      // This implies the column IS `targa` or he calls it that.
-      // The grep results for `vehicle_plate` might show usages.
+    if (bookError) console.error('Error deleting bookings:', bookError)
 
-      // SAFE BET: Usage of `vehicle_id` if available in bookings?
-      // If not, I'll modify this AFTER viewing the file.
-      // For now I'm just reading.
-    } else {
-      // Fallback to name
-      query = query.eq('vehicle_name', vehicleName)
-    }
+    // Finally, delete the vehicle itself
+    const { error: vehicleError } = await supabase
+      .from('vehicles')
+      .delete()
+      .eq('id', id)
 
-    await query
-
-    // ...
+    if (vehicleError) throw vehicleError
   }
 
   async function handleDelete(id: string) {

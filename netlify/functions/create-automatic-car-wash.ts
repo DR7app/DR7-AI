@@ -5,6 +5,112 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+/**
+ * Calculate the automatic wash time after a return
+ * Enforces the mandatory 30-minute gap
+ */
+function calculateAutomaticWashTime(returnDate: Date): Date {
+    // Add 30 minutes to the return time
+    return new Date(returnDate.getTime() + 30 * 60 * 1000)
+}
+
+/**
+ * Validate wash time against existing events
+ * This is a simplified version for the backend - full validation is in schedulingRules.ts
+ */
+async function validateWashTime(washTime: Date, vehicleName: string): Promise<{ isValid: boolean; nextAvailable?: Date }> {
+    // Fetch all events around this time (±2 hours)
+    const startWindow = new Date(washTime.getTime() - 2 * 60 * 60 * 1000)
+    const endWindow = new Date(washTime.getTime() + 2 * 60 * 60 * 1000)
+
+    // Fetch DEPARTURE events (pickups)
+    const { data: pickups } = await supabase
+        .from('bookings')
+        .select('pickup_date, vehicle_name')
+        .neq('status', 'cancelled')
+        .gte('pickup_date', startWindow.toISOString())
+        .lte('pickup_date', endWindow.toISOString())
+        .neq('service_type', 'car_wash')
+
+    // Fetch RETURN events (dropoffs)
+    const { data: dropoffs } = await supabase
+        .from('bookings')
+        .select('dropoff_date, vehicle_name')
+        .neq('status', 'cancelled')
+        .gte('dropoff_date', startWindow.toISOString())
+        .lte('dropoff_date', endWindow.toISOString())
+        .neq('service_type', 'car_wash')
+
+    // Fetch WASH events
+    const { data: washes } = await supabase
+        .from('bookings')
+        .select('pickup_date, appointment_date, appointment_time, vehicle_name')
+        .eq('service_type', 'car_wash')
+        .neq('status', 'cancelled')
+        .gte('appointment_date', startWindow.toISOString().split('T')[0])
+        .lte('appointment_date', endWindow.toISOString().split('T')[0])
+
+    const washTimeMs = washTime.getTime()
+
+    // Check DEPARTURE conflicts (15 min gap required)
+    for (const pickup of pickups || []) {
+        const pickupTimeMs = new Date(pickup.pickup_date).getTime()
+        const gapMs = Math.abs(washTimeMs - pickupTimeMs)
+        if (gapMs < 15 * 60 * 1000) {
+            console.log(`⚠️ Wash conflicts with DEPARTURE at ${new Date(pickup.pickup_date).toISOString()}`)
+            return { isValid: false }
+        }
+    }
+
+    // Check RETURN conflicts (30 min gap required)
+    for (const dropoff of dropoffs || []) {
+        const dropoffTimeMs = new Date(dropoff.dropoff_date).getTime()
+        const gapMs = Math.abs(washTimeMs - dropoffTimeMs)
+        if (gapMs < 30 * 60 * 1000) {
+            console.log(`⚠️ Wash conflicts with RETURN at ${new Date(dropoff.dropoff_date).toISOString()}`)
+            return { isValid: false }
+        }
+    }
+
+    // Check WASH conflicts (no same-time allowed)
+    for (const wash of washes || []) {
+        let washDateTime: Date
+        if (wash.pickup_date) {
+            washDateTime = new Date(wash.pickup_date)
+        } else if (wash.appointment_date && wash.appointment_time) {
+            const dateStr = wash.appointment_date.split('T')[0]
+            washDateTime = new Date(`${dateStr}T${wash.appointment_time}:00`)
+        } else {
+            washDateTime = new Date(wash.appointment_date)
+        }
+
+        if (washDateTime.getTime() === washTimeMs) {
+            console.log(`⚠️ Wash conflicts with another WASH at ${washDateTime.toISOString()}`)
+            return { isValid: false }
+        }
+    }
+
+    return { isValid: true }
+}
+
+/**
+ * Find next available wash slot
+ */
+async function findNextAvailableWashSlot(startTime: Date, vehicleName: string, maxAttempts: number = 20): Promise<Date | null> {
+    let candidateTime = new Date(startTime)
+
+    for (let i = 0; i < maxAttempts; i++) {
+        const validation = await validateWashTime(candidateTime, vehicleName)
+        if (validation.isValid) {
+            return candidateTime
+        }
+        // Move to next 15-minute slot
+        candidateTime = new Date(candidateTime.getTime() + 15 * 60 * 1000)
+    }
+
+    return null
+}
+
 export const handler: Handler = async (event) => {
     // Only allow POST requests
     if (event.httpMethod !== 'POST') {
@@ -40,13 +146,44 @@ export const handler: Handler = async (event) => {
         }
 
         // Determine the car wash appointment time
-        // Use dropoff time if available, otherwise use current time
+        // SCHEDULING RULE: Wash must be scheduled 30 minutes after RETURN (dropoff)
         const dropoffDate = new Date(rentalBooking.dropoff_date)
-        const now = new Date()
 
-        // If dropoff is in the past, use current time; otherwise use dropoff time
-        // UPDATE: User wants it "directly" when car comes back, so we use NOW always for the wash appointment
-        const appointmentDateTime = now
+        // Calculate initial wash time (dropoff + 30 minutes)
+        const initialWashTime = calculateAutomaticWashTime(dropoffDate)
+
+        console.log(`📅 Dropoff time: ${dropoffDate.toISOString()}`)
+        console.log(`🧼 Initial wash time (dropoff + 30min): ${initialWashTime.toISOString()}`)
+
+        // Validate this time against existing events
+        const validation = await validateWashTime(initialWashTime, rentalBooking.vehicle_name)
+
+        let appointmentDateTime: Date
+
+        if (validation.isValid) {
+            appointmentDateTime = initialWashTime
+            console.log(`✅ Wash time is valid: ${appointmentDateTime.toISOString()}`)
+        } else {
+            // Find next available slot
+            console.log(`⚠️ Initial wash time conflicts, finding next available slot...`)
+            const nextAvailable = await findNextAvailableWashSlot(initialWashTime, rentalBooking.vehicle_name)
+
+            if (!nextAvailable) {
+                console.error('❌ No available wash slot found within reasonable timeframe')
+                return {
+                    statusCode: 409,
+                    body: JSON.stringify({
+                        error: 'Cannot schedule automatic wash',
+                        details: 'No available time slot found due to scheduling conflicts. Please manually schedule the wash.',
+                        dropoffTime: dropoffDate.toISOString(),
+                        suggestedWashTime: initialWashTime.toISOString()
+                    })
+                }
+            }
+
+            appointmentDateTime = nextAvailable
+            console.log(`✅ Found available slot: ${appointmentDateTime.toISOString()}`)
+        }
 
         // Format appointment date and time
         const appointmentDate = appointmentDateTime.toISOString()
@@ -91,8 +228,10 @@ export const handler: Handler = async (event) => {
                 internal: true,
                 originalBookingId: bookingId,
                 vehiclePlate: rentalBooking.vehicle_plate,
-                notes: 'Lavaggio automatico post-rientro',
-                createdBy: 'automatic_system'
+                notes: `Lavaggio automatico post-rientro. Scheduled ${appointmentDateTime > initialWashTime ? 'at next available slot due to conflicts' : 'at standard time (dropoff + 30min)'}`,
+                createdBy: 'automatic_system',
+                dropoffTime: dropoffDate.toISOString(),
+                scheduledWashTime: appointmentDateTime.toISOString()
             }
         }
 
