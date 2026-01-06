@@ -238,6 +238,30 @@ function getNext15MinuteTime(): string {
   return `${h}:${m}`
 }
 
+// Helper to normalize plate strings (remove spaces, uppercase)
+const normalizePlate = (s: string) => s ? s.replace(/\s+/g, '').toUpperCase() : ''
+
+// Helper to check if a booking belongs to a vehicle
+const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
+  const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
+  if (bookingVehicleId === vehicle.id) return true
+
+  // Try matching by plate
+  if (!bookingVehicleId && booking.vehicle_plate) {
+    const vPlate = vehicle.plate || vehicle.targa
+    if (vPlate) {
+      if (normalizePlate(booking.vehicle_plate) === normalizePlate(vPlate)) return true
+    }
+  }
+
+  // Fallback to name matching
+  if (!bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
+    if (booking.vehicle_name === vehicle.display_name) return true
+  }
+
+  return false
+}
+
 export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleName?: string; pickupDate?: Date } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
@@ -516,30 +540,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         // Check if this booking is for the same vehicle
         // Priority 1: Check vehicle_id (new field) and booking_details.vehicle_id (legacy)
-        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
-        let isForThisVehicle = bookingVehicleId === vehicle.id
-        let matchMethod = ''
-
-        // Priority 2: If no vehicle_id, try matching by plate/targa FIRST (more reliable than name)
-        if (!isForThisVehicle && !bookingVehicleId && booking.vehicle_plate) {
-          const vehiclePlate = vehicle.plate || vehicle.targa
-          if (vehiclePlate) {
-            isForThisVehicle = booking.vehicle_plate === vehiclePlate
-            if (isForThisVehicle) matchMethod = 'plate'
-          }
-        }
-
-        // Priority 3: ONLY if both booking and vehicle lack plate data, fall back to name matching
-        if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
-          isForThisVehicle = booking.vehicle_name === vehicle.display_name
-          if (isForThisVehicle) matchMethod = 'name'
-        } else if (isForThisVehicle && !matchMethod) {
-          matchMethod = 'id'
-        }
-
-        if (!isForThisVehicle) {
+        // Check if this booking is for the same vehicle
+        if (!isBookingForVehicle(booking, vehicle)) {
           return false
         }
+
+        // We can infer match method or just use generic 'matched' for logging
+        const matchMethod = 'robust_match'
 
         // Ignore cancelled bookings
         if (booking.status === 'cancelled') {
@@ -585,21 +592,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Check car wash/mechanical bookings (soft conflicts - available AFTER service ends)
       const hasServiceConflict = carWashBookings.some(booking => {
-        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
-        let isForThisVehicle = bookingVehicleId === vehicle.id
-
-        if (!isForThisVehicle && !bookingVehicleId && booking.vehicle_plate) {
-          const vehiclePlate = vehicle.plate || vehicle.targa
-          if (vehiclePlate) {
-            isForThisVehicle = booking.vehicle_plate === vehiclePlate
-          }
-        }
-
-        if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
-          isForThisVehicle = booking.vehicle_name === vehicle.display_name
-        }
-
-        if (!isForThisVehicle) return false
+        if (!isBookingForVehicle(booking, vehicle)) return false
         if (booking.status === 'cancelled') return false
 
         const serviceStart = new Date(booking.pickup_date)
@@ -656,20 +649,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     vehicles.forEach(vehicle => {
       // Find all bookings (service AND rental) for this vehicle that OVERLAP with request
       const relevantBookings = [...bookings, ...carWashBookings].filter(booking => {
-        // Vehicle matching logic
-        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
-        let isForThisVehicle = bookingVehicleId === vehicle.id
-
-        if (!isForThisVehicle && !bookingVehicleId && booking.vehicle_plate) {
-          const vehiclePlate = vehicle.plate || vehicle.targa
-          if (vehiclePlate) isForThisVehicle = booking.vehicle_plate === vehiclePlate
-        }
-
-        if (!isForThisVehicle && !bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
-          isForThisVehicle = booking.vehicle_name === vehicle.display_name
-        }
-
-        if (!isForThisVehicle || booking.status === 'cancelled') return false
+        if (!isBookingForVehicle(booking, vehicle)) return false
+        if (booking.status === 'cancelled') return false
 
         const serviceStart = new Date(booking.pickup_date)
         const serviceEnd = new Date(booking.dropoff_date)
