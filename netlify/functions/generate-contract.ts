@@ -267,6 +267,38 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Fallback: Try by email if ID didn't work
+        const secondDriverEmail = booking.booking_details?.second_driver?.email
+        if (!secondDriverCustomer && secondDriverEmail) {
+            console.log(`[generate-contract] Fallback: Fetching second driver by email: ${secondDriverEmail}`)
+            const { data: sdData, error: sdError } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('email', secondDriverEmail)
+                .maybeSingle()
+
+            if (sdData) {
+                console.log('[generate-contract] ✅ Found second driver customer data by email')
+                secondDriverCustomer = sdData
+            }
+        }
+
+        // Fallback: Try by codice fiscale if email didn't work
+        const secondDriverCF = booking.booking_details?.second_driver?.codice_fiscale || booking.booking_details?.second_driver?.tax_code
+        if (!secondDriverCustomer && secondDriverCF) {
+            console.log(`[generate-contract] Fallback: Fetching second driver by codice_fiscale: ${secondDriverCF}`)
+            const { data: sdData, error: sdError } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('codice_fiscale', secondDriverCF)
+                .maybeSingle()
+
+            if (sdData) {
+                console.log('[generate-contract] ✅ Found second driver customer data by codice_fiscale')
+                secondDriverCustomer = sdData
+            }
+        }
+
         // 4. Fetch Template from Supabase Storage
         // Based on user URL: .../public/templates/master_contract.pdf -> Bucket: 'templates', File: 'master_contract.pdf'
         console.log(`[generate-contract] Fetching template from storage: bucket 'templates', file 'master_contract.pdf'`)
