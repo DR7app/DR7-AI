@@ -317,6 +317,21 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // DEBUG: Log what we found for second driver
+        if (secondDriverCustomer) {
+            console.log('[generate-contract] 🔍 SECOND DRIVER DATA FOUND:')
+            console.log('[generate-contract]   - nome:', secondDriverCustomer.nome)
+            console.log('[generate-contract]   - cognome:', secondDriverCustomer.cognome)
+            console.log('[generate-contract]   - tipo_patente:', secondDriverCustomer.tipo_patente)
+            console.log('[generate-contract]   - numero_patente:', secondDriverCustomer.numero_patente)
+            console.log('[generate-contract]   - emessa_da:', secondDriverCustomer.emessa_da)
+            console.log('[generate-contract]   - data_rilascio_patente:', secondDriverCustomer.data_rilascio_patente)
+            console.log('[generate-contract]   - scadenza_patente:', secondDriverCustomer.scadenza_patente)
+            console.log('[generate-contract]   - metadata:', JSON.stringify((secondDriverCustomer as any).metadata))
+        } else {
+            console.log('[generate-contract] ⚠️  NO SECOND DRIVER CUSTOMER DATA FOUND')
+        }
+
         // 4. Fetch Template from Supabase Storage
         // Based on user URL: .../public/templates/master_contract.pdf -> Bucket: 'templates', File: 'master_contract.pdf'
         console.log(`[generate-contract] Fetching template from storage: bucket 'templates', file 'master_contract.pdf'`)
