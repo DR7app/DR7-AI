@@ -611,6 +611,20 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'SecondDriverPhone': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || '') : '',
             'SecondDriverEmail': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || '') : '',
 
+            // Italian Aliases for Second Driver (Robustness)
+            'CodiceFiscaleSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.tax_code || booking.booking_details?.second_driver?.codice_fiscale || '') : '',
+            'IndirizzoSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.address || booking.booking_details?.second_driver?.indirizzo || '') : '',
+            'CittaSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.city || booking.booking_details?.second_driver?.citta || '') : '',
+            'ProvinciaSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.province || booking.booking_details?.second_driver?.provincia || '') : '',
+            'CapSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.zip_code || booking.booking_details?.second_driver?.cap || '') : '',
+            'DataNascitaSecondoGuidatore': (booking.booking_details?.second_driver?.birth_date && booking.booking_details?.second_driver?.name) ? new Date(booking.booking_details.second_driver.birth_date).toLocaleDateString('it-IT') : '',
+            'LuogoNascitaSecondoGuidatore': (booking.booking_details?.second_driver?.birth_place) ? booking.booking_details?.second_driver?.birth_place : '',
+            'SessoSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.gender || booking.booking_details?.second_driver?.sesso || '') : '',
+            'PatenteSecondoGuidatore': (booking.booking_details?.second_driver?.license_number && booking.booking_details?.second_driver?.name) ? booking.booking_details.second_driver.license_number : '',
+            'ScadenzaPatenteSecondoGuidatore': (booking.booking_details?.second_driver?.license_expiry && booking.booking_details?.second_driver?.name) ? new Date(booking.booking_details.second_driver.license_expiry).toLocaleDateString('it-IT') : (booking.booking_details?.second_driver?.license_expiry_date ? new Date(booking.booking_details.second_driver.license_expiry_date).toLocaleDateString('it-IT') : ''),
+            'TelefonoSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || '') : '',
+            'EmailSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || '') : '',
+
             // Company Data (for business clients)
             'CompanyName': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',
             'CompanyEmail': customer?.tipo_cliente === 'azienda' ? customer.email : '',
