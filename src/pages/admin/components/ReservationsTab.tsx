@@ -1748,7 +1748,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               cognome: customerFromList.full_name.split(' ').slice(1).join(' ') || '',
               email: customerFromList.email || '',
               telefono: customerFromList.phone || '',
-              _isNew: true // Explicitly mark as new to guide the save logic
+              // CRITICAL FIX: Only treat as "New" if the ID was NOT a valid UUID.
+              // If it IS a valid UUID, we assume the record exists (or should exist) and we want to UPDATE it, not create a duplicate.
+              _isNew: !uuidRegex.test(targetCustomerId)
             }
 
             // Mark ALL required fields as missing since this is a new customer
