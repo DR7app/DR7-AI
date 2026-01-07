@@ -109,14 +109,20 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       })
 
       // Load bookings (only car rentals, not car wash) - include ALL statuses except cancelled
-      const { data: bookingsData, error: bookingsError } = await supabase
+      const { data: allBookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, payment_status, amount_paid, service_type, booking_details')
-        .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
+        .select('*')
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
 
       if (bookingsError) throw bookingsError
+
+      // Filter out car wash and mechanical bookings client-side
+      const bookingsData = allBookingsData?.filter(b =>
+        b.service_type !== 'car_wash' &&
+        b.service_type !== 'mechanical_service' &&
+        b.service_type !== 'mechanical'
+      ) || []
 
       console.log('📅 CALENDARIO - Veicoli caricati:', vehiclesData?.length || 0)
       console.log('📅 CALENDARIO - Prenotazioni caricate:', bookingsData?.length || 0)
@@ -737,9 +743,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       const width = segment.columnSpan * cellWidth
 
                       // Determine color based on booking type (matching DailyCalendarModal)
-                      let colorClass = "border-red-500"
-                      let gradientClass = "from-red-500/70 to-red-600/60"
-                      let glowClass = "hover:shadow-red-500/30"
+                      let colorClass = "border-red-600"
+                      let gradientClass = "from-red-600/90 to-red-700/80"
+                      let glowClass = "hover:shadow-red-600/40"
                       let textColorClass = "text-red-500"
 
                       if (segment.booking.type === 'lavaggio') {
@@ -813,6 +819,21 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               {dropoffDay} {dropoffTime}
                             </div>
 
+                            {/* Remaining payment amount */}
+                            {(() => {
+                              const totalAmount = segment.booking.price_total || 0
+                              const paidAmount = segment.booking.booking_details?.amount_paid || 0
+                              const remaining = totalAmount - paidAmount
+
+                              if (remaining > 0) {
+                                return (
+                                  <div className="text-yellow-400 text-xs font-semibold whitespace-nowrap">
+                                    €{(remaining / 100).toFixed(2)}
+                                  </div>
+                                )
+                              }
+                              return null
+                            })()}
 
                           </div>
                         </div>
@@ -939,14 +960,23 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${(booking.price_total / 100).toFixed(2)}`}
                           </span>
                         </div>
-                        {booking.payment_status === 'pending' && booking.amount_paid && (
-                          <div className="flex justify-between pt-2 border-t border-orange-500/30">
-                            <span className="text-orange-400 font-medium">Da Saldare:</span>
-                            <span className="text-orange-400 font-bold text-lg">
-                              {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${((booking.price_total - (parseFloat(booking.amount_paid) * 100)) / 100).toFixed(2)}`}
-                            </span>
-                          </div>
-                        )}
+                        {(() => {
+                          const totalAmount = booking.price_total || 0
+                          const paidAmount = booking.booking_details?.amount_paid || 0
+                          const remaining = totalAmount - paidAmount
+
+                          if (remaining > 0) {
+                            return (
+                              <div className="flex justify-between pt-2 border-t border-orange-500/30">
+                                <span className="text-orange-400 font-medium">Da Saldare:</span>
+                                <span className="text-orange-400 font-bold text-lg">
+                                  {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${(remaining / 100).toFixed(2)}`}
+                                </span>
+                              </div>
+                            )
+                          }
+                          return null
+                        })()}
                       </div>
 
                       <div className="mt-3 text-xs text-gray-500">
