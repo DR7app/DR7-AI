@@ -179,65 +179,116 @@ export default function VehiclesTab() {
   }
 
   async function deleteVehicleLogic(id: string, vehicleName: string) {
+    console.log(`Starting deletion for vehicle: ${vehicleName} (ID: ${id})`)
+
     // Delete from reservations
-    const { error: resError } = await supabase
+    console.log('  Deleting reservations...')
+    const { data: deletedReservations, error: resError } = await supabase
       .from('reservations')
       .delete()
       .eq('vehicle_id', id)
+      .select()
 
-    if (resError) console.error('Error deleting reservations:', resError)
+    if (resError) {
+      console.error('  Error deleting reservations:', resError)
+      throw new Error(`Failed to delete reservations: ${resError.message}`)
+    }
+    console.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
 
     // Delete from bookings
     // We use vehicle_name because that is what we used to check for dependencies
-    const { error: bookError } = await supabase
+    console.log('  Deleting bookings...')
+    const { data: deletedBookings, error: bookError } = await supabase
       .from('bookings')
       .delete()
       .eq('vehicle_name', vehicleName)
+      .select()
 
-    if (bookError) console.error('Error deleting bookings:', bookError)
+    if (bookError) {
+      console.error('  Error deleting bookings:', bookError)
+      throw new Error(`Failed to delete bookings: ${bookError.message}`)
+    }
+    console.log(`  Deleted ${deletedBookings?.length || 0} bookings`)
 
     // Finally, delete the vehicle itself
-    const { error: vehicleError } = await supabase
+    console.log('  Deleting vehicle record...')
+    const { data: deletedVehicle, error: vehicleError } = await supabase
       .from('vehicles')
       .delete()
       .eq('id', id)
+      .select()
 
-    if (vehicleError) throw vehicleError
+    if (vehicleError) {
+      console.error('  Error deleting vehicle:', vehicleError)
+      throw new Error(`Failed to delete vehicle: ${vehicleError.message}`)
+    }
+
+    if (!deletedVehicle || deletedVehicle.length === 0) {
+      console.error('  Vehicle was not deleted (no rows affected)')
+      throw new Error('Vehicle deletion failed: No rows were deleted. The vehicle may not exist or you may not have permission to delete it.')
+    }
+
+    console.log('  Vehicle deleted successfully')
   }
 
   async function handleDelete(id: string) {
     const vehicle = vehicles.find(v => v.id === id)
-    if (!vehicle) return
+    if (!vehicle) {
+      console.error('Vehicle not found in list:', id)
+      alert('Errore: Veicolo non trovato')
+      return
+    }
 
     if (!confirm('Sei sicuro di voler eliminare questo veicolo?')) return
 
     try {
+      console.log(`Checking dependencies for vehicle: ${vehicle.display_name}`)
+
       // Check dependencies
-      const { count: resCount } = await supabase
+      const { count: resCount, error: resCountError } = await supabase
         .from('reservations')
         .select('*', { count: 'exact', head: true })
         .eq('vehicle_id', id)
 
-      const { count: bookCount } = await supabase
+      if (resCountError) {
+        console.error('Error checking reservations:', resCountError)
+        throw new Error(`Failed to check reservations: ${resCountError.message}`)
+      }
+
+      const { count: bookCount, error: bookCountError } = await supabase
         .from('bookings')
         .select('*', { count: 'exact', head: true })
         .eq('vehicle_name', vehicle.display_name)
 
+      if (bookCountError) {
+        console.error('Error checking bookings:', bookCountError)
+        throw new Error(`Failed to check bookings: ${bookCountError.message}`)
+      }
+
       const totalDeps = (resCount || 0) + (bookCount || 0)
+      console.log(`  Found ${totalDeps} dependencies (${resCount || 0} reservations, ${bookCount || 0} bookings)`)
 
       if (totalDeps > 0) {
         if (!confirm(`⚠️ Questo veicolo ha ${totalDeps} prenotazioni associate (storico incluso).\n\nVerranno eliminate TUTTE le prenotazioni associate.\n\nProcedere con l'eliminazione definitiva?`)) {
+          console.log('  User cancelled deletion')
           return
         }
       }
 
+      // Attempt deletion
       await deleteVehicleLogic(id, vehicle.display_name)
 
-      alert('✅ Veicolo eliminato con successo!')
-      loadVehicles()
+      console.log('Vehicle deletion completed successfully')
+      alert('Veicolo eliminato con successo!')
+
+      // Reload vehicles list
+      await loadVehicles()
     } catch (error: any) {
       console.error('Failed to delete vehicle:', error)
-      alert('Impossibile eliminare il veicolo: ' + error.message)
+
+      // Provide detailed error message to user
+      const errorMessage = error.message || 'Errore sconosciuto'
+      alert(`❌ Impossibile eliminare il veicolo:\n\n${errorMessage}\n\nControlla la console del browser (F12) per maggiori dettagli.`)
     }
   }
 

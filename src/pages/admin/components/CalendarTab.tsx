@@ -87,7 +87,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
         .select('id, display_name, plate, status, category, metadata')
         .neq('status', 'retired')
 
-      if (vehiclesError) throw vehiclesError
+      console.log('🚗 RAW VEHICLES QUERY RESULT:', { vehiclesData, vehiclesError })
+
+      if (vehiclesError) {
+        console.error('❌ VEHICLES ERROR:', vehiclesError)
+        throw vehiclesError
+      }
 
       // Sort vehicles by category: exotic first, then urban, then aziendali
       const sortedVehicles = vehiclesData?.sort((a, b) => {
