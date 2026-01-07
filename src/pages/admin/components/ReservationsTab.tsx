@@ -1190,44 +1190,81 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       booking.booking_details?.customer?.id ||
       booking.booking_details?.customer_id
 
-    if (!customerId) {
-      // If we don't have a customer ID, we can't validate against the DB.
-      // But we can check if the booking has basic info.
+    let customer = null
 
+    // Try to fetch customer by ID first
+    if (customerId) {
+      const { data: cData, error } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .eq('id', customerId)
+        .single()
+
+      if (cData) {
+        console.log('[validateCustomerData] ✅ Found customer by ID:', customerId)
+        customer = cData
+      } else if (error) {
+        console.error('[validateCustomerData] Error fetching customer by ID:', error)
+      }
+    }
+
+    // Fallback: Try by email if no customer found yet
+    if (!customer && booking.customer_email) {
+      console.log('[validateCustomerData] Fallback: Fetching by email from customers_extended...')
+      const { data: cData, error } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .eq('email', booking.customer_email)
+        .maybeSingle()
+
+      if (cData) {
+        console.log('[validateCustomerData] ✅ Found customer by email:', booking.customer_email)
+        customer = cData
+      } else if (error) {
+        console.error('[validateCustomerData] Error fetching by email:', error)
+      }
+    }
+
+    // Fallback: Try by phone if still no customer found
+    if (!customer && booking.customer_phone) {
+      console.log('[validateCustomerData] Fallback: Fetching by phone from customers_extended...')
+      const { data: cData, error } = await supabase
+        .from('customers_extended')
+        .select('*')
+        .eq('telefono', booking.customer_phone)
+        .maybeSingle()
+
+      if (cData) {
+        console.log('[validateCustomerData] ✅ Found customer by phone:', booking.customer_phone)
+        customer = cData
+      } else if (error) {
+        console.error('[validateCustomerData] Error fetching by phone:', error)
+      }
+    }
+
+    // If still no customer found, check if we have basic booking info to proceed
+    if (!customer) {
       const missing: string[] = []
 
       // Only add fields that are truly missing from booking data
-      // We map these to the keys expected by MissingFieldsModal (e.g. 'nome', 'cognome')
       if (!booking.customer_name && !booking.booking_details?.customer?.fullName) {
         missing.push('nome', 'cognome')
       }
       if (!booking.customer_email) missing.push('email')
       if (!booking.customer_phone) missing.push('telefono')
 
-      // If no customer ID, check if we can fall back to email lookup or booking details
-      if (booking.customer_email) {
-        console.log('[validateCustomerData] No ID but email found. Trusting backend/existing customer lookup.')
+      // If we have basic contact info, let the backend handle it (it has the same fallback logic)
+      if (booking.customer_email || booking.customer_phone) {
+        console.log('[validateCustomerData] No customer record found, but booking has contact info. Backend will handle fallback.')
         return []
       }
 
-      // If we are here, we truly have no way to identify the customer (no ID, no email)
-      missing.push('codice_fiscale', 'indirizzo', 'citta_residenza', 'email')
-
-      return missing
-    }
-
-    // Fetch full customer data
-    const { data: customer, error } = await supabase
-      .from('customers_extended')
-      .select('*')
-      .eq('id', customerId)
-      .single()
-
-    if (error || !customer) {
-      console.error('Error fetching customer for validation:', error)
+      // If we are here, we truly have no way to identify the customer
+      console.error('[validateCustomerData] ❌ No customer found by any method and no contact info in booking')
       throw new Error('Impossibile recuperare i dati del cliente dal database. Verifica che il cliente esista nella tab Clienti.')
     }
 
+    // Validate customer data completeness
     const missing: string[] = []
 
     // Common fields
@@ -1247,8 +1284,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       missing.push('partita_iva')
     }
 
-    // Return customer object via side-effect if needed, but for now just return missing fields
-    // We'll refetch/use this data when opening modal
     return missing
   }
 
