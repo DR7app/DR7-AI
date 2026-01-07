@@ -1225,7 +1225,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (error || !customer) {
       console.error('Error fetching customer for validation:', error)
-      return ['Errore recupero dati cliente']
+      throw new Error('Impossibile recuperare i dati del cliente dal database. Verifica che il cliente esista nella tab Clienti.')
     }
 
     const missing: string[] = []
@@ -1260,7 +1260,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
 
     // 1. Validate Data
-    const missing = await validateCustomerData(booking)
+    let missing: string[]
+    try {
+      missing = await validateCustomerData(booking)
+    } catch (error: any) {
+      console.error('[handleGenerateContract] Validation error:', error)
+      alert('❌ ' + error.message)
+      return
+    }
+
     if (missing.length > 0) {
       console.warn('⚠️ Missing fields for contract:', missing)
 
@@ -1342,7 +1350,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (!booking.id) return
 
     // 1. Validate Data for Invoice
-    const missing = await validateCustomerData(booking)
+    let missing: string[]
+    try {
+      missing = await validateCustomerData(booking)
+    } catch (error: any) {
+      console.error('[handleGenerateInvoice] Validation error:', error)
+      alert('❌ ' + error.message)
+      return
+    }
+
     if (missing.length > 0) {
       console.warn('⚠️ Missing fields for invoice:', missing)
 

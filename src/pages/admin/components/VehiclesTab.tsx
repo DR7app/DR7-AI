@@ -178,7 +178,7 @@ export default function VehiclesTab() {
     }
   }
 
-  async function deleteVehicleLogic(id: string, vehicleName: string, vehiclePlate: string | null) {
+  async function deleteVehicleLogic(id: string, vehicleName: string) {
     // Delete from reservations
     const { error: resError } = await supabase
       .from('reservations')
