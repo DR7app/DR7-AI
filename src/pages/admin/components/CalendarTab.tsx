@@ -30,6 +30,8 @@ interface Booking {
   customer_name: string
   customer_email: string
   price_total: number
+  payment_status?: string
+  amount_paid?: string
   booking_details?: any
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
@@ -104,7 +106,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       // Load bookings (only car rentals, not car wash) - include ALL statuses except cancelled
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, service_type, booking_details')
+        .select('id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, customer_name, customer_email, price_total, payment_status, amount_paid, service_type, booking_details')
         .not('pickup_date', 'is', null) // Fetch all bookings with a pickup date (Rentals)
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
@@ -932,6 +934,14 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${(booking.price_total / 100).toFixed(2)}`}
                           </span>
                         </div>
+                        {booking.payment_status === 'pending' && booking.amount_paid && (
+                          <div className="flex justify-between pt-2 border-t border-orange-500/30">
+                            <span className="text-orange-400 font-medium">Da Saldare:</span>
+                            <span className="text-orange-400 font-bold text-lg">
+                              {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${((booking.price_total - (parseFloat(booking.amount_paid) * 100)) / 100).toFixed(2)}`}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-3 text-xs text-gray-500">
