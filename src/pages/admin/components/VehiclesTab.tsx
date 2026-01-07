@@ -231,7 +231,7 @@ export default function VehiclesTab() {
         }
       }
 
-      await deleteVehicleLogic(id, vehicle.display_name, vehicle.plate)
+      await deleteVehicleLogic(id, vehicle.display_name)
 
       alert('✅ Veicolo eliminato con successo!')
       loadVehicles()
@@ -255,7 +255,7 @@ export default function VehiclesTab() {
 
       for (const vehicle of vehiclesToDelete) {
         try {
-          await deleteVehicleLogic(vehicle.id, vehicle.display_name, vehicle.plate)
+          await deleteVehicleLogic(vehicle.id, vehicle.display_name)
         } catch (err) {
           console.error(`Failed to delete vehicle ${vehicle.display_name}:`, err)
           // Continue with others
