@@ -635,15 +635,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         bookingPickup.setSeconds(0, 0)
         bookingDropoff.setSeconds(0, 0)
 
+        // TRUE OVERLAP: Any part of the requested period overlaps with the existing booking
+        // This prevents double bookings completely
         const hasOverlap = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
 
         if (hasOverlap) {
-          // If the return time is after the booking ends, it's a "soft" conflict (available after dropoff)
-          // So we do NOT filter it out (return false for conflict) unless strictly blocked
-          if (returnDateTime > bookingDropoff) {
-            return false
-          }
-
           conflictingBookings.push({
             bookingId: booking.id,
             customer: booking.customer_name,
@@ -665,7 +661,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return false
       }
 
-      // Check car wash/mechanical bookings (soft conflicts - available AFTER service ends)
+      // Check car wash/mechanical bookings - vehicle is unavailable during service
       const hasServiceConflict = carWashBookings.some(booking => {
         if (!isBookingForVehicle(booking, vehicle)) return false
         if (booking.status === 'cancelled') return false
@@ -673,20 +669,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const serviceStart = new Date(booking.pickup_date)
         const serviceEnd = new Date(booking.dropoff_date)
 
-        // Check for overlap
+        // TRUE OVERLAP: Any part of the requested period overlaps with the service
+        // This prevents booking a vehicle that's in the wash or under maintenance
         const hasOverlap = (pickupDateTime < serviceEnd && returnDateTime > serviceStart)
 
         if (hasOverlap) {
-          // If the return time is after the service ends, it's a "soft" conflict (available after service)
-          // So we do NOT filter it out (return false for conflict)
-          if (returnDateTime > serviceEnd) {
-            return false
-          }
-
-          // Hard conflict (rental entirely inside or effectively blocked by service)
           conflictingBookings.push({
             bookingId: booking.id,
             serviceType: booking.service_type,
+            serviceStart: booking.pickup_date,
             serviceEnd: booking.dropoff_date,
             type: 'service'
           })

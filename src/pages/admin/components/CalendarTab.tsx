@@ -819,22 +819,6 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               {dropoffDay} {dropoffTime}
                             </div>
 
-                            {/* Remaining payment amount */}
-                            {(() => {
-                              const totalAmount = segment.booking.price_total || 0
-                              const paidAmount = segment.booking.booking_details?.amount_paid || 0
-                              const remaining = totalAmount - paidAmount
-
-                              if (remaining > 0) {
-                                return (
-                                  <div className="text-yellow-400 text-xs font-semibold whitespace-nowrap">
-                                    €{(remaining / 100).toFixed(2)}
-                                  </div>
-                                )
-                              }
-                              return null
-                            })()}
-
                           </div>
                         </div>
                       )
