@@ -77,13 +77,16 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass }: Activit
             hover:shadow-lg ${glowClass}
             cursor-pointer
         `}>
-            <div className={`
+            <div
+                className={`
                 inline-block px-2 py-0.5 rounded-full
                 bg-white/10
                 text-xs font-semibold uppercase tracking-wide
                 mb-1.5
-                ${colorClass.replace('border-', 'text-')}
-            `}>
+                ${booking.type === 'check-out' ? 'text-yellow-400' : colorClass.replace('border-', 'text-')}
+            `}
+                style={booking.type === 'check-out' ? { color: '#fbbf24' } : undefined}
+            >
                 {getLabel()}
             </div>
 
