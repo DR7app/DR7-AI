@@ -425,6 +425,36 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     today.getFullYear() === currentDate.getFullYear()
   const todayDay = isCurrentMonth ? today.getDate() : null
 
+  // Filter vehicles for display - SHARED LOGIC
+  const filteredVehicles = useMemo(() => {
+    return vehicles.filter(vehicle => {
+      if (!searchQuery) return true
+      const query = searchQuery.toLowerCase()
+      // Use same logic as before
+      return bookings.some(booking => {
+        const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
+        if (!customerName) return false
+
+        const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
+        const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
+
+        const vehiclePlate = normalizePlate(vehicle.plate)
+        const bookingPlate = normalizePlate(booking.vehicle_plate || booking.booking_details?.vehicle?.plate)
+
+        if (vehiclePlate && bookingPlate && vehiclePlate === bookingPlate) {
+          return customerName.toLowerCase().includes(query)
+        }
+
+        const vehicleMatches = bookingVehicle === vehicleDisplay ||
+          (bookingVehicle && vehicleDisplay && (
+            bookingVehicle.includes(vehicleDisplay) ||
+            vehicleDisplay.includes(bookingVehicle)
+          ))
+        return vehicleMatches && customerName.toLowerCase().includes(query)
+      })
+    })
+  }, [vehicles, bookings, searchQuery])
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -642,27 +672,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                 </tr>
               </thead>
               <tbody>
-                {vehicles.filter(vehicle => {
-                  if (!searchQuery) return true
-                  const query = searchQuery.toLowerCase()
-                  return bookings.some(booking => {
-                    const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
-                    if (!customerName) return false
-
-                    const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
-                    const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-                    if (vehicle.plate && booking.vehicle_plate && vehicle.plate === booking.vehicle_plate) {
-                      return customerName.toLowerCase().includes(query)
-                    }
-
-                    const vehicleMatches = bookingVehicle === vehicleDisplay ||
-                      (bookingVehicle && vehicleDisplay && (
-                        bookingVehicle.includes(vehicleDisplay) ||
-                        vehicleDisplay.includes(bookingVehicle)
-                      ))
-                    return vehicleMatches && customerName.toLowerCase().includes(query)
-                  })
-                }).map((vehicle) => (
+                {filteredVehicles.map((vehicle) => (
                   <tr key={vehicle.id} className="relative group/row hover:bg-white/5 transition-colors h-10">
                     <td className="sticky left-0 z-40 bg-gray-900 border border-gray-700/40 px-3 py-2 text-white font-semibold text-sm shadow-lg group-hover/row:bg-gray-800 transition-colors w-[200px] min-w-[200px] max-w-[200px] box-border overflow-hidden">
                       <div className="flex flex-col gap-0.5">
@@ -724,30 +734,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
             {/* Layer 2: Booking Bars Overlay */}
             <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ top: '40px' }}>
-              {vehicles.filter(vehicle => {
-                if (!searchQuery) return true
-                const query = searchQuery.toLowerCase()
-                // Use same filter logic as table rows for consistency
-                return bookings.some(booking => {
-                  const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
-                  if (!customerName) return false
-                  const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
-                  const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-                  const vehiclePlate = normalizePlate(vehicle.plate)
-                  const bookingPlate = normalizePlate(booking.vehicle_plate || booking.booking_details?.vehicle?.plate)
-
-                  if (vehiclePlate && bookingPlate && vehiclePlate === bookingPlate) {
-                    return customerName.toLowerCase().includes(query)
-                  }
-
-                  const vehicleMatches = bookingVehicle === vehicleDisplay ||
-                    (bookingVehicle && vehicleDisplay && (
-                      bookingVehicle.includes(vehicleDisplay) ||
-                      vehicleDisplay.includes(bookingVehicle)
-                    ))
-                  return vehicleMatches && customerName.toLowerCase().includes(query)
-                })
-              }).map((vehicle, index) => (
+              {filteredVehicles.map((vehicle, index) => (
                 <div
                   key={vehicle.id}
                   className="absolute h-10" // Matched row height
@@ -816,9 +803,11 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             height: '36px' // Fill the cell height
                           }}
                           onClick={() => {
+                            const pickup = new Date(segment.booking.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
+                            const dropoff = new Date(segment.booking.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
                             setSelectedCell({
                               vehicle: vehicle.display_name,
-                              date: `${segment.startDay}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
+                              date: `${pickup} - ${dropoff}`,
                               bookings: [segment.booking]
                             })
                           }}

@@ -78,6 +78,8 @@ export function generateInvoicetronicPayload(invoice: any) {
             vat: invoice.customer_vat || '',
             fiscal_code: invoice.customer_tax_code || '',
             name: invoice.customer_name,
+            recipient_code: invoice.customer_sdi_code || '0000000',
+            pec: invoice.customer_pec || '',
             address: {
                 street: address.street,
                 city: address.comune,
