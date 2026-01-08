@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import IncomingScansList from '../../../components/Scanner/IncomingScansList';
-import { supabase } from '../../supabaseClient';
+import { supabase } from '../../../supabaseClient';
 
 export default function ScannerTab() {
     const [uploading, setUploading] = useState(false);
@@ -19,7 +19,7 @@ export default function ScannerTab() {
         try {
             // 1. Upload to storage
             const fileName = `${Date.now()}_${file.name}`;
-            const { data: uploadData, error: uploadError } = await supabase.storage
+            const { error: uploadError } = await supabase.storage
                 .from('scans')
                 .upload(fileName, file, {
                     contentType: 'application/pdf'
