@@ -235,6 +235,13 @@ export default function AdminDashboard() {
               >
                 Recensioni
               </button>
+              <button
+                onClick={() => setActiveTab('scanner')}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'scanner' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                  }`}
+              >
+                Scanner
+              </button>
             </nav>
           </div>
         </div>
@@ -431,6 +438,15 @@ export default function AdminDashboard() {
                   }`}
               >
                 Recensioni
+              </button>
+              <button
+                onClick={() => setActiveTab('scanner')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'scanner'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  }`}
+              >
+                Scanner
               </button>
             </nav>
           </div>
