@@ -321,7 +321,7 @@ export default function DailyCalendarTab() {
                                 // Determine label text color based on booking type
                                 const labelColor =
                                     booking.type === 'check-in' ? 'text-yellow-400' :
-                                        booking.type === 'check-out' ? 'text-yellow-400' :
+                                        booking.type === 'check-out' ? 'text-yellow-300' :
                                             'text-gray-100'
 
                                 return (
@@ -329,7 +329,12 @@ export default function DailyCalendarTab() {
                                         key={booking.id}
                                         className={`${bgColor} text-white rounded px-2 py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow`}
                                     >
-                                        <div className={`font-bold text-[10px] mb-0.5 ${labelColor}`}>{label}</div>
+                                        <div
+                                            className={`font-bold text-[10px] mb-0.5 ${labelColor}`}
+                                            style={booking.type === 'check-out' ? { color: '#fbbf24' } : undefined}
+                                        >
+                                            {label}
+                                        </div>
                                         <div className="font-bold text-sm leading-tight">{parseCustomerName(booking.customer_name)}</div>
                                         <div className="text-white/90 text-xs mt-0.5">{booking.vehicle_name}</div>
                                         {booking.type !== 'lavaggio' && (

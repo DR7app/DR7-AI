@@ -748,7 +748,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       let glowClass = "hover:shadow-red-600/40"
                       let textColorClass = "text-red-500"
 
-                      if (segment.booking.type === 'lavaggio') {
+                      if (segment.booking.type === 'check-out') {
+                        textColorClass = "text-yellow-400"
+                      } else if (segment.booking.type === 'lavaggio') {
                         colorClass = "border-blue-500"
                         gradientClass = "from-blue-500/70 via-blue-700/40 to-transparent"
                         glowClass = "hover:shadow-blue-500/30"
