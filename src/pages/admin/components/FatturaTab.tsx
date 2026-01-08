@@ -68,7 +68,7 @@ export default function InvoicesTab() {
     setLoading(true)
     try {
       const { data, error } = await supabase
-        .from('invoices')
+        .from('fatture')
         .select('*')
         .order('invoice_date', { ascending: false })
 
@@ -117,14 +117,14 @@ export default function InvoicesTab() {
 
       if (editingId) {
         const { error } = await supabase
-          .from('invoices')
+          .from('fatture')
           .update(invoiceData)
           .eq('id', editingId)
 
         if (error) throw error
       } else {
         const { error } = await supabase
-          .from('invoices')
+          .from('fatture')
           .insert([invoiceData])
 
         if (error) throw error
@@ -350,7 +350,7 @@ export default function InvoicesTab() {
     // Debounce the DB update slightly or just fire and forget (with error handling)
     try {
       const { error } = await supabase
-        .from('invoices')
+        .from('fatture')
         .update({ [field]: value })
         .eq('id', id)
 
