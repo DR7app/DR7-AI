@@ -68,8 +68,17 @@ export default function ScannerTab() {
                     Carica un documento scansionato (PDF) per estrarre automaticamente i dati del cliente.
                 </p>
 
-                <div className="flex items-center gap-4">
-                    <label className="flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Open Scanner Button */}
+                    <button
+                        onClick={() => window.open('http://192.168.1.214', '_blank')}
+                        className="px-8 py-4 bg-dr7-gold text-black text-xl font-bold rounded-xl hover:bg-yellow-500 transition-colors"
+                    >
+                        🖨️ Apri Scanner Brother
+                    </button>
+
+                    {/* Manual Upload */}
+                    <label className="cursor-pointer">
                         <input
                             type="file"
                             accept="application/pdf"
@@ -78,8 +87,8 @@ export default function ScannerTab() {
                             className="hidden"
                             id="scan-upload"
                         />
-                        <div className="cursor-pointer px-8 py-4 bg-dr7-gold text-black text-xl font-bold rounded-xl hover:bg-yellow-500 transition-colors disabled:opacity-50 text-center">
-                            {uploading ? '⏳ Caricamento...' : '📄 Carica Documento Scansionato'}
+                        <div className="px-8 py-4 bg-gray-700 text-white text-xl font-bold rounded-xl hover:bg-gray-600 transition-colors text-center">
+                            {uploading ? '⏳ Caricamento...' : '📄 Carica PDF'}
                         </div>
                     </label>
                 </div>
@@ -87,11 +96,12 @@ export default function ScannerTab() {
                 <div className="mt-4 p-4 bg-gray-800/50 rounded-xl border border-gray-700">
                     <h3 className="text-sm font-semibold text-dr7-gold mb-2">Come funziona:</h3>
                     <ol className="text-sm text-gray-400 space-y-1 list-decimal list-inside">
-                        <li>Clicca "Carica Documento Scansionato"</li>
-                        <li>Seleziona il PDF scansionato dalla stampante</li>
-                        <li>Il documento apparirà nella lista sotto</li>
-                        <li>Clicca "🔍 OCR" per estrarre i dati automaticamente</li>
-                        <li>Clicca "Revisiona" per creare il cliente</li>
+                        <li>Clicca "🖨️ Apri Scanner Brother" per aprire l'interfaccia della stampante</li>
+                        <li>Scansiona il documento dalla pagina Brother e scaricalo</li>
+                        <li>Torna qui e clicca "📄 Carica PDF"</li>
+                        <li>Seleziona il file appena scaricato</li>
+                        <li>Clicca "🔍 OCR" nella lista sotto per estrarre i dati</li>
+                        <li>Clicca "Revisiona" → "Crea Nuovo Cliente"</li>
                     </ol>
                 </div>
             </div>
