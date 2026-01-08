@@ -1,8 +1,13 @@
--- Automatic Car Wash Booking on Vehicle Return
--- This trigger creates a car wash booking automatically when a rental vehicle is returned
+-- Automatic Car Wash Booking on Rental Creation (UPDATED)
+-- This trigger creates a car wash booking IMMEDIATELY when a rental is created
+-- The car wash is scheduled at the dropoff_date time
 
--- Step 1: Create the trigger function
-CREATE OR REPLACE FUNCTION auto_create_carwash_on_return()
+-- Step 1: Drop existing triggers
+DROP TRIGGER IF EXISTS trigger_auto_carwash_on_return ON bookings;
+DROP TRIGGER IF EXISTS trigger_auto_carwash_on_insert ON bookings;
+
+-- Step 2: Create the updated trigger function
+CREATE OR REPLACE FUNCTION auto_create_carwash_on_booking()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -145,34 +150,22 @@ BEGIN
 END;
 $$;
 
--- Step 2: Drop existing trigger if it exists
-DROP TRIGGER IF EXISTS trigger_auto_carwash_on_return ON bookings;
-
--- Step 3: Create the trigger
--- Trigger on UPDATE to catch when dropoff_date is reached or status changes
-CREATE TRIGGER trigger_auto_carwash_on_return
-  AFTER UPDATE ON bookings
-  FOR EACH ROW
-  WHEN (
-    -- Only trigger when:
-    -- 1. It's a rental booking (no service_type or rental type)
-    (NEW.service_type IS NULL OR NEW.service_type = 'rental' OR NEW.service_type = 'car_rental')
-    AND
-    -- 2. The booking is not cancelled
-    NEW.status != 'cancelled'
-    AND
-    -- 3. Either the dropoff_date changed OR we're past the dropoff time
-    (
-      OLD.dropoff_date IS DISTINCT FROM NEW.dropoff_date
-      OR
-      (NEW.dropoff_date <= NOW() AND OLD.dropoff_date > NOW())
-    )
-  )
-  EXECUTE FUNCTION auto_create_carwash_on_return();
-
--- Step 4: Also create trigger on INSERT for immediate past bookings
+-- Step 3: Create trigger on INSERT (when rental booking is created)
 CREATE TRIGGER trigger_auto_carwash_on_insert
   AFTER INSERT ON bookings
+  FOR EACH ROW
+  WHEN (
+    -- Only trigger when it's a rental booking
+    (NEW.service_type IS NULL OR NEW.service_type = 'rental' OR NEW.service_type = 'car_rental')
+    AND
+    -- And the booking is not cancelled
+    NEW.status != 'cancelled'
+  )
+  EXECUTE FUNCTION auto_create_carwash_on_booking();
+
+-- Step 4: Also create trigger on UPDATE (when dropoff date changes)
+CREATE TRIGGER trigger_auto_carwash_on_update
+  AFTER UPDATE ON bookings
   FOR EACH ROW
   WHEN (
     -- Only trigger when:
@@ -182,9 +175,9 @@ CREATE TRIGGER trigger_auto_carwash_on_insert
     -- 2. The booking is not cancelled
     NEW.status != 'cancelled'
     AND
-    -- 3. The dropoff time has already passed (for backdated entries)
-    NEW.dropoff_date <= NOW()
+    -- 3. The dropoff_date changed
+    OLD.dropoff_date IS DISTINCT FROM NEW.dropoff_date
   )
-  EXECUTE FUNCTION auto_create_carwash_on_return();
+  EXECUTE FUNCTION auto_create_carwash_on_booking();
 
--- Done! The trigger will now automatically create car wash bookings when vehicles are returned.
+-- Done! Now car wash bookings are created immediately when you create a rental booking!
