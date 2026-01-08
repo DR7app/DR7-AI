@@ -134,7 +134,7 @@ BEGIN
       v_next_available_slot + INTERVAL '45 minutes',
       'DR7 Empire - Car Wash',
       'DR7 Empire - Car Wash',
-      2500, -- 25 EUR in cents
+      0, -- €0 for internal car wash (rientro)
       'EUR',
       'confirmed',
       'pending',
