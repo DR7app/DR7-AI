@@ -59,7 +59,7 @@ export default function UnpaidBookingsTab() {
         .select('*')
         .in('payment_status', ['pending', 'unpaid'])
         .neq('status', 'cancelled')
-        .gt('price_total', 0)  // Exclude zero-price bookings (automatic car wash rientri)
+        .neq('customer_name', 'Auto-generato (Rientro)')  // Exclude auto-generated car wash rientri
         .order('created_at', { ascending: false })
 
       if (error) throw error
