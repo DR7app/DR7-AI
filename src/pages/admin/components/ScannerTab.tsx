@@ -71,7 +71,7 @@ export default function ScannerTab() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Open Scanner Button */}
                     <button
-                        onClick={() => window.open('http://192.168.1.214', '_blank')}
+                        onClick={() => window.open('http://192.168.1.214/#/scan/pc', '_blank')}
                         className="px-8 py-4 bg-dr7-gold text-black text-xl font-bold rounded-xl hover:bg-yellow-500 transition-colors"
                     >
                         🖨️ Apri Scanner Brother
