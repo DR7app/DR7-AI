@@ -732,8 +732,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
               }).map((vehicle) => (
                 <div
                   key={vehicle.id}
-                  className="relative h-10" // Matched row height
-                  style={{ marginLeft: '300px' }} // 200px (vehicle) + 100px (plate)
+                  className="absolute h-10" // Matched row height
+                  style={{ left: '300px', right: 0 }} // Position after 200px (vehicle) + 100px (plate)
                 >
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
