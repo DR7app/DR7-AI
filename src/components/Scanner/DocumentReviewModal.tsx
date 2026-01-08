@@ -14,7 +14,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
 
     // Data extraction / linking
     const [customerId, setCustomerId] = useState<string>(scan.customer_id || '');
-    const [extractedData, setExtractedData] = useState<any>(scan.extracted_data || {});
+    const extractedData = scan.extracted_data || {};
     const [docType, setDocType] = useState(extractedData.doc_type || 'generic');
 
     // Search state for manual linking
@@ -24,7 +24,6 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
     useEffect(() => {
         if (isOpen && scan) {
             loadFileUrl();
-            setExtractedData(scan.extracted_data || {});
             if (!scan.customer_id) searchCustomers('');
         }
     }, [isOpen, scan]);
