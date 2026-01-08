@@ -329,7 +329,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                             returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                             customerName: booking.customer_name || 'Unknown',
                             type: 'unpaid_pickup',
-                            deposit: booking.price_total // Using deposit field to store amount to pay for reuse
+                            deposit: booking.price_total / 100 // Convert from cents to euros
                         })
                         return
                     }
