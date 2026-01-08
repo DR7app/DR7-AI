@@ -343,6 +343,25 @@ export default function InvoicesTab() {
     }
   }
 
+  async function updateInvoice(id: string, field: keyof Invoice, value: any) {
+    // Optimistic update local state
+    setInvoices(invoices.map(i => i.id === id ? { ...i, [field]: value } : i))
+
+    // Debounce the DB update slightly or just fire and forget (with error handling)
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ [field]: value })
+        .eq('id', id)
+
+      if (error) throw error
+    } catch (error) {
+      console.error('Error updating invoice field:', field, error)
+      // We could revert optimistic update here if needed, but for simple fields usually okay
+    }
+  }
+
+
   const { subtotal, vatAmount, exemptAmount, total } = calculateTotals()
 
   if (loading) {
@@ -603,32 +622,86 @@ export default function InvoicesTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="flex gap-2 justify-center">
-                      <Button
-                        onClick={() => generatePDF(invoice)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
-                      >
-                        PDF
-                      </Button>
+                    <div className="flex flex-col gap-2 max-w-xs mx-auto">
+                      {/* INLINE EDITING FIELDS */}
+                      <div className="bg-gray-800/80 p-2 rounded border border-gray-700 space-y-2 text-left">
+                        <div>
+                          <label className="text-[10px] text-gray-500 uppercase font-bold">Codice Fiscale</label>
+                          <input
+                            type="text"
+                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                            value={invoice.customer_tax_code || ''}
+                            onChange={(e) => updateInvoice(invoice.id, 'customer_tax_code', e.target.value)}
+                            placeholder="CF Obbligatorio"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-gray-500 uppercase font-bold">SDI</label>
+                            <input
+                              type="text"
+                              className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-white font-mono"
+                              value={invoice.customer_sdi_code || ''}
+                              onChange={(e) => updateInvoice(invoice.id, 'customer_sdi_code', e.target.value)}
+                              placeholder="0000000"
+                              maxLength={7}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 uppercase font-bold">PEC</label>
+                            <input
+                              type="text"
+                              className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                              value={invoice.customer_pec || ''}
+                              onChange={(e) => updateInvoice(invoice.id, 'customer_pec', e.target.value)}
+                              placeholder="Optional"
+                            />
+                          </div>
+                        </div>
+                      </div>
 
-                      {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error') ? (
+                      <div className="flex gap-2 justify-center">
                         <Button
-                          onClick={() => handleSendToSDI(invoice)}
+                          onClick={() => generatePDF(invoice)}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-green-700 hover:bg-green-600 text-white"
+                          className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
                         >
-                          🚀 SDI
+                          PDF
                         </Button>
-                      ) : (
+
+                        {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error') ? (
+                          <Button
+                            onClick={() => handleSendToSDI(invoice)}
+                            variant="secondary"
+                            className="text-xs py-1 px-3 bg-green-700 hover:bg-green-600 text-white"
+                          >
+                            🚀 SDI
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => handleCheckStatus(invoice.id)}
+                            variant="secondary"
+                            className="text-xs py-1 px-3 bg-purple-900 hover:bg-purple-800"
+                          >
+                            Stats
+                          </Button>
+                        )}
                         <Button
-                          onClick={() => handleCheckStatus(invoice.id)}
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              ...invoice, // Load invoice data
+                              items: invoice.items || []
+                            })
+                            setEditingId(invoice.id)
+                            setShowForm(true)
+                          }}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-purple-900 hover:bg-purple-800"
+                          className="text-xs py-1 px-3 bg-gray-700 hover:bg-gray-600"
                         >
-                          Stats
+                          ✏️
                         </Button>
-                      )}
+                      </div>
                     </div>
                   </td>
                 </tr>

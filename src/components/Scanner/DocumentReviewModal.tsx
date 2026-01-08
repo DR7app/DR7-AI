@@ -24,6 +24,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
     useEffect(() => {
         if (isOpen && scan) {
             loadFileUrl();
+            setExtractedData(scan.extracted_data || {});
             if (!scan.customer_id) searchCustomers('');
         }
     }, [isOpen, scan]);
@@ -40,6 +41,55 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
         }
         const { data } = await q;
         if (data) setCustomers(data);
+    }
+
+    async function handleCreateCustomer() {
+        if (!extractedData || !extractedData.nome) {
+            alert('Dati insufficienti per creare il cliente');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Parse birth date to ISO format
+            let birthDate = null;
+            if (extractedData.data_nascita) {
+                const parts = extractedData.data_nascita.split(/[\/\-\.]/);
+                if (parts.length === 3) {
+                    birthDate = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+                }
+            }
+
+            // Create new customer
+            const { data: newCustomer, error: createError } = await supabase
+                .from('customers_extended')
+                .insert([{
+                    nome: extractedData.nome,
+                    cognome: extractedData.cognome || '',
+                    codice_fiscale: extractedData.codice_fiscale || null,
+                    data_nascita: birthDate,
+                    luogo_nascita: extractedData.luogo_nascita || null,
+                    indirizzo: extractedData.indirizzo || null,
+                    numero_documento: extractedData.numero_documento || null,
+                    tipo_documento: docType,
+                    data_scadenza_documento: extractedData.data_scadenza || null,
+                }])
+                .select()
+                .single();
+
+            if (createError) throw createError;
+
+            // Set the newly created customer
+            setCustomerId(newCustomer.id);
+            setCustomers([newCustomer, ...customers]);
+
+            alert(`Cliente "${newCustomer.nome} ${newCustomer.cognome}" creato con successo!`);
+        } catch (err: any) {
+            console.error('Error creating customer:', err);
+            alert(`Errore nella creazione del cliente: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
     }
 
     async function handleConfirm() {
@@ -133,11 +183,11 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                             )}
                         </div>
 
-                        {/* Document Details */}
+                        {/* Document Details with OCR Fields */}
                         <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                            <h3 className="text-lg font-semibold text-dr7-gold mb-3">Dati Estratti</h3>
+                            <h3 className="text-lg font-semibold text-dr7-gold mb-3">Dati Estratti (OCR)</h3>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Tipo Documento</label>
                                     <select
@@ -152,22 +202,110 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         <option value="health_card">Tessera Sanitaria</option>
                                     </select>
                                 </div>
+                                {extractedData.confidence && (
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Confidence</label>
+                                        <div className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                                            {(extractedData.confidence * 100).toFixed(0)}%
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Here we would add specific fields inputs like Name, Doc Number etc. based on docType */}
-                            <div className="mt-4 p-4 bg-gray-900/50 rounded-lg text-sm text-gray-500 text-center">
-                                Campi OCR: {Object.keys(extractedData).length > 0 ? 'Dati presenti' : 'Nessun dato OCR disponibile'}
-                            </div>
+                            {/* Extracted Fields Display */}
+                            {extractedData && Object.keys(extractedData).length > 1 ? (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {extractedData.nome && (
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Nome</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                    {extractedData.nome}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {extractedData.cognome && (
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Cognome</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                    {extractedData.cognome}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {extractedData.data_nascita && (
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Data di Nascita</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                    {extractedData.data_nascita}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {extractedData.luogo_nascita && (
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Luogo di Nascita</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                    {extractedData.luogo_nascita}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {extractedData.codice_fiscale && (
+                                            <div className="col-span-2">
+                                                <label className="block text-xs text-gray-500 mb-1">Codice Fiscale</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm font-mono">
+                                                    {extractedData.codice_fiscale}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {extractedData.numero_documento && (
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Numero Documento</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                    {extractedData.numero_documento}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {extractedData.data_scadenza && (
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Scadenza</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                    {extractedData.data_scadenza}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {extractedData.indirizzo && (
+                                            <div className="col-span-2">
+                                                <label className="block text-xs text-gray-500 mb-1">Indirizzo</label>
+                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                    {extractedData.indirizzo}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-4 bg-gray-900/50 rounded-lg text-sm text-gray-500 text-center">
+                                    Nessun dato OCR disponibile. Esegui OCR o inserisci manualmente.
+                                </div>
+                            )}
                         </div>
 
                         {/* Actions */}
                         <div className="flex gap-4 pt-4 border-t border-gray-800">
+                            {!customerId && extractedData && extractedData.nome && (
+                                <button
+                                    onClick={handleCreateCustomer}
+                                    disabled={loading}
+                                    className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
+                                >
+                                    {loading ? 'Creazione...' : 'Crea Nuovo Cliente'}
+                                </button>
+                            )}
                             <button
                                 onClick={handleConfirm}
                                 disabled={loading || !customerId}
                                 className="flex-1 py-3 bg-dr7-gold text-black font-bold rounded-xl hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {loading ? 'Salvataggio...' : 'Conferma e Salva'}
+                                {loading ? 'Salvataggio...' : customerId ? 'Conferma e Salva' : 'Seleziona Cliente'}
                             </button>
                         </div>
 

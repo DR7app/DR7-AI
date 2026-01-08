@@ -5,6 +5,7 @@ import DocumentReviewModal from './DocumentReviewModal';
 export default function IncomingScansList() {
     const [scans, setScans] = useState<any[]>([]);
     const [selectedScan, setSelectedScan] = useState<any | null>(null);
+    const [processingOcr, setProcessingOcr] = useState<string | null>(null);
 
     useEffect(() => {
         fetchScans();
@@ -33,6 +34,33 @@ export default function IncomingScansList() {
 
         if (!error && data) {
             setScans(data);
+        }
+    }
+
+    async function runOcr(scanId: string) {
+        setProcessingOcr(scanId);
+        try {
+            const response = await fetch('/.netlify/functions/process-document-ocr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ documentId: scanId }),
+            });
+
+            if (!response.ok) {
+                throw new Error('OCR processing failed');
+            }
+
+            const result = await response.json();
+            console.log('OCR Result:', result);
+
+            // Refresh list to show updated data
+            await fetchScans();
+            alert('OCR completato con successo!');
+        } catch (error: any) {
+            console.error('OCR error:', error);
+            alert(`Errore OCR: ${error.message}`);
+        } finally {
+            setProcessingOcr(null);
         }
     }
 
@@ -79,12 +107,23 @@ export default function IncomingScansList() {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <button
-                                        onClick={() => setSelectedScan(scan)}
-                                        className="text-dr7-gold hover:text-white font-medium text-sm"
-                                    >
-                                        Revisiona
-                                    </button>
+                                    <div className="flex gap-2">
+                                        {!scan.extracted_data?.nome && (
+                                            <button
+                                                onClick={() => runOcr(scan.id)}
+                                                disabled={processingOcr === scan.id}
+                                                className="text-blue-400 hover:text-blue-300 font-medium text-sm disabled:opacity-50"
+                                            >
+                                                {processingOcr === scan.id ? '⏳ OCR...' : '🔍 OCR'}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setSelectedScan(scan)}
+                                            className="text-dr7-gold hover:text-white font-medium text-sm"
+                                        >
+                                            Revisiona
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
