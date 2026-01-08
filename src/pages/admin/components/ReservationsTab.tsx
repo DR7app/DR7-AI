@@ -1525,8 +1525,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const pickupDate = booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date) : null
     const dropoffDate = booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date) : null
 
-    // Find vehicle by name
-    const vehicle = vehicles.find(v => v.display_name === booking.vehicle_name)
+    // Find vehicle - Priority: ID -> Plate -> Name
+    let vehicle = vehicles.find(v => v.id === booking.vehicle_id)
+
+    // If not found by ID, try matching by plate (if available) - Critical for handling duplicate car names with different plates
+    if (!vehicle && booking.vehicle_plate) {
+      vehicle = vehicles.find(v => {
+        const vPlate = normalizePlate(v.plate || v.targa || '')
+        const bPlate = normalizePlate(booking.vehicle_plate || '')
+        return vPlate && bPlate && vPlate === bPlate
+      })
+    }
+
+    // Fallback to name match
+    if (!vehicle) {
+      vehicle = vehicles.find(v => v.display_name === booking.vehicle_name)
+    }
 
     // Extract location codes from booking_details
     const pickupLoc = booking.booking_details?.pickupLocation || 'dr7_office'

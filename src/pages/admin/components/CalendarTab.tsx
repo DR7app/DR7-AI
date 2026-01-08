@@ -22,6 +22,7 @@ interface Vehicle {
 
 interface Booking {
   id: string
+  vehicle_id?: string // Added vehicle_id
   vehicle_name: string
   vehicle_plate?: string
   pickup_date: string
@@ -263,7 +264,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     // Find bookings for this vehicle on this day
     const vehicleBookings = bookings.filter(booking => {
       let isMatch = false
-      const bookingVehicleId = booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
+      // Check root vehicle_id first, then nested
+      const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
 
       // Get plate from any possible source
       const bookingPlate = booking.vehicle_plate ||
@@ -327,7 +329,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
         // 3. Match by Name (Fallback only if ID and Plate are missing)
 
         let isMatch = false
-        const bookingVehicleId = booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
+        // Check root vehicle_id first, then nested
+        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
 
         // Get plate from any possible source
         const bookingPlate = booking.vehicle_plate ||
