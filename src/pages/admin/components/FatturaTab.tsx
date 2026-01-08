@@ -581,18 +581,18 @@ export default function InvoicesTab() {
                   <td className="px-4 py-3 text-sm text-white text-right">€{invoice.total.toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.status === 'paid' ? 'bg-green-500/20 text-green-400' :
-                        invoice.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-red-500/20 text-red-400'
+                      invoice.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-red-500/20 text-red-400'
                       }`}>
                       {invoice.status === 'paid' ? 'Pagata' : invoice.status === 'pending' ? 'In attesa' : 'Scaduta'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.sdi_status === 'accepted' ? 'bg-green-500/20 text-green-400' :
-                        invoice.sdi_status === 'sent' ? 'bg-blue-500/20 text-blue-400' :
-                          invoice.sdi_status === 'sending' ? 'bg-yellow-500/20 text-yellow-400' :
-                            invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-500/20 text-red-400' :
-                              'bg-gray-500/20 text-gray-400'
+                      invoice.sdi_status === 'sent' ? 'bg-blue-500/20 text-blue-400' :
+                        invoice.sdi_status === 'sending' ? 'bg-yellow-500/20 text-yellow-400' :
+                          invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-500/20 text-red-400' :
+                            'bg-gray-500/20 text-gray-400'
                       }`}>
                       {invoice.sdi_status === 'accepted' ? '✅ Priorità' :
                         invoice.sdi_status === 'sent' ? '📤 Inviata' :
