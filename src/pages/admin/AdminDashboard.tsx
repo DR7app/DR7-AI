@@ -19,10 +19,11 @@ import FatturaTab from './components/FatturaTab'
 import ContrattoTab from './components/ContrattoTab'
 import CargosTab from './components/CargosTab'
 import DailyCalendarModal from './components/DailyCalendarModal'
+import ScannerTab from './components/ScannerTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -453,7 +454,9 @@ export default function AdminDashboard() {
             {activeTab === 'contratto' && 'Contratti'}
             {activeTab === 'cargos' && 'Cargos'}
             {activeTab === 'marketing' && 'Marketing'}
+
             {activeTab === 'reviews' && 'Recensioni'}
+            {activeTab === 'scanner' && 'Scanner Documenti'}
           </h2>
         </div>
 
@@ -484,6 +487,7 @@ export default function AdminDashboard() {
           {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'reviews' && <ReviewsTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
+          {activeTab === 'scanner' && <ScannerTab />}
         </div>
       </main>
 
