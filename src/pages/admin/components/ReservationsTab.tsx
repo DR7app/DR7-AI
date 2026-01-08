@@ -584,125 +584,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Get available vehicles based on selected dates
   const getAvailableVehicles = useMemo((): Vehicle[] => {
-    // If no dates selected, return all vehicles
-    if (!formData.pickup_date || !formData.return_date) {
-      console.log('[Vehicle Availability] No dates selected, showing all vehicles:', vehicles.length)
-      return vehicles
-    }
+    // ALWAYS show all vehicles in the dropdown
+    // The earliest available time will be calculated separately
+    console.log('[Vehicle Availability] Showing all vehicles:', vehicles.length)
+    return vehicles
+  }, [vehicles])
 
-    const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time || '00:00'}:00`)
-    const returnDateTime = new Date(`${formData.return_date}T${formData.return_time || '23:59'}:00`)
-
-    console.log('[Vehicle Availability] Filtering vehicles for date range:', {
-      pickup: pickupDateTime.toISOString(),
-      return: returnDateTime.toISOString(),
-      totalVehicles: vehicles.length,
-      totalBookings: bookings.length,
-      totalCarWashBookings: carWashBookings.length,
-      editingId
-    })
-
-    // Filter out vehicles that have conflicting bookings
-    const availableVehicles = vehicles.filter(vehicle => {
-      // Check if this vehicle has any conflicting bookings
-      const conflictingBookings: any[] = []
-
-      const hasRentalConflict = bookings.some(booking => {
-        // Skip the current booking if we're editing
-        if (editingId && booking.id === editingId) {
-          return false
-        }
-
-        // Check if this booking is for the same vehicle
-        // Priority 1: Check vehicle_id (new field) and booking_details.vehicle_id (legacy)
-        // Check if this booking is for the same vehicle
-        if (!isBookingForVehicle(booking, vehicle)) {
-          return false
-        }
-
-        // We can infer match method or just use generic 'matched' for logging
-        const matchMethod = 'robust_match'
-
-        // Ignore cancelled bookings
-        if (booking.status === 'cancelled') {
-          return false
-        }
-
-        // Check for date overlap
-        const bookingPickup = new Date(booking.pickup_date)
-        const bookingDropoff = new Date(booking.dropoff_date)
-        // Truncate seconds for cleaner matching
-        bookingPickup.setSeconds(0, 0)
-        bookingDropoff.setSeconds(0, 0)
-
-        // TRUE OVERLAP: Any part of the requested period overlaps with the existing booking
-        // This prevents double bookings completely
-        const hasOverlap = (pickupDateTime < bookingDropoff && returnDateTime > bookingPickup)
-
-        if (hasOverlap) {
-          conflictingBookings.push({
-            bookingId: booking.id,
-            customer: booking.customer_name,
-            pickup: booking.pickup_date,
-            dropoff: booking.dropoff_date,
-            status: booking.status,
-            matchMethod,
-            type: 'rental'
-          })
-        }
-
-        return hasOverlap
-      })
-
-      if (hasRentalConflict) {
-        console.log(`[Vehicle Availability] ❌ ${vehicle.display_name} (${vehicle.plate || vehicle.targa || 'no plate'}) - UNAVAILABLE (rental conflict)`, {
-          conflicts: conflictingBookings
-        })
-        return false
-      }
-
-      // Check car wash/mechanical bookings - vehicle is unavailable during service
-      const hasServiceConflict = carWashBookings.some(booking => {
-        if (!isBookingForVehicle(booking, vehicle)) return false
-        if (booking.status === 'cancelled') return false
-
-        const serviceStart = new Date(booking.pickup_date)
-        const serviceEnd = new Date(booking.dropoff_date)
-
-        // TRUE OVERLAP: Any part of the requested period overlaps with the service
-        // This prevents booking a vehicle that's in the wash or under maintenance
-        const hasOverlap = (pickupDateTime < serviceEnd && returnDateTime > serviceStart)
-
-        if (hasOverlap) {
-          conflictingBookings.push({
-            bookingId: booking.id,
-            serviceType: booking.service_type,
-            serviceStart: booking.pickup_date,
-            serviceEnd: booking.dropoff_date,
-            type: 'service'
-          })
-          return true
-        }
-        return false
-      })
-
-      if (hasServiceConflict) {
-        console.log(`[Vehicle Availability] ❌ ${vehicle.display_name} - UNAVAILABLE (pickup before service ends)`, { conflicts: conflictingBookings })
-        return false
-      }
-
-      return true
-    })
-
-    console.log('[Vehicle Availability] ✅ Available vehicles:', {
-      count: availableVehicles.length,
-      vehicles: availableVehicles.map(v => ({ name: v.display_name, plate: v.plate || v.targa, id: v.id }))
-    })
-
-    return availableVehicles
-  }, [formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, vehicles, bookings, carWashBookings, editingId])
-
-  // Calculate earliest available time for each vehicle based on car wash/mechanical bookings
+  // Calculate earliest available time for each vehicle based on existing bookings and automatic wash
   const vehicleEarliestTimes = useMemo(() => {
     // If no dates selected, return empty map
     if (!formData.pickup_date || !formData.return_date) return new Map<string, Date>()
@@ -713,31 +601,47 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const times = new Map<string, Date>()
 
     vehicles.forEach(vehicle => {
-      // Find all bookings (service AND rental) for this vehicle that OVERLAP with request
-      const relevantBookings = [...bookings, ...carWashBookings].filter(booking => {
+      // Find all bookings (rental AND service) for this vehicle
+      const allBookings = [...bookings, ...carWashBookings].filter(booking => {
+        if (editingId && booking.id === editingId) return false // Skip current booking if editing
         if (!isBookingForVehicle(booking, vehicle)) return false
         if (booking.status === 'cancelled') return false
-
-        const serviceStart = new Date(booking.pickup_date)
-        const serviceEnd = new Date(booking.dropoff_date)
-
-        // Only consider overlapping services
-        return (pickupDateTime < serviceEnd && returnDateTime > serviceStart)
+        return true
       })
 
-      // Get the latest end time
-      const latestEnd = relevantBookings.reduce((latest, booking) => {
-        const end = new Date(booking.dropoff_date)
-        return end > latest ? end : latest
-      }, new Date(0))
+      // Find the latest end time that conflicts with our requested pickup
+      let latestConflictEnd: Date | null = null
 
-      if (latestEnd.getTime() > 0) {
-        times.set(vehicle.id, latestEnd)
+      for (const booking of allBookings) {
+        const bookingStart = new Date(booking.pickup_date)
+        const bookingEnd = new Date(booking.dropoff_date)
+
+        // Check if this booking conflicts with our requested period
+        const hasOverlap = (pickupDateTime < bookingEnd && returnDateTime > bookingStart)
+
+        // Also check if booking ends AFTER our requested pickup (blocks our pickup)
+        const blocksPickup = bookingEnd > pickupDateTime
+
+        if (hasOverlap || blocksPickup) {
+          if (!latestConflictEnd || bookingEnd > latestConflictEnd) {
+            latestConflictEnd = bookingEnd
+          }
+        }
+      }
+
+      // If there's a conflict, calculate earliest available time
+      if (latestConflictEnd) {
+        // For rental bookings, add 30min gap + 45min wash = 75 minutes total
+        // This is the true earliest available time after return + automatic wash
+        const earliestAvailable = new Date(latestConflictEnd.getTime() + 75 * 60 * 1000)
+        times.set(vehicle.id, earliestAvailable)
+
+        console.log(`[Earliest Time] ${vehicle.display_name}: Conflict ends at ${latestConflictEnd.toLocaleTimeString('it-IT')}, available at ${earliestAvailable.toLocaleTimeString('it-IT')} (after wash)`)
       }
     })
 
     return times
-  }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
+  }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, editingId])
 
   // Auto-adjust pickup time when vehicle is selected if it conflicts with service
   useEffect(() => {
@@ -770,12 +674,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           // Show notification only if the change is significant (more than 1 minute diff)
           if (Math.abs(pickupDateTime.getTime() - bufferTime.getTime()) > 60000) {
-            alert(`Orario di ritiro aggiornato alle ${newTime} perché il veicolo è in lavaggio/manutenzione fino a quell'ora.`)
+            const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
+            alert(
+              `ℹ️ DISPONIBILITÀ AUTO\n\n` +
+              `${vehicle?.display_name || 'Questo veicolo'} sarà disponibile alle ${newTime}.\n\n` +
+              `Il veicolo è attualmente prenotato e dopo la riconsegna deve completare:\n` +
+              `• 30 minuti di gap obbligatorio\n` +
+              `• 45 minuti di lavaggio automatico\n\n` +
+              `L'orario di ritiro è stato aggiornato automaticamente.`
+            )
           }
         }
       }
     }
-  }, [formData.vehicle_id, formData.pickup_date, vehicleEarliestTimes])
+  }, [formData.vehicle_id, formData.pickup_date, vehicleEarliestTimes, vehicles])
 
 
   const LOCATIONS = [
