@@ -788,8 +788,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                           key={segment.bookingId}
                           className={`absolute pointer-events-auto bg-gradient-to-r ${gradientClass} border-l-2 ${colorClass} px-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg ${glowClass} cursor-pointer z-20`}
                           style={{
-                            left: `${left + 1}px`,
-                            width: `${width - 2}px`, // Full width across all days
+                            left: `${left}px`,
+                            width: `${width}px`,
                             top: '2px',
                             height: '36px' // Fill the cell height
                           }}
