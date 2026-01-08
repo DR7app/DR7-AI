@@ -314,6 +314,14 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     booking: Booking
   }
 
+  // Helper to normalize plate strings (remove spaces, uppercase)
+  const normalizePlate = (s: string | null | undefined) => {
+    if (!s) return ''
+    return s.replace(/\s+/g, '').toUpperCase()
+  }
+
+  // ... inside component ...
+
   // Build booking segments for overlay bars
   const buildBookingSegments = useMemo(() => {
     const segments: BookingSegment[] = []
@@ -325,31 +333,33 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       for (const booking of bookings) {
         // Match booking to vehicle with strict priority:
         // 1. Match by Vehicle ID (most accurate)
-        // 2. Match by Plate (Strict)
-        // 3. Match by Name (Fallback only if ID and Plate are missing)
+        // 2. Match by Plate (Strict but robust)
+        // 3. Match by Name (Fallback)
 
         let isMatch = false
         // Check root vehicle_id first, then nested
         const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
 
         // Get plate from any possible source
-        const bookingPlate = booking.vehicle_plate ||
+        const rawBookingPlate = booking.vehicle_plate ||
           booking.booking_details?.vehicle?.plate ||
           booking.booking_details?.vehicle?.targa ||
           booking.booking_details?.targa
 
+        const vehiclePlate = normalizePlate(vehicle.plate)
+        const bookingPlate = normalizePlate(rawBookingPlate)
+
         if (bookingVehicleId && bookingVehicleId === vehicle.id) {
           isMatch = true
-        } else if (bookingPlate) {
-          // If booking has a plate, REQUIRES strictly matching vehicle plate
-          if (vehicle.plate) {
-            isMatch = vehicle.plate.trim().toUpperCase() === bookingPlate.trim().toUpperCase()
-          } else {
-            // Vehicle has no plate, but booking does. Do NOT match by name to avoid duplicates.
-            isMatch = false
-          }
+        } else if (bookingPlate && vehiclePlate) {
+          // Both have plates - MUST match
+          isMatch = vehiclePlate === bookingPlate
         } else {
-          // Fallback to name match only if absolutely no other ID info
+          // One or both missing plate - Fallback to name match
+          // This covers: 
+          // 1. Booking has plate, Vehicle doesn't
+          // 2. Vehicle has plate, Booking doesn't
+          // 3. Neither has plate
           isMatch = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
         }
 
@@ -717,14 +727,19 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
               {vehicles.filter(vehicle => {
                 if (!searchQuery) return true
                 const query = searchQuery.toLowerCase()
+                // Use same filter logic as table rows for consistency
                 return bookings.some(booking => {
                   const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
                   if (!customerName) return false
                   const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
                   const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-                  if (vehicle.plate && booking.vehicle_plate && vehicle.plate === booking.vehicle_plate) {
+                  const vehiclePlate = normalizePlate(vehicle.plate)
+                  const bookingPlate = normalizePlate(booking.vehicle_plate || booking.booking_details?.vehicle?.plate)
+
+                  if (vehiclePlate && bookingPlate && vehiclePlate === bookingPlate) {
                     return customerName.toLowerCase().includes(query)
                   }
+
                   const vehicleMatches = bookingVehicle === vehicleDisplay ||
                     (bookingVehicle && vehicleDisplay && (
                       bookingVehicle.includes(vehicleDisplay) ||
@@ -732,11 +747,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     ))
                   return vehicleMatches && customerName.toLowerCase().includes(query)
                 })
-              }).map((vehicle) => (
+              }).map((vehicle, index) => (
                 <div
                   key={vehicle.id}
                   className="absolute h-10" // Matched row height
-                  style={{ left: '300px', right: 0 }} // Position after 200px (vehicle) + 100px (plate)
+                  style={{
+                    left: '300px',
+                    right: 0,
+                    top: `${index * 40}px` // CRITICAL FIX: Position vertically based on filtered index
+                  }}
                 >
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
