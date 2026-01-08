@@ -744,18 +744,18 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
                       // Determine color based on booking type (matching DailyCalendarModal)
                       let colorClass = "border-red-600"
-                      let gradientClass = "from-red-600/90 to-red-700/80"
+                      let gradientClass = "from-red-600/90 via-red-800/50 to-transparent"
                       let glowClass = "hover:shadow-red-600/40"
                       let textColorClass = "text-red-500"
 
                       if (segment.booking.type === 'lavaggio') {
                         colorClass = "border-blue-500"
-                        gradientClass = "from-blue-500/70 to-blue-600/60"
+                        gradientClass = "from-blue-500/70 via-blue-700/40 to-transparent"
                         glowClass = "hover:shadow-blue-500/30"
                         textColorClass = "text-blue-500"
                       } else if (segment.booking.type === 'meccanica') {
                         colorClass = "border-orange-500"
-                        gradientClass = "from-orange-500/70 to-orange-600/60"
+                        gradientClass = "from-orange-500/70 via-orange-700/40 to-transparent"
                         glowClass = "hover:shadow-orange-500/30"
                         textColorClass = "text-orange-500"
                       }
@@ -784,7 +784,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       return (
                         <div
                           key={segment.bookingId}
-                          className={`absolute pointer-events-auto bg-gradient-to-br ${gradientClass} backdrop-blur-sm border-l-2 ${colorClass} rounded-lg px-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg ${glowClass} cursor-pointer z-20`}
+                          className={`absolute pointer-events-auto bg-gradient-to-r ${gradientClass} border-l-2 ${colorClass} px-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg ${glowClass} cursor-pointer z-20`}
                           style={{
                             left: `${left + 1}px`,
                             width: `${width - 2}px`, // Full width across all days
