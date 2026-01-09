@@ -90,22 +90,22 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass }: Activit
                 {getLabel()}
             </div>
 
-            <div className="text-white font-medium text-sm leading-tight mb-1">
+            <div className="text-theme-text-primary font-medium text-sm leading-tight mb-1">
                 {parseCustomerName(booking.customer_name)}
             </div>
 
-            <div className="text-gray-300 text-xs">
+            <div className="text-theme-text-secondary text-xs">
                 {booking.vehicle_name}
             </div>
 
             {booking.type !== 'lavaggio' && (
-                <div className="text-gray-400 font-mono text-[10px] mt-1">
+                <div className="text-theme-text-muted font-mono text-[10px] mt-1">
                     {getTarga(booking)}
                 </div>
             )}
 
             {booking.service_name && (
-                <div className="text-gray-400 text-[10px] mt-1 italic">
+                <div className="text-theme-text-muted text-[10px] mt-1 italic">
                     {booking.service_name}
                 </div>
             )}
@@ -290,7 +290,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fadeIn"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-theme-bg-primary/60 backdrop-blur-md animate-fadeIn"
             onClick={onClose}
         >
             <div
@@ -300,7 +300,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                 {/* Header */}
                 <div className="sticky top-0 z-10 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-lg border-b border-white/10 px-6 py-4">
                     <div className="flex justify-between items-center mb-3">
-                        <h2 className="text-2xl font-light text-white">
+                        <h2 className="text-2xl font-light text-theme-text-primary">
                             {selectedDate.toLocaleDateString('it-IT', {
                                 weekday: 'long',
                                 day: 'numeric',
@@ -313,7 +313,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => navigateDay('prev')}
-                                    className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+                                    className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
                                 >
                                     Prec
                                 </button>
@@ -325,7 +325,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                 </button>
                                 <button
                                     onClick={() => navigateDay('next')}
-                                    className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+                                    className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
                                 >
                                     Succ
                                 </button>
@@ -333,7 +333,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
 
                             <button
                                 onClick={onClose}
-                                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-white text-xl"
+                                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-theme-text-primary text-xl"
                             >
                                 ✕
                             </button>
@@ -344,19 +344,19 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     <div className="flex justify-center gap-6 py-2">
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50" />
-                            <span className="text-sm text-gray-300 font-light">Noleggio</span>
+                            <span className="text-sm text-theme-text-secondary font-light">Noleggio</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/50" />
-                            <span className="text-sm text-gray-300 font-light">Lavaggio</span>
+                            <span className="text-sm text-theme-text-secondary font-light">Lavaggio</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/50" />
-                            <span className="text-sm text-gray-300 font-light">Meccanica</span>
+                            <span className="text-sm text-theme-text-secondary font-light">Meccanica</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/50" />
-                            <span className="text-sm text-gray-300 font-light">Varie</span>
+                            <span className="text-sm text-theme-text-secondary font-light">Varie</span>
                         </div>
                     </div>
                 </div>

@@ -33,19 +33,19 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+    <div className="min-h-screen bg-theme-bg-primary flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="bg-gray-900 rounded-lg shadow-xl p-8 border border-gray-700">
+        <div className="bg-theme-bg-secondary rounded-lg shadow-xl p-8 border border-theme-border">
           <div className="flex justify-center mb-6">
             <img src="/DR7logo1.png" alt="DR7 Empire" className="h-20" />
           </div>
-          <h1 className="text-3xl font-bold text-white text-center mb-8">
+          <h1 className="text-3xl font-bold text-theme-text-primary text-center mb-8">
             DR7 Control Room
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-theme-text-primary mb-2">
                 Email
               </label>
               <input
@@ -54,13 +54,13 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:border-white transition-colors"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                 placeholder="admin@dr7empire.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-theme-text-primary mb-2">
                 Password
               </label>
               <input
@@ -69,7 +69,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:border-white transition-colors"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                 placeholder="••••••••"
               />
             </div>
@@ -83,7 +83,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-white hover:bg-gray-200 text-black font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-dr7-gold hover:bg-yellow-500 text-black font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Accesso in corso...' : 'Accedi'}
             </button>

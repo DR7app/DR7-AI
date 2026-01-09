@@ -117,19 +117,19 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
   }
 
   return (
-    <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 mb-6">
-      <h3 className="text-xl font-semibold text-white mb-4">Crea Nuovo Cliente</h3>
+    <div className="bg-theme-bg-secondary p-6 rounded-lg border border-theme-border mb-6">
+      <h3 className="text-xl font-semibold text-theme-text-primary mb-4">Crea Nuovo Cliente</h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Client Type Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
             Tipo Cliente <span className="text-red-500">*</span>
           </label>
           <select
             value={tipoCliente}
             onChange={(e) => setTipoCliente(e.target.value as any)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-dr7-gold"
+            className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
             required
           >
             <option value="">Seleziona tipo cliente...</option>
@@ -142,7 +142,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
         {/* AZIENDA FIELDS */}
         {tipoCliente === 'azienda' && (
           <div className="space-y-4 animate-fadeIn">
-            <div className="border-t border-gray-700 pt-4"></div>
+            <div className="border-t border-theme-border pt-4"></div>
 
             <Input
               label="Nazione"
@@ -153,7 +153,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                 Denominazione <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -162,7 +162,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="denominazione"
                   value={formData.denominazione}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="Nome azienda"
                   required
                 />
@@ -177,7 +177,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                 Partita IVA <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -186,7 +186,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="partitaIVA"
                   value={formData.partitaIVA}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="IT12345678901"
                   required
                 />
@@ -218,9 +218,9 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
               placeholder="Via, Numero Civico, CAP, Città"
             />
 
-            <div className="bg-gray-800 p-4 rounded border border-gray-700">
+            <div className="bg-theme-bg-tertiary p-4 rounded border border-theme-border">
               <h4 className="text-sm font-semibold text-dr7-gold mb-2">Campi Facoltativi</h4>
-              <p className="text-xs text-gray-400">Sezione riservata per campi aggiuntivi futuri</p>
+              <p className="text-xs text-theme-text-muted">Sezione riservata per campi aggiuntivi futuri</p>
             </div>
           </div>
         )}
@@ -228,7 +228,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
         {/* PERSONA FISICA FIELDS */}
         {tipoCliente === 'persona_fisica' && (
           <div className="space-y-4 animate-fadeIn">
-            <div className="border-t border-gray-700 pt-4"></div>
+            <div className="border-t border-theme-border pt-4"></div>
 
             <Input
               label="Nazione"
@@ -274,7 +274,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
               placeholder="Via, Numero Civico, CAP, Città"
             />
 
-            <div className="bg-gray-800 p-4 rounded border border-gray-700 space-y-4">
+            <div className="bg-theme-bg-tertiary p-4 rounded border border-theme-border space-y-4">
               <h4 className="text-sm font-semibold text-dr7-gold mb-2">Campi Facoltativi</h4>
 
               <Input
@@ -310,10 +310,10 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
         {/* PUBBLICA AMMINISTRAZIONE FIELDS */}
         {tipoCliente === 'pubblica_amministrazione' && (
           <div className="space-y-4 animate-fadeIn">
-            <div className="border-t border-gray-700 pt-4"></div>
+            <div className="border-t border-theme-border pt-4"></div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                 Codice Univoco <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -322,7 +322,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="codiceUnivoco"
                   value={formData.codiceUnivoco}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="XXXXXX"
                   required
                 />
@@ -337,7 +337,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                 Codice Fiscale <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -346,7 +346,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="codiceFiscale"
                   value={formData.codiceFiscale}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="00000000000"
                   required
                 />
@@ -361,7 +361,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                 Ente o Ufficio <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -370,7 +370,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="enteUfficio"
                   value={formData.enteUfficio}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="Nome dell'ente o ufficio"
                   required
                 />
@@ -385,7 +385,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                 Città <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -394,7 +394,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="citta"
                   value={formData.citta}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="Cagliari"
                   required
                 />
@@ -412,7 +412,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
 
         {/* Submit Buttons */}
         {tipoCliente && (
-          <div className="flex gap-3 mt-6 pt-4 border-t border-gray-700">
+          <div className="flex gap-3 mt-6 pt-4 border-t border-theme-border">
             <Button type="submit" disabled={loading}>
               {loading ? 'Creazione in corso...' : 'Crea Cliente'}
             </Button>

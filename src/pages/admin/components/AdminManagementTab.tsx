@@ -77,7 +77,7 @@ export default function AdminManagementTab() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="text-white text-lg">Caricamento...</div>
+                <div className="text-theme-text-primary text-lg">Caricamento...</div>
             </div>
         )
     }
@@ -93,23 +93,23 @@ export default function AdminManagementTab() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-white">Gestione Amministratori</h2>
+                <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Amministratori</h2>
             </div>
 
-            <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden">
                 <table className="w-full">
                     <thead className="bg-gray-700">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                                 Email
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                                 Ruolo
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                                 Accesso Finanziario
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                                 Azioni
                             </th>
                         </tr>
@@ -117,14 +117,14 @@ export default function AdminManagementTab() {
                     <tbody className="divide-y divide-gray-700">
                         {admins.map((admin) => (
                             <tr key={admin.id} className="hover:bg-gray-750">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                                     {admin.email}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <select
                                         value={admin.role}
                                         onChange={(e) => updateRole(admin.id, e.target.value as 'superadmin' | 'admin')}
-                                        className="bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                                        className="bg-gray-700 text-theme-text-primary border border-theme-border-light rounded px-2 py-1"
                                     >
                                         <option value="admin">Admin</option>
                                         <option value="superadmin">Superadmin</option>
@@ -134,14 +134,14 @@ export default function AdminManagementTab() {
                                     <button
                                         onClick={() => toggleFinancialAccess(admin.id, admin.can_view_financials)}
                                         className={`px-3 py-1 rounded-full text-xs font-medium ${admin.can_view_financials
-                                                ? 'bg-green-500 text-white'
-                                                : 'bg-gray-600 text-gray-300'
+                                                ? 'bg-green-500 text-theme-text-primary'
+                                                : 'bg-gray-600 text-theme-text-secondary'
                                             }`}
                                     >
                                         {admin.can_view_financials ? 'Abilitato' : 'Disabilitato'}
                                     </button>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-secondary">
                                     <span className="text-xs">
                                         {new Date(admin.created_at).toLocaleDateString('it-IT')}
                                     </span>
@@ -152,7 +152,7 @@ export default function AdminManagementTab() {
                 </table>
 
                 {admins.length === 0 && (
-                    <div className="text-center py-8 text-gray-400">
+                    <div className="text-center py-8 text-theme-text-muted">
                         Nessun amministratore trovato
                     </div>
                 )}

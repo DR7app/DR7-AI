@@ -707,19 +707,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center z-10">
-          <h2 className="text-2xl font-bold text-white">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
-          <button onClick={handleClose} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
+          <h2 className="text-2xl font-bold text-theme-text-primary">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
+          <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none">&times;</button>
         </div>
 
         <div className="p-6 space-y-8">
 
           {/* 1. TIPO CLIENTE SELECTION */}
           <div>
-            <label className="block text-sm font-bold text-gray-300 mb-3 uppercase tracking-wider">
+            <label className="block text-sm font-bold text-theme-text-secondary mb-3 uppercase tracking-wider">
               1. Tipo Cliente
             </label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -727,7 +727,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 onClick={() => setFormData({ ...formData, tipo_cliente: 'persona_fisica' })}
                 className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'persona_fisica'
                   ? 'bg-blue-600/20 border-blue-500 text-blue-400 ring-1 ring-blue-500'
-                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-750'
+                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-gray-750'
                   }`}
               >
                 <span className="font-semibold">Persona Fisica</span>
@@ -737,7 +737,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 onClick={() => setFormData({ ...formData, tipo_cliente: 'azienda' })}
                 className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'azienda'
                   ? 'bg-purple-600/20 border-purple-500 text-purple-400 ring-1 ring-purple-500'
-                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-750'
+                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-gray-750'
                   }`}
               >
                 <span className="font-semibold">Azienda</span>
@@ -747,7 +747,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 onClick={() => setFormData({ ...formData, tipo_cliente: 'pubblica_amministrazione' })}
                 className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'pubblica_amministrazione'
                   ? 'bg-green-600/20 border-green-500 text-green-400 ring-1 ring-green-500'
-                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-750'
+                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-gray-750'
                   }`}
               >
                 <span className="font-semibold">Pubblica Amm.</span>
@@ -764,28 +764,28 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             {formData.tipo_cliente === 'persona_fisica' && (
               <div className="animate-fadeIn space-y-6">
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4">Dati Anagrafici</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati Anagrafici</h3>
 
                   {/* Nome & Cognome First */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Nome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome *</label>
                       <input
                         type="text"
                         value={formData.nome}
                         onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
                         placeholder="Mario"
                       />
                       {errors.nome && <p className="text-red-500 text-xs mt-1">{errors.nome}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Cognome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome *</label>
                       <input
                         type="text"
                         value={formData.cognome}
                         onChange={(e) => setFormData({ ...formData, cognome: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
                         placeholder="Rossi"
                       />
                       {errors.cognome && <p className="text-red-500 text-xs mt-1">{errors.cognome}</p>}
@@ -794,22 +794,22 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Codice Fiscale {formData.nazione === 'Italia' ? '*' : ''}</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale {formData.nazione === 'Italia' ? '*' : ''}</label>
                       <input
                         type="text"
                         value={formData.codice_fiscale}
                         onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
                         maxLength={16}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
                       />
                       {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Sesso</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Sesso</label>
                       <select
                         value={formData.sesso}
                         onChange={(e) => setFormData({ ...formData, sesso: e.target.value as any })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       >
                         <option value="">Seleziona...</option>
                         <option value="M">Maschio</option>
@@ -820,32 +820,32 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Data Nascita</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Nascita</label>
                       <input
                         type="date"
                         lang="it"
                         value={formData.data_nascita || ''}
                         onChange={(e) => setFormData({ ...formData, data_nascita: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Luogo Nascita</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo Nascita</label>
                       <input
                         type="text"
                         value={formData.luogo_nascita}
                         onChange={(e) => setFormData({ ...formData, luogo_nascita: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Provincia</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia</label>
                       <input
                         type="text"
                         value={formData.provincia_nascita}
                         onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase() })}
                         maxLength={2}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
                         placeholder="RM"
                       />
                     </div>
@@ -853,113 +853,113 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4 border-t border-gray-700 pt-4">Residenza</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Residenza</h3>
                   <div className="flex gap-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Indirizzo *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Indirizzo *</label>
                       <input
                         type="text"
                         value={formData.indirizzo}
                         onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                       {errors.indirizzo && <p className="text-red-500 text-xs mt-1">{errors.indirizzo}</p>}
                     </div>
                     <div className="w-24">
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Civico</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Civico</label>
                       <input
                         type="text"
                         value={formData.numero_civico}
                         onChange={(e) => setFormData({ ...formData, numero_civico: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Città *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>
                       <input
                         type="text"
                         value={formData.citta_residenza}
                         onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">CAP *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CAP *</label>
                       <input
                         type="text"
                         value={formData.codice_postale}
                         onChange={(e) => setFormData({ ...formData, codice_postale: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Provincia *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia *</label>
                       <input
                         type="text"
                         value={formData.provincia_residenza}
                         onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
                         maxLength={2}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
                       />
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4 border-t border-gray-700 pt-4">Contatti</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Email *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email *</label>
                       <input
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                       {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Telefono *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono *</label>
                       <input
                         type="text"
                         value={formData.telefono}
                         onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                       {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-400 mb-1">PEC (Opzionale)</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">PEC (Opzionale)</label>
                     <input
                       type="email"
                       value={formData.pec_persona}
                       onChange={(e) => setFormData({ ...formData, pec_persona: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4 border-t border-gray-700 pt-4">Patente</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Patente</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Numero Patente</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Patente</label>
                       <input
                         type="text"
                         value={formData.patente_numero}
                         onChange={(e) => setFormData({ ...formData, patente_numero: e.target.value.toUpperCase() })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Categoria</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Categoria</label>
                       <select
                         value={formData.patente_tipo}
                         onChange={(e) => setFormData({ ...formData, patente_tipo: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       >
                         <option value="">Seleziona...</option>
                         <option value="B">B</option>
@@ -970,33 +970,33 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Emessa da (Ente)</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Emessa da (Ente)</label>
                       <input
                         type="text"
                         value={formData.patente_ente}
                         onChange={(e) => setFormData({ ...formData, patente_ente: e.target.value })}
                         placeholder="es. MIT-UCO o Comune"
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Data Rilascio</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Rilascio</label>
                       <input
                         type="date"
                         lang="it"
                         value={formData.patente_rilascio || ''}
                         onChange={(e) => setFormData({ ...formData, patente_rilascio: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Scadenza</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Scadenza</label>
                       <input
                         type="date"
                         lang="it"
                         value={formData.patente_scadenza || ''}
                         onChange={(e) => setFormData({ ...formData, patente_scadenza: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                   </div>
@@ -1008,118 +1008,118 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             {formData.tipo_cliente === 'azienda' && (
               <div className="animate-fadeIn space-y-6">
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4">Dati Aziendali</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati Aziendali</h3>
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1">Ragione Sociale *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ragione Sociale *</label>
                     <input
                       type="text"
                       value={formData.denominazione}
                       onChange={(e) => setFormData({ ...formData, denominazione: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                     />
                     {errors.denominazione && <p className="text-red-500 text-xs mt-1">{errors.denominazione}</p>}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Partita IVA *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Partita IVA *</label>
                       <input
                         type="text"
                         value={formData.partita_iva}
                         onChange={(e) => setFormData({ ...formData, partita_iva: e.target.value })}
                         maxLength={11}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none font-mono"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none font-mono"
                       />
                       {errors.partita_iva && <p className="text-red-500 text-xs mt-1">{errors.partita_iva}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Codice Fiscale</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
                       <input
                         type="text"
                         value={formData.cf_azienda}
                         onChange={(e) => setFormData({ ...formData, cf_azienda: e.target.value.toUpperCase() })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none font-mono uppercase"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none font-mono uppercase"
                       />
                     </div>
                   </div>
 
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-400 mb-1">Sede Legale *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Sede Legale *</label>
                     <input
                       type="text"
                       value={formData.sede_legale}
                       onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                     />
                     {errors.sede_legale && <p className="text-red-500 text-xs mt-1">{errors.sede_legale}</p>}
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4 border-t border-gray-700 pt-4">Contatti Azienda</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti Azienda</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Email *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email *</label>
                       <input
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Telefono *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono *</label>
                       <input
                         type="text"
                         value={formData.telefono}
                         onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4 border-t border-gray-700 pt-4">Rappresentante Legale</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Rappresentante Legale</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Nome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome *</label>
                       <input
                         type="text"
                         value={formData.rappresentante_nome}
                         onChange={(e) => setFormData({ ...formData, rappresentante_nome: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Cognome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome *</label>
                       <input
                         type="text"
                         value={formData.rappresentante_cognome}
                         onChange={(e) => setFormData({ ...formData, rappresentante_cognome: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-400 mb-1">Codice Fiscale Rappresentante *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale Rappresentante *</label>
                     <input
                       type="text"
                       value={formData.rappresentante_cf}
                       onChange={(e) => setFormData({ ...formData, rappresentante_cf: e.target.value.toUpperCase() })}
-                      className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase font-mono"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
                     />
                   </div>
 
                   <div className="mt-4">
-                    <h4 className="text-sm font-medium text-gray-300 mb-3">Documento Rappresentante</h4>
+                    <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Documento Rappresentante</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Tipo Documento</label>
+                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Tipo Documento</label>
                         <select
                           value={formData.rappresentante_doc_tipo}
                           onChange={(e) => setFormData({ ...formData, rappresentante_doc_tipo: e.target.value })}
-                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                         >
                           <option value="">Seleziona...</option>
                           <option value="Carta d'Identità">Carta d'Identità</option>
@@ -1128,40 +1128,40 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Numero Documento</label>
+                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Documento</label>
                         <input
                           type="text"
                           value={formData.rappresentante_doc_numero}
                           onChange={(e) => setFormData({ ...formData, rappresentante_doc_numero: e.target.value.toUpperCase() })}
-                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase"
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
                           placeholder="es. CA12345AB"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Data Rilascio</label>
+                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Rilascio</label>
                         <input
                           type="date"
                           value={formData.rappresentante_doc_rilascio}
                           onChange={(e) => setFormData({ ...formData, rappresentante_doc_rilascio: e.target.value })}
-                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Data Scadenza</label>
+                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Scadenza</label>
                         <input
                           type="date"
                           value={formData.rappresentante_doc_scadenza}
                           onChange={(e) => setFormData({ ...formData, rappresentante_doc_scadenza: e.target.value })}
-                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Luogo Rilascio</label>
+                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo Rilascio</label>
                         <input
                           type="text"
                           value={formData.rappresentante_doc_luogo}
                           onChange={(e) => setFormData({ ...formData, rappresentante_doc_luogo: e.target.value })}
-                          className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                           placeholder="es. Comune di Roma"
                         />
                       </div>
@@ -1175,71 +1175,71 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             {formData.tipo_cliente === 'pubblica_amministrazione' && (
               <div className="animate-fadeIn space-y-6">
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4">Dati PA</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati PA</h3>
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1">Ente / Ufficio *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ente / Ufficio *</label>
                     <input
                       type="text"
                       value={formData.ente_ufficio}
                       onChange={(e) => setFormData({ ...formData, ente_ufficio: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                     />
                     {errors.ente_ufficio && <p className="text-red-500 text-xs mt-1">{errors.ente_ufficio}</p>}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Codice Univoco *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Univoco *</label>
                       <input
                         type="text"
                         value={formData.codice_univoco}
                         onChange={(e) => setFormData({ ...formData, codice_univoco: e.target.value.toUpperCase() })}
                         maxLength={7}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase font-mono"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
                       />
                       {errors.codice_univoco && <p className="text-red-500 text-xs mt-1">{errors.codice_univoco}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">CF / P.IVA Ente *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CF / P.IVA Ente *</label>
                       <input
                         type="text"
                         value={formData.cf_pa}
                         onChange={(e) => setFormData({ ...formData, cf_pa: e.target.value.toUpperCase() })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none uppercase font-mono"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
                       />
                       {errors.cf_pa && <p className="text-red-500 text-xs mt-1">{errors.cf_pa}</p>}
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-400 mb-1">Città *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>
                     <input
                       type="text"
                       value={formData.citta}
                       onChange={(e) => setFormData({ ...formData, citta: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                     />
                     {errors.citta && <p className="text-red-500 text-xs mt-1">{errors.citta}</p>}
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-4 border-t border-gray-700 pt-4">Contatti PA</h3>
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti PA</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Email / PEC *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email / PEC *</label>
                       <input
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">Telefono *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono *</label>
                       <input
                         type="text"
                         value={formData.telefono}
                         onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       />
                     </div>
                   </div>
@@ -1253,12 +1253,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
           {/* Note Field - GLOBAL */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Note</label>
+            <label className="block text-sm font-medium text-theme-text-muted mb-1">Note</label>
             <textarea
               value={formData.note}
               onChange={(e) => setFormData({ ...formData, note: e.target.value })}
               rows={3}
-              className="w-full bg-gray-800 border border-gray-600 rounded p-2.5 text-white focus:border-dr7-gold outline-none resize-none"
+              className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none resize-none"
               placeholder="Note interne sul cliente..."
             />
           </div>
@@ -1268,19 +1268,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               type="button"
               onClick={() => setShowDocumentSection(!showDocumentSection)}
-              className="w-full flex items-center justify-between p-4 bg-gray-800 hover:bg-gray-750 rounded-lg transition-colors"
+              className="w-full flex items-center justify-between p-4 bg-theme-bg-tertiary hover:bg-gray-750 rounded-lg transition-colors"
             >
               <div className="flex items-center gap-3">
                 <svg className="w-6 h-6 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
                 <div className="text-left">
-                  <h3 className="text-lg font-medium text-white">Documenti (Opzionale)</h3>
-                  <p className="text-sm text-gray-400">Carica patente e documento d'identità se disponibili (Fronte/Retro)</p>
+                  <h3 className="text-lg font-medium text-theme-text-primary">Documenti (Opzionale)</h3>
+                  <p className="text-sm text-theme-text-muted">Carica patente e documento d'identità se disponibili (Fronte/Retro)</p>
                 </div>
               </div>
               <svg
-                className={`w-5 h-5 text-gray-400 transition-transform ${showDocumentSection ? 'rotate-180' : ''}`}
+                className={`w-5 h-5 text-theme-text-muted transition-transform ${showDocumentSection ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1293,8 +1293,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               <div className="mt-4 space-y-4 animate-fadeIn">
 
                 {/* Driver's License Upload */}
-                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
                     <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
@@ -1302,11 +1302,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Fronte</label>
+                      <label className="block text-xs text-theme-text-muted mb-1">Fronte</label>
                       <input
                         type="file"
                         onChange={(e) => setDriversLicenseFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-xs
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1317,11 +1317,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Retro</label>
+                      <label className="block text-xs text-theme-text-muted mb-1">Retro</label>
                       <input
                         type="file"
                         onChange={(e) => setDriversLicenseBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-xs
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1335,8 +1335,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 {/* Identity Document Upload */}
-                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
                     <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
                     </svg>
@@ -1344,11 +1344,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Fronte</label>
+                      <label className="block text-xs text-theme-text-muted mb-1">Fronte</label>
                       <input
                         type="file"
                         onChange={(e) => setIdentityFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-xs
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1359,11 +1359,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Retro</label>
+                      <label className="block text-xs text-theme-text-muted mb-1">Retro</label>
                       <input
                         type="file"
                         onChange={(e) => setIdentityBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-xs
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1377,8 +1377,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 {/* Codice Fiscale Upload */}
-                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
                     <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -1386,11 +1386,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Fronte</label>
+                      <label className="block text-xs text-theme-text-muted mb-1">Fronte</label>
                       <input
                         type="file"
                         onChange={(e) => setCodiceFiscaleFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-xs
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1401,11 +1401,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Retro</label>
+                      <label className="block text-xs text-theme-text-muted mb-1">Retro</label>
                       <input
                         type="file"
                         onChange={(e) => setCodiceFiscaleBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-xs
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1437,7 +1437,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               onClick={handleClose}
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
+              className="px-6 py-2.5 rounded-lg text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
             >
               Annulla
             </button>

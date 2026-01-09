@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import ReservationsTab from './components/ReservationsTab'
 import CustomersTab from './components/CustomersTab'
 import VehiclesTab from './components/VehiclesTab'
@@ -34,6 +35,7 @@ export default function AdminDashboard() {
 
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
+  const { theme, toggleTheme } = useTheme()
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -58,14 +60,14 @@ export default function AdminDashboard() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-black">
-      <header className="bg-black">
+    <div className="min-h-screen bg-theme-bg-primary">
+      <header className="bg-theme-bg-primary border-b border-theme-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2 sm:gap-4">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden text-white p-2 hover:bg-gray-800 rounded-3xl transition-colors"
+                className="lg:hidden text-theme-text-primary p-2 hover:bg-theme-bg-hover rounded-3xl transition-colors"
                 aria-label="Toggle menu"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -77,7 +79,7 @@ export default function AdminDashboard() {
                 </svg>
               </button>
               <img src="/DR7logo1.png" alt="DR7 Empire" className="h-8 sm:h-10" />
-              <h1 className="text-lg sm:text-2xl font-bold text-white">DR7 Control Room</h1>
+              <h1 className="text-lg sm:text-2xl font-bold text-theme-text-primary">DR7 Control Room</h1>
             </div>
             <div className="flex items-center gap-3">
               {!alarmState.audioEnabled && (
@@ -93,8 +95,24 @@ export default function AdminDashboard() {
                 </button>
               )}
               <button
+                onClick={toggleTheme}
+                className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                aria-label="Toggle theme"
+              >
+                {theme === 'dark' ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
+              <button
                 onClick={handleSignOut}
-                className="text-gray-400 hover:text-white transition-colors text-sm sm:text-base"
+                className="text-theme-text-muted hover:text-theme-text-primary transition-colors text-sm sm:text-base"
               >
                 Esci
               </button>
@@ -105,11 +123,11 @@ export default function AdminDashboard() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-75" onClick={() => setMobileMenuOpen(false)}>
-          <div className="bg-gray-900 w-64 h-full shadow-xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-              <h2 className="text-white font-semibold">Menu</h2>
-              <button onClick={() => setMobileMenuOpen(false)} className="text-gray-400 hover:text-white">
+        <div className="lg:hidden fixed inset-0 z-50 bg-black/75 dark:bg-black/75 light:bg-black/50" onClick={() => setMobileMenuOpen(false)}>
+          <div className="bg-theme-bg-secondary w-64 h-full shadow-xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-theme-border flex justify-between items-center">
+              <h2 className="text-theme-text-primary font-semibold">Menu</h2>
+              <button onClick={() => setMobileMenuOpen(false)} className="text-theme-text-muted hover:text-theme-text-primary">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -118,126 +136,126 @@ export default function AdminDashboard() {
             <nav className="p-2 space-y-1">
               <button
                 onClick={() => setActiveTab('reservations')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Noleggio
               </button>
               <button
                 onClick={() => setActiveTab('carwash')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Prenotazioni Lavaggio
               </button>
               <button
                 onClick={() => setActiveTab('mechanical')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Prenotazioni Meccanica
               </button>
               <button
                 onClick={() => setActiveTab('unpaid')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'unpaid' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'unpaid' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Da Saldare
               </button>
               <button
                 onClick={() => setActiveTab('documents-verification')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'documents-verification' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'documents-verification' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Verifica Documenti
               </button>
               <button
                 onClick={() => setActiveTab('customers')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'customers' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'customers' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Clienti
               </button>
               <button
                 onClick={() => setActiveTab('vehicles')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Veicoli
               </button>
               <button
                 onClick={() => setActiveTab('fleet')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Gestione Flotta
               </button>
               <button
                 onClick={() => setActiveTab('calendar')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Calendario Noleggio
               </button>
               <button
                 onClick={() => setActiveTab('carwash-calendar')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Calendario Lavaggi
               </button>
               <button
                 onClick={() => setActiveTab('mechanical-calendar')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Calendario Meccanica
               </button>
               <button
                 onClick={() => setActiveTab('lotteria')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'lotteria' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'lotteria' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Biglietti Lotteria
               </button>
               <button
                 onClick={() => setActiveTab('fattura')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fattura' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fattura' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Fatture
               </button>
               <button
                 onClick={() => setActiveTab('contratto')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Contratti
               </button>
               <button
                 onClick={() => setActiveTab('cargos')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Cargos
               </button>
               <button
                 onClick={() => setActiveTab('marketing')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'marketing' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'marketing' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Marketing
               </button>
               <button
                 onClick={() => setActiveTab('reviews')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reviews' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reviews' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Recensioni
               </button>
               <button
                 onClick={() => setActiveTab('scanner')}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'scanner' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300 hover:bg-gray-800'
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'scanner' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Scanner
@@ -256,24 +274,24 @@ export default function AdminDashboard() {
               <div className="relative group">
                 <button
                   className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar'
-                    ? 'text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                    ? 'text-theme-text-primary'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                     }`}
                 >
                   Noleggio
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-900 border border-gray-700 rounded-b-3xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-b-3xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('reservations')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
                     Noleggio
                   </button>
                   <button
                     onClick={() => setActiveTab('calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-3xl ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-b-3xl ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
                     Calendario
@@ -285,24 +303,24 @@ export default function AdminDashboard() {
               <div className="relative group">
                 <button
                   className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'carwash' || activeTab === 'carwash-calendar'
-                    ? 'text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                    ? 'text-theme-text-primary'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                     }`}
                 >
                   Lavaggio
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-900 border border-gray-700 rounded-b-3xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-b-3xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('carwash')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('carwash-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-3xl ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-b-3xl ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
                     Calendario
@@ -314,24 +332,24 @@ export default function AdminDashboard() {
               <div className="relative group">
                 <button
                   className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'mechanical' || activeTab === 'mechanical-calendar'
-                    ? 'text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                    ? 'text-theme-text-primary'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                     }`}
                 >
                   Meccanica
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-900 border border-gray-700 rounded-b-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-b-3xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('mechanical')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('mechanical-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-800 transition-colors rounded-b-3xl ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-b-3xl ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
                       }`}
                   >
                     Calendario
@@ -343,8 +361,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('unpaid')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'unpaid'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Da Saldare
@@ -352,8 +370,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('documents-verification')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'documents-verification'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Verifica Documenti
@@ -361,8 +379,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('customers')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'customers'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Clienti
@@ -370,8 +388,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('vehicles')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'vehicles'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Veicoli
@@ -379,8 +397,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('fleet')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fleet'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Gestione Flotta
@@ -388,8 +406,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('lotteria')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'lotteria'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Lotteria
@@ -397,8 +415,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('fattura')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Fatture
@@ -406,8 +424,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('contratto')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Contratti
@@ -415,8 +433,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('cargos')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'cargos'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Cargos
@@ -424,8 +442,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('marketing')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Marketing
@@ -433,8 +451,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('reviews')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reviews'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Recensioni
@@ -442,8 +460,8 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('scanner')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'scanner'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                   }`}
               >
                 Scanner
@@ -454,7 +472,7 @@ export default function AdminDashboard() {
 
         {/* Mobile Tab Indicator */}
         <div className="mb-4 lg:hidden">
-          <h2 className="text-xl font-bold text-white">
+          <h2 className="text-xl font-bold text-theme-text-primary">
             {activeTab === 'reservations' && 'Noleggio'}
             {activeTab === 'carwash' && 'Prenotazioni Lavaggio'}
             {activeTab === 'mechanical' && 'Prenotazioni Meccanica'}

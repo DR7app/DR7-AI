@@ -596,7 +596,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-xl max-w-2xl w-full my-8 shadow-2xl">
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
@@ -606,7 +606,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             </h2>
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors text-3xl leading-none"
+              className="text-theme-text-muted hover:text-gray-600 transition-colors text-3xl leading-none"
             >
               ×
             </button>
@@ -1321,7 +1321,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               disabled={isSaveDisabled() || isSaving}
               className={`px-6 py-2 rounded-lg font-medium transition-colors ${isSaveDisabled() || isSaving
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-blue-600 text-theme-text-primary hover:bg-blue-700'
                 }`}
             >
               {isSaving ? 'Salvataggio...' : 'Salva Cliente'}

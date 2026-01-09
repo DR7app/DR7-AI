@@ -120,32 +120,32 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="bg-gray-900 w-full max-w-6xl h-[90vh] rounded-3xl shadow-2xl flex border border-gray-700 overflow-hidden">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-theme-bg-primary/80 backdrop-blur-sm">
+            <div className="bg-theme-bg-secondary w-full max-w-6xl h-[90vh] rounded-3xl shadow-2xl flex border border-theme-border overflow-hidden">
 
                 {/* Left: Document Viewer */}
-                <div className="w-1/2 h-full bg-gray-800 p-4 border-r border-gray-700">
+                <div className="w-1/2 h-full bg-theme-bg-tertiary p-4 border-r border-theme-border">
                     {fileUrl ? (
                         <iframe src={fileUrl} className="w-full h-full rounded-xl bg-white" title="PDF Viewer" />
                     ) : (
-                        <div className="flex items-center justify-center h-full text-gray-400">Caricamento PDF...</div>
+                        <div className="flex items-center justify-center h-full text-theme-text-muted">Caricamento PDF...</div>
                     )}
                 </div>
 
                 {/* Right: Data Entry */}
                 <div className="w-1/2 h-full p-6 overflow-y-auto">
                     <div className="flex justify-between items-start mb-6">
-                        <h2 className="text-2xl font-bold text-white">Revisione Documento</h2>
-                        <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
+                        <h2 className="text-2xl font-bold text-theme-text-primary">Revisione Documento</h2>
+                        <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary">✕</button>
                     </div>
 
                     <div className="space-y-6">
                         {/* Customer Association */}
-                        <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+                        <div className="bg-theme-bg-tertiary/50 p-4 rounded-xl border border-theme-border">
                             <h3 className="text-lg font-semibold text-dr7-gold mb-3">Associazione Cliente</h3>
                             {customerId ? (
-                                <div className="flex justify-between items-center bg-gray-800 p-3 rounded-lg">
-                                    <span className="text-white">
+                                <div className="flex justify-between items-center bg-theme-bg-tertiary p-3 rounded-lg">
+                                    <span className="text-theme-text-primary">
                                         {customers.find(c => c.id === customerId)?.nome || 'Cliente selezionato'}
                                     </span>
                                     <button
@@ -160,7 +160,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                     <input
                                         type="text"
                                         placeholder="Cerca cliente..."
-                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white mb-2"
+                                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-4 py-2 text-theme-text-primary mb-2"
                                         value={searchQuery}
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);
@@ -172,7 +172,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                             <button
                                                 key={c.id}
                                                 onClick={() => setCustomerId(c.id)}
-                                                className="w-full text-left px-3 py-2 hover:bg-gray-700 rounded-lg text-sm text-gray-300"
+                                                className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover rounded-lg text-sm text-theme-text-secondary"
                                             >
                                                 {c.nome} {c.cognome} <span className="text-gray-500 text-xs">({c.email})</span>
                                             </button>
@@ -183,7 +183,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                         </div>
 
                         {/* Document Details with OCR Fields */}
-                        <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+                        <div className="bg-theme-bg-tertiary/50 p-4 rounded-xl border border-theme-border">
                             <h3 className="text-lg font-semibold text-dr7-gold mb-3">Dati Estratti (OCR)</h3>
 
                             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -192,7 +192,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                     <select
                                         value={docType}
                                         onChange={(e) => setDocType(e.target.value)}
-                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary text-sm"
                                     >
                                         <option value="generic">Generico</option>
                                         <option value="identity_card">Carta d'Identità</option>
@@ -204,7 +204,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                 {extractedData.confidence && (
                                     <div>
                                         <label className="block text-xs text-gray-500 mb-1">Confidence</label>
-                                        <div className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                                        <div className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                             {(extractedData.confidence * 100).toFixed(0)}%
                                         </div>
                                     </div>
@@ -218,7 +218,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.nome && (
                                             <div>
                                                 <label className="block text-xs text-gray-500 mb-1">Nome</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.nome}
                                                 </div>
                                             </div>
@@ -226,7 +226,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.cognome && (
                                             <div>
                                                 <label className="block text-xs text-gray-500 mb-1">Cognome</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.cognome}
                                                 </div>
                                             </div>
@@ -234,7 +234,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.data_nascita && (
                                             <div>
                                                 <label className="block text-xs text-gray-500 mb-1">Data di Nascita</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.data_nascita}
                                                 </div>
                                             </div>
@@ -242,7 +242,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.luogo_nascita && (
                                             <div>
                                                 <label className="block text-xs text-gray-500 mb-1">Luogo di Nascita</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.luogo_nascita}
                                                 </div>
                                             </div>
@@ -250,7 +250,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.codice_fiscale && (
                                             <div className="col-span-2">
                                                 <label className="block text-xs text-gray-500 mb-1">Codice Fiscale</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm font-mono">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm font-mono">
                                                     {extractedData.codice_fiscale}
                                                 </div>
                                             </div>
@@ -258,7 +258,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.numero_documento && (
                                             <div>
                                                 <label className="block text-xs text-gray-500 mb-1">Numero Documento</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.numero_documento}
                                                 </div>
                                             </div>
@@ -266,7 +266,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.data_scadenza && (
                                             <div>
                                                 <label className="block text-xs text-gray-500 mb-1">Scadenza</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.data_scadenza}
                                                 </div>
                                             </div>
@@ -274,7 +274,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         {extractedData.indirizzo && (
                                             <div className="col-span-2">
                                                 <label className="block text-xs text-gray-500 mb-1">Indirizzo</label>
-                                                <div className="bg-gray-900 border border-green-700/50 rounded-lg px-3 py-2 text-white text-sm">
+                                                <div className="bg-theme-bg-secondary border border-green-700/50 rounded-lg px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.indirizzo}
                                                 </div>
                                             </div>
@@ -282,7 +282,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                     </div>
                                 </div>
                             ) : (
-                                <div className="p-4 bg-gray-900/50 rounded-lg text-sm text-gray-500 text-center">
+                                <div className="p-4 bg-theme-bg-secondary/50 rounded-lg text-sm text-gray-500 text-center">
                                     Nessun dato OCR disponibile. Esegui OCR o inserisci manualmente.
                                 </div>
                             )}
@@ -294,7 +294,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                 <button
                                     onClick={handleCreateCustomer}
                                     disabled={loading}
-                                    className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
+                                    className="flex-1 py-3 bg-green-600 text-theme-text-primary font-bold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
                                 >
                                     {loading ? 'Creazione...' : 'Crea Nuovo Cliente'}
                                 </button>

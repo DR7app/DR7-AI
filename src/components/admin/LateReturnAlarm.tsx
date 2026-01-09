@@ -207,7 +207,7 @@ const LateReturnAlarm: React.FC = () => {
                                 </div>
                                 <button
                                     onClick={() => handleMarkAsReturned(booking.id)}
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition-colors"
+                                    className="w-full bg-green-600 hover:bg-green-700 text-theme-text-primary font-semibold py-2 px-4 rounded transition-colors"
                                 >
                                     Mark as Returned
                                 </button>
@@ -218,7 +218,7 @@ const LateReturnAlarm: React.FC = () => {
                     <div className="flex gap-4">
                         <button
                             onClick={handleStopAlarm}
-                            className="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 px-6 rounded transition-colors"
+                            className="flex-1 bg-theme-bg-tertiary hover:bg-theme-bg-secondary text-theme-text-primary font-semibold py-3 px-6 rounded transition-colors"
                         >
                             Stop Alarm
                         </button>

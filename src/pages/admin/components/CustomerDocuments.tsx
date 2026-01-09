@@ -306,11 +306,11 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     const selectedFile = selectedFiles[type]
 
     return (
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+      <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h4 className="text-lg font-semibold text-dr7-gold">{label}</h4>
-            <p className="text-sm text-gray-400 mt-1">{description}</p>
+            <p className="text-sm text-theme-text-muted mt-1">{description}</p>
           </div>
           {doc && (
             <span className="px-3 py-1 bg-green-900/50 text-green-400 text-xs font-medium rounded">
@@ -321,7 +321,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
         {/* Existing Document Preview */}
         {doc && previewUrl && (
-          <div className="mb-4 bg-gray-900 border border-gray-600 rounded-lg p-4">
+          <div className="mb-4 bg-theme-bg-secondary border border-theme-border-light rounded-lg p-4">
             <div className="flex gap-4">
               {/* Preview */}
               {isImage(doc.mime_type) ? (
@@ -345,8 +345,8 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
               {/* Document Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-white font-medium truncate mb-1">{doc.file_name}</p>
-                <p className="text-xs text-gray-400 mb-2">
+                <p className="text-theme-text-primary font-medium truncate mb-1">{doc.file_name}</p>
+                <p className="text-xs text-theme-text-muted mb-2">
                   {formatFileSize(doc.file_size)} • Caricato il{' '}
                   {new Date(doc.uploaded_at).toLocaleDateString('it-IT', {
                     day: '2-digit',
@@ -361,20 +361,20 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
                     href={previewUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded text-sm font-medium transition-colors"
                   >
                     Visualizza
                   </a>
                   <a
                     href={previewUrl}
                     download={doc.file_name}
-                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors"
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded text-sm font-medium transition-colors"
                   >
                     Scarica
                   </a>
                   <button
                     onClick={() => handleDelete(doc.id, doc.file_path, doc.bucket_id)}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded text-sm font-medium transition-colors"
                   >
                     Elimina
                   </button>
@@ -387,13 +387,13 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         {/* Upload New/Replace Document */}
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-2">
               {doc ? 'Sostituisci Documento' : 'Carica Documento'}
             </label>
             <input
               type="file"
               onChange={(e) => setSelectedFiles({ ...selectedFiles, [type]: e.target.files?.[0] || null })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm
+              className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-sm
                 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0
                 file:text-sm file:font-semibold file:bg-dr7-gold file:text-black
                 hover:file:bg-yellow-500 file:cursor-pointer"
@@ -401,7 +401,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
               disabled={isUploading}
             />
             {selectedFile && (
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-theme-text-muted mt-2">
                 File selezionato: {selectedFile.name} ({formatFileSize(selectedFile.size)})
               </p>
             )}
@@ -419,27 +419,27 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-8 text-center">
+      <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50">
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-8 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-          <p className="text-white">Caricamento documenti...</p>
+          <p className="text-theme-text-primary">Caricamento documenti...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
+        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
           <div>
-            <h3 className="text-xl font-bold text-white">Documenti Cliente</h3>
-            <p className="text-sm text-gray-400 mt-1">{customerName}</p>
+            <h3 className="text-xl font-bold text-theme-text-primary">Documenti Cliente</h3>
+            <p className="text-sm text-theme-text-muted mt-1">{customerName}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl leading-none"
+            className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none"
           >
             ×
           </button>
@@ -460,31 +460,31 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
               {customerDetails.tipo_cliente === 'persona_fisica' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="space-y-2">
-                    <div><span className="text-gray-400">Nome:</span> <span className="text-white font-medium">{customerDetails.nome}</span></div>
-                    <div><span className="text-gray-400">Cognome:</span> <span className="text-white font-medium">{customerDetails.cognome}</span></div>
-                    <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white font-medium">{customerDetails.codice_fiscale}</span></div>
-                    {customerDetails.sesso && <div><span className="text-gray-400">Sesso:</span> <span className="text-white">{customerDetails.sesso === 'M' ? 'Maschio' : 'Femmina'}</span></div>}
-                    {customerDetails.data_nascita && <div><span className="text-gray-400">Data di Nascita:</span> <span className="text-white">{new Date(customerDetails.data_nascita).toLocaleDateString('it-IT')}</span></div>}
-                    {customerDetails.citta_nascita && <div><span className="text-gray-400">Città di Nascita:</span> <span className="text-white">{customerDetails.citta_nascita} {customerDetails.provincia_nascita && `(${customerDetails.provincia_nascita})`}</span></div>}
-                    <div><span className="text-gray-400">Email:</span> <span className="text-white">{customerDetails.email}</span></div>
-                    <div><span className="text-gray-400">Telefono:</span> <span className="text-white">{customerDetails.telefono}</span></div>
-                    {customerDetails.pec && <div><span className="text-gray-400">PEC:</span> <span className="text-white">{customerDetails.pec}</span></div>}
+                    <div><span className="text-theme-text-muted">Nome:</span> <span className="text-theme-text-primary font-medium">{customerDetails.nome}</span></div>
+                    <div><span className="text-theme-text-muted">Cognome:</span> <span className="text-theme-text-primary font-medium">{customerDetails.cognome}</span></div>
+                    <div><span className="text-theme-text-muted">Codice Fiscale:</span> <span className="text-theme-text-primary font-medium">{customerDetails.codice_fiscale}</span></div>
+                    {customerDetails.sesso && <div><span className="text-theme-text-muted">Sesso:</span> <span className="text-theme-text-primary">{customerDetails.sesso === 'M' ? 'Maschio' : 'Femmina'}</span></div>}
+                    {customerDetails.data_nascita && <div><span className="text-theme-text-muted">Data di Nascita:</span> <span className="text-theme-text-primary">{new Date(customerDetails.data_nascita).toLocaleDateString('it-IT')}</span></div>}
+                    {customerDetails.citta_nascita && <div><span className="text-theme-text-muted">Città di Nascita:</span> <span className="text-theme-text-primary">{customerDetails.citta_nascita} {customerDetails.provincia_nascita && `(${customerDetails.provincia_nascita})`}</span></div>}
+                    <div><span className="text-theme-text-muted">Email:</span> <span className="text-theme-text-primary">{customerDetails.email}</span></div>
+                    <div><span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{customerDetails.telefono}</span></div>
+                    {customerDetails.pec && <div><span className="text-theme-text-muted">PEC:</span> <span className="text-theme-text-primary">{customerDetails.pec}</span></div>}
                   </div>
                   <div className="space-y-2">
-                    {customerDetails.indirizzo && <div><span className="text-gray-400">Indirizzo:</span> <span className="text-white">{customerDetails.indirizzo} {customerDetails.numero_civico}</span></div>}
-                    {customerDetails.citta_residenza && <div><span className="text-gray-400">Città:</span> <span className="text-white">{customerDetails.citta_residenza} ({customerDetails.provincia_residenza})</span></div>}
-                    {customerDetails.codice_postale && <div><span className="text-gray-400">CAP:</span> <span className="text-white">{customerDetails.codice_postale}</span></div>}
-                    <div><span className="text-gray-400">Nazione:</span> <span className="text-white">{customerDetails.nazione}</span></div>
+                    {customerDetails.indirizzo && <div><span className="text-theme-text-muted">Indirizzo:</span> <span className="text-theme-text-primary">{customerDetails.indirizzo} {customerDetails.numero_civico}</span></div>}
+                    {customerDetails.citta_residenza && <div><span className="text-theme-text-muted">Città:</span> <span className="text-theme-text-primary">{customerDetails.citta_residenza} ({customerDetails.provincia_residenza})</span></div>}
+                    {customerDetails.codice_postale && <div><span className="text-theme-text-muted">CAP:</span> <span className="text-theme-text-primary">{customerDetails.codice_postale}</span></div>}
+                    <div><span className="text-theme-text-muted">Nazione:</span> <span className="text-theme-text-primary">{customerDetails.nazione}</span></div>
 
                     {/* Driving License Info */}
                     {customerDetails.tipo_patente && (
-                      <div className="mt-4 pt-4 border-t border-gray-700">
+                      <div className="mt-4 pt-4 border-t border-theme-border">
                         <div className="text-dr7-gold font-semibold mb-2">Patente di Guida</div>
-                        <div><span className="text-gray-400">Tipo:</span> <span className="text-white">{customerDetails.tipo_patente}</span></div>
-                        {customerDetails.numero_patente && <div><span className="text-gray-400">Numero:</span> <span className="text-white">{customerDetails.numero_patente}</span></div>}
-                        {customerDetails.emessa_da && <div><span className="text-gray-400">Emessa da:</span> <span className="text-white">{customerDetails.emessa_da}</span></div>}
-                        {customerDetails.data_rilascio_patente && <div><span className="text-gray-400">Rilascio:</span> <span className="text-white">{new Date(customerDetails.data_rilascio_patente).toLocaleDateString('it-IT')}</span></div>}
-                        {customerDetails.scadenza_patente && <div><span className="text-gray-400">Scadenza:</span> <span className="text-white">{new Date(customerDetails.scadenza_patente).toLocaleDateString('it-IT')}</span></div>}
+                        <div><span className="text-theme-text-muted">Tipo:</span> <span className="text-theme-text-primary">{customerDetails.tipo_patente}</span></div>
+                        {customerDetails.numero_patente && <div><span className="text-theme-text-muted">Numero:</span> <span className="text-theme-text-primary">{customerDetails.numero_patente}</span></div>}
+                        {customerDetails.emessa_da && <div><span className="text-theme-text-muted">Emessa da:</span> <span className="text-theme-text-primary">{customerDetails.emessa_da}</span></div>}
+                        {customerDetails.data_rilascio_patente && <div><span className="text-theme-text-muted">Rilascio:</span> <span className="text-theme-text-primary">{new Date(customerDetails.data_rilascio_patente).toLocaleDateString('it-IT')}</span></div>}
+                        {customerDetails.scadenza_patente && <div><span className="text-theme-text-muted">Scadenza:</span> <span className="text-theme-text-primary">{new Date(customerDetails.scadenza_patente).toLocaleDateString('it-IT')}</span></div>}
                       </div>
                     )}
                   </div>
@@ -495,29 +495,29 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
               {customerDetails.tipo_cliente === 'azienda' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="space-y-2">
-                    <div><span className="text-gray-400">Ragione Sociale:</span> <span className="text-white font-medium">{customerDetails.denominazione}</span></div>
-                    <div><span className="text-gray-400">Partita IVA:</span> <span className="text-white font-medium">{customerDetails.partita_iva}</span></div>
-                    {customerDetails.cf_azienda && <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white">{customerDetails.cf_azienda}</span></div>}
-                    {customerDetails.sede_legale && <div><span className="text-gray-400">Sede Legale:</span> <span className="text-white">{customerDetails.sede_legale}</span></div>}
-                    {customerDetails.sede_operativa && <div><span className="text-gray-400">Sede Operativa:</span> <span className="text-white">{customerDetails.sede_operativa}</span></div>}
-                    {customerDetails.codice_destinatario && <div><span className="text-gray-400">Codice SDI:</span> <span className="text-white">{customerDetails.codice_destinatario}</span></div>}
-                    {customerDetails.pec_azienda && <div><span className="text-gray-400">PEC:</span> <span className="text-white">{customerDetails.pec_azienda}</span></div>}
-                    <div><span className="text-gray-400">Email:</span> <span className="text-white">{customerDetails.email}</span></div>
-                    <div><span className="text-gray-400">Telefono:</span> <span className="text-white">{customerDetails.telefono}</span></div>
+                    <div><span className="text-theme-text-muted">Ragione Sociale:</span> <span className="text-theme-text-primary font-medium">{customerDetails.denominazione}</span></div>
+                    <div><span className="text-theme-text-muted">Partita IVA:</span> <span className="text-theme-text-primary font-medium">{customerDetails.partita_iva}</span></div>
+                    {customerDetails.cf_azienda && <div><span className="text-theme-text-muted">Codice Fiscale:</span> <span className="text-theme-text-primary">{customerDetails.cf_azienda}</span></div>}
+                    {customerDetails.sede_legale && <div><span className="text-theme-text-muted">Sede Legale:</span> <span className="text-theme-text-primary">{customerDetails.sede_legale}</span></div>}
+                    {customerDetails.sede_operativa && <div><span className="text-theme-text-muted">Sede Operativa:</span> <span className="text-theme-text-primary">{customerDetails.sede_operativa}</span></div>}
+                    {customerDetails.codice_destinatario && <div><span className="text-theme-text-muted">Codice SDI:</span> <span className="text-theme-text-primary">{customerDetails.codice_destinatario}</span></div>}
+                    {customerDetails.pec_azienda && <div><span className="text-theme-text-muted">PEC:</span> <span className="text-theme-text-primary">{customerDetails.pec_azienda}</span></div>}
+                    <div><span className="text-theme-text-muted">Email:</span> <span className="text-theme-text-primary">{customerDetails.email}</span></div>
+                    <div><span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{customerDetails.telefono}</span></div>
                   </div>
                   <div className="space-y-2">
                     {/* Legal Representative */}
                     {customerDetails.nome_rappresentante && (
-                      <div className="mt-0 pt-0 border-t-0 border-gray-700">
+                      <div className="mt-0 pt-0 border-t-0 border-theme-border">
                         <div className="text-dr7-gold font-semibold mb-2">Rappresentante Legale</div>
-                        <div><span className="text-gray-400">Nome:</span> <span className="text-white">{customerDetails.nome_rappresentante} {customerDetails.cognome_rappresentante}</span></div>
-                        {customerDetails.cf_rappresentante && <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white">{customerDetails.cf_rappresentante}</span></div>}
-                        {customerDetails.ruolo_rappresentante && <div><span className="text-gray-400">Ruolo:</span> <span className="text-white">{customerDetails.ruolo_rappresentante}</span></div>}
+                        <div><span className="text-theme-text-muted">Nome:</span> <span className="text-theme-text-primary">{customerDetails.nome_rappresentante} {customerDetails.cognome_rappresentante}</span></div>
+                        {customerDetails.cf_rappresentante && <div><span className="text-theme-text-muted">Codice Fiscale:</span> <span className="text-theme-text-primary">{customerDetails.cf_rappresentante}</span></div>}
+                        {customerDetails.ruolo_rappresentante && <div><span className="text-theme-text-muted">Ruolo:</span> <span className="text-theme-text-primary">{customerDetails.ruolo_rappresentante}</span></div>}
                         {customerDetails.tipo_documento_rappresentante && (
-                          <div><span className="text-gray-400">Documento:</span> <span className="text-white">{customerDetails.tipo_documento_rappresentante} {customerDetails.numero_documento_rappresentante}</span></div>
+                          <div><span className="text-theme-text-muted">Documento:</span> <span className="text-theme-text-primary">{customerDetails.tipo_documento_rappresentante} {customerDetails.numero_documento_rappresentante}</span></div>
                         )}
                         {customerDetails.data_rilascio_documento && (
-                          <div><span className="text-gray-400">Rilasciato:</span> <span className="text-white">{new Date(customerDetails.data_rilascio_documento).toLocaleDateString('it-IT')} - {customerDetails.luogo_rilascio_documento}</span></div>
+                          <div><span className="text-theme-text-muted">Rilasciato:</span> <span className="text-theme-text-primary">{new Date(customerDetails.data_rilascio_documento).toLocaleDateString('it-IT')} - {customerDetails.luogo_rilascio_documento}</span></div>
                         )}
                       </div>
                     )}
@@ -529,16 +529,16 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
               {customerDetails.tipo_cliente === 'pubblica_amministrazione' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="space-y-2">
-                    <div><span className="text-gray-400">Ente/Ufficio:</span> <span className="text-white font-medium">{customerDetails.ente_ufficio}</span></div>
-                    <div><span className="text-gray-400">Codice Univoco:</span> <span className="text-white font-medium">{customerDetails.codice_univoco}</span></div>
-                    {customerDetails.cf_pa && <div><span className="text-gray-400">Codice Fiscale:</span> <span className="text-white">{customerDetails.cf_pa}</span></div>}
-                    {customerDetails.partita_iva_pa && <div><span className="text-gray-400">Partita IVA:</span> <span className="text-white">{customerDetails.partita_iva_pa}</span></div>}
+                    <div><span className="text-theme-text-muted">Ente/Ufficio:</span> <span className="text-theme-text-primary font-medium">{customerDetails.ente_ufficio}</span></div>
+                    <div><span className="text-theme-text-muted">Codice Univoco:</span> <span className="text-theme-text-primary font-medium">{customerDetails.codice_univoco}</span></div>
+                    {customerDetails.cf_pa && <div><span className="text-theme-text-muted">Codice Fiscale:</span> <span className="text-theme-text-primary">{customerDetails.cf_pa}</span></div>}
+                    {customerDetails.partita_iva_pa && <div><span className="text-theme-text-muted">Partita IVA:</span> <span className="text-theme-text-primary">{customerDetails.partita_iva_pa}</span></div>}
                   </div>
                   <div className="space-y-2">
-                    {customerDetails.citta && <div><span className="text-gray-400">Città:</span> <span className="text-white">{customerDetails.citta}</span></div>}
-                    {customerDetails.pec_pa && <div><span className="text-gray-400">PEC:</span> <span className="text-white">{customerDetails.pec_pa}</span></div>}
-                    <div><span className="text-gray-400">Email:</span> <span className="text-white">{customerDetails.email}</span></div>
-                    <div><span className="text-gray-400">Telefono:</span> <span className="text-white">{customerDetails.telefono}</span></div>
+                    {customerDetails.citta && <div><span className="text-theme-text-muted">Città:</span> <span className="text-theme-text-primary">{customerDetails.citta}</span></div>}
+                    {customerDetails.pec_pa && <div><span className="text-theme-text-muted">PEC:</span> <span className="text-theme-text-primary">{customerDetails.pec_pa}</span></div>}
+                    <div><span className="text-theme-text-muted">Email:</span> <span className="text-theme-text-primary">{customerDetails.email}</span></div>
+                    <div><span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{customerDetails.telefono}</span></div>
                   </div>
                 </div>
               )}
@@ -574,20 +574,20 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
           )}
 
           {/* Storage Info */}
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-            <h5 className="text-sm font-semibold text-white mb-2">Informazioni Storage</h5>
+          <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-4">
+            <h5 className="text-sm font-semibold text-theme-text-primary mb-2">Informazioni Storage</h5>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-theme-text-muted">
                 <strong>Buckets:</strong> <code className="bg-gray-700 px-2 py-0.5 rounded mr-1">{DRIVERS_LICENSE_BUCKET}</code>
                 <code className="bg-gray-700 px-2 py-0.5 rounded">{IDENTITY_DOCS_BUCKET}</code>
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-theme-text-muted">
                 <strong>Path:</strong> <code className="bg-gray-700 px-2 py-0.5 rounded">{customerId}/</code>
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-theme-text-muted">
                 <strong>Formati supportati:</strong> Immagini (JPG, PNG), PDF
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-theme-text-muted">
                 <strong>Documenti caricati:</strong> {documents.length}/2
               </p>
             </div>
@@ -595,7 +595,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-900 border-t border-gray-700 p-4">
+        <div className="sticky bottom-0 bg-theme-bg-secondary border-t border-theme-border p-4">
           <div className="flex justify-end">
             <Button variant="secondary" onClick={onClose}>
               Chiudi

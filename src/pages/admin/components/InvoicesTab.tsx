@@ -280,89 +280,89 @@ export default function InvoicesTab() {
   const { subtotal, vatAmount, exemptAmount, total } = calculateTotals()
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Caricamento...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Fatture</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">Fatture</h2>
         <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
           + Nuova Fattura
         </Button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-900 p-6 rounded-lg mb-6 border border-gray-700">
-          <h3 className="text-xl font-semibold text-white mb-4">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-lg mb-6 border border-theme-border">
+          <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
             {editingId ? 'Modifica Fattura' : 'Nuova Fattura'}
           </h3>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Numero Fattura *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Numero Fattura *</label>
               <input
                 type="text"
                 value={formData.invoice_number}
                 onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 placeholder="1448/FE"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Data Fattura *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Data Fattura *</label>
               <input
                 type="date"
                 value={formData.invoice_date}
                 onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
           </div>
 
           <div className="space-y-4 mb-6">
-            <h4 className="text-lg font-semibold text-white">Destinatario</h4>
+            <h4 className="text-lg font-semibold text-theme-text-primary">Destinatario</h4>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Nome / Ragione Sociale *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Nome / Ragione Sociale *</label>
               <input
                 type="text"
                 value={formData.customer_name}
                 onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Indirizzo *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Indirizzo *</label>
               <input
                 type="text"
                 value={formData.customer_address}
                 onChange={(e) => setFormData({ ...formData, customer_address: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 placeholder="Via Roma 43, 09070 Cagliari (CA)"
                 required
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Codice Fiscale *</label>
+                <label className="block text-sm text-theme-text-muted mb-1">Codice Fiscale *</label>
                 <input
                   type="text"
                   value={formData.customer_tax_code}
                   onChange={(e) => setFormData({ ...formData, customer_tax_code: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">P. IVA (opzionale)</label>
+                <label className="block text-sm text-theme-text-muted mb-1">P. IVA (opzionale)</label>
                 <input
                   type="text"
                   value={formData.customer_vat}
                   onChange={(e) => setFormData({ ...formData, customer_vat: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 />
               </div>
             </div>
@@ -370,19 +370,19 @@ export default function InvoicesTab() {
 
           <div className="mb-6">
             <div className="flex justify-between items-center mb-3">
-              <h4 className="text-lg font-semibold text-white">Articoli</h4>
+              <h4 className="text-lg font-semibold text-theme-text-primary">Articoli</h4>
               <Button type="button" onClick={addItem} variant="secondary">+ Aggiungi Articolo</Button>
             </div>
 
             {formData.items.map((item, index) => (
-              <div key={index} className="bg-gray-800 p-4 rounded-lg mb-3">
+              <div key={index} className="bg-theme-bg-tertiary p-4 rounded-lg mb-3">
                 <div className="grid grid-cols-12 gap-3">
                   <div className="col-span-12 md:col-span-5">
                     <input
                       type="text"
                       value={item.description}
                       onChange={(e) => updateItem(index, 'description', e.target.value)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Descrizione"
                       required
                     />
@@ -393,7 +393,7 @@ export default function InvoicesTab() {
                       step="0.01"
                       value={item.unit_price}
                       onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Prezzo"
                       required
                     />
@@ -403,7 +403,7 @@ export default function InvoicesTab() {
                       type="number"
                       value={item.quantity}
                       onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Q.tà"
                       min="1"
                       required
@@ -414,7 +414,7 @@ export default function InvoicesTab() {
                       type="number"
                       value={item.vat_rate}
                       onChange={(e) => updateItem(index, 'vat_rate', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="IVA %"
                       required
                     />
@@ -434,23 +434,23 @@ export default function InvoicesTab() {
               </div>
             ))}
 
-            <div className="bg-gray-800 p-4 rounded-lg mt-4">
+            <div className="bg-theme-bg-tertiary p-4 rounded-lg mt-4">
               <div className="space-y-2 text-sm">
-                {subtotal > 0 && <div className="flex justify-between"><span className="text-gray-400">Imponibile:</span><span className="text-white">€{subtotal.toFixed(2)}</span></div>}
-                {vatAmount > 0 && <div className="flex justify-between"><span className="text-gray-400">IVA:</span><span className="text-white">€{vatAmount.toFixed(2)}</span></div>}
-                {exemptAmount > 0 && <div className="flex justify-between"><span className="text-gray-400">Esente IVA:</span><span className="text-white">€{exemptAmount.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-700"><span className="text-white">Totale:</span><span className="text-dr7-gold">€{total.toFixed(2)}</span></div>
+                {subtotal > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">Imponibile:</span><span className="text-theme-text-primary">€{subtotal.toFixed(2)}</span></div>}
+                {vatAmount > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">IVA:</span><span className="text-theme-text-primary">€{vatAmount.toFixed(2)}</span></div>}
+                {exemptAmount > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">Esente IVA:</span><span className="text-theme-text-primary">€{exemptAmount.toFixed(2)}</span></div>}
+                <div className="flex justify-between font-bold text-lg pt-2 border-t border-theme-border"><span className="text-theme-text-primary">Totale:</span><span className="text-dr7-gold">€{total.toFixed(2)}</span></div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Metodo Pagamento</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Metodo Pagamento</label>
               <select
                 value={formData.payment_method}
                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
               >
                 <option value="Carta di credito / bancomat">Carta di credito / bancomat</option>
                 <option value="Bonifico bancario">Bonifico bancario</option>
@@ -459,23 +459,23 @@ export default function InvoicesTab() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Data Scadenza</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Data Scadenza</label>
               <input
                 type="date"
                 value={formData.payment_date}
                 onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-1">Stato</label>
+            <label className="block text-sm text-theme-text-muted mb-1">Stato</label>
             <select
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-              className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+              className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
             >
               <option value="paid">Pagata</option>
               <option value="pending">In attesa</option>
@@ -492,26 +492,26 @@ export default function InvoicesTab() {
         </form>
       )}
 
-      <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-black">
+            <thead className="bg-theme-bg-primary">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Numero</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Cliente</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-white">Totale</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-white">Stato</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-white">Azioni</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Numero</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Totale</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-theme-text-primary">Stato</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-theme-text-primary">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {invoices.map((invoice) => (
-                <tr key={invoice.id} className="border-t border-gray-700 hover:bg-gray-800">
-                  <td className="px-4 py-3 text-sm text-white">{invoice.invoice_number}</td>
-                  <td className="px-4 py-3 text-sm text-white">{new Date(invoice.invoice_date).toLocaleDateString('it-IT')}</td>
-                  <td className="px-4 py-3 text-sm text-white">{invoice.customer_name}</td>
-                  <td className="px-4 py-3 text-sm text-white text-right">€{invoice.total.toFixed(2)}</td>
+                <tr key={invoice.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary">
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{invoice.invoice_number}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{new Date(invoice.invoice_date).toLocaleDateString('it-IT')}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{invoice.customer_name}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary text-right">€{invoice.total.toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       invoice.status === 'paid' ? 'bg-green-500/20 text-green-400' :

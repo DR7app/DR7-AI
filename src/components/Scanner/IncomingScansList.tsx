@@ -65,17 +65,17 @@ export default function IncomingScansList() {
     }
 
     return (
-        <div className="bg-gray-900 p-6 rounded-3xl border border-gray-800">
+        <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-gray-800">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-white">Inbox Scansioni</h2>
-                <button onClick={fetchScans} className="text-gray-400 hover:text-white">
+                <h2 className="text-2xl font-bold text-theme-text-primary">Inbox Scansioni</h2>
+                <button onClick={fetchScans} className="text-theme-text-muted hover:text-theme-text-primary">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
             </div>
 
             <div className="overflow-x-auto">
-                <table className="w-full text-left text-gray-300">
-                    <thead className="text-xs text-gray-500 uppercase bg-gray-800/50">
+                <table className="w-full text-left text-theme-text-secondary">
+                    <thead className="text-xs text-gray-500 uppercase bg-theme-bg-tertiary/50">
                         <tr>
                             <th className="px-6 py-3">Data</th>
                             <th className="px-6 py-3">File</th>
@@ -87,7 +87,7 @@ export default function IncomingScansList() {
                     </thead>
                     <tbody>
                         {scans.map((scan) => (
-                            <tr key={scan.id} className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                            <tr key={scan.id} className="border-b border-gray-800 hover:bg-theme-bg-tertiary/30 transition-colors">
                                 <td className="px-6 py-4">{new Date(scan.created_at).toLocaleString()}</td>
                                 <td className="px-6 py-4 font-mono text-sm">{scan.original_filename}</td>
                                 <td className="px-6 py-4 text-xs font-mono">{scan.scan_job_id || '-'}</td>
@@ -119,7 +119,7 @@ export default function IncomingScansList() {
                                         )}
                                         <button
                                             onClick={() => setSelectedScan(scan)}
-                                            className="text-dr7-gold hover:text-white font-medium text-sm"
+                                            className="text-dr7-gold hover:text-theme-text-primary font-medium text-sm"
                                         >
                                             Revisiona
                                         </button>

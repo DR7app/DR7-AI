@@ -30,8 +30,8 @@ export default function ScanJobCreator() {
     }
 
     return (
-        <div className="bg-gray-900 p-6 rounded-3xl border border-gray-800">
-            <h2 className="text-2xl font-bold text-white mb-6">Nuova Scansione</h2>
+        <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-gray-800">
+            <h2 className="text-2xl font-bold text-theme-text-primary mb-6">Nuova Scansione</h2>
 
             {!currentJobId ? (
                 <div className="text-center py-12">
@@ -42,7 +42,7 @@ export default function ScanJobCreator() {
                     >
                         {loading ? 'Generazione...' : 'Genera Cover Sheet QR'}
                     </button>
-                    <p className="mt-4 text-gray-400">
+                    <p className="mt-4 text-theme-text-muted">
                         Genera un codice QR da stampare e usare come copertina per la scansione.
                     </p>
                 </div>
@@ -71,7 +71,7 @@ export default function ScanJobCreator() {
                         </button>
                         <button
                             onClick={() => setCurrentJobId(null)}
-                            className="px-6 py-2 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-600"
+                            className="px-6 py-2 bg-gray-700 text-theme-text-primary font-bold rounded-lg hover:bg-gray-600"
                         >
                             Nuova Scansione
                         </button>

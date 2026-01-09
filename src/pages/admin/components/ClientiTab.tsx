@@ -89,7 +89,7 @@ export default function ClientiTab() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Caricamento clienti...</p>
+        <p className="text-theme-text-primary">Caricamento clienti...</p>
       </div>
     )
   }
@@ -100,7 +100,7 @@ export default function ClientiTab() {
       <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-lg p-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-400 mb-1">Totale Clienti</p>
+            <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
             <p className="text-4xl font-bold text-dr7-gold">{customers.length}</p>
           </div>
           <div className="text-dr7-gold">
@@ -114,14 +114,14 @@ export default function ClientiTab() {
       {/* Actions Bar */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white mb-2">Gestione Clienti</h2>
+          <h2 className="text-2xl font-bold text-theme-text-primary mb-2">Gestione Clienti</h2>
           <div className="flex gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`px-3 py-1 rounded text-sm ${
                 filter === 'all'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
               }`}
             >
               Tutti ({customers.length})
@@ -131,7 +131,7 @@ export default function ClientiTab() {
               className={`px-3 py-1 rounded text-sm ${
                 filter === 'azienda'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
               }`}
             >
               Aziende ({customers.filter(c => c.tipo_cliente === 'azienda').length})
@@ -141,7 +141,7 @@ export default function ClientiTab() {
               className={`px-3 py-1 rounded text-sm ${
                 filter === 'persona_fisica'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
               }`}
             >
               Persone ({customers.filter(c => c.tipo_cliente === 'persona_fisica').length})
@@ -151,7 +151,7 @@ export default function ClientiTab() {
               className={`px-3 py-1 rounded text-sm ${
                 filter === 'pubblica_amministrazione'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
               }`}
             >
               P.A. ({customers.filter(c => c.tipo_cliente === 'pubblica_amministrazione').length})
@@ -180,50 +180,50 @@ export default function ClientiTab() {
           Nessun cliente trovato
         </div>
       ) : (
-        <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-black">
+              <thead className="bg-theme-bg-primary">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tipo</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome/Denominazione</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Codice Fiscale</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Contatto</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Indirizzo</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Origine</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome/Denominazione</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Codice Fiscale</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Contatto</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Indirizzo</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Origine</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCustomers.map((customer) => (
-                  <tr key={customer.id} className="border-t border-gray-700 hover:bg-gray-800">
-                    <td className="px-4 py-3 text-sm text-white">
+                  <tr key={customer.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary">
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">
                       <span className="inline-block px-2 py-1 rounded bg-dr7-gold/20 text-dr7-gold text-xs font-medium">
                         {getTipoLabel(customer.tipo_cliente)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-white font-medium">
+                    <td className="px-4 py-3 text-sm text-theme-text-primary font-medium">
                       {getDisplayName(customer)}
                       {customer.tipo_cliente === 'azienda' && customer.partita_iva && (
-                        <div className="text-xs text-gray-400 mt-1">P.IVA: {customer.partita_iva}</div>
+                        <div className="text-xs text-theme-text-muted mt-1">P.IVA: {customer.partita_iva}</div>
                       )}
                       {customer.tipo_cliente === 'pubblica_amministrazione' && customer.codice_univoco && (
-                        <div className="text-xs text-gray-400 mt-1">Cod. Univoco: {customer.codice_univoco}</div>
+                        <div className="text-xs text-theme-text-muted mt-1">Cod. Univoco: {customer.codice_univoco}</div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-white">
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">
                       {customer.codice_fiscale || '-'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-white">
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">
                       {customer.email && <div>{customer.email}</div>}
-                      {customer.telefono && <div className="text-xs text-gray-400">{customer.telefono}</div>}
+                      {customer.telefono && <div className="text-xs text-theme-text-muted">{customer.telefono}</div>}
                       {!customer.email && !customer.telefono && '-'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">
+                    <td className="px-4 py-3 text-sm text-theme-text-muted max-w-xs truncate">
                       {customer.indirizzo || '-'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-white whitespace-nowrap">
+                    <td className="px-4 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                       {new Date(customer.created_at).toLocaleDateString('it-IT')}
                     </td>
                     <td className="px-4 py-3 text-sm">

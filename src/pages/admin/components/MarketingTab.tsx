@@ -295,15 +295,15 @@ export default function MarketingTab() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-xl border border-theme-border">
                 <div>
-                    <h2 className="text-xl font-bold text-white">Marketing & Promozioni</h2>
-                    <p className="text-gray-400 text-sm">Gestisci campagne e invio buoni regalo</p>
+                    <h2 className="text-xl font-bold text-theme-text-primary">Marketing & Promozioni</h2>
+                    <p className="text-theme-text-muted text-sm">Gestisci campagne e invio buoni regalo</p>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="text-right">
                         <span className="block text-2xl font-bold text-dr7-gold">{selectedCustomerIds.size}</span>
-                        <span className="text-xs text-gray-400">Selezionati</span>
+                        <span className="text-xs text-theme-text-muted">Selezionati</span>
                     </div>
                     <Button
                         onClick={() => setShowGiftVoucherModal(true)}
@@ -317,13 +317,13 @@ export default function MarketingTab() {
             {/* Tools Bar */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Search */}
-                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
+                <div className="bg-theme-bg-tertiary p-3 rounded-lg border border-theme-border">
                     <input
                         type="text"
                         placeholder="Cerca cliente..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-transparent text-white outline-none"
+                        className="w-full bg-transparent text-theme-text-primary outline-none"
                     />
                 </div>
 
@@ -337,8 +337,8 @@ export default function MarketingTab() {
                             }
                         }}
                         className={`px-4 py-2 rounded font-semibold transition-colors ${multiSelectMode
-                                ? 'bg-orange-600 text-white hover:bg-orange-700'
-                                : 'bg-gray-700 text-white hover:bg-gray-600'
+                                ? 'bg-orange-600 text-theme-text-primary hover:bg-orange-700'
+                                : 'bg-gray-700 text-theme-text-primary hover:bg-gray-600'
                             }`}
                     >
                         {multiSelectMode ? '✓ Selezione Multipla ON' : 'Selezione Multipla'}
@@ -352,10 +352,10 @@ export default function MarketingTab() {
             </div>
 
             {/* Customers List Table */}
-            <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
+            <div className="bg-theme-bg-tertiary rounded-xl overflow-hidden border border-theme-border">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-gray-400">
-                        <thead className="bg-gray-900/50 text-gray-300 uppercase font-medium">
+                    <table className="w-full text-left text-sm text-theme-text-muted">
+                        <thead className="bg-theme-bg-secondary/50 text-theme-text-secondary uppercase font-medium">
                             <tr>
                                 <th className="p-4 w-12 text-center">
                                     <input
@@ -374,7 +374,7 @@ export default function MarketingTab() {
                                                 setSelectedCustomerIds(newSet)
                                             }
                                         }}
-                                        className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                        className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                                     />
                                 </th>
                                 <th className="p-4">Cliente</th>
@@ -387,7 +387,7 @@ export default function MarketingTab() {
                             {paginatedCustomers.map((customer) => (
                                 <tr
                                     key={customer.id}
-                                    className={`hover:bg-gray-700/50 transition-colors cursor-pointer ${selectedCustomerIds.has(customer.id) ? 'bg-dr7-gold/5' : ''}`}
+                                    className={`hover:bg-theme-bg-hover/50 transition-colors cursor-pointer ${selectedCustomerIds.has(customer.id) ? 'bg-dr7-gold/5' : ''}`}
                                     onClick={() => toggleSelection(customer.id)}
                                 >
                                     <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
@@ -395,10 +395,10 @@ export default function MarketingTab() {
                                             type="checkbox"
                                             checked={selectedCustomerIds.has(customer.id)}
                                             onChange={() => toggleSelection(customer.id)}
-                                            className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                            className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                                         />
                                     </td>
-                                    <td className="p-4 font-medium text-white">{customer.full_name}</td>
+                                    <td className="p-4 font-medium text-theme-text-primary">{customer.full_name}</td>
                                     <td className="p-4">{customer.email || '-'}</td>
                                     <td className="p-4">{customer.phone || '-'}</td>
                                     <td className="p-4 text-right">
@@ -419,8 +419,8 @@ export default function MarketingTab() {
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
-                    <div className="bg-gray-900/50 p-4 border-t border-gray-700 flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">
+                    <div className="bg-theme-bg-secondary/50 p-4 border-t border-theme-border flex justify-between items-center">
+                        <span className="text-theme-text-muted text-sm">
                             Pagina {currentPage} di {totalPages}
                         </span>
                         <div className="flex gap-2">

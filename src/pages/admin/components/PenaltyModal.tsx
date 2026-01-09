@@ -202,25 +202,25 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700">
+        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-md w-full p-6 border border-theme-border">
                 <h2 className="text-2xl font-bold text-dr7-gold mb-4">Penali</h2>
 
-                <div className="mb-4 p-3 bg-gray-800 rounded border border-gray-700">
-                    <p className="text-sm text-gray-400">Cliente</p>
-                    <p className="text-white font-semibold">{booking.customer_name}</p>
+                <div className="mb-4 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
+                    <p className="text-sm text-theme-text-muted">Cliente</p>
+                    <p className="text-theme-text-primary font-semibold">{booking.customer_name}</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Penalty Selection Dropdown */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                             Seleziona Penale ({vehicleTypeLabel})
                         </label>
                         <select
                             value={selectedPenalty}
                             onChange={handlePenaltySelect}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                             disabled={isGenerating}
                         >
                             <option value="">-- Seleziona una penale --</option>
@@ -232,7 +232,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             <option value="custom">✏️ Penale personalizzata</option>
                         </select>
                         {selectedPenalty && selectedPenalty !== 'custom' && (
-                            <p className="mt-2 text-xs text-gray-400">
+                            <p className="mt-2 text-xs text-theme-text-muted">
                                 {penaltyList.find(p => p.id === selectedPenalty)?.description}
                             </p>
                         )}
@@ -240,18 +240,18 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
                     {/* Amount field */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                             Importo penale (netto, senza IVA) *
                         </label>
                         <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">€</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted">€</span>
                             <input
                                 type="number"
                                 step="0.01"
                                 min="0"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="w-full pl-8 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                                className="w-full pl-8 pr-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                                 placeholder="0.00"
                                 disabled={isGenerating}
                                 required
@@ -261,14 +261,14 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
                     {/* Motivo field */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                             Motivo (opzionale)
                         </label>
                         <input
                             type="text"
                             value={motivo}
                             onChange={(e) => setMotivo(e.target.value)}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                             placeholder="Es: Ritardo nella riconsegna"
                             disabled={isGenerating}
                         />
@@ -276,14 +276,14 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
                     {/* Note field */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                             Note interne (opzionale)
                         </label>
                         <textarea
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                             rows={3}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold resize-none"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold resize-none"
                             placeholder="Note per uso interno..."
                             disabled={isGenerating}
                         />
@@ -297,7 +297,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                 <button
                                     type="button"
                                     onClick={handleEditCustomerClick}
-                                    className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                                    className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm rounded transition-colors"
                                 >
                                     Modifica Dati Cliente
                                 </button>
@@ -311,7 +311,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             type="button"
                             onClick={handleClose}
                             disabled={isGenerating}
-                            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Annulla
                         </button>

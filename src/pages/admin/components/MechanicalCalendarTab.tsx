@@ -197,7 +197,7 @@ export default function MechanicalCalendarTab() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Caricamento calendario meccanica...</p>
+        <p className="text-theme-text-primary">Caricamento calendario meccanica...</p>
       </div>
     )
   }
@@ -205,10 +205,10 @@ export default function MechanicalCalendarTab() {
   return (
     <div className="space-y-6">
       {/* Header Controls */}
-      <div className="bg-gray-900 rounded-lg p-3 lg:p-4">
+      <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap flex-1">
-            <h2 className="text-lg font-bold text-white">Calendario Meccanica</h2>
+            <h2 className="text-lg font-bold text-theme-text-primary">Calendario Meccanica</h2>
 
             {/* Search Input */}
             <div className="relative">
@@ -217,19 +217,19 @@ export default function MechanicalCalendarTab() {
                 placeholder="Cerca clienti..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-3 py-1.5 bg-gray-800 text-white rounded-md border border-gray-700 focus:border-dr7-gold focus:outline-none text-sm w-48"
+                className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-primary rounded-md border border-theme-border focus:border-dr7-gold focus:outline-none text-sm w-48"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
                 >
                   ×
                 </button>
               )}
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-400">Questo Mese:</span>
+              <span className="text-xs text-theme-text-muted">Questo Mese:</span>
               <span className="text-dr7-gold font-bold text-sm">
                 {bookings.filter(b => {
                   const bookingDate = new Date(b.appointment_date)
@@ -240,7 +240,7 @@ export default function MechanicalCalendarTab() {
             </div>
             {canViewFinancials && !hideFinancials && (
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-400">Fatturato:</span>
+                <span className="text-xs text-theme-text-muted">Fatturato:</span>
                 <span className="text-green-400 font-bold text-sm">
                   <FinancialData type="total">
                     €{(bookings
@@ -258,7 +258,7 @@ export default function MechanicalCalendarTab() {
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
                 className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
-                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
                   : 'bg-yellow-600 text-black hover:bg-yellow-700'
                   }`}
               >
@@ -270,14 +270,14 @@ export default function MechanicalCalendarTab() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigateMonth('prev')}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors text-sm font-semibold"
+              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md transition-colors text-sm font-semibold"
               aria-label="Mese precedente"
             >
               ← Precedente
             </button>
             <button
               onClick={() => navigateMonth('next')}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors text-sm font-semibold"
+              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md transition-colors text-sm font-semibold"
               aria-label="Mese successivo"
             >
               Successivo →
@@ -286,24 +286,24 @@ export default function MechanicalCalendarTab() {
         </div>
 
         <div className="mt-2 text-center">
-          <h3 className="text-base text-white capitalize font-semibold">{monthName}</h3>
+          <h3 className="text-base text-theme-text-primary capitalize font-semibold">{monthName}</h3>
         </div>
       </div>
 
       {/* Search Results */}
       {searchQuery && (
-        <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-bold text-white mb-3">
+        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+          <h3 className="text-lg font-bold text-theme-text-primary mb-3">
             Risultati ricerca: "{searchQuery}"
           </h3>
           {matchingBookings.length === 0 ? (
-            <p className="text-gray-400 text-sm">Nessun cliente trovato</p>
+            <p className="text-theme-text-muted text-sm">Nessun cliente trovato</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {matchingBookings.map(booking => (
                 <div
                   key={booking.id}
-                  className="bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-dr7-gold transition-colors cursor-pointer"
+                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3 hover:border-dr7-gold transition-colors cursor-pointer"
                   onClick={() => {
                     const dateString = booking.appointment_date.split('T')[0]
                     setSelectedCell({
@@ -315,24 +315,24 @@ export default function MechanicalCalendarTab() {
                   }}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-white font-bold text-sm">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</h4>
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
+                    <h4 className="text-theme-text-primary font-bold text-sm">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</h4>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-theme-text-primary' :
                       booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                        'bg-gray-600 text-white'
+                        'bg-gray-600 text-theme-text-primary'
                       }`}>
                       {booking.status}
                     </span>
                   </div>
-                  <p className="text-gray-400 text-xs mb-2">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
+                  <p className="text-theme-text-muted text-xs mb-2">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
                   <div className="space-y-1 text-xs">
-                    <p className="text-white">
-                      <span className="text-gray-400">Servizio:</span> {booking.service_name}
+                    <p className="text-theme-text-primary">
+                      <span className="text-theme-text-muted">Servizio:</span> {booking.service_name}
                     </p>
-                    <p className="text-white">
-                      <span className="text-gray-400">Veicolo:</span> {booking.vehicle_name}
+                    <p className="text-theme-text-primary">
+                      <span className="text-theme-text-muted">Veicolo:</span> {booking.vehicle_name}
                     </p>
-                    <p className="text-white">
-                      <span className="text-gray-400">Data:</span>{' '}
+                    <p className="text-theme-text-primary">
+                      <span className="text-theme-text-muted">Data:</span>{' '}
                       {new Date(booking.appointment_date).toLocaleDateString('it-IT')} - {booking.appointment_time}
                     </p>
                     <p className="text-dr7-gold font-bold">€{(booking.price_total / 100).toFixed(2)}</p>
@@ -345,18 +345,18 @@ export default function MechanicalCalendarTab() {
       )}
 
       {/* Battleship-style Calendar Grid */}
-      <div className="bg-gray-900 rounded-lg p-4 lg:p-6 overflow-x-auto">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
         <div className="min-w-max">
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-left text-white font-bold text-xs min-w-[80px]">
+                <th className="sticky left-0 z-10 bg-theme-bg-secondary border border-theme-border px-2 py-1 text-left text-theme-text-primary font-bold text-xs min-w-[80px]">
                   Orario
                 </th>
                 {daysInMonth.map(day => (
                   <th
                     key={day}
-                    className={`border border-gray-700 px-1 py-1 text-center text-[10px] font-semibold min-w-[28px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-gray-400'
+                    className={`border border-theme-border px-1 py-1 text-center text-[10px] font-semibold min-w-[28px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-theme-text-muted'
                       }`}
                   >
                     {day}
@@ -367,7 +367,7 @@ export default function MechanicalCalendarTab() {
             <tbody>
               {TIME_SLOTS.map(timeSlot => (
                 <tr key={timeSlot}>
-                  <td className="sticky left-0 z-10 bg-gray-900 border border-gray-700 px-2 py-1 text-white font-semibold text-xs">
+                  <td className="sticky left-0 z-10 bg-theme-bg-secondary border border-theme-border px-2 py-1 text-theme-text-primary font-semibold text-xs">
                     {timeSlot}
                   </td>
                   {daysInMonth.map(day => {
@@ -381,7 +381,7 @@ export default function MechanicalCalendarTab() {
                           time: timeSlot,
                           bookings: slotBookings
                         })}
-                        className={`border border-gray-700 p-0.5 min-w-[28px] h-6 transition-all ${isBooked
+                        className={`border border-theme-border p-0.5 min-w-[28px] h-6 transition-all ${isBooked
                           ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
                           : 'bg-green-500 hover:bg-green-600'
                           } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
@@ -399,19 +399,19 @@ export default function MechanicalCalendarTab() {
       {/* Booking Details Modal */}
       {selectedCell && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-theme-bg-primary bg-opacity-80 flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedCell(null)}
         >
           <div
-            className="bg-gray-900 border-2 border-dr7-gold rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-theme-bg-secondary border-2 border-dr7-gold rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold text-theme-text-primary mb-1">
                   Prenotazioni Meccanica
                 </h3>
-                <p className="text-gray-400 text-sm">
+                <p className="text-theme-text-muted text-sm">
                   {new Date(selectedCell.date).toLocaleDateString('it-IT', {
                     weekday: 'long',
                     year: 'numeric',
@@ -422,7 +422,7 @@ export default function MechanicalCalendarTab() {
               </div>
               <button
                 onClick={() => setSelectedCell(null)}
-                className="text-gray-400 hover:text-white text-2xl font-bold"
+                className="text-theme-text-muted hover:text-theme-text-primary text-2xl font-bold"
               >
                 ×
               </button>
@@ -432,26 +432,26 @@ export default function MechanicalCalendarTab() {
               {selectedCell.bookings.map((booking) => (
                 <div
                   key={booking.id}
-                  className="bg-gray-800 border border-gray-700 rounded-lg p-4"
+                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4"
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h4 className="text-white font-bold text-lg">{booking.service_name}</h4>
-                      <p className="text-gray-400 text-sm">ID: {booking.id.substring(0, 8)}</p>
+                      <h4 className="text-theme-text-primary font-bold text-lg">{booking.service_name}</h4>
+                      <p className="text-theme-text-muted text-sm">ID: {booking.id.substring(0, 8)}</p>
                     </div>
                     <div className="flex gap-2">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-white' :
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-theme-text-primary' :
                         booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                          'bg-gray-600 text-white'
+                          'bg-gray-600 text-theme-text-primary'
                         }`}>
                         {booking.status}
                       </span>
                       <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'paid' ||
                           (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                          ? 'bg-green-600 text-white'
+                          ? 'bg-green-600 text-theme-text-primary'
                           : booking.payment_status === 'pending'
                             ? 'bg-yellow-600 text-black'
-                            : 'bg-red-600 text-white'
+                            : 'bg-red-600 text-theme-text-primary'
                         }`}>
                         {booking.payment_status === 'paid' ||
                           (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
@@ -463,44 +463,44 @@ export default function MechanicalCalendarTab() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     <div>
-                      <span className="text-gray-400">Cliente:</span>
-                      <p className="text-white font-semibold">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</p>
+                      <span className="text-theme-text-muted">Cliente:</span>
+                      <p className="text-theme-text-primary font-semibold">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Telefono:</span>
-                      <p className="text-white font-semibold">{booking.customer_phone || booking.booking_details?.customer?.phone || 'N/A'}</p>
+                      <span className="text-theme-text-muted">Telefono:</span>
+                      <p className="text-theme-text-primary font-semibold">{booking.customer_phone || booking.booking_details?.customer?.phone || 'N/A'}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Email:</span>
-                      <p className="text-white font-semibold text-xs">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
+                      <span className="text-theme-text-muted">Email:</span>
+                      <p className="text-theme-text-primary font-semibold text-xs">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Veicolo:</span>
-                      <p className="text-white font-semibold">{booking.vehicle_name}</p>
+                      <span className="text-theme-text-muted">Veicolo:</span>
+                      <p className="text-theme-text-primary font-semibold">{booking.vehicle_name}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Prezzo:</span>
+                      <span className="text-theme-text-muted">Prezzo:</span>
                       <p className="text-dr7-gold font-bold">€{(booking.price_total / 100).toFixed(2)}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Creato il:</span>
-                      <p className="text-white font-semibold text-xs">
+                      <span className="text-theme-text-muted">Creato il:</span>
+                      <p className="text-theme-text-primary font-semibold text-xs">
                         {new Date(booking.created_at).toLocaleDateString('it-IT')}
                       </p>
                     </div>
                   </div>
 
                   {booking.booking_details?.notes && (
-                    <div className="mt-3 pt-3 border-t border-gray-700">
-                      <span className="text-gray-400 text-xs">Note:</span>
-                      <p className="text-white text-sm mt-1">{booking.booking_details.notes}</p>
+                    <div className="mt-3 pt-3 border-t border-theme-border">
+                      <span className="text-theme-text-muted text-xs">Note:</span>
+                      <p className="text-theme-text-primary text-sm mt-1">{booking.booking_details.notes}</p>
                     </div>
                   )}
 
                   <div className="mt-4 flex justify-end">
                     <button
                       onClick={() => setEditingBooking(booking)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded transition-colors"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm font-bold rounded transition-colors"
                     >
                       Modifica
                     </button>
@@ -511,7 +511,7 @@ export default function MechanicalCalendarTab() {
 
             <button
               onClick={() => setSelectedCell(null)}
-              className="mt-6 w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors"
+              className="mt-6 w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-bold py-2 px-4 rounded transition-colors"
             >
               Chiudi
             </button>
@@ -521,7 +521,7 @@ export default function MechanicalCalendarTab() {
 
       {/* Editing Modal */}
       {editingBooking && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-[60] p-4">
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <MechanicalBookingForm
               initialData={editingBooking}

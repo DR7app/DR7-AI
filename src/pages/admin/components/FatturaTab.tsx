@@ -4,22 +4,27 @@ import Button from './Button'
 
 interface Invoice {
   id: string
-  invoice_number: string
-  invoice_date: string
+  numero_fattura: string
+  data_emissione: string
   customer_name: string
   customer_address: string
   customer_tax_code: string
   customer_vat?: string
+  customer_email?: string
+  customer_phone?: string
   items: InvoiceItem[]
   subtotal: number
   vat_amount: number
-  exempt_amount: number
-  total: number
-  payment_method: string
-  payment_date: string
-  status: 'paid' | 'pending' | 'overdue'
+  exempt_amount?: number
+  importo_totale: number
+  payment_method?: string
+  payment_date?: string
+  stato: 'paid' | 'pending' | 'overdue'
   notes?: string
+  booking_id?: string
+  invoice_html?: string
   created_at: string
+  updated_at?: string
   // SDI fields
   sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'error'
   sdi_id?: string
@@ -45,8 +50,8 @@ export default function InvoicesTab() {
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
-    invoice_number: '',
-    invoice_date: new Date().toISOString().split('T')[0],
+    numero_fattura: '',
+    data_emissione: new Date().toISOString().split('T')[0],
     customer_name: '',
     customer_address: '',
     customer_tax_code: '',
@@ -54,7 +59,7 @@ export default function InvoicesTab() {
     items: [{ description: '', unit_price: 0, quantity: 1, vat_rate: 0 }],
     payment_method: 'Carta di credito / bancomat',
     payment_date: new Date().toISOString().split('T')[0],
-    status: 'paid' as 'paid' | 'pending' | 'overdue',
+    stato: 'paid' as 'paid' | 'pending' | 'overdue',
     notes: '',
     customer_sdi_code: '0000000',
     customer_pec: ''
@@ -70,7 +75,7 @@ export default function InvoicesTab() {
       const { data, error } = await supabase
         .from('fatture')
         .select('*')
-        .order('invoice_date', { ascending: false })
+        .order('data_emissione', { ascending: false })
 
       if (error) throw error
       setInvoices(data || [])
@@ -111,7 +116,7 @@ export default function InvoicesTab() {
         subtotal,
         vat_amount: vatAmount,
         exempt_amount: exemptAmount,
-        total,
+        importo_totale: total,
         items: formData.items
       }
 
@@ -142,8 +147,8 @@ export default function InvoicesTab() {
 
   function resetForm() {
     setFormData({
-      invoice_number: '',
-      invoice_date: new Date().toISOString().split('T')[0],
+      numero_fattura: '',
+      data_emissione: new Date().toISOString().split('T')[0],
       customer_name: '',
       customer_address: '',
       customer_tax_code: '',
@@ -151,7 +156,7 @@ export default function InvoicesTab() {
       items: [{ description: '', unit_price: 0, quantity: 1, vat_rate: 0 }],
       payment_method: 'Carta di credito / bancomat',
       payment_date: new Date().toISOString().split('T')[0],
-      status: 'paid',
+      stato: 'paid',
       notes: '',
       customer_sdi_code: '0000000',
       customer_pec: ''
@@ -211,8 +216,8 @@ export default function InvoicesTab() {
       </head>
       <body>
         <div class="header">
-          <h1>Fattura ${invoice.invoice_number}</h1>
-          <p style="margin: 5px 0;">del ${new Date(invoice.invoice_date).toLocaleDateString('it-IT')}</p>
+          <h1>Fattura ${invoice.numero_fattura}</h1>
+          <p style="margin: 5px 0;">del ${new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</p>
         </div>
 
         <div class="company-info">
@@ -273,7 +278,7 @@ export default function InvoicesTab() {
           <div class="info-line"><strong>Modalità di pagamento:</strong> ${invoice.payment_method}</div>
           <div class="info-line"><strong>Data scadenza:</strong> ${new Date(invoice.payment_date).toLocaleDateString('it-IT')}</div>
           <div class="info-line"><strong>Importo:</strong> ${total.toFixed(2)} €</div>
-          <div class="info-line"><strong>Stato:</strong> ${invoice.status === 'paid' ? 'Pagata' : invoice.status === 'pending' ? 'In attesa' : 'Scaduta'}</div>
+          <div class="info-line"><strong>Stato:</strong> ${invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'pending' ? 'In attesa' : 'Scaduta'}</div>
         </div>
 
         <div class="footer">
@@ -365,89 +370,89 @@ export default function InvoicesTab() {
   const { subtotal, vatAmount, exemptAmount, total } = calculateTotals()
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Caricamento...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Fatture</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">Fatture</h2>
         <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
           + Nuova Fattura
         </Button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-900 p-6 rounded-lg mb-6 border border-gray-700">
-          <h3 className="text-xl font-semibold text-white mb-4">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-lg mb-6 border border-theme-border">
+          <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
             {editingId ? 'Modifica Fattura' : 'Nuova Fattura'}
           </h3>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Numero Fattura *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Numero Fattura *</label>
               <input
                 type="text"
-                value={formData.invoice_number}
-                onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                value={formData.numero_fattura}
+                onChange={(e) => setFormData({ ...formData, numero_fattura: e.target.value })}
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 placeholder="1448/FE"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Data Fattura *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Data Fattura *</label>
               <input
                 type="date"
-                value={formData.invoice_date}
-                onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                value={formData.data_emissione}
+                onChange={(e) => setFormData({ ...formData, data_emissione: e.target.value })}
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
           </div>
 
           <div className="space-y-4 mb-6">
-            <h4 className="text-lg font-semibold text-white">Destinatario</h4>
+            <h4 className="text-lg font-semibold text-theme-text-primary">Destinatario</h4>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Nome / Ragione Sociale *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Nome / Ragione Sociale *</label>
               <input
                 type="text"
                 value={formData.customer_name}
                 onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Indirizzo *</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Indirizzo *</label>
               <input
                 type="text"
                 value={formData.customer_address}
                 onChange={(e) => setFormData({ ...formData, customer_address: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 placeholder="Via Roma 43, 09070 Cagliari (CA)"
                 required
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Codice Fiscale *</label>
+                <label className="block text-sm text-theme-text-muted mb-1">Codice Fiscale *</label>
                 <input
                   type="text"
                   value={formData.customer_tax_code}
                   onChange={(e) => setFormData({ ...formData, customer_tax_code: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">P. IVA (opzionale)</label>
+                <label className="block text-sm text-theme-text-muted mb-1">P. IVA (opzionale)</label>
                 <input
                   type="text"
                   value={formData.customer_vat}
                   onChange={(e) => setFormData({ ...formData, customer_vat: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 />
               </div>
             </div>
@@ -455,19 +460,19 @@ export default function InvoicesTab() {
 
           <div className="mb-6">
             <div className="flex justify-between items-center mb-3">
-              <h4 className="text-lg font-semibold text-white">Articoli</h4>
+              <h4 className="text-lg font-semibold text-theme-text-primary">Articoli</h4>
               <Button type="button" onClick={addItem} variant="secondary">+ Aggiungi Articolo</Button>
             </div>
 
             {formData.items.map((item, index) => (
-              <div key={index} className="bg-gray-800 p-4 rounded-lg mb-3">
+              <div key={index} className="bg-theme-bg-tertiary p-4 rounded-lg mb-3">
                 <div className="grid grid-cols-12 gap-3">
                   <div className="col-span-12 md:col-span-5">
                     <input
                       type="text"
                       value={item.description}
                       onChange={(e) => updateItem(index, 'description', e.target.value)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Descrizione"
                       required
                     />
@@ -478,7 +483,7 @@ export default function InvoicesTab() {
                       step="0.01"
                       value={item.unit_price}
                       onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Prezzo"
                       required
                     />
@@ -488,7 +493,7 @@ export default function InvoicesTab() {
                       type="number"
                       value={item.quantity}
                       onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Q.tà"
                       min="1"
                       required
@@ -499,7 +504,7 @@ export default function InvoicesTab() {
                       type="number"
                       value={item.vat_rate}
                       onChange={(e) => updateItem(index, 'vat_rate', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-gray-900 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="IVA %"
                       required
                     />
@@ -519,23 +524,23 @@ export default function InvoicesTab() {
               </div>
             ))}
 
-            <div className="bg-gray-800 p-4 rounded-lg mt-4">
+            <div className="bg-theme-bg-tertiary p-4 rounded-lg mt-4">
               <div className="space-y-2 text-sm">
-                {subtotal > 0 && <div className="flex justify-between"><span className="text-gray-400">Imponibile:</span><span className="text-white">€{subtotal.toFixed(2)}</span></div>}
-                {vatAmount > 0 && <div className="flex justify-between"><span className="text-gray-400">IVA:</span><span className="text-white">€{vatAmount.toFixed(2)}</span></div>}
-                {exemptAmount > 0 && <div className="flex justify-between"><span className="text-gray-400">Esente IVA:</span><span className="text-white">€{exemptAmount.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-700"><span className="text-white">Totale:</span><span className="text-dr7-gold">€{total.toFixed(2)}</span></div>
+                {subtotal > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">Imponibile:</span><span className="text-theme-text-primary">€{subtotal.toFixed(2)}</span></div>}
+                {vatAmount > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">IVA:</span><span className="text-theme-text-primary">€{vatAmount.toFixed(2)}</span></div>}
+                {exemptAmount > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">Esente IVA:</span><span className="text-theme-text-primary">€{exemptAmount.toFixed(2)}</span></div>}
+                <div className="flex justify-between font-bold text-lg pt-2 border-t border-theme-border"><span className="text-theme-text-primary">Totale:</span><span className="text-dr7-gold">€{total.toFixed(2)}</span></div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Metodo Pagamento</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Metodo Pagamento</label>
               <select
                 value={formData.payment_method}
                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
               >
                 <option value="Carta di credito / bancomat">Carta di credito / bancomat</option>
                 <option value="Bonifico bancario">Bonifico bancario</option>
@@ -544,23 +549,23 @@ export default function InvoicesTab() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Data Scadenza</label>
+              <label className="block text-sm text-theme-text-muted mb-1">Data Scadenza</label>
               <input
                 type="date"
                 value={formData.payment_date}
                 onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-1">Stato</label>
+            <label className="block text-sm text-theme-text-muted mb-1">Stato</label>
             <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-              className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+              value={formData.stato}
+              onChange={(e) => setFormData({ ...formData, stato: e.target.value as any })}
+              className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
             >
               <option value="paid">Pagata</option>
               <option value="pending">In attesa</option>
@@ -577,33 +582,33 @@ export default function InvoicesTab() {
         </form>
       )}
 
-      <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-black">
+            <thead className="bg-theme-bg-primary">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Numero</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Cliente</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-white">Totale</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-white">Stato</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-white">SDI</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-white">Azioni</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Numero</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Totale</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-theme-text-primary">Stato</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-theme-text-primary">SDI</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-theme-text-primary">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {invoices.map((invoice) => (
-                <tr key={invoice.id} className="border-t border-gray-700 hover:bg-gray-800">
-                  <td className="px-4 py-3 text-sm text-white">{invoice.invoice_number}</td>
-                  <td className="px-4 py-3 text-sm text-white">{new Date(invoice.invoice_date).toLocaleDateString('it-IT')}</td>
-                  <td className="px-4 py-3 text-sm text-white">{invoice.customer_name}</td>
-                  <td className="px-4 py-3 text-sm text-white text-right">€{invoice.total.toFixed(2)}</td>
+                <tr key={invoice.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary">
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{invoice.numero_fattura}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{invoice.customer_name}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary text-right">€{(invoice.importo_totale || 0).toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.status === 'paid' ? 'bg-green-500/20 text-green-400' :
-                      invoice.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.stato === 'paid' ? 'bg-green-500/20 text-green-400' :
+                      invoice.stato === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
                         'bg-red-500/20 text-red-400'
                       }`}>
-                      {invoice.status === 'paid' ? 'Pagata' : invoice.status === 'pending' ? 'In attesa' : 'Scaduta'}
+                      {invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'pending' ? 'In attesa' : 'Scaduta'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -611,7 +616,7 @@ export default function InvoicesTab() {
                       invoice.sdi_status === 'sent' ? 'bg-blue-500/20 text-blue-400' :
                         invoice.sdi_status === 'sending' ? 'bg-yellow-500/20 text-yellow-400' :
                           invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-500/20 text-red-400' :
-                            'bg-gray-500/20 text-gray-400'
+                            'bg-gray-500/20 text-theme-text-muted'
                       }`}>
                       {invoice.sdi_status === 'accepted' ? '✅ Priorità' :
                         invoice.sdi_status === 'sent' ? '📤 Inviata' :
@@ -624,12 +629,12 @@ export default function InvoicesTab() {
                   <td className="px-4 py-3 text-sm">
                     <div className="flex flex-col gap-2 max-w-xs mx-auto">
                       {/* INLINE EDITING FIELDS */}
-                      <div className="bg-gray-800/80 p-2 rounded border border-gray-700 space-y-2 text-left">
+                      <div className="bg-theme-bg-tertiary/80 p-2 rounded border border-theme-border space-y-2 text-left">
                         <div>
                           <label className="text-[10px] text-gray-500 uppercase font-bold">Codice Fiscale</label>
                           <input
                             type="text"
-                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                            className="w-full bg-theme-bg-secondary border border-theme-border-light rounded px-2 py-1 text-xs text-theme-text-primary"
                             value={invoice.customer_tax_code || ''}
                             onChange={(e) => updateInvoice(invoice.id, 'customer_tax_code', e.target.value)}
                             placeholder="CF Obbligatorio"
@@ -640,7 +645,7 @@ export default function InvoicesTab() {
                             <label className="text-[10px] text-gray-500 uppercase font-bold">SDI</label>
                             <input
                               type="text"
-                              className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-white font-mono"
+                              className="w-full bg-theme-bg-secondary border border-theme-border-light rounded px-2 py-1 text-xs text-theme-text-primary font-mono"
                               value={invoice.customer_sdi_code || ''}
                               onChange={(e) => updateInvoice(invoice.id, 'customer_sdi_code', e.target.value)}
                               placeholder="0000000"
@@ -651,7 +656,7 @@ export default function InvoicesTab() {
                             <label className="text-[10px] text-gray-500 uppercase font-bold">PEC</label>
                             <input
                               type="text"
-                              className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                              className="w-full bg-theme-bg-secondary border border-theme-border-light rounded px-2 py-1 text-xs text-theme-text-primary"
                               value={invoice.customer_pec || ''}
                               onChange={(e) => updateInvoice(invoice.id, 'customer_pec', e.target.value)}
                               placeholder="Optional"
@@ -673,7 +678,7 @@ export default function InvoicesTab() {
                           <Button
                             onClick={() => handleSendToSDI(invoice)}
                             variant="secondary"
-                            className="text-xs py-1 px-3 bg-green-700 hover:bg-green-600 text-white"
+                            className="text-xs py-1 px-3 bg-green-700 hover:bg-green-600 text-theme-text-primary"
                           >
                             🚀 SDI
                           </Button>

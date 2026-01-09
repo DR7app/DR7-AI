@@ -115,7 +115,7 @@ export default function TicketsTab() {
     switch (status) {
       case 'active': return 'bg-green-900 text-green-200'
       case 'redeemed': return 'bg-blue-900 text-blue-200'
-      case 'expired': return 'bg-gray-700 text-gray-300'
+      case 'expired': return 'bg-gray-700 text-theme-text-secondary'
       case 'cancelled': return 'bg-red-900 text-red-200'
       default: return 'bg-gray-700 text-gray-200'
     }
@@ -135,7 +135,7 @@ export default function TicketsTab() {
   const totalActive = filteredCards.filter(c => c.status === 'active').length
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Caricamento...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
   return (
@@ -146,7 +146,7 @@ export default function TicketsTab() {
           onClick={() => setViewMode('commercial')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'commercial'
             ? 'bg-white text-black'
-            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
             }`}
         >
           Biglietti Operazione Commerciale
@@ -155,7 +155,7 @@ export default function TicketsTab() {
           onClick={() => setViewMode('gift_cards')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'gift_cards'
             ? 'bg-white text-black'
-            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
             }`}
         >
           Buoni Regalo Promozionali
@@ -166,8 +166,8 @@ export default function TicketsTab() {
         <div>
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-white">Biglietti Operazione Commerciale</h2>
-              <p className="text-sm text-gray-400 mt-1">
+              <h2 className="text-2xl font-bold text-theme-text-primary">Biglietti Operazione Commerciale</h2>
+              <p className="text-sm text-theme-text-muted mt-1">
                 Biglietti venduti per l'operazione "7 MILIONI DI EURO"
               </p>
             </div>
@@ -175,47 +175,47 @@ export default function TicketsTab() {
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-              <div className="text-sm text-gray-400">Totale Biglietti Venduti</div>
-              <div className="text-2xl font-bold text-white">{totalCommercialTickets}</div>
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+              <div className="text-sm text-theme-text-muted">Totale Biglietti Venduti</div>
+              <div className="text-2xl font-bold text-theme-text-primary">{totalCommercialTickets}</div>
             </div>
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-              <div className="text-sm text-gray-400">Ricavo Totale</div>
-              <div className="text-2xl font-bold text-white">{formatPriceCents(totalCommercialRevenue)}</div>
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+              <div className="text-sm text-theme-text-muted">Ricavo Totale</div>
+              <div className="text-2xl font-bold text-theme-text-primary">{formatPriceCents(totalCommercialRevenue)}</div>
             </div>
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-              <div className="text-sm text-gray-400">Acquisti Unici</div>
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+              <div className="text-sm text-theme-text-muted">Acquisti Unici</div>
               <div className="text-2xl font-bold text-green-400">{uniquePurchases}</div>
             </div>
           </div>
 
           {/* Commercial Tickets Table */}
-          <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-black">
+                <thead className="bg-theme-bg-primary">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Numero Biglietto</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Email</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Importo Pagato</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data Acquisto</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Quantità</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">UUID</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Numero Biglietto</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Email</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Importo Pagato</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data Acquisto</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Quantità</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">UUID</th>
                   </tr>
                 </thead>
                 <tbody>
                   {commercialTickets.map((ticket) => (
-                    <tr key={ticket.id} className="border-t border-gray-700 hover:bg-gray-800">
-                      <td className="px-4 py-3 text-sm font-mono text-white font-bold">
+                    <tr key={ticket.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary">
+                      <td className="px-4 py-3 text-sm font-mono text-theme-text-primary font-bold">
                         #{ticket.ticket_number.toString().padStart(6, '0')}
                       </td>
-                      <td className="px-4 py-3 text-sm text-white">{ticket.full_name}</td>
-                      <td className="px-4 py-3 text-sm text-gray-400">{ticket.email}</td>
-                      <td className="px-4 py-3 text-sm text-white font-semibold">
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">{ticket.full_name}</td>
+                      <td className="px-4 py-3 text-sm text-theme-text-muted">{ticket.email}</td>
+                      <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">
                         {formatPriceCents(ticket.amount_paid, ticket.currency)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-400">
+                      <td className="px-4 py-3 text-sm text-theme-text-muted">
                         {new Date(ticket.purchase_date).toLocaleString('it-IT', {
                           day: '2-digit',
                           month: '2-digit',
@@ -224,7 +224,7 @@ export default function TicketsTab() {
                           minute: '2-digit'
                         })}
                       </td>
-                      <td className="px-4 py-3 text-sm text-white">{ticket.quantity}</td>
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">{ticket.quantity}</td>
                       <td className="px-4 py-3 text-xs font-mono text-gray-500">
                         {ticket.uuid.substring(0, 8)}...
                       </td>
@@ -244,10 +244,10 @@ export default function TicketsTab() {
 
           {commercialTickets.length === 0 && (
             <div className="mt-6 p-6 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-              <h3 className="text-lg font-semibold text-white mb-2">
+              <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
                 📝 Operazione Commerciale "7 MILIONI DI EURO"
               </h3>
-              <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+              <ul className="text-sm text-theme-text-secondary space-y-1 list-disc list-inside">
                 <li>I biglietti vengono salvati automaticamente dopo ogni acquisto</li>
                 <li>Ogni biglietto ha un numero univoco da 1 a 350,000</li>
                 <li>L'estrazione si terrà il 24 Gennaio 2026</li>
@@ -262,8 +262,8 @@ export default function TicketsTab() {
         <div>
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-white">Buoni Regalo Promozionali</h2>
-              <p className="text-sm text-gray-400 mt-1">
+              <h2 className="text-2xl font-bold text-theme-text-primary">Buoni Regalo Promozionali</h2>
+              <p className="text-sm text-theme-text-muted mt-1">
                 Buoni da €25 con validità 24 mesi (non cumulabili)
               </p>
             </div>
@@ -271,20 +271,20 @@ export default function TicketsTab() {
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-              <div className="text-sm text-gray-400">Totale Buoni</div>
-              <div className="text-2xl font-bold text-white">{filteredCards.length}</div>
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+              <div className="text-sm text-theme-text-muted">Totale Buoni</div>
+              <div className="text-2xl font-bold text-theme-text-primary">{filteredCards.length}</div>
             </div>
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-              <div className="text-sm text-gray-400">Valore Totale</div>
-              <div className="text-2xl font-bold text-white">{formatPrice(totalValue)}</div>
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+              <div className="text-sm text-theme-text-muted">Valore Totale</div>
+              <div className="text-2xl font-bold text-theme-text-primary">{formatPrice(totalValue)}</div>
             </div>
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-              <div className="text-sm text-gray-400">Attivi</div>
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+              <div className="text-sm text-theme-text-muted">Attivi</div>
               <div className="text-2xl font-bold text-green-400">{totalActive}</div>
             </div>
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-              <div className="text-sm text-gray-400">Riscattati</div>
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+              <div className="text-sm text-theme-text-muted">Riscattati</div>
               <div className="text-2xl font-bold text-blue-400">{totalRedeemed}</div>
             </div>
           </div>
@@ -294,7 +294,7 @@ export default function TicketsTab() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-gray-900 border border-gray-700 text-white rounded px-3 py-2 text-sm"
+              className="bg-theme-bg-secondary border border-theme-border text-theme-text-primary rounded px-3 py-2 text-sm"
             >
               <option value="all">Tutti gli stati</option>
               <option value="active">Attivi</option>
@@ -305,38 +305,38 @@ export default function TicketsTab() {
           </div>
 
           {/* Gift Cards Table */}
-          <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-black">
+                <thead className="bg-theme-bg-primary">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Codice</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Destinatario</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Email</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Valore</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Rimanente</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Emesso</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white">Scadenza</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Codice</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Destinatario</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Email</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Valore</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Rimanente</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Emesso</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Scadenza</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredCards.map((card) => (
-                    <tr key={card.id} className="border-t border-gray-700 hover:bg-gray-800">
-                      <td className="px-4 py-3 text-sm font-mono text-white">{card.code}</td>
-                      <td className="px-4 py-3 text-sm text-white">{card.recipient_name || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-400">{card.recipient_email || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-white">{formatPrice(card.initial_value, card.currency)}</td>
-                      <td className="px-4 py-3 text-sm text-white">{formatPrice(card.remaining_value, card.currency)}</td>
+                    <tr key={card.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary">
+                      <td className="px-4 py-3 text-sm font-mono text-theme-text-primary">{card.code}</td>
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">{card.recipient_name || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-theme-text-muted">{card.recipient_email || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">{formatPrice(card.initial_value, card.currency)}</td>
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">{formatPrice(card.remaining_value, card.currency)}</td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(card.status)}`}>
                           {getStatusLabel(card.status)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-400">
+                      <td className="px-4 py-3 text-sm text-theme-text-muted">
                         {new Date(card.issued_at).toLocaleDateString('it-IT')}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-400">
+                      <td className="px-4 py-3 text-sm text-theme-text-muted">
                         {card.expires_at ? new Date(card.expires_at).toLocaleDateString('it-IT') : 'N/A'}
                       </td>
                     </tr>
@@ -358,10 +358,10 @@ export default function TicketsTab() {
 
           {giftCards.length === 0 && (
             <div className="mt-6 p-6 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-              <h3 className="text-lg font-semibold text-white mb-2">
+              <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
                 📝 Come funzionano i Buoni Promozionali
               </h3>
-              <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+              <ul className="text-sm text-theme-text-secondary space-y-1 list-disc list-inside">
                 <li>Valore: €25 per buono</li>
                 <li>Validità: 24 mesi dalla data di emissione</li>
                 <li>Non cumulabili tra loro</li>

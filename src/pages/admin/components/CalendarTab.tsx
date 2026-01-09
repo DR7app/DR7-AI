@@ -459,7 +459,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Caricamento calendario...</p>
+        <p className="text-theme-text-primary">Caricamento calendario...</p>
       </div>
     )
   }
@@ -470,9 +470,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 p-4 lg:p-6 shadow-2xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-wrap">
-            <h2 className="text-xl font-light text-white">Calendario Flotta</h2>
+            <h2 className="text-xl font-light text-theme-text-primary">Calendario Flotta</h2>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">Questo Mese:</span>
+              <span className="text-xs text-theme-text-muted">Questo Mese:</span>
               <span className="text-dr7-gold font-semibold text-sm">
                 {bookings.filter(b => {
                   const pickupDate = new Date(b.pickup_date)
@@ -483,7 +483,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
             </div>
             {canViewFinancials && !hideFinancials && userEmail !== 'dubai.rent7.0srl@gmail.com' && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Fatturato:</span>
+                <span className="text-xs text-theme-text-muted">Fatturato:</span>
                 <span className="text-green-400 font-semibold text-sm">
                   <FinancialData type="total">
                     €{(bookings
@@ -501,15 +501,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
             <div className="flex items-center gap-4 text-xs">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50"></div>
-                <span className="text-gray-300 font-light">Disponibile</span>
+                <span className="text-theme-text-secondary font-light">Disponibile</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/50"></div>
-                <span className="text-gray-300 font-light">Non Disponibile</span>
+                <span className="text-theme-text-secondary font-light">Non Disponibile</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/50"></div>
-                <span className="text-gray-300 font-light">Noleggiato</span>
+                <span className="text-theme-text-secondary font-light">Noleggiato</span>
               </div>
             </div>
             {canViewFinancials && (
@@ -530,26 +530,26 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       {/* Search and Navigation Bar */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-2xl font-light text-white mb-3 capitalize">{monthName}</h3>
+          <h3 className="text-2xl font-light text-theme-text-primary mb-3 capitalize">{monthName}</h3>
           <input
             type="text"
             placeholder="Cerca cliente..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 focus:border-dr7-gold/30 w-64 backdrop-blur-sm transition-all"
+            className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-theme-text-primary placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 focus:border-dr7-gold/30 w-64 backdrop-blur-sm transition-all"
           />
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigateMonth('prev')}
-            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
             aria-label="Mese precedente"
           >
             Prec
           </button>
           <button
             onClick={() => navigateMonth('next')}
-            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
             aria-label="Mese successivo"
           >
             Succ
@@ -559,8 +559,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       {/* Search Results - Show matching bookings */}
       {searchQuery && (
-        <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-bold text-white mb-3">
+        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+          <h3 className="text-lg font-bold text-theme-text-primary mb-3">
             Risultati ricerca: "{searchQuery}"
           </h3>
           {(() => {
@@ -571,7 +571,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
             if (matchingBookings.length === 0) {
               return (
-                <p className="text-gray-400 text-sm">Nessuna prenotazione trovata con questo nome cliente.</p>
+                <p className="text-theme-text-muted text-sm">Nessuna prenotazione trovata con questo nome cliente.</p>
               )
             }
 
@@ -580,28 +580,28 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                 {matchingBookings.map(booking => (
                   <div
                     key={booking.id}
-                    className="bg-gray-800 p-3 rounded border border-gray-700 hover:border-dr7-gold transition-colors"
+                    className="bg-theme-bg-tertiary p-3 rounded border border-theme-border hover:border-dr7-gold transition-colors"
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-white font-semibold">
+                        <p className="text-theme-text-primary font-semibold">
                           {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
                         </p>
-                        <p className="text-gray-400 text-sm">
+                        <p className="text-theme-text-muted text-sm">
                           {booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}
                         </p>
                         <p className="text-dr7-gold text-sm mt-1">
                           🚗 {booking.vehicle_name}
-                          {booking.vehicle_plate && <span className="text-gray-400"> ({booking.vehicle_plate})</span>}
+                          {booking.vehicle_plate && <span className="text-theme-text-muted"> ({booking.vehicle_plate})</span>}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-gray-300 text-sm">
+                        <p className="text-theme-text-secondary text-sm">
                           {booking.dropoff_date ? `Rientro: ${new Date(booking.dropoff_date).toLocaleDateString('it-IT')} ${new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}` : 'Data rientro non valida'}
                         </p>
                         <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
                           booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                            'bg-gray-700 text-gray-300'
+                            'bg-gray-700 text-theme-text-secondary'
                           }`}>
                           {booking.status}
                         </span>
@@ -617,9 +617,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       {/* Month Grid */}
       {vehicles.length > 0 && (
-        <div className="bg-gray-900 rounded-lg p-4 lg:p-6 overflow-x-auto">
-          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <span className="text-sm text-gray-400">Tutti i Veicoli ({vehicles.length})</span>
+        <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
+          <h3 className="text-lg font-bold text-theme-text-primary mb-4 flex items-center gap-2">
+            <span className="text-sm text-theme-text-muted">Tutti i Veicoli ({vehicles.length})</span>
           </h3>
 
           <div className="relative min-w-max">
@@ -628,10 +628,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
             <table className="w-full border-collapse">
               <thead>
                 <tr className="h-10">
-                  <th className="sticky left-0 top-0 z-50 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[200px] min-w-[200px] max-w-[200px] shadow-lg box-border">
+                  <th className="sticky left-0 top-0 z-50 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-left text-theme-text-primary font-bold text-xs w-[200px] min-w-[200px] max-w-[200px] shadow-lg box-border">
                     Veicolo
                   </th>
-                  <th className="sticky left-[200px] top-0 z-50 bg-gray-900 border border-gray-700/40 px-3 py-2 text-left text-white font-bold text-xs w-[100px] min-w-[100px] max-w-[100px] shadow-lg box-border">
+                  <th className="sticky left-[200px] top-0 z-50 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-left text-theme-text-primary font-bold text-xs w-[100px] min-w-[100px] max-w-[100px] shadow-lg box-border">
                     Targa
                   </th>
                   {daysInMonth.map(day => {
@@ -644,15 +644,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     return (
                       <th
                         key={day}
-                        className={`sticky top-0 z-30 border border-gray-700/40 px-1 py-1 text-center text-[10px] font-semibold w-[40px] min-w-[40px] max-w-[40px] relative group cursor-help box-border ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
+                        className={`sticky top-0 z-30 border border-theme-border/40 px-1 py-1 text-center text-[10px] font-semibold w-[40px] min-w-[40px] max-w-[40px] relative group cursor-help box-border ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
                           holiday || isSundayDay ? 'bg-red-900/90 border-red-500/30 text-red-300' : // Solid bg to hide scroll
-                            'text-gray-400 bg-gray-900' // Solid bg to hide scroll
+                            'text-theme-text-muted bg-theme-bg-secondary' // Solid bg to hide scroll
                           }`}
                       >
                         <div className="flex flex-col items-center justify-between h-full py-0.5">
                           <span className="text-[10px] leading-none mb-1">{day}</span>
                           {holiday ? (
-                            <span className="text-[7px] leading-tight font-medium text-white uppercase tracking-tight absolute bottom-0.5 left-0 right-0 overflow-visible whitespace-nowrap z-10 px-0.5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                            <span className="text-[7px] leading-tight font-medium text-theme-text-primary uppercase tracking-tight absolute bottom-0.5 left-0 right-0 overflow-visible whitespace-nowrap z-10 px-0.5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
                               {holiday.label}
                             </span>
                           ) : isSundayDay && (
@@ -661,7 +661,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
 
                         {(holiday || isSundayDay) && (
-                          <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg border border-gray-700 whitespace-nowrap z-50 pointer-events-none">
+                          <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-theme-bg-secondary text-theme-text-primary text-[10px] rounded shadow-lg border border-theme-border whitespace-nowrap z-50 pointer-events-none">
                             {holiday ? holiday.name : 'Domenica'}
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                           </div>
@@ -674,16 +674,16 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
               <tbody>
                 {filteredVehicles.map((vehicle) => (
                   <tr key={vehicle.id} className="relative group/row hover:bg-white/5 transition-colors h-10">
-                    <td className="sticky left-0 z-40 bg-gray-900 border border-gray-700/40 px-3 py-2 text-white font-semibold text-sm shadow-lg group-hover/row:bg-gray-800 transition-colors w-[200px] min-w-[200px] max-w-[200px] box-border overflow-hidden">
+                    <td className="sticky left-0 z-40 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-theme-text-primary font-semibold text-sm shadow-lg group-hover/row:bg-theme-bg-tertiary transition-colors w-[200px] min-w-[200px] max-w-[200px] box-border overflow-hidden">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
                           <span className="truncate" title={vehicle.display_name}>{vehicle.display_name}</span>
                           {vehicle.category && (
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${vehicle.category === 'exotic'
-                              ? 'bg-purple-600 text-white shadow-purple-500/20 shadow-sm'
+                              ? 'bg-purple-600 text-theme-text-primary shadow-purple-500/20 shadow-sm'
                               : vehicle.category === 'urban'
-                                ? 'bg-cyan-600 text-white shadow-cyan-500/20 shadow-sm'
-                                : 'bg-orange-600 text-white shadow-orange-500/20 shadow-sm'
+                                ? 'bg-cyan-600 text-theme-text-primary shadow-cyan-500/20 shadow-sm'
+                                : 'bg-orange-600 text-theme-text-primary shadow-orange-500/20 shadow-sm'
                               }`}>
                               {vehicle.category}
                             </span>
@@ -691,7 +691,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
                       </div>
                     </td>
-                    <td className="sticky left-[200px] z-40 bg-gray-900 border border-gray-700/40 px-3 py-2 text-gray-300 text-xs font-mono shadow-lg group-hover/row:bg-gray-800 transition-colors w-[100px] min-w-[100px] max-w-[100px] box-border overflow-hidden">
+                    <td className="sticky left-[200px] z-40 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-theme-text-secondary text-xs font-mono shadow-lg group-hover/row:bg-theme-bg-tertiary transition-colors w-[100px] min-w-[100px] max-w-[100px] box-border overflow-hidden">
                       {vehicle.plate || '-'}
                     </td>
                     {daysInMonth.map(day => {
@@ -718,10 +718,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               setSelectedUnavailability(vehicle)
                             }
                           }}
-                          className={`border border-gray-700/30 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
+                          className={`border border-theme-border/30 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
                             ? 'bg-red-500/15' // Red for booked
                             : status === 'unavailable'
-                              ? 'bg-gray-800/60'
+                              ? 'bg-theme-bg-tertiary/60'
                               : 'bg-green-500/30 hover:bg-green-500/40' // Green for available
                             } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold/50 bg-dr7-gold/5' : ''}`}
                         />
@@ -823,12 +823,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             )}
 
                             {/* Customer name */}
-                            <div className="text-white font-semibold text-sm truncate">
+                            <div className="text-theme-text-primary font-semibold text-sm truncate">
                               {segment.booking.customer_name || 'N/A'}
                             </div>
 
                             {/* Return date and time - always show */}
-                            <div className="text-white/80 text-xs whitespace-nowrap">
+                            <div className="text-theme-text-primary/80 text-xs whitespace-nowrap">
                               {dropoffDay} {dropoffTime}
                             </div>
 
@@ -845,8 +845,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       {
         vehicles.length === 0 && (
-          <div className="bg-gray-900 rounded-lg p-8 text-center">
-            <p className="text-gray-400">Nessun veicolo trovato</p>
+          <div className="bg-theme-bg-secondary rounded-lg p-8 text-center">
+            <p className="text-theme-text-muted">Nessun veicolo trovato</p>
           </div>
         )
       }
@@ -855,7 +855,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       {
         selectedCell && (
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn"
+            className="fixed inset-0 bg-theme-bg-primary/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn"
             onClick={() => setSelectedCell(null)}
           >
             <div
@@ -865,14 +865,14 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
               <div className="p-6 border-b border-white/10">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-2xl font-light text-white mb-2">
+                    <h3 className="text-2xl font-light text-theme-text-primary mb-2">
                       {selectedCell.vehicle}
                     </h3>
-                    <p className="text-gray-400 text-sm">{selectedCell.date}</p>
+                    <p className="text-theme-text-muted text-sm">{selectedCell.date}</p>
                   </div>
                   <button
                     onClick={() => setSelectedCell(null)}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-white text-xl"
+                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-theme-text-primary text-xl"
                   >
                     ✕
                   </button>
@@ -888,10 +888,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     <div key={booking.id} className="bg-gradient-to-br from-red-500/20 to-red-600/10 backdrop-blur-sm rounded-lg p-5 border-l-2 border-red-500 border border-white/10 hover:scale-[1.01] transition-all duration-200">
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <div className="text-white font-medium text-lg mb-1">
+                          <div className="text-theme-text-primary font-medium text-lg mb-1">
                             {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
                           </div>
-                          <div className="text-gray-300 text-sm">
+                          <div className="text-theme-text-secondary text-sm">
                             {booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}
                           </div>
                         </div>
@@ -902,15 +902,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
                       {/* Vehicle selection dropdown */}
                       {hasAlternatives && (
-                        <div className="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <div className="mb-4 p-3 bg-theme-bg-secondary/50 rounded-lg border border-theme-border">
+                          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                             Veicolo Assegnato (Targa)
                           </label>
                           <select
                             value={booking.vehicle_name}
                             onChange={(e) => changeBookingVehicle(booking.id, e.target.value)}
                             disabled={changingVehicle === booking.id}
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:border-dr7-gold disabled:opacity-50"
+                            className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-md text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold disabled:opacity-50"
                           >
                             {alternativeVehicles.map(vehicle => (
                               <option key={vehicle.id} value={vehicle.display_name}>
@@ -926,8 +926,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Ritiro:</span>
-                          <span className="text-white font-medium">
+                          <span className="text-theme-text-muted">Ritiro:</span>
+                          <span className="text-theme-text-primary font-medium">
                             {new Date(booking.pickup_date).toLocaleString('it-IT', {
                               day: '2-digit',
                               month: '2-digit',
@@ -939,8 +939,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Riconsegna:</span>
-                          <span className="text-white font-medium">
+                          <span className="text-theme-text-muted">Riconsegna:</span>
+                          <span className="text-theme-text-primary font-medium">
                             {new Date(booking.dropoff_date).toLocaleString('it-IT', {
                               day: '2-digit',
                               month: '2-digit',
@@ -951,8 +951,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             })}
                           </span>
                         </div>
-                        <div className="flex justify-between pt-2 border-t border-gray-700">
-                          <span className="text-gray-400">Prezzo Totale:</span>
+                        <div className="flex justify-between pt-2 border-t border-theme-border">
+                          <span className="text-theme-text-muted">Prezzo Totale:</span>
                           <span className="text-dr7-gold font-bold text-lg">
                             {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${(booking.price_total / 100).toFixed(2)}`}
                           </span>
@@ -992,23 +992,23 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       {
         selectedUnavailability && (
           <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4"
             onClick={() => setSelectedUnavailability(null)}
           >
             <div
-              className="bg-gray-900 rounded-xl max-w-lg w-full border border-gray-700 shadow-2xl"
+              className="bg-theme-bg-secondary rounded-xl max-w-lg w-full border border-theme-border shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6 border-b border-gray-800">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-2xl font-bold text-white mb-2">
+                    <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
                       Dettagli Indisponibilità
                     </h3>
                   </div>
                   <button
                     onClick={() => setSelectedUnavailability(null)}
-                    className="text-gray-400 hover:text-white transition-colors text-3xl leading-none"
+                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors text-3xl leading-none"
                   >
                     ×
                   </button>
@@ -1017,12 +1017,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
               <div className="p-6 space-y-4">
                 {/* Vehicle Name */}
-                <div className="bg-gray-800/50 rounded-lg p-4">
-                  <p className="text-sm text-gray-400 mb-1">Veicolo</p>
-                  <p className="text-lg font-semibold text-white">
+                <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
+                  <p className="text-sm text-theme-text-muted mb-1">Veicolo</p>
+                  <p className="text-lg font-semibold text-theme-text-primary">
                     {selectedUnavailability.display_name}
                     {selectedUnavailability.plate && (
-                      <span className="text-gray-400 font-normal text-sm ml-2">
+                      <span className="text-theme-text-muted font-normal text-sm ml-2">
                         ({selectedUnavailability.plate})
                       </span>
                     )}
@@ -1040,9 +1040,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                 {/* Date Range */}
                 {selectedUnavailability.metadata?.unavailable_from && selectedUnavailability.metadata?.unavailable_until && (
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                      <p className="text-sm text-gray-400 mb-1">Dal</p>
-                      <p className="text-white font-medium">
+                    <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
+                      <p className="text-sm text-theme-text-muted mb-1">Dal</p>
+                      <p className="text-theme-text-primary font-medium">
                         {new Date(selectedUnavailability.metadata.unavailable_from).toLocaleDateString('it-IT', {
                           day: '2-digit',
                           month: 'long',
@@ -1050,15 +1050,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         })}
                       </p>
                       {selectedUnavailability.metadata?.unavailable_from_time && (
-                        <p className="text-sm text-gray-400 mt-1">
+                        <p className="text-sm text-theme-text-muted mt-1">
                           {selectedUnavailability.metadata.unavailable_from_time}
                         </p>
                       )}
                     </div>
 
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                      <p className="text-sm text-gray-400 mb-1">Al</p>
-                      <p className="text-white font-medium">
+                    <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
+                      <p className="text-sm text-theme-text-muted mb-1">Al</p>
+                      <p className="text-theme-text-primary font-medium">
                         {new Date(selectedUnavailability.metadata.unavailable_until).toLocaleDateString('it-IT', {
                           day: '2-digit',
                           month: 'long',
@@ -1066,7 +1066,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         })}
                       </p>
                       {selectedUnavailability.metadata?.unavailable_until_time && (
-                        <p className="text-sm text-gray-400 mt-1">
+                        <p className="text-sm text-theme-text-muted mt-1">
                           {selectedUnavailability.metadata.unavailable_until_time}
                         </p>
                       )}
@@ -1076,9 +1076,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
                 {/* Duration */}
                 {selectedUnavailability.metadata?.unavailable_from && selectedUnavailability.metadata?.unavailable_until && (
-                  <div className="bg-gray-800/50 rounded-lg p-4">
-                    <p className="text-sm text-gray-400 mb-1">Durata</p>
-                    <p className="text-white font-medium">
+                  <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
+                    <p className="text-sm text-theme-text-muted mb-1">Durata</p>
+                    <p className="text-theme-text-primary font-medium">
                       {(() => {
                         const from = new Date(selectedUnavailability.metadata.unavailable_from)
                         const until = new Date(selectedUnavailability.metadata.unavailable_until)
@@ -1093,7 +1093,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
               <div className="p-6 border-t border-gray-800">
                 <button
                   onClick={() => setSelectedUnavailability(null)}
-                  className="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg transition-colors font-medium"
+                  className="w-full bg-gray-700 hover:bg-gray-600 text-theme-text-primary px-4 py-3 rounded-lg transition-colors font-medium"
                 >
                   Chiudi
                 </button>

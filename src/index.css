@@ -6,35 +6,63 @@
   --color-dr7-gold: #D4AF37;
   --color-dr7-dark: #000000;
   --color-dr7-darker: #000000;
+
+  --color-theme-bg-primary: #000000;
+  --color-theme-bg-secondary: #171717;
+  --color-theme-bg-tertiary: #1f1f1f;
+  --color-theme-bg-hover: #262626;
+  --color-theme-text-primary: #ffffff;
+  --color-theme-text-secondary: #d4d4d4;
+  --color-theme-text-muted: #a3a3a3;
+  --color-theme-border: #404040;
+  --color-theme-border-light: #525252;
+  --color-theme-input-bg: #000000;
+  --color-theme-input-border: #525252;
+  --color-theme-shadow: rgba(0, 0, 0, 0.5);
+  --color-theme-overlay: rgba(0, 0, 0, 0.75);
 }
 
-/* Fix calendar icon visibility for datetime inputs */
-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+.light {
+  --color-theme-bg-primary: #ffffff;
+  --color-theme-bg-secondary: #f5f5f5;
+  --color-theme-bg-tertiary: #e5e5e5;
+  --color-theme-bg-hover: #d4d4d4;
+  --color-theme-text-primary: #171717;
+  --color-theme-text-secondary: #404040;
+  --color-theme-text-muted: #737373;
+  --color-theme-border: #d4d4d4;
+  --color-theme-border-light: #e5e5e5;
+  --color-theme-input-bg: #ffffff;
+  --color-theme-input-border: #d4d4d4;
+  --color-theme-shadow: rgba(0, 0, 0, 0.1);
+  --color-theme-overlay: rgba(0, 0, 0, 0.5);
+}
+
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
   cursor: pointer;
   opacity: 0.7;
 }
 
-input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
-
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
+.light input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.light input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0);
   cursor: pointer;
   opacity: 0.7;
 }
 
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
-/* Premium Modal Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -45,7 +73,6 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   animation: fadeIn 0.2s ease-out;
 }
 
-/* Custom Scrollbar for Modal */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
 }
@@ -54,20 +81,32 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: transparent;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+.light .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.light .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.scrollbar-thumb-white\/10::-webkit-scrollbar-thumb {
+.dark .scrollbar-thumb-white\/10::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.light .scrollbar-thumb-white\/10::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}

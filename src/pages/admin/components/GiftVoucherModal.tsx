@@ -88,20 +88,20 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 {/* Header */}
-                <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-white">🎁 Invia Buono Regalo</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl">&times;</button>
+                <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
+                    <h2 className="text-2xl font-bold text-theme-text-primary">🎁 Invia Buono Regalo</h2>
+                    <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary text-3xl">&times;</button>
                 </div>
 
                 <div className="p-6 space-y-6">
                     {/* Channel Selection */}
-                    <div className="bg-gray-800 rounded-lg p-4">
-                        <label className="block text-sm font-medium text-gray-300 mb-3">Canale di Invio</label>
+                    <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-3">Canale di Invio</label>
                         <div className="flex gap-4">
-                            <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${channel === 'email' ? 'border-dr7-gold bg-dr7-gold/10' : 'border-gray-600 hover:bg-gray-700'}`}>
+                            <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${channel === 'email' ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border-light hover:bg-theme-bg-hover'}`}>
                                 <input
                                     type="radio"
                                     name="channel"
@@ -110,9 +110,9 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                     onChange={() => setChannel('email')}
                                     className="text-dr7-gold focus:ring-dr7-gold"
                                 />
-                                <span className="text-white">📧 Email</span>
+                                <span className="text-theme-text-primary">📧 Email</span>
                             </label>
-                            <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${channel === 'whatsapp' ? 'border-green-500 bg-green-500/10' : 'border-gray-600 hover:bg-gray-700'}`}>
+                            <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${channel === 'whatsapp' ? 'border-green-500 bg-green-500/10' : 'border-theme-border-light hover:bg-theme-bg-hover'}`}>
                                 <input
                                     type="radio"
                                     name="channel"
@@ -121,14 +121,14 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                     onChange={() => setChannel('whatsapp')}
                                     className="text-green-500 focus:ring-green-500"
                                 />
-                                <span className="text-white">💬 WhatsApp</span>
+                                <span className="text-theme-text-primary">💬 WhatsApp</span>
                             </label>
                         </div>
                     </div>
 
                     {/* Selected Customers */}
-                    <div className="bg-gray-800 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-gray-300 mb-2">
+                    <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                        <h3 className="text-sm font-semibold text-theme-text-secondary mb-2">
                             Destinatari ({selectedCustomers.length})
                         </h3>
                         {channel === 'whatsapp' && (
@@ -143,7 +143,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                 </span>
                             ))}
                             {selectedCustomers.length > 10 && (
-                                <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">
+                                <span className="px-3 py-1 bg-gray-700 text-theme-text-secondary rounded-full text-sm">
                                     +{selectedCustomers.length - 10} altri
                                 </span>
                             )}
@@ -153,21 +153,21 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                     {/* Image Upload (Email Only) */}
                     {channel === 'email' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                                 Immagine Buono Regalo *
                             </label>
-                            <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center">
+                            <div className="border-2 border-dashed border-theme-border-light rounded-lg p-6 text-center">
                                 <div className="space-y-4">
                                     {/* Preview Grid */}
                                     {imagePreviews.length > 0 && (
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                                             {imagePreviews.map((preview, index) => (
                                                 <div key={index} className="relative group">
-                                                    <img src={preview} alt={`Preview ${index}`} className="w-full h-24 object-cover rounded border border-gray-600" />
+                                                    <img src={preview} alt={`Preview ${index}`} className="w-full h-24 object-cover rounded border border-theme-border-light" />
                                                     <button
                                                         type="button"
                                                         onClick={() => removeImage(index)}
-                                                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        className="absolute -top-2 -right-2 bg-red-600 text-theme-text-primary rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                                     >
                                                         &times;
                                                     </button>
@@ -191,7 +191,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                         >
                                             Carica Immagini Multiple (JPEG/PNG)
                                         </label>
-                                        <p className="text-xs text-gray-400 mt-2">Massimo 15MB totali</p>
+                                        <p className="text-xs text-theme-text-muted mt-2">Massimo 15MB totali</p>
                                     </div>
                                 </div>
                             </div>
@@ -201,14 +201,14 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                     {/* Email Subject (Email Only) */}
                     {channel === 'email' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                                 Oggetto Email *
                             </label>
                             <input
                                 type="text"
                                 value={subject}
                                 onChange={(e) => setSubject(e.target.value)}
-                                className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white focus:border-dr7-gold outline-none"
+                                className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-3 text-theme-text-primary focus:border-dr7-gold outline-none"
                                 placeholder="🎁 Buono Regalo per te!"
                             />
                         </div>
@@ -216,23 +216,23 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
 
                     {/* Message */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                             {channel === 'email' ? 'Messaggio Email *' : 'Messaggio WhatsApp *'}
                         </label>
                         <textarea
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
                             rows={6}
-                            className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white focus:border-dr7-gold outline-none"
+                            className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-3 text-theme-text-primary focus:border-dr7-gold outline-none"
                             placeholder="Scrivi il tuo messaggio..."
                         />
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-theme-text-muted mt-1">
                             Usa <code className="bg-gray-700 px-1 rounded">{'{nome}'}</code> e <code className="bg-gray-700 px-1 rounded">{'{cognome}'}</code> per personalizzare
                         </p>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-3 pt-4 border-t border-gray-700">
+                    <div className="flex gap-3 pt-4 border-t border-theme-border">
                         <Button
                             onClick={onClose}
                             variant="secondary"

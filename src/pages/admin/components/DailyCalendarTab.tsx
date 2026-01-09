@@ -221,7 +221,7 @@ export default function DailyCalendarTab() {
         return (
             <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-                <p className="text-white">Caricamento calendario giornaliero...</p>
+                <p className="text-theme-text-primary">Caricamento calendario giornaliero...</p>
             </div>
         )
     }
@@ -229,13 +229,13 @@ export default function DailyCalendarTab() {
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 shadow-lg">
+            <div className="bg-theme-bg-secondary rounded-lg p-3 border border-theme-border shadow-lg">
                 <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-xl font-bold text-white">Calendario Giornaliero</h2>
+                    <h2 className="text-xl font-bold text-theme-text-primary">Calendario Giornaliero</h2>
                     <div className="flex gap-2">
                         <button
                             onClick={() => navigateDay('prev')}
-                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white rounded text-xs font-semibold"
+                            className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded text-xs font-semibold"
                         >
                             ← Prec
                         </button>
@@ -247,13 +247,13 @@ export default function DailyCalendarTab() {
                         </button>
                         <button
                             onClick={() => navigateDay('next')}
-                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white rounded text-xs font-semibold"
+                            className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded text-xs font-semibold"
                         >
                             Succ →
                         </button>
                     </div>
                 </div>
-                <p className="text-gray-400 text-xs mb-2">
+                <p className="text-theme-text-muted text-xs mb-2">
                     {selectedDate.toLocaleDateString('it-IT', {
                         weekday: 'long',
                         year: 'numeric',
@@ -264,29 +264,29 @@ export default function DailyCalendarTab() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-lg overflow-x-auto">
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-x-auto">
                 {/* Header Row with Categories */}
-                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-gray-700 bg-gray-800 sticky top-0">
-                    <div className="p-2 text-xs font-bold text-gray-400">ORA</div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-theme-border bg-theme-bg-tertiary sticky top-0">
+                    <div className="p-2 text-xs font-bold text-theme-text-muted">ORA</div>
+                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-green-600 rounded"></div>
                             <span className="text-gray-200">NOLEGGIO</span>
                         </div>
                     </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-blue-600 rounded"></div>
                             <span className="text-gray-200">LAVAGGIO</span>
                         </div>
                     </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-orange-600 rounded"></div>
                             <span className="text-gray-200">MECCANICA</span>
                         </div>
                     </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-gray-700">
+                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-purple-600 rounded"></div>
                             <span className="text-gray-200">VARIE</span>
@@ -327,7 +327,7 @@ export default function DailyCalendarTab() {
                                 return (
                                     <div
                                         key={booking.id}
-                                        className={`${bgColor} text-white rounded px-2 py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow`}
+                                        className={`${bgColor} text-theme-text-primary rounded px-2 py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow`}
                                     >
                                         <div
                                             className={`font-bold text-[10px] mb-0.5 ${labelColor}`}
@@ -336,12 +336,12 @@ export default function DailyCalendarTab() {
                                             {label}
                                         </div>
                                         <div className="font-bold text-sm leading-tight">{parseCustomerName(booking.customer_name)}</div>
-                                        <div className="text-white/90 text-xs mt-0.5">{booking.vehicle_name}</div>
+                                        <div className="text-theme-text-primary/90 text-xs mt-0.5">{booking.vehicle_name}</div>
                                         {booking.type !== 'lavaggio' && (
-                                            <div className="text-white/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
+                                            <div className="text-theme-text-primary/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
                                         )}
                                         {booking.service_name && (
-                                            <div className="text-white/70 text-[10px] mt-1 italic">{booking.service_name}</div>
+                                            <div className="text-theme-text-primary/70 text-[10px] mt-1 italic">{booking.service_name}</div>
                                         )}
                                     </div>
                                 )
@@ -352,11 +352,11 @@ export default function DailyCalendarTab() {
                             <div
                                 key={slot}
                                 ref={isCurrentSlot ? currentTimeRef : null}
-                                className={`grid grid-cols-[80px_1fr_1fr_1fr_1fr] ${isCurrentSlot ? 'bg-gray-800/50 border-l-2 border-dr7-gold' : ''
-                                    } hover:bg-gray-800/30 transition-colors`}
+                                className={`grid grid-cols-[80px_1fr_1fr_1fr_1fr] ${isCurrentSlot ? 'bg-theme-bg-tertiary/50 border-l-2 border-dr7-gold' : ''
+                                    } hover:bg-theme-bg-tertiary/30 transition-colors`}
                             >
                                 {/* Time Column */}
-                                <div className="p-2 text-gray-400 font-mono text-xs font-semibold border-r border-gray-800">
+                                <div className="p-2 text-theme-text-muted font-mono text-xs font-semibold border-r border-gray-800">
                                     {slot}
                                 </div>
 

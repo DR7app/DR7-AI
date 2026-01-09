@@ -483,15 +483,15 @@ export default function VehiclesTab() {
   const aziendaliCount = aziendaliVehicles.length
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Caricamento...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
   return (
     <div>
       <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Veicoli</h2>
-          <p className="text-sm text-gray-400 mt-1">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Veicoli</h2>
+          <p className="text-sm text-theme-text-muted mt-1">
             Exotic Supercars: {exoticCount} | Urban: {urbanCount} | Aziendali: {aziendaliCount} | Totale: {vehicles.length}
           </p>
         </div>
@@ -502,7 +502,7 @@ export default function VehiclesTab() {
               setSelectedVehicles(new Set())
             }}
             variant={multiSelectMode ? 'secondary' : 'primary'}
-            className={multiSelectMode ? 'bg-blue-600 text-white' : ''}
+            className={multiSelectMode ? 'bg-blue-600 text-theme-text-primary' : ''}
           >
             {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
           </Button>
@@ -534,7 +534,7 @@ export default function VehiclesTab() {
             </Button>
             <Button
               onClick={deleteSelectedVehicles}
-              className="bg-red-600 hover:bg-red-700 text-white text-sm"
+              className="bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm"
             >
               Elimina Selezionati
             </Button>
@@ -543,14 +543,14 @@ export default function VehiclesTab() {
       )}
 
       {/* Price Adjustment Section - Compact */}
-      <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-6">
+      <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-lg p-4 mb-6">
         <div className="flex items-end gap-3">
           <div className="flex-1">
-            <label className="block text-xs text-gray-400 mb-1">Veicolo</label>
+            <label className="block text-xs text-theme-text-muted mb-1">Veicolo</label>
             <select
               value={selectedVehicle}
               onChange={(e) => setSelectedVehicle(e.target.value)}
-              className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+              className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
             >
               <option value="all">Tutti i veicoli ({vehicles.length})</option>
               {vehicles.map((vehicle) => (
@@ -562,14 +562,14 @@ export default function VehiclesTab() {
           </div>
 
           <div className="w-32">
-            <label className="block text-xs text-gray-400 mb-1">Percentuale</label>
+            <label className="block text-xs text-theme-text-muted mb-1">Percentuale</label>
             <input
               type="number"
               value={adjustmentPercentage}
               onChange={(e) => setAdjustmentPercentage(e.target.value)}
               min="1"
               max="100"
-              className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+              className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
               placeholder="10"
             />
           </div>
@@ -577,7 +577,7 @@ export default function VehiclesTab() {
           <button
             onClick={() => handlePriceAdjustment(true)}
             disabled={isAdjusting}
-            className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-green-700 hover:bg-green-600 text-theme-text-primary px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             + Aumenta
           </button>
@@ -585,22 +585,22 @@ export default function VehiclesTab() {
           <button
             onClick={() => handlePriceAdjustment(false)}
             disabled={isAdjusting}
-            className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-red-700 hover:bg-red-600 text-theme-text-primary px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             - Diminuisci
           </button>
         </div>
 
         {isAdjusting && (
-          <div className="mt-3 text-center text-sm text-gray-400">
+          <div className="mt-3 text-center text-sm text-theme-text-muted">
             <p>Aggiornamento prezzi in corso...</p>
           </div>
         )}
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-900 p-6 rounded-lg mb-6 border border-gray-700">
-          <h3 className="text-xl font-semibold text-white mb-4">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-lg mb-6 border border-theme-border">
+          <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
             {editingId ? 'Modifica Veicolo' : 'Nuovo Veicolo'}
           </h3>
 
@@ -662,7 +662,7 @@ export default function VehiclesTab() {
                   value={formData.unavailable_from}
                   onChange={(value) => setFormData({ ...formData, unavailable_from: value })}
                   required={formData.status === 'unavailable'}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
@@ -671,7 +671,7 @@ export default function VehiclesTab() {
                   type="text"
                   value={formData.unavailable_from_time}
                   onChange={(e) => setFormData({ ...formData, unavailable_from_time: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white font-mono"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary font-mono"
                   placeholder="10:00"
                   pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
                   maxLength={5}
@@ -685,7 +685,7 @@ export default function VehiclesTab() {
                   value={formData.unavailable_until}
                   onChange={(value) => setFormData({ ...formData, unavailable_until: value })}
                   required={formData.status === 'unavailable'}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
@@ -694,7 +694,7 @@ export default function VehiclesTab() {
                   type="text"
                   value={formData.unavailable_until_time}
                   onChange={(e) => setFormData({ ...formData, unavailable_until_time: e.target.value })}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white font-mono"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary font-mono"
                   placeholder="16:00"
                   pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
                   maxLength={5}
@@ -708,7 +708,7 @@ export default function VehiclesTab() {
                   value={formData.unavailable_reason}
                   onChange={(e) => setFormData({ ...formData, unavailable_reason: e.target.value })}
                   required={formData.status === 'unavailable'}
-                  className="w-full bg-gray-800 border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
                 >
                   <option value="">Seleziona un motivo...</option>
                   <option value="Tagliando">Tagliando</option>
@@ -743,49 +743,49 @@ export default function VehiclesTab() {
       {/* Three Column Layout: Urban, Exotic, and Aziendali */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Urban Vehicles Column */}
-        <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-          <div className="bg-cyan-900/30 px-4 py-3 border-b border-gray-700">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+          <div className="bg-cyan-900/30 px-4 py-3 border-b border-theme-border">
+            <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-cyan-900 text-cyan-200 rounded text-sm">Urban</span>
-              <span className="text-sm text-gray-400">({urbanCount} veicoli)</span>
+              <span className="text-sm text-theme-text-muted">({urbanCount} veicoli)</span>
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-black">
+              <thead className="bg-theme-bg-primary">
                 <tr>
                   {multiSelectMode && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white w-10">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
                       <input
                         type="checkbox"
                         checked={urbanVehicles.length > 0 && urbanVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(urbanVehicles)}
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Targa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tariffa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 </tr>
               </thead>
               <tbody>
                 {urbanVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
+                  <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
                     {multiSelectMode && (
                       <td className="px-4 py-3 text-sm">
                         <input
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
-                    <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
-                    <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
@@ -799,7 +799,7 @@ export default function VehiclesTab() {
                               vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-white">€{vehicle.daily_rate}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
                         <Button
@@ -841,49 +841,49 @@ export default function VehiclesTab() {
         </div>
 
         {/* Exotic Vehicles Column */}
-        <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-          <div className="bg-purple-900/30 px-4 py-3 border-b border-gray-700">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+          <div className="bg-purple-900/30 px-4 py-3 border-b border-theme-border">
+            <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Exotic Supercars</span>
-              <span className="text-sm text-gray-400">({exoticCount} veicoli)</span>
+              <span className="text-sm text-theme-text-muted">({exoticCount} veicoli)</span>
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-black">
+              <thead className="bg-theme-bg-primary">
                 <tr>
                   {multiSelectMode && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white w-10">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
                       <input
                         type="checkbox"
                         checked={exoticVehicles.length > 0 && exoticVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(exoticVehicles)}
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Targa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tariffa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 </tr>
               </thead>
               <tbody>
                 {exoticVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
+                  <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
                     {multiSelectMode && (
                       <td className="px-4 py-3 text-sm">
                         <input
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
-                    <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
-                    <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
@@ -897,7 +897,7 @@ export default function VehiclesTab() {
                               vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-white">€{vehicle.daily_rate}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
                         <Button
@@ -939,49 +939,49 @@ export default function VehiclesTab() {
         </div>
 
         {/* Aziendali Vehicles Column */}
-        <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-          <div className="bg-orange-900/30 px-4 py-3 border-b border-gray-700">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+          <div className="bg-orange-900/30 px-4 py-3 border-b border-theme-border">
+            <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Aziendali</span>
-              <span className="text-sm text-gray-400">({aziendaliCount} veicoli)</span>
+              <span className="text-sm text-theme-text-muted">({aziendaliCount} veicoli)</span>
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-black">
+              <thead className="bg-theme-bg-primary">
                 <tr>
                   {multiSelectMode && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-white w-10">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
                       <input
                         type="checkbox"
                         checked={aziendaliVehicles.length > 0 && aziendaliVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(aziendaliVehicles)}
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Targa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tariffa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 </tr>
               </thead>
               <tbody>
                 {aziendaliVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
+                  <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
                     {multiSelectMode && (
                       <td className="px-4 py-3 text-sm">
                         <input
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
-                    <td className="px-4 py-3 text-sm text-white font-semibold">{vehicle.display_name}</td>
-                    <td className="px-4 py-3 text-sm text-white">{vehicle.plate || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
@@ -995,7 +995,7 @@ export default function VehiclesTab() {
                               vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-white">€{vehicle.daily_rate}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
                         <Button

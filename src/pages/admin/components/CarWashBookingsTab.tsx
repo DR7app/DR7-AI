@@ -834,7 +834,7 @@ export default function CarWashBookingsTab() {
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Loading...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Loading...</div>
   }
 
   return (
@@ -842,7 +842,7 @@ export default function CarWashBookingsTab() {
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold text-dr7-gold">Prenotazioni Lavaggio</h2>
         <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-400">
+          <div className="text-sm text-theme-text-muted">
             {bookings.length} prenotazion{bookings.length !== 1 ? 'i' : 'e'}
           </div>
           <button
@@ -861,7 +861,7 @@ export default function CarWashBookingsTab() {
           placeholder="Cerca prenotazione per nome cliente..."
           value={bookingSearchQuery}
           onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
       </div>
 
@@ -876,18 +876,18 @@ export default function CarWashBookingsTab() {
       />
 
       {showForm && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Crea Nuova Prenotazione Lavaggio</h3>
+        <div className="bg-theme-bg-tertiary rounded-lg p-6 border border-theme-border mb-6">
+          <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Crea Nuova Prenotazione Lavaggio</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Customer Selection */}
-            <div className="border-b border-gray-700 pb-4">
+            <div className="border-b border-theme-border pb-4">
               <div className="flex items-center gap-4 mb-4">
                 <button
                   type="button"
                   onClick={() => setNewCustomerMode(false)}
                   className={`px-4 py-2 rounded ${!newCustomerMode
                     ? 'bg-white text-black font-semibold'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                     }`}
                 >
                   Seleziona Cliente
@@ -897,7 +897,7 @@ export default function CarWashBookingsTab() {
                   onClick={() => setNewCustomerMode(true)}
                   className={`px-4 py-2 rounded ${newCustomerMode
                     ? 'bg-white text-black font-semibold'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                     }`}
                 >
                   Nuovo Cliente
@@ -906,7 +906,7 @@ export default function CarWashBookingsTab() {
 
               {!newCustomerMode ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente</label>
                   <CustomerAutocomplete
                     customers={customers}
                     selectedCustomerId={formData.customer_id}
@@ -919,67 +919,67 @@ export default function CarWashBookingsTab() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Nome *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Nome *</label>
                       <input
                         type="text"
                         required
                         value={newCustomerData.nome}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, nome: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Cognome *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cognome *</label>
                       <input
                         type="text"
                         required
                         value={newCustomerData.cognome}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Codice Fiscale *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Codice Fiscale *</label>
                       <input
                         type="text"
                         required
                         value={newCustomerData.codice_fiscale}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                         maxLength={16}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Data di Nascita</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data di Nascita</label>
                       <input
                         type="date"
                         value={newCustomerData.data_nascita}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Luogo di Nascita</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Luogo di Nascita</label>
                       <input
                         type="text"
                         value={newCustomerData.luogo_nascita}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Nazione *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Nazione *</label>
                       <select
                         required
                         value={newCustomerData.nazione}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, nazione: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       >
                         <option value="Italia">Italia</option>
                         <option value="Francia">Francia</option>
@@ -993,78 +993,78 @@ export default function CarWashBookingsTab() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Email *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Email *</label>
                       <input
                         type="email"
                         required
                         value={newCustomerData.email}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Telefono *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Telefono *</label>
                       <input
                         type="tel"
                         required
                         value={newCustomerData.telefono}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, telefono: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Indirizzo</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Indirizzo</label>
                       <input
                         type="text"
                         value={newCustomerData.indirizzo}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, indirizzo: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Numero Civico</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Numero Civico</label>
                       <input
                         type="text"
                         value={newCustomerData.numero_civico}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, numero_civico: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Città di Residenza *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Città di Residenza *</label>
                       <input
                         type="text"
                         required
                         value={newCustomerData.citta_residenza}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, citta_residenza: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">CAP *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">CAP *</label>
                       <input
                         type="text"
                         required
                         value={newCustomerData.codice_postale}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_postale: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                         maxLength={5}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Provincia *</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Provincia *</label>
                       <input
                         type="text"
                         required
                         value={newCustomerData.provincia_residenza}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, provincia_residenza: e.target.value.toUpperCase() })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                         maxLength={2}
                         placeholder="ES: CA"
                       />
@@ -1072,12 +1072,12 @@ export default function CarWashBookingsTab() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">PEC (opzionale)</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">PEC (opzionale)</label>
                     <input
                       type="email"
                       value={newCustomerData.pec}
                       onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>
                 </div>
@@ -1088,19 +1088,19 @@ export default function CarWashBookingsTab() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* DATE FIRST */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Data *</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data *</label>
                 <input
                   type="date"
                   required
                   value={formData.appointment_date}
                   onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                  className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                 />
               </div>
 
               {/* SERVICE TYPE SECOND */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Tipo Servizio *
                   {!formData.appointment_date && <span className="text-yellow-400 text-xs ml-2">(Seleziona prima la data)</span>}
                 </label>
@@ -1116,7 +1116,7 @@ export default function CarWashBookingsTab() {
                       appointment_time: '' // Reset time when service changes
                     })
                   }}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                  className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                   disabled={!formData.appointment_date}
                 >
                   <option value="">{formData.appointment_date ? 'Seleziona servizio' : 'Seleziona prima la data'}</option>
@@ -1141,7 +1141,7 @@ export default function CarWashBookingsTab() {
                     <p className="text-red-400 text-sm font-semibold mb-2">
                       ❌ Nessun orario disponibile per questa data
                     </p>
-                    <p className="text-gray-300 text-sm mb-3">
+                    <p className="text-theme-text-secondary text-sm mb-3">
                       Tutti gli orari sono occupati da prenotazioni di lavaggio o meccanica.
                     </p>
                     {(() => {
@@ -1169,7 +1169,7 @@ export default function CarWashBookingsTab() {
                                 </span>
                               ))}
                             </div>
-                            <p className="text-gray-400 text-xs mt-2">
+                            <p className="text-theme-text-muted text-xs mt-2">
                               Seleziona una data diversa per prenotare in questi orari
                             </p>
                           </div>
@@ -1180,7 +1180,7 @@ export default function CarWashBookingsTab() {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                       Ora Appuntamento *
                       <span className="text-green-400 text-xs ml-2">
                         ({availableTimeSlots.length} orari disponibili)
@@ -1190,7 +1190,7 @@ export default function CarWashBookingsTab() {
                       required
                       value={formData.appointment_time}
                       onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                     >
                       <option value="">Seleziona orario</option>
                       {(() => {
@@ -1225,12 +1225,12 @@ export default function CarWashBookingsTab() {
             {/* Payment Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Stato Pagamento</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato Pagamento</label>
                 <select
                   required
                   value={formData.payment_status}
                   onChange={(e) => setFormData({ ...formData, payment_status: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                  className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                 >
                   <option value="paid">Pagato</option>
                   <option value="pending">Da Saldare</option>
@@ -1238,7 +1238,7 @@ export default function CarWashBookingsTab() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Importo Pagato (€)</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Importo Pagato (€)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1246,18 +1246,18 @@ export default function CarWashBookingsTab() {
                   required
                   value={formData.amount_paid}
                   onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                  className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                   placeholder="0.00"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Note (opzionale)</label>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Note (opzionale)</label>
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                 rows={3}
               />
             </div>
@@ -1274,7 +1274,7 @@ export default function CarWashBookingsTab() {
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded"
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded"
               >
                 Annulla
               </button>
@@ -1282,7 +1282,7 @@ export default function CarWashBookingsTab() {
                 type="submit"
                 disabled={submitting}
                 className={`px-4 py-2 font-semibold rounded ${submitting
-                  ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                  ? 'bg-gray-500 text-theme-text-secondary cursor-not-allowed'
                   : 'bg-dr7-gold hover:bg-yellow-500 text-black'
                   }`}
               >
@@ -1305,12 +1305,12 @@ export default function CarWashBookingsTab() {
               <table className="w-full min-w-max">
                 <thead className="bg-dr7-darker">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Cliente</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Servizio</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Data & Ora</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Prezzo</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Pagamento</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Azioni</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Servizio</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Data & Ora</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Prezzo</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Pagamento</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Azioni</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1323,20 +1323,20 @@ export default function CarWashBookingsTab() {
                     return customerName.includes(query)
                   }).map((booking) => (
                     <tr key={booking.id} className="border-t border-gray-800 hover:bg-dr7-darker/50">
-                      <td className="px-4 py-3 text-sm text-white">
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div className="font-medium">{booking.customer_name}</div>
-                        <div className="text-xs text-gray-400">{booking.customer_email}</div>
-                        <div className="text-xs text-gray-400">{booking.customer_phone}</div>
+                        <div className="text-xs text-theme-text-muted">{booking.customer_email}</div>
+                        <div className="text-xs text-theme-text-muted">{booking.customer_phone}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-white">
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div className="font-medium">{booking.service_name}</div>
                         {booking.booking_details?.additionalService && (
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-theme-text-muted">
                             + {booking.booking_details.additionalService}
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-white">
+                      <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div>
                           {booking.appointment_date
                             ? new Date(booking.appointment_date).toLocaleDateString('it-IT', {
@@ -1347,11 +1347,11 @@ export default function CarWashBookingsTab() {
                             })
                             : '-'}
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-theme-text-muted">
                           {booking.appointment_time || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-white font-bold">
+                      <td className="px-4 py-3 text-sm text-theme-text-primary font-bold">
                         EUR {(booking.price_total / 100).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-sm">
@@ -1368,32 +1368,32 @@ export default function CarWashBookingsTab() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => setEditingBooking(booking)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded text-xs font-medium transition-colors"
                           >
                             Modifica
                           </button>
                           <button
                             onClick={() => handleGenerateInvoice(booking)}
                             disabled={generatingInvoice}
-                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-purple-600 hover:bg-purple-700 text-white'} rounded text-xs font-medium transition-colors`}
+                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded text-xs font-medium transition-colors`}
                           >
                             {generatingInvoice ? '...' : 'Genera Fattura'}
                           </button>
                           {booking.status !== 'cancelled' ? (
                             <button
                               onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium transition-colors"
+                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-theme-text-primary rounded text-xs font-medium transition-colors"
                             >
                               Annulla
                             </button>
                           ) : (
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-400">
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-theme-text-muted">
                               Annullata
                             </span>
                           )}
                           <button
                             onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded text-xs font-medium transition-colors"
                           >
                             Elimina
                           </button>
@@ -1411,14 +1411,14 @@ export default function CarWashBookingsTab() {
       {/* Edit Booking Modal */}
       {
         editingBooking && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
+          <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border">
               <div className="p-6 border-b border-gray-800">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-2xl font-bold text-white">Modifica Prenotazione</h3>
+                  <h3 className="text-2xl font-bold text-theme-text-primary">Modifica Prenotazione</h3>
                   <button
                     onClick={() => setEditingBooking(null)}
-                    className="text-gray-400 hover:text-white text-2xl"
+                    className="text-theme-text-muted hover:text-theme-text-primary text-2xl"
                   >
                     ×
                   </button>
@@ -1427,85 +1427,85 @@ export default function CarWashBookingsTab() {
 
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Cliente</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cliente</label>
                   <input
                     type="text"
                     value={editingBooking.customer_name}
                     onChange={(e) => setEditingBooking({ ...editingBooking, customer_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">Email</label>
                     <input
                       type="email"
                       value={editingBooking.customer_email || ''}
                       onChange={(e) => setEditingBooking({ ...editingBooking, customer_email: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Telefono</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">Telefono</label>
                     <input
                       type="tel"
                       value={editingBooking.customer_phone || ''}
                       onChange={(e) => setEditingBooking({ ...editingBooking, customer_phone: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Servizio</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Servizio</label>
                   <input
                     type="text"
                     value={editingBooking.service_name}
                     onChange={(e) => setEditingBooking({ ...editingBooking, service_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Data</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data</label>
                     <input
                       type="date"
                       value={editingBooking.appointment_date}
                       onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Ora</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>
                     <input
                       type="time"
                       value={editingBooking.appointment_time}
                       onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Prezzo (€)</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo (€)</label>
                   <input
                     type="number"
                     value={editingBooking.price_total / 100}
                     onChange={(e) => setEditingBooking({ ...editingBooking, price_total: parseFloat(e.target.value) * 100 })}
                     step="0.01"
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Stato</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato</label>
                     <select
                       value={editingBooking.status}
                       onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     >
                       <option value="pending">In Attesa</option>
                       <option value="confirmed">Confermata</option>
@@ -1514,11 +1514,11 @@ export default function CarWashBookingsTab() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Pagamento</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">Pagamento</label>
                     <select
                       value={editingBooking.payment_status}
                       onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     >
                       <option value="pending">In Attesa</option>
                       <option value="paid">Pagato</option>
@@ -1563,7 +1563,7 @@ export default function CarWashBookingsTab() {
                 </button>
                 <button
                   onClick={() => setEditingBooking(null)}
-                  className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors"
+                  className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded font-medium transition-colors"
                 >
                   Annulla
                 </button>

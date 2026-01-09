@@ -210,13 +210,13 @@ export default function MissingFieldsModal({
         if (field === 'sesso') {
             return (
                 <div key={field} className="mb-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                         {label} *
                     </label>
                     <select
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     >
                         <option value="">Seleziona...</option>
                         <option value="M">Maschio</option>
@@ -232,14 +232,14 @@ export default function MissingFieldsModal({
         if (field === 'data_nascita' || field.includes('data_')) {
             return (
                 <div key={field} className="mb-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                         {label} *
                     </label>
                     <input
                         type="date"
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     />
                     {errors[field] && (
                         <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
@@ -251,14 +251,14 @@ export default function MissingFieldsModal({
         if (field === 'email') {
             return (
                 <div key={field} className="mb-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                         {label} *
                     </label>
                     <input
                         type="email"
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                         placeholder="esempio@email.com"
                     />
                     {errors[field] && (
@@ -271,14 +271,14 @@ export default function MissingFieldsModal({
         // Default text input
         return (
             <div key={field} className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                     {label} *
                 </label>
                 <input
                     type="text"
                     value={value}
                     onChange={(e) => handleChange(field, e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     placeholder={`Inserisci ${label.toLowerCase()}`}
                 />
                 {errors[field] && (
@@ -291,19 +291,19 @@ export default function MissingFieldsModal({
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
                 {/* Header */}
-                <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center z-10">
+                <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
                     <div>
-                        <h2 className="text-2xl font-bold text-white">Completa Dati Cliente</h2>
-                        <p className="text-sm text-gray-400 mt-1">
+                        <h2 className="text-2xl font-bold text-theme-text-primary">Completa Dati Cliente</h2>
+                        <p className="text-sm text-theme-text-muted mt-1">
                             Compila i campi mancanti per continuare
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white text-3xl leading-none"
+                        className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none"
                     >
                         &times;
                     </button>
@@ -323,18 +323,18 @@ export default function MissingFieldsModal({
                 </div>
 
                 {/* Footer */}
-                <div className="sticky bottom-0 bg-gray-900 border-t border-gray-700 p-6 flex justify-end gap-3">
+                <div className="sticky bottom-0 bg-theme-bg-secondary border-t border-theme-border p-6 flex justify-end gap-3">
                     <button
                         onClick={onClose}
                         disabled={isSaving}
-                        className="px-6 py-2.5 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:opacity-50"
+                        className="px-6 py-2.5 border border-theme-border-light text-theme-text-secondary rounded-lg hover:bg-theme-bg-tertiary transition-colors font-medium disabled:opacity-50"
                     >
                         Annulla
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-2.5 bg-blue-600 text-theme-text-primary rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isSaving ? 'Salvataggio...' : 'Salva e Continua'}
                     </button>

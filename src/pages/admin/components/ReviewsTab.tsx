@@ -181,7 +181,7 @@ export default function ReviewsTab() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-white">Gestione Recensioni</h2>
+                <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
                 <div className="flex gap-2">
                     <Button
                         onClick={() => {
@@ -189,7 +189,7 @@ export default function ReviewsTab() {
                             setSelectedIds(new Set())
                         }}
                         variant={multiSelectMode ? 'secondary' : 'primary'}
-                        className={multiSelectMode ? 'bg-blue-600 text-white' : ''}
+                        className={multiSelectMode ? 'bg-blue-600 text-theme-text-primary' : ''}
                     >
                         {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
                     </Button>
@@ -207,20 +207,20 @@ export default function ReviewsTab() {
             </div>
 
             {/* Filters */}
-            <div className="bg-gray-900 p-4 rounded-xl border border-gray-700 flex gap-4">
+            <div className="bg-theme-bg-secondary p-4 rounded-xl border border-theme-border flex gap-4">
                 <input
                     type="text"
                     placeholder="Cerca cliente o email..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-gray-800 border border-gray-600 text-white px-4 py-2 rounded w-full max-w-md focus:outline-none focus:border-dr7-gold"
+                    className="bg-theme-bg-tertiary border border-theme-border-light text-theme-text-primary px-4 py-2 rounded w-full max-w-md focus:outline-none focus:border-dr7-gold"
                 />
             </div>
 
-            <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl">
+            <div className="bg-theme-bg-secondary rounded-xl overflow-hidden border border-theme-border shadow-2xl">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="bg-black text-white uppercase text-xs tracking-wider">
+                        <thead className="bg-theme-bg-primary text-theme-text-primary uppercase text-xs tracking-wider">
                             <tr>
                                 {multiSelectMode && (
                                     <th className="p-4 w-10">
@@ -228,7 +228,7 @@ export default function ReviewsTab() {
                                             type="checkbox"
                                             checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.filter(b => !b.review_sent_at).length}
                                             onChange={handleSelectAll}
-                                            className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                            className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
                                         />
                                     </th>
                                 )}
@@ -243,19 +243,19 @@ export default function ReviewsTab() {
                         <tbody className="divide-y divide-gray-800">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-gray-400">
+                                    <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-theme-text-muted">
                                         Caricamento completati...
                                     </td>
                                 </tr>
                             ) : filteredBookings.length === 0 ? (
                                 <tr>
-                                    <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-gray-400">
+                                    <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-theme-text-muted">
                                         Nessuna prenotazione completata trovata.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredBookings.map((b) => (
-                                    <tr key={b.id} className={`hover:bg-gray-800/50 transition-colors ${selectedIds.has(b.id) ? 'bg-dr7-gold/10' : ''} ${b.review_sent_at ? 'opacity-60 grayscale' : ''}`}>
+                                    <tr key={b.id} className={`hover:bg-theme-bg-tertiary/50 transition-colors ${selectedIds.has(b.id) ? 'bg-dr7-gold/10' : ''} ${b.review_sent_at ? 'opacity-60 grayscale' : ''}`}>
                                         {multiSelectMode && (
                                             <td className="p-4">
                                                 {!b.review_sent_at ? (
@@ -263,14 +263,14 @@ export default function ReviewsTab() {
                                                         type="checkbox"
                                                         checked={selectedIds.has(b.id)}
                                                         onChange={() => toggleSelection(b.id)}
-                                                        className="rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                                        className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
                                                     />
                                                 ) : (
                                                     <span title="Recensione già richiesta" className="text-xs text-green-500">✅</span>
                                                 )}
                                             </td>
                                         )}
-                                        <td className="p-4 font-medium text-white">
+                                        <td className="p-4 font-medium text-theme-text-primary">
                                             {b.customer_name}
                                             {b.review_sent_at && (
                                                 <span className="block text-xs text-green-400 mt-1">
@@ -278,16 +278,16 @@ export default function ReviewsTab() {
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="p-4 text-gray-300">
+                                        <td className="p-4 text-theme-text-secondary">
                                             {b.service_type === 'car_wash' && '🚿 '}
                                             {b.service_type === 'mechanical_service' && '🔧 '}
                                             {!b.service_type && '🚗 '}
                                             {b.service_name}
                                         </td>
-                                        <td className="p-4 text-gray-300">
+                                        <td className="p-4 text-theme-text-secondary">
                                             {new Date(b.end_date).toLocaleDateString('it-IT')}
                                         </td>
-                                        <td className="p-4 text-sm text-gray-400">
+                                        <td className="p-4 text-sm text-theme-text-muted">
                                             <div>{b.customer_email || '-'}</div>
                                             <div>{b.customer_phone || '-'}</div>
                                         </td>

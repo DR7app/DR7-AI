@@ -228,15 +228,15 @@ export default function AviationQuotesTab() {
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Caricamento...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Preventivi Elicottero / Jet Privato</h2>
-          <p className="text-sm text-gray-400 mt-1">Gestione richieste preventivi voli privati</p>
+          <h2 className="text-2xl font-bold text-theme-text-primary">Preventivi Elicottero / Jet Privato</h2>
+          <p className="text-sm text-theme-text-muted mt-1">Gestione richieste preventivi voli privati</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Chiudi Form' : '+ Nuovo Preventivo'}
@@ -246,8 +246,8 @@ export default function AviationQuotesTab() {
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-dr7-dark p-6 rounded-lg border border-gray-800 mb-6 space-y-6">
           {/* Customer Info */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">Informazioni Cliente</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Informazioni Cliente</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Nome Completo"
@@ -288,8 +288,8 @@ export default function AviationQuotesTab() {
           </div>
 
           {/* 1. Flight Details */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">📍 1. Dettagli del Volo</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">📍 1. Dettagli del Volo</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Partenza (Aeroporto/Eliporto)"
@@ -337,7 +337,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, direct_flight: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Volo Diretto</label>
+                <label className="text-theme-text-primary">Volo Diretto</label>
               </div>
               {!formData.direct_flight && (
                 <Input
@@ -370,8 +370,8 @@ export default function AviationQuotesTab() {
           </div>
 
           {/* 2. Passengers */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">👥 2. Passeggeri</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">👥 2. Passeggeri</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Numero Passeggeri"
@@ -389,7 +389,7 @@ export default function AviationQuotesTab() {
                     onChange={(e) => setFormData({ ...formData, has_children: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label className="text-white">Bambini/Neonati</label>
+                  <label className="text-theme-text-primary">Bambini/Neonati</label>
                 </div>
                 {formData.has_children && (
                   <Input
@@ -409,7 +409,7 @@ export default function AviationQuotesTab() {
                     onChange={(e) => setFormData({ ...formData, has_pets: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label className="text-white">Animali a Bordo</label>
+                  <label className="text-theme-text-primary">Animali a Bordo</label>
                 </div>
                 {formData.has_pets && (
                   <Input
@@ -426,7 +426,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, needs_hostess: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Hostess di Bordo</label>
+                <label className="text-theme-text-primary">Hostess di Bordo</label>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
@@ -436,14 +436,14 @@ export default function AviationQuotesTab() {
                     onChange={(e) => setFormData({ ...formData, is_vip: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label className="text-white">Passeggero VIP</label>
+                  <label className="text-theme-text-primary">Passeggero VIP</label>
                 </div>
                 {formData.is_vip && (
                   <textarea
                     placeholder="Dettagli VIP e misure di sicurezza"
                     value={formData.vip_details}
                     onChange={(e) => setFormData({ ...formData, vip_details: e.target.value })}
-                    className="w-full bg-gray-800 text-white p-2 rounded"
+                    className="w-full bg-theme-bg-tertiary text-theme-text-primary p-2 rounded"
                     rows={2}
                   />
                 )}
@@ -452,8 +452,8 @@ export default function AviationQuotesTab() {
           </div>
 
           {/* 3. Luggage */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">💼 3. Bagagli</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">💼 3. Bagagli</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Numero Bagagli"
@@ -481,14 +481,14 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, bulky_luggage: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Bagagli Ingombranti</label>
+                <label className="text-theme-text-primary">Bagagli Ingombranti</label>
               </div>
             </div>
           </div>
 
           {/* 4. Flight Type & Preferences */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">🛫 4. Tipologia e Preferenze</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">🛫 4. Tipologia e Preferenze</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
                 label="Scopo del Volo"
@@ -525,7 +525,7 @@ export default function AviationQuotesTab() {
                     onChange={(e) => setFormData({ ...formData, needs_branding: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label className="text-white">Logo Aziendale a Bordo</label>
+                  <label className="text-theme-text-primary">Logo Aziendale a Bordo</label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <input
@@ -534,7 +534,7 @@ export default function AviationQuotesTab() {
                     onChange={(e) => setFormData({ ...formData, needs_wifi: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label className="text-white">Wi-Fi a Bordo</label>
+                  <label className="text-theme-text-primary">Wi-Fi a Bordo</label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <input
@@ -543,7 +543,7 @@ export default function AviationQuotesTab() {
                     onChange={(e) => setFormData({ ...formData, needs_catering: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label className="text-white">Catering di Bordo</label>
+                  <label className="text-theme-text-primary">Catering di Bordo</label>
                 </div>
                 {formData.needs_catering && (
                   <Input
@@ -560,15 +560,15 @@ export default function AviationQuotesTab() {
                     onChange={(e) => setFormData({ ...formData, needs_ground_transfer: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label className="text-white">Transfer a Terra (Auto di Lusso)</label>
+                  <label className="text-theme-text-primary">Transfer a Terra (Auto di Lusso)</label>
                 </div>
               </div>
             </div>
           </div>
 
           {/* 5. Technical & Logistics */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">⚙️ 5. Dettagli Tecnici e Logistici</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">⚙️ 5. Dettagli Tecnici e Logistici</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center space-x-2">
                 <input
@@ -577,7 +577,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, known_airport: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Aeroporto/Eliporto Conosciuto</label>
+                <label className="text-theme-text-primary">Aeroporto/Eliporto Conosciuto</label>
               </div>
               {!formData.known_airport && (
                 <Input
@@ -605,7 +605,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, international_flight: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Volo Internazionale</label>
+                <label className="text-theme-text-primary">Volo Internazionale</label>
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -614,14 +614,14 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, needs_luggage_assistance: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Assistenza Bagagli</label>
+                <label className="text-theme-text-primary">Assistenza Bagagli</label>
               </div>
             </div>
           </div>
 
           {/* 6. Economic & Administrative */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">💳 6. Condizioni Economiche</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">💳 6. Condizioni Economiche</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
                 label="Metodo di Pagamento"
@@ -640,7 +640,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, vat_included: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">IVA Inclusa</label>
+                <label className="text-theme-text-primary">IVA Inclusa</label>
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -649,14 +649,14 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, needs_contract: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Contratto Sub-Noleggio</label>
+                <label className="text-theme-text-primary">Contratto Sub-Noleggio</label>
               </div>
             </div>
           </div>
 
           {/* 7. Optional Services */}
-          <div className="border-b border-gray-700 pb-4">
-            <h3 className="text-lg font-semibold text-white mb-4">🔒 7. Servizi Opzionali Premium</h3>
+          <div className="border-b border-theme-border pb-4">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">🔒 7. Servizi Opzionali Premium</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center space-x-2">
                 <input
@@ -665,7 +665,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, needs_insurance: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Assicurazione Full Risk</label>
+                <label className="text-theme-text-primary">Assicurazione Full Risk</label>
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -674,7 +674,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, needs_security: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Sicurezza Privata/Scorta</label>
+                <label className="text-theme-text-primary">Sicurezza Privata/Scorta</label>
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -683,7 +683,7 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, needs_crew_accommodation: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">Pernottamento Equipaggio</label>
+                <label className="text-theme-text-primary">Pernottamento Equipaggio</label>
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -692,19 +692,19 @@ export default function AviationQuotesTab() {
                   onChange={(e) => setFormData({ ...formData, needs_nda: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <label className="text-white">NDA / Massima Discrezione</label>
+                <label className="text-theme-text-primary">NDA / Massima Discrezione</label>
               </div>
             </div>
           </div>
 
           {/* Notes & Quote */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">📝 Note Aggiuntive</h3>
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4">📝 Note Aggiuntive</h3>
             <textarea
               placeholder="Note o richieste speciali..."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full bg-gray-800 text-white p-3 rounded"
+              className="w-full bg-theme-bg-tertiary text-theme-text-primary p-3 rounded"
               rows={4}
             />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -742,30 +742,30 @@ export default function AviationQuotesTab() {
           <table className="w-full">
             <thead className="bg-dr7-darker">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Tratta</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Tipo</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Passeggeri</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Importo</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Stato</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Data</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Tratta</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Tipo</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Passeggeri</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Importo</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Stato</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Data</th>
               </tr>
             </thead>
             <tbody>
               {quotes.map((quote) => (
                 <tr key={quote.id} className="border-t border-gray-800 hover:bg-dr7-darker/50">
                   <td className="px-4 py-3 text-sm">
-                    <div className="text-white font-medium">{quote.customer_name}</div>
-                    <div className="text-gray-400 text-xs">{quote.customer_email}</div>
+                    <div className="text-theme-text-primary font-medium">{quote.customer_name}</div>
+                    <div className="text-theme-text-muted text-xs">{quote.customer_email}</div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-white">
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">
                     {quote.departure_location} → {quote.arrival_location}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-400">
+                  <td className="px-4 py-3 text-sm text-theme-text-muted">
                     {quote.flight_type === 'round_trip' ? 'A/R' : 'Andata'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-white">{quote.passenger_count}</td>
-                  <td className="px-4 py-3 text-sm text-white">
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{quote.passenger_count}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">
                     {quote.quote_amount ? `€${quote.quote_amount.toLocaleString()}` : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm">
@@ -773,14 +773,14 @@ export default function AviationQuotesTab() {
                       quote.status === 'accepted' ? 'bg-green-900 text-green-300' :
                       quote.status === 'quoted' ? 'bg-blue-900 text-blue-300' :
                       quote.status === 'rejected' ? 'bg-red-900 text-red-300' :
-                      'bg-gray-700 text-gray-300'
+                      'bg-gray-700 text-theme-text-secondary'
                     }`}>
                       {quote.status === 'pending' ? 'In Attesa' :
                        quote.status === 'quoted' ? 'Preventivato' :
                        quote.status === 'accepted' ? 'Accettato' : 'Rifiutato'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-400">
+                  <td className="px-4 py-3 text-sm text-theme-text-muted">
                     {new Date(quote.created_at).toLocaleDateString('it-IT')}
                   </td>
                 </tr>

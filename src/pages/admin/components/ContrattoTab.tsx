@@ -214,16 +214,16 @@ export default function ContrattoTab() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Caricamento contratti...</p>
+        <p className="text-theme-text-primary">Caricamento contratti...</p>
       </div>
     )
   }
 
   if (showForm) {
     return (
-      <div className="bg-gray-900 rounded-lg p-6">
+      <div className="bg-theme-bg-secondary rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">
+          <h2 className="text-2xl font-bold text-theme-text-primary">
             {editingId ? 'Modifica Contratto' : 'Nuovo Contratto'}
           </h2>
           <button
@@ -232,7 +232,7 @@ export default function ContrattoTab() {
               setEditingId(null)
               resetForm()
             }}
-            className="text-gray-400 hover:text-white"
+            className="text-theme-text-muted hover:text-theme-text-primary"
           >
             ✕ Chiudi
           </button>
@@ -242,150 +242,150 @@ export default function ContrattoTab() {
           {/* Contract Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Numero Contratto *</label>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Numero Contratto *</label>
               <input
                 type="text"
                 value={formData.contract_number}
                 onChange={(e) => setFormData({ ...formData, contract_number: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Data Contratto *</label>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data Contratto *</label>
               <input
                 type="date"
                 value={formData.contract_date}
                 onChange={(e) => setFormData({ ...formData, contract_date: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
           </div>
 
           {/* Customer Info */}
-          <div className="border-t border-gray-700 pt-4">
-            <h3 className="text-lg font-bold text-white mb-4">Informazioni Cliente</h3>
+          <div className="border-t border-theme-border pt-4">
+            <h3 className="text-lg font-bold text-theme-text-primary mb-4">Informazioni Cliente</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Nome Cliente *</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Nome Cliente *</label>
                 <input
                   type="text"
                   value={formData.customer_name}
                   onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Email</label>
                 <input
                   type="email"
                   value={formData.customer_email}
                   onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Telefono</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Telefono</label>
                 <input
                   type="tel"
                   value={formData.customer_phone}
                   onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Codice Fiscale</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Codice Fiscale</label>
                 <input
                   type="text"
                   value={formData.customer_tax_code}
                   onChange={(e) => setFormData({ ...formData, customer_tax_code: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Indirizzo</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Indirizzo</label>
                 <input
                   type="text"
                   value={formData.customer_address}
                   onChange={(e) => setFormData({ ...formData, customer_address: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Patente N.</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Patente N.</label>
                 <input
                   type="text"
                   value={formData.customer_license_number}
                   onChange={(e) => setFormData({ ...formData, customer_license_number: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>
             </div>
           </div>
 
           {/* Rental Info */}
-          <div className="border-t border-gray-700 pt-4">
-            <h3 className="text-lg font-bold text-white mb-4">Dettagli Noleggio</h3>
+          <div className="border-t border-theme-border pt-4">
+            <h3 className="text-lg font-bold text-theme-text-primary mb-4">Dettagli Noleggio</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Veicolo *</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Veicolo *</label>
                 <input
                   type="text"
                   value={formData.vehicle_name}
                   onChange={(e) => setFormData({ ...formData, vehicle_name: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Data Inizio *</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data Inizio *</label>
                 <input
                   type="date"
                   value={formData.rental_start_date}
                   onChange={(e) => setFormData({ ...formData, rental_start_date: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Data Fine *</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data Fine *</label>
                 <input
                   type="date"
                   value={formData.rental_end_date}
                   onChange={(e) => setFormData({ ...formData, rental_end_date: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Tariffa Giornaliera (€) *</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Tariffa Giornaliera (€) *</label>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.daily_rate}
                   onChange={(e) => setFormData({ ...formData, daily_rate: parseFloat(e.target.value) })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Cauzione (€)</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cauzione (€)</label>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.deposit_amount}
                   onChange={(e) => setFormData({ ...formData, deposit_amount: parseFloat(e.target.value) })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Stato</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato</label>
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 >
                   <option value="active">Attivo</option>
                   <option value="completed">Completato</option>
@@ -395,12 +395,12 @@ export default function ContrattoTab() {
             </div>
 
             {/* Calculated Totals */}
-            <div className="mt-4 p-4 bg-gray-800 rounded">
-              <div className="flex justify-between text-white mb-2">
+            <div className="mt-4 p-4 bg-theme-bg-tertiary rounded">
+              <div className="flex justify-between text-theme-text-primary mb-2">
                 <span>Giorni Totali:</span>
                 <span className="font-bold">{calculateTotalDays()}</span>
               </div>
-              <div className="flex justify-between text-white text-lg">
+              <div className="flex justify-between text-theme-text-primary text-lg">
                 <span>Totale:</span>
                 <span className="font-bold text-dr7-gold">€{calculateTotalAmount().toFixed(2)}</span>
               </div>
@@ -409,12 +409,12 @@ export default function ContrattoTab() {
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Note</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-2">Note</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+              className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
             />
           </div>
 
@@ -433,7 +433,7 @@ export default function ContrattoTab() {
                 setEditingId(null)
                 resetForm()
               }}
-              className="px-6 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded transition-colors"
+              className="px-6 bg-gray-700 hover:bg-gray-600 text-theme-text-primary font-bold py-3 rounded transition-colors"
             >
               Annulla
             </button>
@@ -447,7 +447,7 @@ export default function ContrattoTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-white">📄 Contratti</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">📄 Contratti</h2>
         <button
           onClick={() => setShowForm(true)}
           className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-4 rounded transition-colors"
@@ -457,20 +457,20 @@ export default function ContrattoTab() {
       </div>
 
       {/* Search Bar */}
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-gray-800">
         <input
           type="text"
           placeholder="Cerca cliente..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
         />
       </div>
 
       {/* Contracts List */}
       {contracts.length === 0 ? (
-        <div className="bg-gray-900 rounded-lg p-12 text-center">
-          <p className="text-gray-400 text-lg mb-4">Nessun contratto trovato</p>
+        <div className="bg-theme-bg-secondary rounded-lg p-12 text-center">
+          <p className="text-theme-text-muted text-lg mb-4">Nessun contratto trovato</p>
           <button
             onClick={() => setShowForm(true)}
             className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-6 rounded transition-colors"
@@ -489,14 +489,14 @@ export default function ContrattoTab() {
               contract.customer_email.toLowerCase().includes(query)
             )
           }).map((contract) => (
-            <div key={contract.id} className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+            <div key={contract.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-gray-800">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-bold text-white">{contract.contract_number}</h3>
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${contract.status === 'active' ? 'bg-green-600 text-white' :
-                      contract.status === 'completed' ? 'bg-blue-600 text-white' :
-                        'bg-red-600 text-white'
+                    <h3 className="text-lg font-bold text-theme-text-primary">{contract.contract_number}</h3>
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${contract.status === 'active' ? 'bg-green-600 text-theme-text-primary' :
+                      contract.status === 'completed' ? 'bg-blue-600 text-theme-text-primary' :
+                        'bg-red-600 text-theme-text-primary'
                       }`}>
                       {contract.status === 'active' ? 'Attivo' :
                         contract.status === 'completed' ? 'Completato' : 'Cancellato'}
@@ -504,21 +504,21 @@ export default function ContrattoTab() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <span className="text-gray-400">Cliente:</span>
-                      <p className="text-white font-semibold">{contract.customer_name}</p>
+                      <span className="text-theme-text-muted">Cliente:</span>
+                      <p className="text-theme-text-primary font-semibold">{contract.customer_name}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Veicolo:</span>
-                      <p className="text-white font-semibold">{contract.vehicle_name}</p>
+                      <span className="text-theme-text-muted">Veicolo:</span>
+                      <p className="text-theme-text-primary font-semibold">{contract.vehicle_name}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Periodo:</span>
-                      <p className="text-white font-semibold">
+                      <span className="text-theme-text-muted">Periodo:</span>
+                      <p className="text-theme-text-primary font-semibold">
                         {new Date(contract.rental_start_date).toLocaleDateString('it-IT')} - {new Date(contract.rental_end_date).toLocaleDateString('it-IT')}
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Totale:</span>
+                      <span className="text-theme-text-muted">Totale:</span>
                       <p className="text-dr7-gold font-bold">€{contract.total_amount.toFixed(2)}</p>
                     </div>
                   </div>
@@ -530,13 +530,13 @@ export default function ContrattoTab() {
                         href={contract.pdf_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                        className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
                       >
                         <span>📄</span> PDF
                       </a>
                       <a
                         href={`mailto:${contract.customer_email}?subject=Contratto Noleggio ${contract.contract_number}&body=Gentile Cliente,%0D%0A%0D%0AEcco il link al tuo contratto di noleggio:%0D%0A${encodeURIComponent(contract.pdf_url)}%0D%0A%0D%0AGrazie per aver scelto DR7 Empire.`}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                        className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
                       >
                         <span>✉️</span> Email
                       </a>
@@ -545,18 +545,18 @@ export default function ContrattoTab() {
                   {contract.yousign_status === 'signed' && contract.signed_pdf_url ? (
                     <button
                       onClick={() => window.open(contract.signed_pdf_url, '_blank')}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
                     >
                       <span>🖊️</span> Contratto Firmato
                     </button>
                   ) : contract.yousign_status === 'ongoing' ? (
-                    <div className="w-full bg-yellow-600 text-white px-3 py-1 rounded text-sm text-center opacity-70 cursor-not-allowed">
+                    <div className="w-full bg-yellow-600 text-theme-text-primary px-3 py-1 rounded text-sm text-center opacity-70 cursor-not-allowed">
                       <span>⏳</span> In Attesa di Firma
                     </div>
                   ) : (
                     <button
                       onClick={() => handleSendToYousign(contract)}
-                      className="w-full bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
+                      className="w-full bg-pink-600 hover:bg-pink-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
                     >
                       <span>✍️</span> Invia a Yousign
                     </button>
@@ -564,13 +564,13 @@ export default function ContrattoTab() {
                   <div className="flex gap-2 w-full">
                     <button
                       onClick={() => handleEdit(contract)}
-                      className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors flex-1"
+                      className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex-1"
                     >
                       Modifica
                     </button>
                     <button
                       onClick={() => handleDelete(contract.id)}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors flex-1"
+                      className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex-1"
                     >
                       Elimina
                     </button>

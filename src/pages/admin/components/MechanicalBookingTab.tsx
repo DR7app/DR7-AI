@@ -223,7 +223,7 @@ export default function MechanicalBookingTab() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Caricamento...</p>
+        <p className="text-theme-text-primary">Caricamento...</p>
       </div>
     )
   }
@@ -231,7 +231,7 @@ export default function MechanicalBookingTab() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-white">🔧 Prenotazioni Meccanica</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">🔧 Prenotazioni Meccanica</h2>
         <button
           onClick={() => setShowForm(true)}
           className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-md transition-colors"
@@ -247,14 +247,14 @@ export default function MechanicalBookingTab() {
           placeholder="Cerca prenotazione per nome cliente..."
           value={bookingSearchQuery}
           onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
       </div>
 
 
       {/* Booking Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <MechanicalBookingForm
               initialData={editingId ? bookings.find(b => b.id === editingId) : undefined}
@@ -286,17 +286,17 @@ export default function MechanicalBookingTab() {
       />
 
       {/* Bookings Table */}
-      <div className="bg-gray-900 rounded-lg overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-800">
+          <thead className="bg-theme-bg-tertiary">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Cliente</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Veicolo</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Servizio</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Appuntamento</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Prezzo</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Pagamento</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Azioni</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Veicolo</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Servizio</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Appuntamento</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Prezzo</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Pagamento</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Azioni</th>
             </tr>
           </thead>
           <tbody>
@@ -308,18 +308,18 @@ export default function MechanicalBookingTab() {
               const customerName = (booking.customer_name || '').toLowerCase()
               return customerName.includes(query)
             }).map(booking => (
-              <tr key={booking.id} className="border-t border-gray-800 hover:bg-gray-800/50">
-                <td className="px-4 py-3 text-sm text-white">
+              <tr key={booking.id} className="border-t border-gray-800 hover:bg-theme-bg-tertiary/50">
+                <td className="px-4 py-3 text-sm text-theme-text-primary">
                   <div>{booking.customer_name}</div>
-                  <div className="text-gray-400 text-xs">{booking.customer_phone}</div>
+                  <div className="text-theme-text-muted text-xs">{booking.customer_phone}</div>
                 </td>
-                <td className="px-4 py-3 text-sm text-white">
+                <td className="px-4 py-3 text-sm text-theme-text-primary">
                   {booking.booking_details?.vehicleInfo || '-'}
                 </td>
-                <td className="px-4 py-3 text-sm text-white">
+                <td className="px-4 py-3 text-sm text-theme-text-primary">
                   {booking.service_name}
                 </td>
-                <td className="px-4 py-3 text-sm text-white">
+                <td className="px-4 py-3 text-sm text-theme-text-primary">
                   <div>
                     {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT', {
                       day: '2-digit',
@@ -329,7 +329,7 @@ export default function MechanicalBookingTab() {
                   </div>
                   <div className="text-dr7-gold">{booking.appointment_time}</div>
                 </td>
-                <td className="px-4 py-3 text-sm text-white">
+                <td className="px-4 py-3 text-sm text-theme-text-primary">
                   €{(booking.price_total / 100).toFixed(2)}
                 </td>
                 <td className="px-4 py-3 text-sm">
@@ -345,20 +345,20 @@ export default function MechanicalBookingTab() {
                         setEditingId(booking.id)
                         setShowForm(true)
                       }}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-xs rounded transition-colors"
                     >
                       Modifica
                     </button>
                     <button
                       onClick={() => handleGenerateInvoice(booking)}
                       disabled={generatingInvoice}
-                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-purple-600 hover:bg-purple-700 text-white'} rounded text-xs font-medium transition-colors`}
+                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded text-xs font-medium transition-colors`}
                     >
                       {generatingInvoice ? '...' : 'Genera Fattura'}
                     </button>
                     <button
                       onClick={() => handleDelete(booking.id)}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors"
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-xs rounded transition-colors"
                     >
                       Elimina
                     </button>
@@ -378,9 +378,9 @@ export default function MechanicalBookingTab() {
       </div>
 
       {/* Info Note */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-        <h4 className="text-white font-semibold mb-2">📝 Note Importanti</h4>
-        <ul className="text-gray-300 text-sm space-y-1">
+      <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-4">
+        <h4 className="text-theme-text-primary font-semibold mb-2">📝 Note Importanti</h4>
+        <ul className="text-theme-text-secondary text-sm space-y-1">
           <li>• Tutti i prezzi, tranne le lucidature, sono di sola manodopera</li>
           <li>• I pezzi possono essere forniti dal cliente o acquistati tramite DR7</li>
           <li>• Controllo livelli incluso nei tagliandi rapidi</li>

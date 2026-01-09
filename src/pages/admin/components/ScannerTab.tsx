@@ -62,9 +62,9 @@ export default function ScannerTab() {
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Scanner Interface */}
-            <div className="bg-gray-900 p-6 rounded-3xl border border-gray-800">
-                <h2 className="text-2xl font-bold text-white mb-4">Scanner Brother</h2>
-                <p className="text-gray-400 mb-6">
+            <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-gray-800">
+                <h2 className="text-2xl font-bold text-theme-text-primary mb-4">Scanner Brother</h2>
+                <p className="text-theme-text-muted mb-6">
                     Scansiona documenti direttamente dalla stampante Brother e caricali per estrarre i dati del cliente.
                 </p>
 
@@ -96,15 +96,15 @@ export default function ScannerTab() {
                             className="hidden"
                             id="scan-upload"
                         />
-                        <div className="px-8 py-4 bg-gray-700 text-white text-xl font-bold rounded-xl hover:bg-gray-600 transition-colors text-center">
+                        <div className="px-8 py-4 bg-gray-700 text-theme-text-primary text-xl font-bold rounded-xl hover:bg-gray-600 transition-colors text-center">
                             {uploading ? '⏳ Caricamento...' : '📄 Carica PDF'}
                         </div>
                     </label>
                 </div>
 
-                <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700">
+                <div className="p-4 bg-theme-bg-tertiary/50 rounded-xl border border-theme-border">
                     <h3 className="text-sm font-semibold text-dr7-gold mb-2">Come funziona:</h3>
-                    <ol className="text-sm text-gray-400 space-y-1 list-decimal list-inside">
+                    <ol className="text-sm text-theme-text-muted space-y-1 list-decimal list-inside">
                         <li>Clicca "🖨️ Apri Scanner Brother" (si apre in una nuova finestra)</li>
                         <li>Nella finestra Brother, clicca "Invia" per scansionare</li>
                         <li>Scarica il PDF quando pronto</li>

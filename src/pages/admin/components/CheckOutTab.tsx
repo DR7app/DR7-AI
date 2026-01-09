@@ -95,21 +95,21 @@ export default function CheckOutTab() {
         return (
             <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-                <p className="text-white">Caricamento check-out di oggi...</p>
+                <p className="text-theme-text-primary">Caricamento check-out di oggi...</p>
             </div>
         )
     }
 
     return (
         <div className="space-y-6">
-            <div className="bg-gray-900 rounded-lg p-4">
+            <div className="bg-theme-bg-secondary rounded-lg p-4">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-white">Check-Out Oggi</h2>
+                    <h2 className="text-2xl font-bold text-theme-text-primary">Check-Out Oggi</h2>
                     <div className="text-dr7-gold font-bold text-lg">
                         {bookings.length} {bookings.length === 1 ? 'rientro' : 'rientri'}
                     </div>
                 </div>
-                <p className="text-gray-400 text-sm">
+                <p className="text-theme-text-muted text-sm">
                     Veicoli in rientro oggi - {new Date().toLocaleDateString('it-IT', {
                         weekday: 'long',
                         year: 'numeric',
@@ -120,31 +120,31 @@ export default function CheckOutTab() {
             </div>
 
             {bookings.length === 0 ? (
-                <div className="bg-gray-900 rounded-lg p-8 text-center">
-                    <p className="text-gray-400">Nessun rientro previsto per oggi</p>
+                <div className="bg-theme-bg-secondary rounded-lg p-8 text-center">
+                    <p className="text-theme-text-muted">Nessun rientro previsto per oggi</p>
                 </div>
             ) : (
-                <div className="bg-gray-900 rounded-lg overflow-hidden">
+                <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gray-800">
+                            <thead className="bg-theme-bg-tertiary">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
                                         Ora
                                     </th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
                                         Veicolo
                                     </th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
                                         Targa
                                     </th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
                                         Nome
                                     </th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
                                         Cognome
                                     </th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
                                         Calendario
                                     </th>
                                 </tr>
@@ -159,7 +159,7 @@ export default function CheckOutTab() {
                                     return (
                                         <tr
                                             key={booking.id}
-                                            className={`hover:bg-gray-800 transition-colors ${overdue ? 'bg-red-900/20' : ''}`}
+                                            className={`hover:bg-theme-bg-tertiary transition-colors ${overdue ? 'bg-red-900/20' : ''}`}
                                         >
                                             <td className="px-4 py-4 whitespace-nowrap">
                                                 <span className={`font-bold text-lg ${overdue ? 'text-red-500' : 'text-dr7-gold'}`}>
@@ -170,19 +170,19 @@ export default function CheckOutTab() {
                                                 )}
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="text-white font-semibold">{booking.vehicle_name}</span>
+                                                <span className="text-theme-text-primary font-semibold">{booking.vehicle_name}</span>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="text-gray-300 font-mono">{targa}</span>
+                                                <span className="text-theme-text-secondary font-mono">{targa}</span>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="text-white">{nome}</span>
+                                                <span className="text-theme-text-primary">{nome}</span>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="text-white font-semibold">{cognome}</span>
+                                                <span className="text-theme-text-primary font-semibold">{cognome}</span>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="text-gray-400 text-sm">
+                                                <span className="text-theme-text-muted text-sm">
                                                     {new Date(booking.dropoff_date).toLocaleDateString('it-IT')}
                                                 </span>
                                             </td>

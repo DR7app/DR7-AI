@@ -304,7 +304,7 @@ export default function UnpaidBookingsTab() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Caricamento prenotazioni da saldare...</p>
+        <p className="text-theme-text-primary">Caricamento prenotazioni da saldare...</p>
       </div>
     )
   }
@@ -312,11 +312,11 @@ export default function UnpaidBookingsTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white">Prenotazioni Da Saldare</h2>
-            <p className="text-sm text-gray-400 mt-1">
+            <h2 className="text-2xl font-bold text-theme-text-primary">Prenotazioni Da Saldare</h2>
+            <p className="text-sm text-theme-text-muted mt-1">
               Tutte le prenotazioni con pagamento in sospeso
             </p>
           </div>
@@ -325,39 +325,39 @@ export default function UnpaidBookingsTab() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-          <div className="text-sm text-gray-400">Totale Da Saldare</div>
+        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+          <div className="text-sm text-theme-text-muted">Totale Da Saldare</div>
           <div className="text-2xl font-bold text-red-400">
             €{(totalUnpaid / 100).toFixed(2)}
           </div>
         </div>
-        <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-          <div className="text-sm text-gray-400">Prenotazioni</div>
-          <div className="text-2xl font-bold text-white">{filteredBookings.length}</div>
+        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+          <div className="text-sm text-theme-text-muted">Prenotazioni</div>
+          <div className="text-2xl font-bold text-theme-text-primary">{filteredBookings.length}</div>
         </div>
-        <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-          <div className="text-sm text-gray-400">Noleggio</div>
-          <div className="text-2xl font-bold text-white">
+        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+          <div className="text-sm text-theme-text-muted">Noleggio</div>
+          <div className="text-2xl font-bold text-theme-text-primary">
             {bookings.filter(b => b.service_type === 'rental').length}
           </div>
         </div>
-        <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-          <div className="text-sm text-gray-400">Lavaggio + Meccanica</div>
-          <div className="text-2xl font-bold text-white">
+        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+          <div className="text-sm text-theme-text-muted">Lavaggio + Meccanica</div>
+          <div className="text-2xl font-bold text-theme-text-primary">
             {bookings.filter(b => b.service_type === 'car_wash' || b.service_type === 'mechanical_service').length}
           </div>
         </div>
       </div>
 
       {/* Filter and Actions */}
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row justify-between gap-4">
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setFilterService('all')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'all'
                 ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
               Tutti ({bookings.length})
@@ -366,7 +366,7 @@ export default function UnpaidBookingsTab() {
               onClick={() => setFilterService('rental')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'rental'
                 ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
               Noleggio ({bookings.filter(b => b.service_type === 'rental').length})
@@ -375,7 +375,7 @@ export default function UnpaidBookingsTab() {
               onClick={() => setFilterService('car_wash')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'car_wash'
                 ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
               Lavaggio ({bookings.filter(b => b.service_type === 'car_wash').length})
@@ -384,7 +384,7 @@ export default function UnpaidBookingsTab() {
               onClick={() => setFilterService('mechanical_service')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'mechanical_service'
                 ? 'bg-dr7-gold text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
               Meccanica ({bookings.filter(b => b.service_type === 'mechanical_service').length})
@@ -398,8 +398,8 @@ export default function UnpaidBookingsTab() {
                 setSelectedBookings(new Set())
               }}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${multiSelectMode
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ? 'bg-blue-600 text-theme-text-primary'
+                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
               Selezione Multipla
@@ -408,13 +408,13 @@ export default function UnpaidBookingsTab() {
               <>
                 <button
                   onClick={markSelectedAsPaid}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-lg font-medium transition-colors"
                 >
                   Segna Pagato ({selectedBookings.size})
                 </button>
                 <button
                   onClick={deleteSelectedBookings}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-lg font-medium transition-colors"
                 >
                   Elimina ({selectedBookings.size})
                 </button>
@@ -425,13 +425,13 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* Bookings Table */}
-      <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-black">
+            <thead className="bg-theme-bg-primary">
               <tr>
                 {multiSelectMode && (
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">
                     <input
                       type="checkbox"
                       checked={selectedBookings.size === filteredBookings.length && filteredBookings.length > 0}
@@ -440,18 +440,18 @@ export default function UnpaidBookingsTab() {
                     />
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Servizio</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Dettagli</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Data</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Da Saldare</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Servizio</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Dettagli</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Da Saldare</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {filteredBookings.map((booking) => (
-                <tr key={booking.id} className={`border-t border-gray-700 hover:bg-gray-800 ${selectedBookings.has(booking.id) ? 'bg-blue-900/30' : ''
+                <tr key={booking.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedBookings.has(booking.id) ? 'bg-blue-900/30' : ''
                   }`}>
                   {multiSelectMode && (
                     <td className="px-4 py-3 text-sm">
@@ -464,32 +464,32 @@ export default function UnpaidBookingsTab() {
                     </td>
                   )}
                   <td className="px-4 py-3 text-sm">
-                    <span className="text-white font-medium">{getServiceLabel(booking)}</span>
+                    <span className="text-theme-text-primary font-medium">{getServiceLabel(booking)}</span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="text-white font-semibold">{booking.customer_name}</div>
-                    <div className="text-gray-400 text-xs">{booking.customer_email}</div>
-                    <div className="text-gray-400 text-xs">{booking.customer_phone}</div>
+                    <div className="text-theme-text-primary font-semibold">{booking.customer_name}</div>
+                    <div className="text-theme-text-muted text-xs">{booking.customer_email}</div>
+                    <div className="text-theme-text-muted text-xs">{booking.customer_phone}</div>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {booking.service_type === 'rental' ? (
                       <div>
-                        <div className="text-white">{booking.vehicle_name}</div>
-                        <div className="text-gray-400 text-xs">
+                        <div className="text-theme-text-primary">{booking.vehicle_name}</div>
+                        <div className="text-theme-text-muted text-xs">
                           {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} -
                           {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
                         </div>
                       </div>
                     ) : (
                       <div>
-                        <div className="text-white">{booking.service_name}</div>
-                        <div className="text-gray-400 text-xs">
+                        <div className="text-theme-text-primary">{booking.service_name}</div>
+                        <div className="text-theme-text-muted text-xs">
                           {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time}
                         </div>
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-400">
+                  <td className="px-4 py-3 text-sm text-theme-text-muted">
                     {new Date(booking.created_at).toLocaleDateString('it-IT')}
                   </td>
                   <td className="px-4 py-3 text-sm">
@@ -497,7 +497,7 @@ export default function UnpaidBookingsTab() {
                       €{(getRemainingAmount(booking) / 100).toFixed(2)}
                     </span>
                     {booking.booking_details?.amountPaid > 0 && (
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-theme-text-muted">
                         su €{(booking.price_total / 100).toFixed(2)}
                       </div>
                     )}
@@ -505,7 +505,7 @@ export default function UnpaidBookingsTab() {
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'pending'
                       ? 'bg-yellow-600 text-black'
-                      : 'bg-red-600 text-white'
+                      : 'bg-red-600 text-theme-text-primary'
                       }`}>
                       {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
                     </span>
@@ -514,13 +514,13 @@ export default function UnpaidBookingsTab() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold transition-colors"
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded text-xs font-semibold transition-colors"
                       >
                         Segna Pagato
                       </button>
                       <button
                         onClick={() => deleteSingleBooking(booking.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold transition-colors"
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded text-xs font-semibold transition-colors"
                       >
                         Elimina
                       </button>

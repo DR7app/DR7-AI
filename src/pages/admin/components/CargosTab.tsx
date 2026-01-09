@@ -363,22 +363,22 @@ export default function CargosTab() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-xl border border-theme-border">
                 <div>
-                    <h2 className="text-xl font-bold text-white">Gestione Multe & Cargos</h2>
-                    <p className="text-gray-400 text-sm">Portale Polizia di Stato</p>
+                    <h2 className="text-xl font-bold text-theme-text-primary">Gestione Multe & Cargos</h2>
+                    <p className="text-theme-text-muted text-sm">Portale Polizia di Stato</p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
+                    <div className="flex bg-theme-bg-tertiary rounded-lg p-1 border border-theme-border">
                         <button
                             onClick={() => setActiveSubTab('fines')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black shadow-sm' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                         >
                             🔍 Gestione Multe
                         </button>
                         <button
                             onClick={() => setActiveSubTab('export')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black shadow-sm' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                         >
                             📤 Invio Telematico
                         </button>
@@ -386,7 +386,7 @@ export default function CargosTab() {
 
                     <button
                         onClick={() => setShowSettings(!showSettings)}
-                        className="px-3 py-2 bg-gray-800 text-gray-400 hover:text-white rounded-lg border border-gray-700 transition-colors"
+                        className="px-3 py-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-lg border border-theme-border transition-colors"
                         title="Impostazioni API"
                     >
                         ⚙️
@@ -396,7 +396,7 @@ export default function CargosTab() {
                         href="https://cargos.poliziadistato.it/Cargos_Portale/"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 bg-gray-700 text-white font-medium rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
+                        className="px-4 py-2 bg-gray-700 text-theme-text-primary font-medium rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
                     >
                         Apri Portale Cargos ↗
                     </a>
@@ -405,8 +405,8 @@ export default function CargosTab() {
 
             {/* API Settings Modal */}
             {showSettings && (
-                <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl mb-6 animate-fadeIn">
-                    <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-700 pb-2">⚙️ Configurazione API Cargos</h3>
+                <div className="bg-theme-bg-tertiary border border-theme-border p-6 rounded-xl mb-6 animate-fadeIn">
+                    <h3 className="text-lg font-bold text-theme-text-primary mb-4 border-b border-theme-border pb-2">⚙️ Configurazione API Cargos</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Username (Utente Web Service)</label>
@@ -455,18 +455,18 @@ export default function CargosTab() {
             {activeSubTab === 'fines' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Search Form */}
-                    <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 space-y-4 h-fit">
-                        <h3 className="text-lg font-semibold text-white mb-4">Dati Multa (Ricerca Driver)</h3>
+                    <div className="bg-theme-bg-tertiary p-6 rounded-xl border border-theme-border space-y-4 h-fit">
+                        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Dati Multa (Ricerca Driver)</h3>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Targa Veicolo</label>
+                            <label className="block text-sm font-medium text-theme-text-muted mb-1">Targa Veicolo</label>
                             <div className="relative">
                                 <input
                                     type="text"
                                     value={plate}
                                     onChange={(e) => setPlate(e.target.value.toUpperCase())}
                                     placeholder="Esempio: GB123XY"
-                                    className="w-full text-white bg-gray-900 border border-gray-700 rounded-lg p-2.5 font-mono uppercase tracking-wider focus:ring-2 focus:ring-dr7-gold outline-none"
+                                    className="w-full text-theme-text-primary bg-theme-bg-secondary border border-theme-border rounded-lg p-2.5 font-mono uppercase tracking-wider focus:ring-2 focus:ring-dr7-gold outline-none"
                                 />
                             </div>
                             {/* Quick select from vehicles helper */}
@@ -485,7 +485,7 @@ export default function CargosTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">Data Infrazione</label>
+                                <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Infrazione</label>
                                 <Input
                                     type="date"
                                     value={fineDate}
@@ -493,7 +493,7 @@ export default function CargosTab() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">Ora</label>
+                                <label className="block text-sm font-medium text-theme-text-muted mb-1">Ora</label>
                                 <Input
                                     type="time"
                                     value={fineTime}
@@ -516,19 +516,19 @@ export default function CargosTab() {
                     {/* Results Area */}
                     <div className="lg:col-span-2">
                         {searchResult ? (
-                            <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-                                <div className="p-6 border-b border-gray-700 bg-gray-800/50">
+                            <div className="bg-theme-bg-tertiary rounded-xl border border-theme-border overflow-hidden">
+                                <div className="p-6 border-b border-theme-border bg-theme-bg-tertiary/50">
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className="text-green-400 text-sm font-bold tracking-wider uppercase">Conducente Trovato</span>
                                                 <span className="text-gray-500 text-xs">•</span>
-                                                <span className="text-gray-400 text-xs">Booking ID: {searchResult.id.slice(0, 8)}...</span>
+                                                <span className="text-theme-text-muted text-xs">Booking ID: {searchResult.id.slice(0, 8)}...</span>
                                             </div>
-                                            <h3 className="text-2xl font-bold text-white mb-1">{searchResult.customer_name}</h3>
-                                            <p className="text-gray-400 text-sm flex items-center gap-2">
+                                            <h3 className="text-2xl font-bold text-theme-text-primary mb-1">{searchResult.customer_name}</h3>
+                                            <p className="text-theme-text-muted text-sm flex items-center gap-2">
                                                 <span>{searchResult.vehicle_name}</span>
-                                                <span className="px-2 py-0.5 bg-gray-700 rounded text-xs text-white font-mono">{searchResult.vehicle_plate || plate}</span>
+                                                <span className="px-2 py-0.5 bg-gray-700 rounded text-xs text-theme-text-primary font-mono">{searchResult.vehicle_plate || plate}</span>
                                             </p>
                                         </div>
                                         {searchResult.contract_url && (
@@ -546,13 +546,13 @@ export default function CargosTab() {
 
                                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-4">
-                                        <h4 className="text-dr7-gold font-medium uppercase text-xs tracking-wider border-b border-gray-700 pb-2">Dati Contatto</h4>
+                                        <h4 className="text-dr7-gold font-medium uppercase text-xs tracking-wider border-b border-theme-border pb-2">Dati Contatto</h4>
 
                                         <div>
                                             <label className="text-xs text-gray-500">Email</label>
                                             <div className="text-gray-200 flex items-center gap-2">
                                                 {searchResult.customer_email || 'N/D'}
-                                                <button className="text-gray-500 hover:text-white" title="Copia" onClick={() => navigator.clipboard.writeText(searchResult.customer_email)}>📋</button>
+                                                <button className="text-gray-500 hover:text-theme-text-primary" title="Copia" onClick={() => navigator.clipboard.writeText(searchResult.customer_email)}>📋</button>
                                             </div>
                                         </div>
                                         <div>
@@ -561,7 +561,7 @@ export default function CargosTab() {
                                         </div>
                                         <div>
                                             <label className="text-xs text-gray-500">Documento Guida</label>
-                                            <div className="text-gray-200 font-mono bg-gray-900/50 p-2 rounded border border-gray-700 inline-block">
+                                            <div className="text-gray-200 font-mono bg-theme-bg-secondary/50 p-2 rounded border border-theme-border inline-block">
                                                 {searchResult.driver_license || 'Non registrato'}
                                             </div>
                                             {!searchResult.driver_license && (
@@ -571,24 +571,24 @@ export default function CargosTab() {
                                     </div>
 
                                     <div className="space-y-4">
-                                        <h4 className="text-dr7-gold font-medium uppercase text-xs tracking-wider border-b border-gray-700 pb-2">Periodo Noleggio</h4>
+                                        <h4 className="text-dr7-gold font-medium uppercase text-xs tracking-wider border-b border-theme-border pb-2">Periodo Noleggio</h4>
 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="text-xs text-gray-500">Ritiro</label>
-                                                <div className="text-white font-medium">
+                                                <div className="text-theme-text-primary font-medium">
                                                     {new Date(searchResult.pickup_date).toLocaleDateString('it-IT')}
                                                 </div>
-                                                <div className="text-gray-400 text-sm">
+                                                <div className="text-theme-text-muted text-sm">
                                                     {new Date(searchResult.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </div>
                                             <div>
                                                 <label className="text-xs text-gray-500">Restituzione</label>
-                                                <div className="text-white font-medium">
+                                                <div className="text-theme-text-primary font-medium">
                                                     {new Date(searchResult.dropoff_date).toLocaleDateString('it-IT')}
                                                 </div>
-                                                <div className="text-gray-400 text-sm">
+                                                <div className="text-theme-text-muted text-sm">
                                                     {new Date(searchResult.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </div>
@@ -596,14 +596,14 @@ export default function CargosTab() {
 
                                         <div>
                                             <label className="text-xs text-gray-500">Indirizzo Residenza (da Booking)</label>
-                                            <div className="text-gray-300 text-sm mt-1 p-2 bg-gray-900/30 rounded">
+                                            <div className="text-theme-text-secondary text-sm mt-1 p-2 bg-theme-bg-secondary/30 rounded">
                                                 {searchResult.address || 'Indirizzo non presente nei metadati'}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-gray-900/50 border-t border-gray-700 flex justify-end gap-3">
+                                <div className="p-4 bg-theme-bg-secondary/50 border-t border-theme-border flex justify-end gap-3">
                                     <Button
                                         variant="secondary"
                                         onClick={() => {
@@ -617,7 +617,7 @@ export default function CargosTab() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-gray-800/30 rounded-xl border border-gray-700 border-dashed text-gray-500">
+                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-xl border border-theme-border border-dashed text-gray-500">
                                 <span className="text-4xl mb-4">👮‍♂️</span>
                                 <p className="text-lg font-medium">In attesa di ricerca</p>
                                 <p className="text-sm max-w-md text-center mt-2">
@@ -630,12 +630,12 @@ export default function CargosTab() {
             )}
 
             {activeSubTab === 'export' && (
-                <div className="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                <div className="bg-theme-bg-tertiary p-8 rounded-xl border border-theme-border">
                     <div className="max-w-2xl mx-auto space-y-8">
                         <div className="text-center">
                             <span className="text-5xl mb-4 block">📤</span>
-                            <h3 className="text-2xl font-bold text-white mb-2">Esportazione Dati per Cargos</h3>
-                            <p className="text-gray-400">
+                            <h3 className="text-2xl font-bold text-theme-text-primary mb-2">Esportazione Dati per Cargos</h3>
+                            <p className="text-theme-text-muted">
                                 Prepara e invia automaticamente i dati dei contratti al portale Polizia di Stato.<br />
                                 Seleziona la data di inizio noleggio.
                             </p>
@@ -648,8 +648,8 @@ export default function CargosTab() {
                             )}
                         </div>
 
-                        <div className="bg-gray-900/50 p-6 rounded-xl border border-gray-700 max-w-md mx-auto">
-                            <label className="block text-sm font-medium text-gray-400 mb-2">Seleziona Data Inizio Noleggio</label>
+                        <div className="bg-theme-bg-secondary/50 p-6 rounded-xl border border-theme-border max-w-md mx-auto">
+                            <label className="block text-sm font-medium text-theme-text-muted mb-2">Seleziona Data Inizio Noleggio</label>
                             <Input
                                 type="date"
                                 value={exportDate}
@@ -666,9 +666,9 @@ export default function CargosTab() {
                                 </Button>
 
                                 <div className="relative flex py-2 items-center">
-                                    <div className="flex-grow border-t border-gray-700"></div>
+                                    <div className="flex-grow border-t border-theme-border"></div>
                                     <span className="flex-shrink-0 mx-4 text-gray-500 text-xs uppercase">Oppure Scarica File</span>
-                                    <div className="flex-grow border-t border-gray-700"></div>
+                                    <div className="flex-grow border-t border-theme-border"></div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">

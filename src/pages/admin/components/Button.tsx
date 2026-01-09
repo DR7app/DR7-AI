@@ -14,8 +14,8 @@ export default function Button({
 
   const variantClasses = {
     primary: 'bg-dr7-gold hover:bg-yellow-600 text-black',
-    secondary: 'bg-gray-700 hover:bg-gray-600 text-white',
-    danger: 'bg-red-600 hover:bg-red-700 text-white'
+    secondary: 'bg-gray-700 hover:bg-gray-600 text-theme-text-primary',
+    danger: 'bg-red-600 hover:bg-red-700 text-theme-text-primary'
   }
 
   return (

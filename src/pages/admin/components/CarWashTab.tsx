@@ -176,7 +176,7 @@ export default function CarWashTab() {
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Caricamento...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
   return (
@@ -252,27 +252,27 @@ export default function CarWashTab() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
                 Descrizione (Italiano)
               </label>
               <textarea
                 required
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:border-dr7-gold transition-colors"
+                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                 rows={2}
                 placeholder="Rapido e completo..."
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
                 Descrizione (Inglese)
               </label>
               <textarea
                 required
                 value={formData.description_en}
                 onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
-                className="w-full px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:border-dr7-gold transition-colors"
+                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                 rows={2}
                 placeholder="Quick and complete..."
               />
@@ -281,27 +281,27 @@ export default function CarWashTab() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
                 Caratteristiche (Italiano) - Una per riga
               </label>
               <textarea
                 required
                 value={formData.features}
                 onChange={(e) => setFormData({ ...formData, features: e.target.value })}
-                className="w-full px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
+                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
                 rows={6}
                 placeholder="Esterni + interni completi&#10;Schiuma colorata profumata&#10;Pulizia cerchi, passaruota, vetri"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
                 Caratteristiche (Inglese) - Una per riga
               </label>
               <textarea
                 required
                 value={formData.features_en}
                 onChange={(e) => setFormData({ ...formData, features_en: e.target.value })}
-                className="w-full px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
+                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
                 rows={6}
                 placeholder="Complete exterior + interior&#10;Scented colored foam&#10;Wheel, wheel arch, glass cleaning"
               />
@@ -309,7 +309,7 @@ export default function CarWashTab() {
           </div>
 
           <div className="mt-4">
-            <label className="flex items-center gap-2 text-white">
+            <label className="flex items-center gap-2 text-theme-text-primary">
               <input
                 type="checkbox"
                 checked={formData.is_active}
@@ -348,22 +348,22 @@ export default function CarWashTab() {
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-xl font-bold text-white">{service.name}</h3>
-                <p className="text-sm text-gray-400">{service.name_en}</p>
+                <h3 className="text-xl font-bold text-theme-text-primary">{service.name}</h3>
+                <p className="text-sm text-theme-text-muted">{service.name_en}</p>
                 <p className="text-xs text-gray-500 mt-1">ID: {service.id}</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-white">€{service.price}</div>
-                <div className="text-sm text-gray-400">{service.duration}</div>
+                <div className="text-3xl font-bold text-theme-text-primary">€{service.price}</div>
+                <div className="text-sm text-theme-text-muted">{service.duration}</div>
               </div>
             </div>
 
-            <p className="text-sm text-gray-300 mb-4 italic">{service.description}</p>
+            <p className="text-sm text-theme-text-secondary mb-4 italic">{service.description}</p>
 
             <div className="space-y-2 mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase">Caratteristiche:</p>
+              <p className="text-xs font-semibold text-theme-text-muted uppercase">Caratteristiche:</p>
               {service.features.slice(0, 3).map((feature, idx) => (
-                <div key={idx} className="text-xs text-gray-300 flex items-start">
+                <div key={idx} className="text-xs text-theme-text-secondary flex items-start">
                   <span className="mr-2">•</span>
                   <span>{feature}</span>
                 </div>
@@ -375,16 +375,16 @@ export default function CarWashTab() {
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-700">
+            <div className="flex flex-wrap gap-2 pt-4 border-t border-theme-border">
               <button
                 onClick={() => handleEdit(service)}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm rounded transition-colors"
               >
                 Modifica
               </button>
               <button
                 onClick={() => handleToggleActive(service.id, service.is_active)}
-                className={`px-3 py-1 text-white text-sm rounded transition-colors ${
+                className={`px-3 py-1 text-theme-text-primary text-sm rounded transition-colors ${
                   service.is_active
                     ? 'bg-yellow-600 hover:bg-yellow-700'
                     : 'bg-green-600 hover:bg-green-700'
@@ -394,7 +394,7 @@ export default function CarWashTab() {
               </button>
               <button
                 onClick={() => handleDelete(service.id)}
-                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm rounded transition-colors"
               >
                 Elimina
               </button>
@@ -417,8 +417,8 @@ export default function CarWashTab() {
 
       {/* Info Box */}
       <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4 mt-6">
-        <h4 className="text-white font-semibold mb-2">ℹ️ Informazioni</h4>
-        <ul className="text-sm text-gray-300 space-y-1">
+        <h4 className="text-theme-text-primary font-semibold mb-2">ℹ️ Informazioni</h4>
+        <ul className="text-sm text-theme-text-secondary space-y-1">
           <li>• Le modifiche ai prezzi si riflettono immediatamente sul sito principale</li>
           <li>• Puoi disattivare temporaneamente un servizio senza eliminarlo</li>
           <li>• L'ordine di visualizzazione determina come appaiono i servizi sul sito</li>

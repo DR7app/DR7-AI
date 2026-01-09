@@ -2578,7 +2578,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Loading...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Loading...</div>
   }
 
   return (
@@ -2685,20 +2685,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             {/* Booking Type Selection - Mobile Optimized */}
             {/* Customer Selection - Mobile Optimized */}
-            <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-dr7-darker rounded-lg border border-gray-700">
-              <div className="border-b border-gray-700 pb-4">
+            <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-dr7-darker rounded-lg border border-theme-border">
+              <div className="border-b border-theme-border pb-4">
                 <div className="flex items-center gap-4 mb-4">
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(false)}
-                    className={`px-4 py-2 rounded ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    className={`px-4 py-2 rounded ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                   >
                     Seleziona Cliente
                   </button>
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(true)}
-                    className={`px-4 py-2 rounded ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    className={`px-4 py-2 rounded ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                   >
                     Nuovo Cliente
                   </button>
@@ -2782,7 +2782,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente</label>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente</label>
                     <CustomerAutocomplete
                       customers={customers}
                       selectedCustomerId={formData.customer_id}
@@ -2804,7 +2804,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             {/* Service Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* DATE SELECTION FIRST - Moved before vehicle selection */}
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-dr7-darker rounded-lg border border-gray-700">
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-dr7-darker rounded-lg border border-theme-border">
                 <div className="space-y-3">
                   <Input
                     label="Data Ritiro"
@@ -2926,16 +2926,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             </div>
 
             {/* Second Driver Section */}
-            <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-gray-700">
+            <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-theme-border">
               <div className="flex items-center mb-4">
                 <input
                   type="checkbox"
                   id="has_second_driver"
                   checked={formData.has_second_driver}
                   onChange={(e) => setFormData({ ...formData, has_second_driver: e.target.checked })}
-                  className="w-4 h-4 text-dr7-gold bg-gray-700 border-gray-600 rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                  className="w-4 h-4 text-dr7-gold bg-gray-700 border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
                 />
-                <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-gray-300">
+                <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
                   Aggiungi Secondo Guidatore
                 </label>
               </div>
@@ -2947,14 +2947,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(false)}
-                      className={`px-4 py-2 rounded ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                      className={`px-4 py-2 rounded ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                     >
                       Seleziona Cliente
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(true)}
-                      className={`px-4 py-2 rounded ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                      className={`px-4 py-2 rounded ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                     >
                       Nuovo Guidatore
                     </button>
@@ -3053,8 +3053,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       />
 
                       {/* License Details */}
-                      <div className="md:col-span-2 border-t border-gray-600 pt-4 mt-2">
-                        <h4 className="text-white font-semibold mb-3">Dettagli Patente</h4>
+                      <div className="md:col-span-2 border-t border-theme-border-light pt-4 mt-2">
+                        <h4 className="text-theme-text-primary font-semibold mb-3">Dettagli Patente</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input
                             label="Tipo di Patente *"
@@ -3096,7 +3096,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   ) : (
                     // Select Existing Customer Mode
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente per Secondo Guidatore</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente per Secondo Guidatore</label>
                       <CustomerAutocomplete
                         customers={customers}
                         selectedCustomerId={formData.second_driver_id}
@@ -3111,8 +3111,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             </div>
 
             {/* Kasko Selection & Deposit */}
-            <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-gray-700">
-              <h4 className="text-white font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
+            <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-theme-border">
+              <h4 className="text-theme-text-primary font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
                   label="Opzione Kasko"
@@ -3221,18 +3221,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 disabled={formData.unlimited_km}
               />
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-300 mb-2">LIMITE KM (Da inserire):</h4>
+                <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM (Da inserire):</h4>
                 <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                   {[100, 180, 240, 280, 300].map((kmLimit) => (
                     <div
                       key={kmLimit}
                       className={`p-2 rounded-md border cursor-pointer transition-all flex flex-col items-center justify-center text-center ${parseInt(formData.km_limit) === kmLimit && !formData.unlimited_km
                         ? 'border-white bg-white/5'
-                        : 'border-gray-700 hover:border-gray-500'
+                        : 'border-theme-border hover:border-gray-500'
                         } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
                       onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: kmLimit.toString() }))}
                     >
-                      <span className="text-white font-bold text-xs">{kmLimit} km</span>
+                      <span className="text-theme-text-primary font-bold text-xs">{kmLimit} km</span>
                     </div>
                   ))}
                 </div>
@@ -3247,15 +3247,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 placeholder="es. 150 (Lascia vuoto se Illimitati)"
                 disabled={formData.unlimited_km}
               />
-              <div className="flex items-center gap-2 p-3 bg-dr7-darker rounded-lg border border-gray-700">
+              <div className="flex items-center gap-2 p-3 bg-dr7-darker rounded-lg border border-theme-border">
                 <input
                   type="checkbox"
                   id="unlimited_km"
                   checked={formData.unlimited_km}
                   onChange={(e) => setFormData({ ...formData, unlimited_km: e.target.checked, km_overage_fee: e.target.checked ? '0' : formData.km_overage_fee })}
-                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-theme-border-light rounded focus:ring-blue-500"
                 />
-                <label htmlFor="unlimited_km" className="text-sm text-gray-300 cursor-pointer">
+                <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
                   ✅ KM Illimitati
                 </label>
               </div>
@@ -3340,10 +3340,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <div className="font-semibold text-white mb-1">
+                    <div className="font-semibold text-theme-text-primary mb-1">
                       {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                     </div>
-                    <div className="text-sm text-gray-400">{booking.customer_phone || '-'}</div>
+                    <div className="text-sm text-theme-text-muted">{booking.customer_phone || '-'}</div>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                     booking.payment_status === 'paid' ||
@@ -3360,7 +3360,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
 
                 <div className="mb-2">
-                  <div className="flex items-center gap-2 text-white">
+                  <div className="flex items-center gap-2 text-theme-text-primary">
                     {isCarWash ? (
                       <>
                         <span className="text-sm">{booking.service_name || 'Autolavaggio'}</span>
@@ -3372,11 +3372,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     )}
                   </div>
                   {!isCarWash && booking.vehicle_plate && (
-                    <div className="text-xs text-gray-400 mt-1">Targa: {booking.vehicle_plate}</div>
+                    <div className="text-xs text-theme-text-muted mt-1">Targa: {booking.vehicle_plate}</div>
                   )}
                 </div>
 
-                <div className="text-xs text-gray-400 mb-2">
+                <div className="text-xs text-theme-text-muted mb-2">
                   {isCarWash
                     ? `${booking.appointment_date ? new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '-'}${booking.appointment_time ? ` alle ${booking.appointment_time}` : ''}`
                     : `${booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-'} → ${booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-'}`
@@ -3384,13 +3384,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
 
                 <div className="flex justify-between items-start mt-3 gap-2">
-                  <div className="text-lg font-bold text-white">
+                  <div className="text-lg font-bold text-theme-text-primary">
                     {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                   </div>
                   <div className="flex flex-col gap-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors whitespace-nowrap"
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap"
                     >
                       Modifica
                     </button>
@@ -3400,7 +3400,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <div className="flex gap-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); window.open(booking.contract_url, '_blank') }}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
                           title="Visualizza Contratto"
                         >
                           <span>📄</span> PDF
@@ -3408,7 +3408,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <a
                           href={`mailto:${booking.customer_email || ''}?subject=${encodeURIComponent(`Contratto Noleggio DR7 - ${booking.vehicle_name}`)}&body=${encodeURIComponent(`Gentile Cliente,\n\nEcco il link al tuo contratto di noleggio:\n${booking.contract_url}\n\nGrazie per aver scelto DR7 Empire.`)}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
                           title="Invia Email"
                         >
                           <span>✉️</span> Email
@@ -3418,7 +3418,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
                           disabled={generatingInvoice}
-                          className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700 text-white'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
+                          className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-blue-600 hover:bg-blue-700 text-theme-text-primary'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
                           title="Genera Fattura"
                         >
                           {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
@@ -3428,7 +3428,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <button
                         onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
                         disabled={generatingContract}
-                        className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-gray-300' : 'bg-dr7-gold hover:bg-yellow-600 text-white'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
+                        className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
                       >
                         {generatingContract ? 'Generazione...' : '📄 Genera Contratto'}
                       </button>
@@ -3437,14 +3437,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {booking.status !== 'cancelled' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded transition-colors whitespace-nowrap"
+                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap"
                       >
                         Cancella
                       </button>
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors whitespace-nowrap w-full"
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap w-full"
                     >
                       Elimina
                     </button>
@@ -3461,14 +3461,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             <table className="w-full min-w-max">
               <thead className="bg-dr7-darker sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Nome</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Telefono</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Car</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Data Inizio</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Data Fine</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Pagamento</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Totale</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap">Azioni</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Car</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Pagamento</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Totale</th>
+                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Azioni</th>
                 </tr>
               </thead>
               <tbody>
@@ -3483,13 +3483,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
                     <tr key={`booking-${booking.id}`} className="border-t border-gray-800 hover:bg-dr7-darker/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
-                      <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                       </td>
-                      <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.customer_phone || '-'}
                       </td>
-                      <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {isCarWash ? (
                           <span className="flex items-center gap-2">
                             <span>{booking.service_name || 'Autolavaggio'}</span>
@@ -3500,18 +3500,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               <span>{booking.vehicle_name}</span>
                             </span>
                             {booking.vehicle_plate && (
-                              <span className="text-xs text-gray-400">Targa: {booking.vehicle_plate}</span>
+                              <span className="text-xs text-theme-text-muted">Targa: {booking.vehicle_plate}</span>
                             )}
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {isCarWash
                           ? (booking.appointment_date ? `${new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })} ${booking.appointment_time || ''}` : '-')
                           : (booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-')
                         }
                       </td>
-                      <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {isCarWash
                           ? (booking.appointment_date && booking.appointment_time
                             ? `${new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })} ${calculateCarWashEndTime(booking.appointment_date, booking.appointment_time, booking.price_total)}`
@@ -3533,7 +3533,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             : 'Non Pagato'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-sm text-white whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                       </td>
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
@@ -3543,26 +3543,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
                                 disabled={generatingContract}
-                                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
+                                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
                               >
                                 {generatingContract ? '...' : 'Genera Contratto'}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
                                 disabled={generatingInvoice}
-                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
+                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
                               >
                                 {generatingInvoice ? '...' : 'Genera Fattura'}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
-                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
                               >
                                 Modifica
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                                className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                                className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
                               >
                                 Cancella
                               </button>
@@ -3570,13 +3570,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           )}
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedBookingForPenalty(booking); setPenaltyModalOpen(true) }}
-                            className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                            className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
                           >
                             Penali
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors whitespace-nowrap"
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
                           >
                             Elimina
                           </button>
@@ -3606,14 +3606,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
-          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
             <div className="bg-dr7-dark w-full sm:max-w-2xl sm:rounded-lg max-h-[90vh] overflow-y-auto">
               {/* Modal Header */}
-              <div className="sticky top-0 bg-dr7-darker p-4 border-b border-gray-700 flex justify-between items-center">
+              <div className="sticky top-0 bg-dr7-darker p-4 border-b border-theme-border flex justify-between items-center">
                 <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
                 <button
                   onClick={() => setSelectedBooking(null)}
-                  className="text-gray-400 hover:text-white text-2xl leading-none"
+                  className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none"
                 >
                   ×
                 </button>
@@ -3623,19 +3623,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <div className="p-4 sm:p-6 space-y-4">
                 {/* Customer Info */}
                 <div className="bg-dr7-darker p-4 rounded-lg">
-                  <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                  <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                     Cliente
                   </h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="text-gray-400">Nome:</span> <span className="text-white">{selectedBooking.booking_details?.customer?.fullName || selectedBooking.customer_name || 'N/A'}</span></div>
+                    <div><span className="text-theme-text-muted">Nome:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.customer?.fullName || selectedBooking.customer_name || 'N/A'}</span></div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-gray-400">Telefono:</span> <span className="text-white">{selectedBooking.customer_phone || '-'}</span>
+                        <span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{selectedBooking.customer_phone || '-'}</span>
                       </div>
                       {selectedBooking.customer_phone && (
                         <a
                           href={`tel:${selectedBooking.customer_phone}`}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded text-xs font-medium transition-colors"
                         >
                           Chiama
                         </a>
@@ -3646,31 +3646,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 {/* Service Info */}
                 <div className="bg-dr7-darker p-4 rounded-lg">
-                  <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                  <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                     Car
                   </h4>
                   <div className="space-y-2 text-sm">
                     {selectedBooking.service_type === 'car_wash' ? (
                       <>
-                        <div><span className="text-gray-400">Tipo:</span> <span className="text-white">{selectedBooking.service_name || 'Autolavaggio'}</span></div>
-                        <div><span className="text-gray-400">Data:</span> <span className="text-white">{selectedBooking.appointment_date ? new Date(selectedBooking.appointment_date).toLocaleDateString('it-IT', { dateStyle: 'full' }) : '-'}</span></div>
-                        <div><span className="text-gray-400">Ora:</span> <span className="text-white">{selectedBooking.appointment_time || '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Tipo:</span> <span className="text-theme-text-primary">{selectedBooking.service_name || 'Autolavaggio'}</span></div>
+                        <div><span className="text-theme-text-muted">Data:</span> <span className="text-theme-text-primary">{selectedBooking.appointment_date ? new Date(selectedBooking.appointment_date).toLocaleDateString('it-IT', { dateStyle: 'full' }) : '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Ora:</span> <span className="text-theme-text-primary">{selectedBooking.appointment_time || '-'}</span></div>
                         {selectedBooking.booking_details?.additionalService && (
-                          <div><span className="text-gray-400">Servizio Aggiuntivo:</span> <span className="text-white">{selectedBooking.booking_details.additionalService}</span></div>
+                          <div><span className="text-theme-text-muted">Servizio Aggiuntivo:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details.additionalService}</span></div>
                         )}
                       </>
                     ) : (
                       <>
-                        <div><span className="text-gray-400">Veicolo:</span> <span className="text-white">{selectedBooking.vehicle_name || '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Veicolo:</span> <span className="text-theme-text-primary">{selectedBooking.vehicle_name || '-'}</span></div>
                         {selectedBooking.vehicle_plate && (
-                          <div><span className="text-gray-400">Targa:</span> <span className="text-white">{selectedBooking.vehicle_plate}</span></div>
+                          <div><span className="text-theme-text-muted">Targa:</span> <span className="text-theme-text-primary">{selectedBooking.vehicle_plate}</span></div>
                         )}
-                        <div><span className="text-gray-400">Ritiro:</span> <span className="text-white">{selectedBooking.pickup_date ? new Date(typeof selectedBooking.pickup_date === 'number' ? selectedBooking.pickup_date * 1000 : selectedBooking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
-                        <div><span className="text-gray-400">Luogo Ritiro:</span> <span className="text-white">{selectedBooking.pickup_location || '-'}</span></div>
-                        <div><span className="text-gray-400">Riconsegna:</span> <span className="text-white">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
-                        <div><span className="text-gray-400">Luogo Riconsegna:</span> <span className="text-white">{selectedBooking.dropoff_location || '-'}</span></div>
-                        <div><span className="text-gray-400">Assicurazione:</span> <span className="text-dr7-gold">{selectedBooking.booking_details?.insuranceOption || 'N/A'}</span></div>
-                        <div><span className="text-gray-400">Cauzione:</span> <span className="text-white">{selectedBooking.booking_details?.deposit ? `€${selectedBooking.booking_details.deposit}` : 'N/A'}</span></div>
+                        <div><span className="text-theme-text-muted">Ritiro:</span> <span className="text-theme-text-primary">{selectedBooking.pickup_date ? new Date(typeof selectedBooking.pickup_date === 'number' ? selectedBooking.pickup_date * 1000 : selectedBooking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Luogo Ritiro:</span> <span className="text-theme-text-primary">{selectedBooking.pickup_location || '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_location || '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{selectedBooking.booking_details?.insuranceOption || 'N/A'}</span></div>
+                        <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.deposit ? `€${selectedBooking.booking_details.deposit}` : 'N/A'}</span></div>
                       </>
                     )}
                   </div>
@@ -3678,18 +3678,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 {/* Payment Info */}
                 <div className="bg-dr7-darker p-4 rounded-lg">
-                  <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                  <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                     Pagamento
                   </h4>
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Importo:</span>
-                      <span className="text-white font-bold text-xl">
+                      <span className="text-theme-text-muted">Importo:</span>
+                      <span className="text-theme-text-primary font-bold text-xl">
                         {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(selectedBooking.price_total / 100).toFixed(2)}` : '***'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Stato:</span>
+                      <span className="text-theme-text-muted">Stato:</span>
                       <span className={`px-3 py-1.5 rounded text-sm font-medium ${selectedBooking.payment_status === 'completed' ||
                         selectedBooking.payment_status === 'paid' ||
                         (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
@@ -3713,10 +3713,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {/* Notes */}
                 {selectedBooking.booking_details?.notes && (
                   <div className="bg-dr7-darker p-4 rounded-lg">
-                    <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                    <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                       Note
                     </h4>
-                    <p className="text-sm text-gray-300">{selectedBooking.booking_details.notes}</p>
+                    <p className="text-sm text-theme-text-secondary">{selectedBooking.booking_details.notes}</p>
                   </div>
                 )}
 
@@ -3726,7 +3726,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <button
                       onClick={() => handleGenerateContract(selectedBooking)}
                       disabled={generatingContract}
-                      className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+                      className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-lg transition-colors font-medium disabled:opacity-50"
                     >
                       {generatingContract ? 'Generazione in corso...' : 'Scarica Contratto'}
                     </button>
@@ -3737,14 +3737,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         handleCancelBooking(selectedBooking.id, 'booking')
                         setSelectedBooking(null)
                       }}
-                      className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+                      className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-lg transition-colors font-medium"
                     >
                       Cancella Prenotazione
                     </button>
                   )}
                   <button
                     onClick={() => setSelectedBooking(null)}
-                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-lg transition-colors font-medium"
                   >
                     Chiudi
                   </button>

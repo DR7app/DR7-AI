@@ -874,22 +874,22 @@ export default function CustomersTab() {
 
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-400">Caricamento...</div>
+    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
   return (
     <div>
       {/* Customer Details Modal - For Fattura Generation */}
       {viewingCustomerDetails && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-white">
+        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-theme-text-primary">
                 Dettagli Cliente Completi - {viewingCustomerDetails.full_name}
               </h3>
               <button
                 onClick={() => setViewingCustomerDetails(null)}
-                className="text-gray-400 hover:text-white"
+                className="text-theme-text-muted hover:text-theme-text-primary"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -899,7 +899,7 @@ export default function CustomersTab() {
             <div className="p-6 space-y-6">
               {/* Customer Type Badge */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">Tipo Cliente:</span>
+                <span className="text-sm text-theme-text-muted">Tipo Cliente:</span>
                 <span className={`px-3 py-1 rounded text-sm font-medium ${viewingCustomerDetails.tipo_cliente === 'persona_fisica'
                   ? 'bg-blue-500/20 text-blue-400'
                   : viewingCustomerDetails.tipo_cliente === 'azienda'
@@ -913,13 +913,13 @@ export default function CustomersTab() {
               </div>
 
               {/* Membership Section */}
-              <div className="bg-gray-800 rounded-lg p-4 border border-dr7-gold/20 mb-4">
-                <h4 className="text-sm font-semibold text-dr7-gold mb-3 border-b border-gray-700 pb-2 flex justify-between items-center">
+              <div className="bg-theme-bg-tertiary rounded-lg p-4 border border-dr7-gold/20 mb-4">
+                <h4 className="text-sm font-semibold text-dr7-gold mb-3 border-b border-theme-border pb-2 flex justify-between items-center">
                   <span>Pacchetto Membership</span>
                   {(viewingCustomerDetails as any).active_membership && (
                     <span className={`px-2 py-0.5 rounded text-xs text-black font-bold ${(viewingCustomerDetails as any).active_membership.package_name === 'Argento' ? 'bg-gray-400' :
                       (viewingCustomerDetails as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500' :
-                        (viewingCustomerDetails as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
+                        (viewingCustomerDetails as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-theme-text-primary' : 'bg-blue-500 text-theme-text-primary'
                       }`}>
                       {(viewingCustomerDetails as any).active_membership.package_name}
                     </span>
@@ -928,32 +928,32 @@ export default function CustomersTab() {
                 {(viewingCustomerDetails as any).active_membership ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <span className="text-sm text-gray-400">Stato:</span>
-                      <p className="text-sm text-white font-medium capitalize">
+                      <span className="text-sm text-theme-text-muted">Stato:</span>
+                      <p className="text-sm text-theme-text-primary font-medium capitalize">
                         {(viewingCustomerDetails as any).active_membership.status === 'active' ? 'Attivo' : (viewingCustomerDetails as any).active_membership.status}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Data Attivazione:</span>
-                      <p className="text-sm text-white font-medium">
+                      <span className="text-sm text-theme-text-muted">Data Attivazione:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">
                         {(viewingCustomerDetails as any).active_membership.start_date ? new Date((viewingCustomerDetails as any).active_membership.start_date).toLocaleDateString('it-IT') : '-'}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Data Scadenza:</span>
-                      <p className="text-sm text-white font-medium">
+                      <span className="text-sm text-theme-text-muted">Data Scadenza:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">
                         {(viewingCustomerDetails as any).active_membership.end_date ? new Date((viewingCustomerDetails as any).active_membership.end_date).toLocaleDateString('it-IT') : 'Illimitato'}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Riferimento Ordine:</span>
-                      <p className="text-sm text-white font-medium font-mono">
+                      <span className="text-sm text-theme-text-muted">Riferimento Ordine:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">
                         {(viewingCustomerDetails as any).active_membership.external_order_id || '-'}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Fonte:</span>
-                      <p className="text-sm text-white font-medium">
+                      <span className="text-sm text-theme-text-muted">Fonte:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">
                         {(viewingCustomerDetails as any).active_membership.source || 'dr7empire.com'}
                       </p>
                     </div>
@@ -965,22 +965,22 @@ export default function CustomersTab() {
 
               {/* Persona Fisica Details */}
               {viewingCustomerDetails.tipo_cliente === 'persona_fisica' && (
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Persona Fisica
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <span className="text-sm text-gray-400">Nome:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.nome || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Nome:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.nome || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Cognome:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.cognome || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Cognome:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.cognome || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Sesso:</span>
-                      <p className="text-sm text-white font-medium">
+                      <span className="text-sm text-theme-text-muted">Sesso:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">
                         {(() => {
                           const val = viewingCustomerDetails.sesso || viewingCustomerDetails.metadata?.sesso;
                           return val === 'M' ? 'Maschio' : val === 'F' ? 'Femmina' : val || '-';
@@ -988,43 +988,43 @@ export default function CustomersTab() {
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Codice Fiscale:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_fiscale || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Codice Fiscale:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.codice_fiscale || '-'}</p>
                     </div>
                     {/* Duplicate Sesso removed */}
                     <div>
-                      <span className="text-sm text-gray-400">Data di Nascita:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.data_nascita || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Data di Nascita:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.data_nascita || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Luogo di Nascita:</span>
-                      <p className="text-sm text-white font-medium">
+                      <span className="text-sm text-theme-text-muted">Luogo di Nascita:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">
                         {viewingCustomerDetails.luogo_nascita ? `${viewingCustomerDetails.luogo_nascita} (${viewingCustomerDetails.metadata?.provincia_nascita || '-'})` : '-'}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Numero Patente:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.patente || viewingCustomerDetails.driver_license_number || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Numero Patente:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.patente || viewingCustomerDetails.driver_license_number || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Categoria Patente:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.tipo_patente || viewingCustomerDetails.metadata?.patente?.tipo || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Categoria Patente:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.tipo_patente || viewingCustomerDetails.metadata?.patente?.tipo || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Ente Rilascio:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.emessa_da || viewingCustomerDetails.metadata?.patente?.ente || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Ente Rilascio:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.emessa_da || viewingCustomerDetails.metadata?.patente?.ente || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Data Rilascio:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.data_rilascio_patente || viewingCustomerDetails.metadata?.patente?.rilascio || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Data Rilascio:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.data_rilascio_patente || viewingCustomerDetails.metadata?.patente?.rilascio || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Data Scadenza:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Data Scadenza:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Indirizzo:</span>
-                      <p className="text-sm text-white font-medium">
+                      <span className="text-sm text-theme-text-muted">Indirizzo:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">
                         {(() => {
                           const fullAddress = viewingCustomerDetails.indirizzo || '';
                           const numberMatch = fullAddress.match(/\s+(\d+[a-zA-Z]?)$/);
@@ -1037,8 +1037,8 @@ export default function CustomersTab() {
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Numero Civico:</span>
-                      <p className="text-sm text-white font-medium">
+                      <span className="text-sm text-theme-text-muted">Numero Civico:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">
                         {(() => {
                           // First check if numero_civico field has data
                           if (viewingCustomerDetails.numero_civico) {
@@ -1052,20 +1052,20 @@ export default function CustomersTab() {
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Città di Residenza:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.citta_residenza || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Città di Residenza:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.citta_residenza || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Provincia:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.provincia_residenza || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Provincia:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.provincia_residenza || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">CAP:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.codice_postale || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">CAP:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.codice_postale || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">PEC:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.pec || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">PEC:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.pec || '-'}</p>
                     </div>
                   </div>
                 </div>
@@ -1073,78 +1073,78 @@ export default function CustomersTab() {
 
               {/* Azienda Details */}
               {viewingCustomerDetails.tipo_cliente === 'azienda' && (
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Azienda
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Ragione Sociale / Denominazione:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.ragione_sociale || viewingCustomerDetails.denominazione || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Ragione Sociale / Denominazione:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.ragione_sociale || viewingCustomerDetails.denominazione || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Partita IVA:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.partita_iva || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Partita IVA:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.partita_iva || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Codice Fiscale:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_fiscale || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Codice Fiscale:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.codice_fiscale || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Codice Destinatario:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_destinatario || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Codice Destinatario:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.codice_destinatario || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">PEC:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.pec || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">PEC:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.pec || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Indirizzo Sede Legale:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.indirizzo_azienda || viewingCustomerDetails.indirizzo || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Indirizzo Sede Legale:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.indirizzo_azienda || viewingCustomerDetails.indirizzo || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Sede Operativa:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.metadata?.sede_operativa || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Sede Operativa:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.metadata?.sede_operativa || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Indirizzo DDT:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.indirizzo_ddt || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Indirizzo DDT:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.indirizzo_ddt || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Contatti Cliente:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.contatti_cliente || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Contatti Cliente:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.contatti_cliente || '-'}</p>
                     </div>
                   </div>
 
                   {/* Rappresentante Legale Info */}
-                  <div className="mt-4 border-t border-gray-700 pt-3">
-                    <h5 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Rappresentante Legale</h5>
+                  <div className="mt-4 border-t border-theme-border pt-3">
+                    <h5 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider mb-2">Rappresentante Legale</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <span className="text-sm text-gray-400">Nome Completo:</span>
-                        <p className="text-sm text-white font-medium">
+                        <span className="text-sm text-theme-text-muted">Nome Completo:</span>
+                        <p className="text-sm text-theme-text-primary font-medium">
                           {viewingCustomerDetails.metadata?.rappresentante?.nome} {viewingCustomerDetails.metadata?.rappresentante?.cognome}
                         </p>
                       </div>
                       <div>
-                        <span className="text-sm text-gray-400">CF Rappresentante:</span>
-                        <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.metadata?.rappresentante?.cf || '-'}</p>
+                        <span className="text-sm text-theme-text-muted">CF Rappresentante:</span>
+                        <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.metadata?.rappresentante?.cf || '-'}</p>
                       </div>
                       <div>
-                        <span className="text-sm text-gray-400">Ruolo:</span>
-                        <p className="text-sm text-white font-medium">{viewingCustomerDetails.metadata?.rappresentante?.ruolo || '-'}</p>
+                        <span className="text-sm text-theme-text-muted">Ruolo:</span>
+                        <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.metadata?.rappresentante?.ruolo || '-'}</p>
                       </div>
                     </div>
                     <div className="mt-2">
                       <p className="text-xs text-gray-500 mb-1">Documento Identità:</p>
-                      <p className="text-sm text-white">
+                      <p className="text-sm text-theme-text-primary">
                         {viewingCustomerDetails.metadata?.rappresentante?.documento?.tipo} n. {viewingCustomerDetails.metadata?.rappresentante?.documento?.numero}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-theme-text-muted">
                         Rilasciato il {viewingCustomerDetails.metadata?.rappresentante?.documento?.rilascio} a {viewingCustomerDetails.metadata?.rappresentante?.documento?.luogo}
                         {viewingCustomerDetails.metadata?.rappresentante?.documento?.scadenza && (
-                          <span className="block text-gray-400 mt-1">
-                            Scadenza: <span className="text-white">{viewingCustomerDetails.metadata?.rappresentante?.documento?.scadenza}</span>
+                          <span className="block text-theme-text-muted mt-1">
+                            Scadenza: <span className="text-theme-text-primary">{viewingCustomerDetails.metadata?.rappresentante?.documento?.scadenza}</span>
                           </span>
                         )}
                       </p>
@@ -1155,60 +1155,60 @@ export default function CustomersTab() {
 
               {/* Pubblica Amministrazione Details */}
               {viewingCustomerDetails.tipo_cliente === 'pubblica_amministrazione' && (
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Pubblica Amministrazione
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="md:col-span-2">
-                      <span className="text-sm text-gray-400">Ente o Ufficio:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.ente_ufficio || viewingCustomerDetails.denominazione || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Ente o Ufficio:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.ente_ufficio || viewingCustomerDetails.denominazione || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Codice Univoco:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_univoco || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Codice Univoco:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.codice_univoco || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Codice Fiscale:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_fiscale_pa || viewingCustomerDetails.codice_fiscale || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Codice Fiscale:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.codice_fiscale_pa || viewingCustomerDetails.codice_fiscale || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Codice IPA:</span>
-                      <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.codice_ipa || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Codice IPA:</span>
+                      <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.codice_ipa || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-400">Citta:</span>
-                      <p className="text-sm text-white font-medium">{viewingCustomerDetails.citta || '-'}</p>
+                      <span className="text-sm text-theme-text-muted">Citta:</span>
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.citta || '-'}</p>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Common Contact Information */}
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+              <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                   Informazioni di Contatto
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <span className="text-sm text-gray-400">Email:</span>
-                    <p className="text-sm text-white font-medium">{viewingCustomerDetails.email || '-'}</p>
+                    <span className="text-sm text-theme-text-muted">Email:</span>
+                    <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.email || '-'}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-400">Telefono:</span>
-                    <p className="text-sm text-white font-medium">{viewingCustomerDetails.telefono || viewingCustomerDetails.phone || '-'}</p>
+                    <span className="text-sm text-theme-text-muted">Telefono:</span>
+                    <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.telefono || viewingCustomerDetails.phone || '-'}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-400">Numero Patente:</span>
-                    <p className="text-sm text-white font-medium font-mono">{viewingCustomerDetails.patente || viewingCustomerDetails.driver_license_number || '-'}</p>
+                    <span className="text-sm text-theme-text-muted">Numero Patente:</span>
+                    <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.patente || viewingCustomerDetails.driver_license_number || '-'}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-400">Nazione:</span>
-                    <p className="text-sm text-white font-medium">{viewingCustomerDetails.nazione || '-'}</p>
+                    <span className="text-sm text-theme-text-muted">Nazione:</span>
+                    <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.nazione || '-'}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-400">Fonte:</span>
-                    <p className="text-sm text-white font-medium">
+                    <span className="text-sm text-theme-text-muted">Fonte:</span>
+                    <p className="text-sm text-theme-text-primary font-medium">
                       {viewingCustomerDetails.source === 'admin' ? 'Pannello Admin' : viewingCustomerDetails.source === 'website' ? 'Sito Web' : '-'}
                     </p>
                   </div>
@@ -1216,20 +1216,20 @@ export default function CustomersTab() {
               </div>
 
               {/* Metadata */}
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+              <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                   Metadata
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <span className="text-sm text-gray-400">Data Creazione:</span>
-                    <p className="text-sm text-white font-medium">
+                    <span className="text-sm text-theme-text-muted">Data Creazione:</span>
+                    <p className="text-sm text-theme-text-primary font-medium">
                       {new Date(viewingCustomerDetails.created_at).toLocaleString('it-IT')}
                     </p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-400">Ultimo Aggiornamento:</span>
-                    <p className="text-sm text-white font-medium">
+                    <span className="text-sm text-theme-text-muted">Ultimo Aggiornamento:</span>
+                    <p className="text-sm text-theme-text-primary font-medium">
                       {new Date(viewingCustomerDetails.updated_at).toLocaleString('it-IT')}
                     </p>
                   </div>
@@ -1239,18 +1239,18 @@ export default function CustomersTab() {
 
               {/* Note */}
               {(viewingCustomerDetails.notes || (viewingCustomerDetails.metadata as any)?.note || (viewingCustomerDetails as any).note) && (
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Note
                   </h4>
-                  <p className="text-sm text-white whitespace-pre-wrap">
+                  <p className="text-sm text-theme-text-primary whitespace-pre-wrap">
                     {viewingCustomerDetails.notes || (viewingCustomerDetails.metadata as any)?.note || (viewingCustomerDetails as any).note}
                   </p>
                 </div>
               )}
 
               {/* Action Button */}
-              <div className="flex justify-end pt-4 border-t border-gray-700">
+              <div className="flex justify-end pt-4 border-t border-theme-border">
                 <Button
                   onClick={() => setViewingCustomerDetails(null)}
                   variant="secondary"
@@ -1267,15 +1267,15 @@ export default function CustomersTab() {
       {/* Documents Modal */}
       {
         viewingDocuments && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white">
+          <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
+                <h3 className="text-xl font-bold text-theme-text-primary">
                   Documenti - {viewingDocuments.full_name}
                 </h3>
                 <button
                   onClick={() => setViewingDocuments(null)}
-                  className="text-gray-400 hover:text-white"
+                  className="text-theme-text-muted hover:text-theme-text-primary"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1284,33 +1284,33 @@ export default function CustomersTab() {
               </div>
               <div className="p-6 space-y-6">
                 {/* Customer Info */}
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-3">Informazioni Cliente</h4>
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Informazioni Cliente</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-400">Email:</span>
-                      <span className="text-sm text-white">{viewingDocuments.email || '-'}</span>
+                      <span className="text-sm text-theme-text-muted">Email:</span>
+                      <span className="text-sm text-theme-text-primary">{viewingDocuments.email || '-'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-400">Telefono:</span>
-                      <span className="text-sm text-white">{viewingDocuments.phone || '-'}</span>
+                      <span className="text-sm text-theme-text-muted">Telefono:</span>
+                      <span className="text-sm text-theme-text-primary">{viewingDocuments.phone || '-'}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Uploaded Documents */}
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-3">Documenti Caricati</h4>
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Documenti Caricati</h4>
                   {loadingDocuments ? (
                     <div className="text-center py-4">
-                      <p className="text-gray-400">Caricamento documenti...</p>
+                      <p className="text-theme-text-muted">Caricamento documenti...</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
                       {/* Driver's License */}
-                      <div className="border border-gray-700 rounded-lg p-3">
+                      <div className="border border-theme-border rounded-lg p-3">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-gray-300">
+                          <span className="text-sm font-medium text-theme-text-secondary">
                             📄 Patente di Guida ({documentsUrls.licenses.length}/2)
                           </span>
                         </div>
@@ -1319,7 +1319,7 @@ export default function CustomersTab() {
                             {documentsUrls.licenses.map((doc, index) => (
                               <div key={index} className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs text-gray-400">
+                                  <span className="text-xs text-theme-text-muted">
                                     {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
                                   </span>
                                   <div className="flex gap-2">
@@ -1342,7 +1342,7 @@ export default function CustomersTab() {
                                 <img
                                   src={doc.url}
                                   alt={`Patente di guida - ${index === 0 ? 'Fronte' : 'Retro'}`}
-                                  className="w-full rounded border border-gray-600"
+                                  className="w-full rounded border border-theme-border-light"
                                 />
                               </div>
                             ))}
@@ -1352,7 +1352,7 @@ export default function CustomersTab() {
                         )}
                         {/* Upload Section */}
                         {viewingDocuments.id && viewingDocuments.id.length > 10 && (
-                          <div className="mt-3 pt-3 border-t border-gray-700">
+                          <div className="mt-3 pt-3 border-t border-theme-border">
                             <label className="block">
                               <input
                                 type="file"
@@ -1369,7 +1369,7 @@ export default function CustomersTab() {
                                 id="license-upload"
                               />
                               <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
@@ -1385,9 +1385,9 @@ export default function CustomersTab() {
                       </div>
 
                       {/* ID Card / Passport */}
-                      <div className="border border-gray-700 rounded-lg p-3">
+                      <div className="border border-theme-border rounded-lg p-3">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-gray-300">
+                          <span className="text-sm font-medium text-theme-text-secondary">
                             🆔 Carta d'Identità / Passaporto ({documentsUrls.ids.length}/2)
                           </span>
                         </div>
@@ -1396,7 +1396,7 @@ export default function CustomersTab() {
                             {documentsUrls.ids.map((doc, index) => (
                               <div key={index} className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs text-gray-400">
+                                  <span className="text-xs text-theme-text-muted">
                                     {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
                                   </span>
                                   <div className="flex gap-2">
@@ -1419,7 +1419,7 @@ export default function CustomersTab() {
                                 <img
                                   src={doc.url}
                                   alt={`Carta d'identità - ${index === 0 ? 'Fronte' : 'Retro'}`}
-                                  className="w-full rounded border border-gray-600"
+                                  className="w-full rounded border border-theme-border-light"
                                 />
                               </div>
                             ))}
@@ -1429,7 +1429,7 @@ export default function CustomersTab() {
                         )}
                         {/* Upload Section */}
                         {viewingDocuments.id && viewingDocuments.id.length > 10 && (
-                          <div className="mt-3 pt-3 border-t border-gray-700">
+                          <div className="mt-3 pt-3 border-t border-theme-border">
                             <label className="block">
                               <input
                                 type="file"
@@ -1446,7 +1446,7 @@ export default function CustomersTab() {
                                 id="id-upload"
                               />
                               <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingId
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
@@ -1462,9 +1462,9 @@ export default function CustomersTab() {
                       </div>
 
                       {/* Codice Fiscale */}
-                      <div className="border border-gray-700 rounded-lg p-3">
+                      <div className="border border-theme-border rounded-lg p-3">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-gray-300">
+                          <span className="text-sm font-medium text-theme-text-secondary">
                             📋 Codice Fiscale ({documentsUrls.codiceFiscale.length}/2)
                           </span>
                         </div>
@@ -1473,7 +1473,7 @@ export default function CustomersTab() {
                             {documentsUrls.codiceFiscale.map((doc, index) => (
                               <div key={index} className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs text-gray-400">
+                                  <span className="text-xs text-theme-text-muted">
                                     {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
                                   </span>
                                   <div className="flex gap-2">
@@ -1496,7 +1496,7 @@ export default function CustomersTab() {
                                 <img
                                   src={doc.url}
                                   alt={`Codice Fiscale - ${index === 0 ? 'Fronte' : 'Retro'}`}
-                                  className="w-full rounded border border-gray-600"
+                                  className="w-full rounded border border-theme-border-light"
                                 />
                               </div>
                             ))}
@@ -1506,7 +1506,7 @@ export default function CustomersTab() {
                         )}
                         {/* Upload Section */}
                         {viewingDocuments.id && viewingDocuments.id.length > 10 && (
-                          <div className="mt-3 pt-3 border-t border-gray-700">
+                          <div className="mt-3 pt-3 border-t border-theme-border">
                             <label className="block">
                               <input
                                 type="file"
@@ -1523,7 +1523,7 @@ export default function CustomersTab() {
                                 id="codice-fiscale-upload"
                               />
                               <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
@@ -1543,9 +1543,9 @@ export default function CustomersTab() {
 
                 {/* Note */}
                 {viewingDocuments.notes && (
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Note</h4>
-                    <p className="text-sm text-white whitespace-pre-wrap">{viewingDocuments.notes}</p>
+                  <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">Note</h4>
+                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{viewingDocuments.notes}</p>
                   </div>
                 )}
               </div>
@@ -1557,7 +1557,7 @@ export default function CustomersTab() {
       <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-lg p-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-400 mb-1">Totale Clienti</p>
+            <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
             <p className="text-4xl font-bold text-dr7-gold">{totalCustomers}</p>
           </div>
           <div className="text-dr7-gold">
@@ -1570,14 +1570,14 @@ export default function CustomersTab() {
 
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-white">Clienti</h2>
+          <h2 className="text-2xl font-bold text-theme-text-primary">Clienti</h2>
           <div className="flex gap-3">
             {selectedCustomerIds.size > 0 && (
               <>
 
 
-                <div className="flex gap-2 items-center border-l border-gray-600 pl-4">
-                  <span className="text-sm text-gray-400">Cambia Status:</span>
+                <div className="flex gap-2 items-center border-l border-theme-border-light pl-4">
+                  <span className="text-sm text-theme-text-muted">Cambia Status:</span>
                   <button
                     onClick={() => handleBulkStatusUpdate('blacklist')}
                     className="px-3 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 border border-red-400/20 backdrop-blur-sm transition-all"
@@ -1601,7 +1601,7 @@ export default function CustomersTab() {
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate(null)}
-                    className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-700/30 text-white/60 hover:bg-gray-700/50 border border-white/10 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 border border-white/10 backdrop-blur-sm transition-all"
                     title="Rimuovi Status"
                   >
                     ✕ Rimuovi
@@ -1622,10 +1622,10 @@ export default function CustomersTab() {
             placeholder="Cerca cliente per nome, email o telefono..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pl-10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold focus:border-transparent"
+            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-4 py-3 pl-10 text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold focus:border-transparent"
           />
           <svg
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -1635,7 +1635,7 @@ export default function CustomersTab() {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1647,10 +1647,10 @@ export default function CustomersTab() {
 
 
 
-      <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-black">
+            <thead className="bg-theme-bg-primary">
               <tr>
                 <th className="px-4 py-3 text-left">
                   <input
@@ -1663,23 +1663,23 @@ export default function CustomersTab() {
                         setSelectedCustomerIds(new Set())
                       }
                     }}
-                    className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                    className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Nome</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Pacchetto</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Tipo Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Telefono</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-white">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Pacchetto</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo Cliente</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Email</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Telefono</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Status</th>
               </tr>
             </thead>
             <tbody>
               {customers.map((customer) => (
                 <tr
                   key={customer.id}
-                  className={`border-t border-gray-700 hover:bg-gray-800 ${customer.status === 'blacklist' ? 'bg-red-900/40' :
+                  className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${customer.status === 'blacklist' ? 'bg-red-900/40' :
                     customer.status === 'vip' ? 'bg-yellow-500/10' :
                       customer.status === 'has_rental' ? 'bg-green-500/10' :
                         ''
@@ -1698,10 +1698,10 @@ export default function CustomersTab() {
                         }
                         setSelectedCustomerIds(newSet)
                       }}
-                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                      className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm text-white">
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">
                     <div className="flex items-center gap-2">
                       <span>{customer.full_name}</span>
                     </div>
@@ -1711,12 +1711,12 @@ export default function CustomersTab() {
                       <div className="flex flex-col">
                         <span className={`px-2 py-0.5 rounded text-xs font-bold inline-block w-fit mb-1 ${(customer as any).active_membership.package_name === 'Argento' ? 'bg-gray-400 text-black' :
                           (customer as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500 text-black' :
-                            (customer as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-white' :
-                              'bg-blue-600 text-white'
+                            (customer as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-theme-text-primary' :
+                              'bg-blue-600 text-theme-text-primary'
                           }`}>
                           {(customer as any).active_membership.package_name}
                         </span>
-                        <span className="text-[10px] text-gray-400 capitalize">
+                        <span className="text-[10px] text-theme-text-muted capitalize">
                           {(customer as any).active_membership.status === 'active' ? 'Attivo' : (customer as any).active_membership.status}
                         </span>
                       </div>
@@ -1740,8 +1740,8 @@ export default function CustomersTab() {
                       <span className="text-gray-500">-</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-white">{customer.email || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-white">{customer.phone || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.email || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.phone || '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">
                       <Button
@@ -1770,7 +1770,7 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center justify-end">
                       {customer.status === 'blacklist' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600 text-white border border-red-500 backdrop-blur-sm shadow-sm">
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600 text-theme-text-primary border border-red-500 backdrop-blur-sm shadow-sm">
                           Blacklist
                         </span>
                       )}
@@ -1788,7 +1788,7 @@ export default function CustomersTab() {
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-white border border-red-500/30 backdrop-blur-sm transition-all"
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-theme-text-primary border border-red-500/30 backdrop-blur-sm transition-all"
                             title="Blacklist"
                           >
                             BL
@@ -1812,7 +1812,7 @@ export default function CustomersTab() {
                       {customer.status && (
                         <button
                           onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                          className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-700/30 text-white/60 hover:bg-gray-700/50 hover:text-white border border-white/10 backdrop-blur-sm transition-all"
+                          className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
                           title="Rimuovi Status"
                         >
                           ✕
@@ -1843,25 +1843,25 @@ export default function CustomersTab() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-700">
-          <div className="text-sm text-gray-400">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-theme-border">
+          <div className="text-sm text-theme-text-muted">
             Mostrando {((currentPage - 1) * CUSTOMERS_PER_PAGE) + 1} - {Math.min(currentPage * CUSTOMERS_PER_PAGE, totalCustomers)} di {totalCustomers} clienti
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               ← Precedente
             </button>
-            <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg">
+            <div className="flex items-center gap-2 px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg">
               Pagina {currentPage} di {Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE)}
             </div>
             <button
               onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE), prev + 1))}
               disabled={currentPage >= Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE)}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Successiva →
             </button>

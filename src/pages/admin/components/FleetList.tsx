@@ -35,21 +35,21 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
         }
     }
 
-    if (loading) return <div className="text-gray-400">Caricamento flotta...</div>
+    if (loading) return <div className="text-theme-text-muted">Caricamento flotta...</div>
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-white mb-6">Gestione Flotta</h2>
+            <h2 className="text-2xl font-bold text-theme-text-primary mb-6">Gestione Flotta</h2>
 
-            <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
                 <table className="w-full">
-                    <thead className="bg-black">
+                    <thead className="bg-theme-bg-primary">
                         <tr>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-white">Veicolo</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-white">Targa</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-white">KM Attuali</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-white">Stato</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-white">Azioni</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Veicolo</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">KM Attuali</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -57,8 +57,8 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                             const { status, nearestDeadline } = getVehicleStatus(vehicle, null) // Pass maintenance data when available
 
                             return (
-                                <tr key={vehicle.id} className="border-t border-gray-700 hover:bg-gray-800 cursor-pointer" onClick={() => onOpenDetail(vehicle.id)}>
-                                    <td className="px-4 py-3 text-white font-medium">
+                                <tr key={vehicle.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary cursor-pointer" onClick={() => onOpenDetail(vehicle.id)}>
+                                    <td className="px-4 py-3 text-theme-text-primary font-medium">
                                         {vehicle.display_name}
                                         {nearestDeadline && (
                                             <div className={`text-xs mt-1 ${nearestDeadline.isUrgent ? 'text-red-400 font-bold' : nearestDeadline.isWarning ? 'text-yellow-400' : 'text-gray-500'}`}>
@@ -66,8 +66,8 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 text-gray-300">{vehicle.plate || '-'}</td>
-                                    <td className="px-4 py-3 text-white font-mono">{vehicle.current_km?.toLocaleString() || 0} km</td>
+                                    <td className="px-4 py-3 text-theme-text-secondary">{vehicle.plate || '-'}</td>
+                                    <td className="px-4 py-3 text-theme-text-primary font-mono">{vehicle.current_km?.toLocaleString() || 0} km</td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded text-xs font-bold ${status === 'URGENTE' ? 'bg-red-900 text-red-200 animate-pulse' :
                                             status === 'ATTENZIONE' ? 'bg-yellow-900 text-yellow-200' :

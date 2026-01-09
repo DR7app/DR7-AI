@@ -114,7 +114,7 @@ export default function AlarmNotification() {
                     <div className="flex gap-4 w-full justify-center mt-4">
                         <button
                             onClick={handleOpenBooking}
-                            className={`px-8 py-4 ${style.iconColor.replace('text', 'bg')} text-white text-xl font-bold rounded-lg hover:opacity-90 transition-opacity shadow-lg flex-1 max-w-xs`}
+                            className={`px-8 py-4 ${style.iconColor.replace('text', 'bg')} text-theme-text-primary text-xl font-bold rounded-lg hover:opacity-90 transition-opacity shadow-lg flex-1 max-w-xs`}
                         >
                             Open Booking
                         </button>

@@ -23,16 +23,16 @@ export default function ConfirmationModal({
     }
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-dr7-dark max-w-md w-full rounded-lg shadow-xl">
                 {/* Header */}
-                <div className="bg-dr7-darker p-4 border-b border-gray-700 flex justify-between items-center rounded-t-lg">
+                <div className="bg-dr7-darker p-4 border-b border-theme-border flex justify-between items-center rounded-t-lg">
                     <h3 className={`text-lg font-bold ${isDangerous ? 'text-red-400' : 'text-dr7-gold'}`}>
                         {title}
                     </h3>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white text-2xl leading-none"
+                        className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none"
                     >
                         ×
                     </button>
@@ -40,20 +40,20 @@ export default function ConfirmationModal({
 
                 {/* Content */}
                 <div className="p-6">
-                    <p className="text-white whitespace-pre-line">{message}</p>
+                    <p className="text-theme-text-primary whitespace-pre-line">{message}</p>
                 </div>
 
                 {/* Actions */}
-                <div className="p-4 border-t border-gray-700 flex gap-3 justify-end rounded-b-lg">
+                <div className="p-4 border-t border-theme-border flex gap-3 justify-end rounded-b-lg">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                        className="px-4 py-2 bg-gray-600 hover:bg-theme-bg-hover text-theme-text-primary rounded transition-colors"
                     >
                         Annulla
                     </button>
                     <button
                         onClick={handleConfirm}
-                        className={`px-4 py-2 text-white rounded transition-colors ${isDangerous
+                        className={`px-4 py-2 text-theme-text-primary rounded transition-colors ${isDangerous
                                 ? 'bg-red-600 hover:bg-red-700'
                                 : 'bg-dr7-gold hover:bg-yellow-600'
                             }`}

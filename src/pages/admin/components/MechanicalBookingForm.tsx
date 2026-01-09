@@ -292,14 +292,14 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
     }
 
     return (
-        <div className="bg-gray-900 rounded-xl w-full border border-gray-700">
+        <div className="bg-theme-bg-secondary rounded-xl w-full border border-theme-border">
             <div className="p-6 border-b border-gray-800 flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white">
+                <h3 className="text-xl font-bold text-theme-text-primary">
                     {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione Meccanica'}
                 </h3>
                 <button
                     onClick={onCancel}
-                    className="text-gray-400 hover:text-white text-2xl"
+                    className="text-theme-text-muted hover:text-theme-text-primary text-2xl"
                 >
                     ×
                 </button>
@@ -307,14 +307,14 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
                 {/* Customer Selection */}
-                <div className="border-b border-gray-700 pb-4">
+                <div className="border-b border-theme-border pb-4">
                     <div className="flex items-center gap-4 mb-4">
                         <button
                             type="button"
                             onClick={() => setIsNewClientModalOpen(false)}
                             className={`px-4 py-2 rounded ${!isNewClientModalOpen
                                 ? 'bg-white text-black font-semibold'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                                 }`}
                         >
                             Seleziona Cliente
@@ -324,7 +324,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             onClick={() => setIsNewClientModalOpen(true)}
                             className={`px-4 py-2 rounded ${isNewClientModalOpen
                                 ? 'bg-white text-black font-semibold'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                                 }`}
                         >
                             Nuovo Cliente
@@ -332,7 +332,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Cerca Cliente</label>
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente</label>
                         <CustomerAutocomplete
                             customers={customers}
                             selectedCustomerId={formData.customer_id}
@@ -345,7 +345,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
                 {/* Service Selection */}
                 <div>
-                    <label className="block text-white font-semibold mb-2">Servizio</label>
+                    <label className="block text-theme-text-primary font-semibold mb-2">Servizio</label>
                     <select
                         required
                         value={formData.service_name}
@@ -357,7 +357,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                                 price_total: selectedService?.price || 0
                             })
                         }}
-                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                        className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary"
                     >
                         <option value="">Seleziona servizio...</option>
                         {MECHANICAL_SERVICES.map(s => (
@@ -370,31 +370,31 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
                 {/* Vehicle Info */}
                 <div>
-                    <label className="block text-white font-semibold mb-2">Info Veicolo Cliente</label>
+                    <label className="block text-theme-text-primary font-semibold mb-2">Info Veicolo Cliente</label>
                     <input
                         type="text"
                         required
                         placeholder="es. Fiat Panda 2018 - AA123BB"
                         value={formData.vehicle_info}
                         onChange={(e) => setFormData({ ...formData, vehicle_info: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                        className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary"
                     />
                 </div>
 
                 {/* Appointment Date & Time */}
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-white font-semibold mb-2">Data</label>
+                        <label className="block text-theme-text-primary font-semibold mb-2">Data</label>
                         <input
                             type="date"
                             required
                             value={formData.appointment_date}
                             onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary"
                         />
                     </div>
                     <div>
-                        <label className="block text-white font-semibold mb-2">Ora</label>
+                        <label className="block text-theme-text-primary font-semibold mb-2">Ora</label>
                         {!formData.appointment_date ? (
                             <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
                                 <p className="text-yellow-400 text-sm">
@@ -406,7 +406,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                                 <p className="text-red-400 text-sm font-semibold mb-2">
                                     ❌ Nessun orario disponibile per questa data
                                 </p>
-                                <p className="text-gray-300 text-sm mb-3">
+                                <p className="text-theme-text-secondary text-sm mb-3">
                                     Tutti gli orari sono occupati da prenotazioni di lavaggio o meccanica.
                                 </p>
                                 {(() => {
@@ -431,7 +431,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                                                         </span>
                                                     ))}
                                                 </div>
-                                                <p className="text-gray-400 text-xs mt-2">
+                                                <p className="text-theme-text-muted text-xs mt-2">
                                                     Seleziona una data diversa per prenotare in questi orari
                                                 </p>
                                             </div>
@@ -445,7 +445,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                                 required
                                 value={formData.appointment_time}
                                 onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                                className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary"
                             >
                                 <option value="">Seleziona orario... ({availableTimeSlots.length} disponibili)</option>
                                 {availableTimeSlots.map(slot => (
@@ -459,39 +459,39 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 {/* Price & Payment Status */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-white font-semibold mb-2">Prezzo Totale (€)</label>
+                        <label className="block text-theme-text-primary font-semibold mb-2">Prezzo Totale (€)</label>
                         <input
                             type="number"
                             step="0.01"
                             required
                             value={formData.price_total}
                             onChange={(e) => setFormData({ ...formData, price_total: parseFloat(e.target.value) })}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white font-bold text-lg"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary font-bold text-lg"
                         />
                     </div>
                     <div>
-                        <label className="block text-white font-semibold mb-2">Importo Pagato (€)</label>
+                        <label className="block text-theme-text-primary font-semibold mb-2">Importo Pagato (€)</label>
                         <input
                             type="number"
                             step="0.01"
                             value={formData.amount_paid}
                             onChange={(e) => setFormData({ ...formData, amount_paid: parseFloat(e.target.value) })}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary"
                         />
                     </div>
                     <div>
-                        <label className="block text-white font-semibold mb-2">Stato Pagamento</label>
+                        <label className="block text-theme-text-primary font-semibold mb-2">Stato Pagamento</label>
                         <select
                             value={formData.payment_status}
                             onChange={(e) => setFormData({ ...formData, payment_status: e.target.value })}
-                            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary"
                         >
                             <option value="paid">Pagato</option>
                             <option value="pending">Da Saldare</option>
                             <option value="unpaid">Non Pagato</option>
                         </select>
                         <div className="mt-2 text-right">
-                            <span className="text-gray-400 text-sm">Rimanente: </span>
+                            <span className="text-theme-text-muted text-sm">Rimanente: </span>
                             <span className={`font-bold ${formData.price_total - formData.amount_paid > 0 ? 'text-red-400' : 'text-green-400'}`}>
                                 €{(formData.price_total - formData.amount_paid).toFixed(2)}
                             </span>
@@ -501,11 +501,11 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
                 {/* Notes */}
                 <div>
-                    <label className="block text-white font-semibold mb-2">Note</label>
+                    <label className="block text-theme-text-primary font-semibold mb-2">Note</label>
                     <textarea
                         value={formData.notes}
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                        className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary"
                         rows={3}
                         placeholder="Note aggiuntive..."
                     />
@@ -521,7 +521,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-md transition-colors"
+                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary font-semibold rounded-md transition-colors"
                     >
                         Annulla
                     </button>
