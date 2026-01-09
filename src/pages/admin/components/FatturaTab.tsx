@@ -188,14 +188,14 @@ export default function InvoicesTab() {
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
 
-    const { subtotal, vat_amount, exempt_amount, total } = invoice
+    const { subtotal, vat_amount, exempt_amount, importo_totale } = invoice
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Fattura ${invoice.invoice_number}</title>
+        <title>Fattura ${invoice.numero_fattura}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
           .header { text-align: center; margin-bottom: 40px; }
@@ -250,7 +250,7 @@ export default function InvoicesTab() {
             </tr>
           </thead>
           <tbody>
-            ${invoice.items.map(item => {
+            ${(invoice.items || []).map(item => {
       const itemTotal = item.unit_price * item.quantity
       return `
                 <tr>
@@ -266,18 +266,18 @@ export default function InvoicesTab() {
         </table>
 
         <div class="totals">
-          ${subtotal > 0 ? `<div><span>Imponibile:</span><span>${subtotal.toFixed(2)} €</span></div>` : ''}
-          ${vat_amount > 0 ? `<div><span>IVA:</span><span>${vat_amount.toFixed(2)} €</span></div>` : ''}
-          ${exempt_amount > 0 ? `<div><span>Anticipazioni o Spese esenti IVA art. 15:</span><span>${exempt_amount.toFixed(2)} €</span></div>` : ''}
-          <div class="total-line"><span>Totale fattura:</span><span>${total.toFixed(2)} €</span></div>
+          ${subtotal && subtotal > 0 ? `<div><span>Imponibile:</span><span>${subtotal.toFixed(2)} €</span></div>` : ''}
+          ${vat_amount && vat_amount > 0 ? `<div><span>IVA:</span><span>${vat_amount.toFixed(2)} €</span></div>` : ''}
+          ${exempt_amount && exempt_amount > 0 ? `<div><span>Anticipazioni o Spese esenti IVA art. 15:</span><span>${exempt_amount.toFixed(2)} €</span></div>` : ''}
+          <div class="total-line"><span>Totale fattura:</span><span>${(importo_totale || 0).toFixed(2)} €</span></div>
         </div>
 
         <div style="clear: both;"></div>
 
         <div class="payment-info">
-          <div class="info-line"><strong>Modalità di pagamento:</strong> ${invoice.payment_method}</div>
-          <div class="info-line"><strong>Data scadenza:</strong> ${new Date(invoice.payment_date).toLocaleDateString('it-IT')}</div>
-          <div class="info-line"><strong>Importo:</strong> ${total.toFixed(2)} €</div>
+          <div class="info-line"><strong>Modalità di pagamento:</strong> ${invoice.payment_method || 'N/A'}</div>
+          <div class="info-line"><strong>Data scadenza:</strong> ${invoice.payment_date ? new Date(invoice.payment_date).toLocaleDateString('it-IT') : 'N/A'}</div>
+          <div class="info-line"><strong>Importo:</strong> ${(importo_totale || 0).toFixed(2)} €</div>
           <div class="info-line"><strong>Stato:</strong> ${invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'pending' ? 'In attesa' : 'Scaduta'}</div>
         </div>
 
