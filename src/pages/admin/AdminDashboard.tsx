@@ -60,8 +60,17 @@ export default function AdminDashboard() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-theme-bg-primary">
-      <header className="bg-theme-bg-primary border-b border-theme-border">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Gradient Background - same as login page */}
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-800 -z-10" />
+
+      {/* Subtle overlay pattern */}
+      <div className="fixed inset-0 opacity-5 -z-10" style={{
+        backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
+        backgroundSize: '40px 40px'
+      }} />
+
+      <header className="bg-black/20 backdrop-blur-md border-b border-gray-700/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2 sm:gap-4">
@@ -123,11 +132,11 @@ export default function AdminDashboard() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-theme-bg-primary opacity-75 dark:bg-theme-bg-primary opacity-75 light:bg-theme-bg-primary/50" onClick={() => setMobileMenuOpen(false)}>
-          <div className="bg-theme-bg-secondary w-64 h-full shadow-xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-theme-border flex justify-between items-center">
-              <h2 className="text-theme-text-primary font-semibold">Menu</h2>
-              <button onClick={() => setMobileMenuOpen(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+        <div className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
+          <div className="bg-gray-900/95 backdrop-blur-xl w-64 h-full shadow-2xl overflow-y-auto border-r border-gray-700/50" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-700/50 flex justify-between items-center">
+              <h2 className="text-white font-semibold">Menu</h2>
+              <button onClick={() => setMobileMenuOpen(false)} className="text-gray-400 hover:text-white">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
