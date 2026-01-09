@@ -320,22 +320,32 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   }
 
   // Helper to parse date strings into Date objects
-  // We simply extract the YYYY-MM-DD components to create a local date at midnight.
-  // This avoids ALL timezone offset issues (UTC vs Local) by treating the date string as absolute truth.
+  // CRITICAL FIX: We must convert to Europe/Rome timezone FIRST, then extract date components
+  // Example: "2026-01-10T23:00:00Z" is Jan 11 00:00 in Rome, NOT Jan 10!
   const parseLocalDate = (dateString: string): Date => {
-    // 1. Try to match YYYY-MM-DD format first
-    const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (match) {
-      const [, year, month, day] = match
-      // Construct date exactly as it appears in the string, at 00:00:00 local time
-      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0)
+    const utcDate = new Date(dateString)
+
+    // Validate
+    if (isNaN(utcDate.getTime())) {
+      console.warn(`⚠️ parseLocalDate: Invalid date "${dateString}"`)
+      return new Date()
     }
 
-    // 2. Fallback: Parse as standard date but reset time to midnight local
-    // This handles other valid formats if they occur
-    const date = new Date(dateString)
-    date.setHours(0, 0, 0, 0)
-    return date
+    // Extract date components in Rome timezone using Intl API
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+
+    const parts = formatter.formatToParts(utcDate)
+    const year = parseInt(parts.find(p => p.type === 'year')?.value || '0')
+    const month = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1 // 0-indexed
+    const day = parseInt(parts.find(p => p.type === 'day')?.value || '0')
+
+    // Create local date with Rome components at midnight
+    return new Date(year, month, day, 0, 0, 0, 0)
   }
 
   // ... inside component ...
