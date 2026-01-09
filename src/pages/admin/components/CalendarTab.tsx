@@ -321,23 +321,37 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
   // Helper to parse date strings as local dates (not UTC)
   // This prevents timezone offset issues that cause booking bars to shift
+  // CRITICAL: Safari handles date parsing differently than Chrome!
   const parseLocalDate = (dateString: string): Date => {
     // Extract date components from ISO string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss...)
     // This regex captures the date part regardless of time/timezone info
     const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if (match) {
-      const [, year, month, day] = match
-      // Create date in local timezone (month is 0-indexed)
+      const year = parseInt(match[1], 10)
+      const month = parseInt(match[2], 10) - 1 // Month is 0-indexed
+      const day = parseInt(match[3], 10)
+
       // CRITICAL: Always use local timezone constructor to avoid timezone shifts
-      const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0)
-      console.log(`📅 parseLocalDate: "${dateString}" -> Day ${localDate.getDate()}`)
-      return localDate
+      // This works consistently across ALL browsers (Chrome, Safari, Firefox, Edge)
+      const localDate = new Date(year, month, day, 0, 0, 0, 0)
+
+      // Verify the date was created correctly (Safari can be finicky)
+      if (localDate.getFullYear() === year &&
+        localDate.getMonth() === month &&
+        localDate.getDate() === day) {
+        console.log(`📅 parseLocalDate: "${dateString}" -> ${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')} (Day ${day})`)
+        return localDate
+      } else {
+        console.error(`❌ Date parsing verification failed for "${dateString}"`)
+      }
     }
-    // Fallback to standard parsing if format doesn't match
+
+    // Fallback: This should rarely be used, but provides safety
     console.warn(`⚠️ parseLocalDate: Unexpected format "${dateString}", using fallback`)
     const date = new Date(dateString)
-    date.setHours(0, 0, 0, 0)
-    return date
+    // Force to local midnight to avoid timezone issues
+    const localFallback = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+    return localFallback
   }
 
   // ... inside component ...
