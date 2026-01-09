@@ -396,7 +396,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.provincia_nascita) customerData.provincia_nascita = formData.provincia_nascita
         customerData.indirizzo = formData.indirizzo
         if (formData.numero_civico) customerData.numero_civico = formData.numero_civico
-        if (formData.codice_postale) customerData.codice_postale = formData.codice_postale
+        if (formData.codice_postale) customerData.codice_postale = formData.codice_postale.trim().substring(0, 10)
         if (formData.citta_residenza) customerData.citta_residenza = formData.citta_residenza
         if (formData.provincia_residenza) customerData.provincia_residenza = formData.provincia_residenza
         if (formData.pec_persona) customerData.pec = formData.pec_persona
