@@ -319,32 +319,28 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   }
 
   // Helper to parse date strings into Date objects
-  // CRITICAL FIX: We must convert to Europe/Rome timezone FIRST, then extract date components
-  // Example: "2026-01-10T23:00:00Z" is Jan 11 00:00 in Rome, NOT Jan 10!
+  // Helper to parse date strings into Date objects
+  // We extract components specifically in Europe/Rome timezone to ensure
+  // "2026-01-10T23:00:00Z" (UTC) correctly becomes Jan 11 (Rome) on ALL browsers.
   const parseLocalDate = (dateString: string): Date => {
     const utcDate = new Date(dateString)
-
-    // Validate
     if (isNaN(utcDate.getTime())) {
       console.warn(`⚠️ parseLocalDate: Invalid date "${dateString}"`)
       return new Date()
     }
 
-    // Extract date components in Rome timezone using Intl API
-    const formatter = new Intl.DateTimeFormat('en-US', {
+    // sv-SE locale gives YYYY-MM-DD which is easy to parse
+    const romeStr = utcDate.toLocaleString('sv-SE', {
       timeZone: 'Europe/Rome',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
     })
 
-    const parts = formatter.formatToParts(utcDate)
-    const year = parseInt(parts.find(p => p.type === 'year')?.value || '0')
-    const month = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1 // 0-indexed
-    const day = parseInt(parts.find(p => p.type === 'day')?.value || '0')
+    const [y, m, d] = romeStr.split(' ')[0].split('-').map(Number)
+    const localDate = new Date(y, m - 1, d, 0, 0, 0, 0)
 
-    // Create local date with Rome components at midnight
-    return new Date(year, month, day, 0, 0, 0, 0)
+    return localDate
   }
 
   // ... inside component ...
@@ -820,8 +816,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       // The grid columns are: Veicolo (200px) | Targa (100px) | Day1 | Day2 | ...
                       // This overlay container starts at left:300px (after Veicolo+Targa)
                       // Within this container, Day 1 should be at 0px, Day 2 at 40px, etc.
-                      // So for Day N, position = N * cellWidth (NOT (N-1) because of how the grid is structured)
-                      const left = segment.startDay * cellWidth
+                      // Formula: (startDay - 1) * cellWidth
+                      const left = (segment.startDay - 1) * cellWidth
                       const width = segment.columnSpan * cellWidth
 
                       // Determine color based on booking type (matching DailyCalendarModal)
