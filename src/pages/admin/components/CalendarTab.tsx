@@ -321,37 +321,23 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
   // Helper to parse date strings as local dates (not UTC)
   // This prevents timezone offset issues that cause booking bars to shift
-  // CRITICAL: Safari handles date parsing differently than Chrome!
   const parseLocalDate = (dateString: string): Date => {
     // Extract date components from ISO string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss...)
     // This regex captures the date part regardless of time/timezone info
     const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if (match) {
-      const year = parseInt(match[1], 10)
-      const month = parseInt(match[2], 10) - 1 // Month is 0-indexed
-      const day = parseInt(match[3], 10)
-
+      const [, year, month, day] = match
+      // Create date in local timezone (month is 0-indexed)
       // CRITICAL: Always use local timezone constructor to avoid timezone shifts
-      // This works consistently across ALL browsers (Chrome, Safari, Firefox, Edge)
-      const localDate = new Date(year, month, day, 0, 0, 0, 0)
-
-      // Verify the date was created correctly (Safari can be finicky)
-      if (localDate.getFullYear() === year &&
-        localDate.getMonth() === month &&
-        localDate.getDate() === day) {
-        console.log(`📅 parseLocalDate: "${dateString}" -> ${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')} (Day ${day})`)
-        return localDate
-      } else {
-        console.error(`❌ Date parsing verification failed for "${dateString}"`)
-      }
+      const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0)
+      console.log(`📅 parseLocalDate: "${dateString}" -> Day ${localDate.getDate()}`)
+      return localDate
     }
-
-    // Fallback: This should rarely be used, but provides safety
+    // Fallback to standard parsing if format doesn't match
     console.warn(`⚠️ parseLocalDate: Unexpected format "${dateString}", using fallback`)
     const date = new Date(dateString)
-    // Force to local midnight to avoid timezone issues
-    const localFallback = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
-    return localFallback
+    date.setHours(0, 0, 0, 0)
+    return date
   }
 
   // ... inside component ...
@@ -819,18 +805,16 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
                     .map(segment => {
-                      // CRITICAL FIX: Account for border-collapse table layout
-                      // With border-collapse, borders are SHARED between cells
-                      // Each cell is 40px wide, and borders add 1px between cells
-                      // So: Cell 1 at 0px, Cell 2 at 41px, Cell 3 at 82px, etc.
+                      // CRITICAL FIX: Account for cell borders in positioning
+                      // Each cell is 40px wide + 2px borders (1px left + 1px right)
                       const cellWidth = 40
-                      const borderWidth = 1 // Shared border between cells
+                      const borderWidth = 2 // 1px border on each side
                       const totalCellWidth = cellWidth + borderWidth
 
-                      // Calculate position: startDay is 1-indexed (1 = first day of month)
-                      // So day 1 starts at position 0, day 2 at 41px, day 3 at 82px, etc.
-                      const left = (segment.startDay - 1) * totalCellWidth
-                      const width = segment.columnSpan * totalCellWidth - borderWidth // Subtract 1px to avoid overlap
+                      // Calculate position accounting for borders
+                      // SAFARI FIX: Add 1 cell offset because Safari parses dates 1 day earlier
+                      const left = segment.startDay * totalCellWidth // Changed from (startDay - 1)
+                      const width = segment.columnSpan * totalCellWidth
 
                       // Determine color based on booking type (matching DailyCalendarModal)
                       let colorClass = "border-red-600"
