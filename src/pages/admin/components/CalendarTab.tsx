@@ -484,7 +484,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
               <span className="text-xs text-theme-text-muted">Questo Mese:</span>
               <span className="text-dr7-gold font-semibold text-sm">
                 {bookings.filter(b => {
-                  const pickupDate = new Date(b.pickup_date)
+                  const pickupDate = parseLocalDate(b.pickup_date)
                   return pickupDate.getMonth() === currentDate.getMonth() &&
                     pickupDate.getFullYear() === currentDate.getFullYear()
                 }).length} noleggi
@@ -497,7 +497,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   <FinancialData type="total">
                     €{(bookings
                       .filter(b => {
-                        const pickupDate = new Date(b.pickup_date)
+                        const pickupDate = parseLocalDate(b.pickup_date)
                         return pickupDate.getMonth() === currentDate.getMonth() &&
                           pickupDate.getFullYear() === currentDate.getFullYear()
                       })
@@ -606,7 +606,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       </div>
                       <div className="text-right">
                         <p className="text-theme-text-secondary text-sm">
-                          {booking.dropoff_date ? `Rientro: ${new Date(booking.dropoff_date).toLocaleDateString('it-IT')} ${new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}` : 'Data rientro non valida'}
+                          {booking.dropoff_date ? (() => {
+                            const dropoffDate = parseLocalDate(booking.dropoff_date)
+                            return `Rientro: ${dropoffDate.toLocaleDateString('it-IT')} ${dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
+                          })() : 'Data rientro non valida'}
                         </p>
                         <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
                           booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
@@ -969,7 +972,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         <div className="flex justify-between">
                           <span className="text-theme-text-muted">Ritiro:</span>
                           <span className="text-theme-text-primary font-medium">
-                            {new Date(booking.pickup_date).toLocaleString('it-IT', {
+                            {parseLocalDate(booking.pickup_date).toLocaleString('it-IT', {
                               day: '2-digit',
                               month: '2-digit',
                               year: 'numeric',
@@ -982,7 +985,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         <div className="flex justify-between">
                           <span className="text-theme-text-muted">Riconsegna:</span>
                           <span className="text-theme-text-primary font-medium">
-                            {new Date(booking.dropoff_date).toLocaleString('it-IT', {
+                            {parseLocalDate(booking.dropoff_date).toLocaleString('it-IT', {
                               day: '2-digit',
                               month: '2-digit',
                               year: 'numeric',
@@ -1100,7 +1103,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
                       <p className="text-sm text-theme-text-muted mb-1">Dal</p>
                       <p className="text-theme-text-primary font-medium">
-                        {new Date(selectedUnavailability.metadata.unavailable_from).toLocaleDateString('it-IT', {
+                        {parseLocalDate(selectedUnavailability.metadata.unavailable_from).toLocaleDateString('it-IT', {
                           day: '2-digit',
                           month: 'long',
                           year: 'numeric'
@@ -1116,7 +1119,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
                       <p className="text-sm text-theme-text-muted mb-1">Al</p>
                       <p className="text-theme-text-primary font-medium">
-                        {new Date(selectedUnavailability.metadata.unavailable_until).toLocaleDateString('it-IT', {
+                        {parseLocalDate(selectedUnavailability.metadata.unavailable_until).toLocaleDateString('it-IT', {
                           day: '2-digit',
                           month: 'long',
                           year: 'numeric'
@@ -1137,8 +1140,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                     <p className="text-sm text-theme-text-muted mb-1">Durata</p>
                     <p className="text-theme-text-primary font-medium">
                       {(() => {
-                        const from = new Date(selectedUnavailability.metadata.unavailable_from)
-                        const until = new Date(selectedUnavailability.metadata.unavailable_until)
+                        const from = parseLocalDate(selectedUnavailability.metadata.unavailable_from)
+                        const until = parseLocalDate(selectedUnavailability.metadata.unavailable_until)
                         const days = Math.ceil((until.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1
                         return `${days} ${days === 1 ? 'giorno' : 'giorni'}`
                       })()}
