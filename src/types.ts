@@ -47,9 +47,13 @@ export interface Vehicle {
   inspection_expiry?: string
   leasing_expiry?: string
   // Maintenance Tracking
-  last_tire_change_km?: number
+  last_tire_change_km?: number // Legacy field - kept for backward compatibility
+  last_tire_change_front_km?: number
+  last_tire_change_rear_km?: number
   maintenance_tires_interval_km?: number
-  last_brake_change_km?: number
+  last_brake_change_km?: number // Legacy field - kept for backward compatibility
+  last_brake_change_front_km?: number
+  last_brake_change_rear_km?: number
   maintenance_brake_interval_km?: number
   last_service_km?: number
   last_service_date?: string

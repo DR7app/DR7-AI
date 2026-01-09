@@ -100,38 +100,72 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
             }
         }
 
-        // Tires (Gomme)
+        // Tires (Gomme) - Check both front and rear
         if (editedVehicle.maintenance_tires_interval_km) {
-            const lastTires = editedVehicle.last_tire_change_km || 0
-            const nextTires = lastTires + editedVehicle.maintenance_tires_interval_km
-            const remaining = nextTires - currentKm
+            // Check front tires
+            const lastTiresFront = editedVehicle.last_tire_change_front_km || editedVehicle.last_tire_change_km || 0
+            const nextTiresFront = lastTiresFront + editedVehicle.maintenance_tires_interval_km
+            const remainingFront = nextTiresFront - currentKm
 
-            if (remaining <= ALERT_THRESHOLD) {
+            if (remainingFront <= ALERT_THRESHOLD) {
                 alerts.push({
                     type: 'tires',
-                    label: 'Gomme',
+                    label: 'Gomme Anteriori',
                     current: currentKm,
-                    due: nextTires,
-                    remaining,
-                    urgent: remaining <= 0
+                    due: nextTiresFront,
+                    remaining: remainingFront,
+                    urgent: remainingFront <= 0
+                })
+            }
+
+            // Check rear tires
+            const lastTiresRear = editedVehicle.last_tire_change_rear_km || editedVehicle.last_tire_change_km || 0
+            const nextTiresRear = lastTiresRear + editedVehicle.maintenance_tires_interval_km
+            const remainingRear = nextTiresRear - currentKm
+
+            if (remainingRear <= ALERT_THRESHOLD) {
+                alerts.push({
+                    type: 'tires',
+                    label: 'Gomme Posteriori',
+                    current: currentKm,
+                    due: nextTiresRear,
+                    remaining: remainingRear,
+                    urgent: remainingRear <= 0
                 })
             }
         }
 
-        // Brakes (Freni)
+        // Brakes (Freni) - Check both front and rear
         if (editedVehicle.maintenance_brake_interval_km) {
-            const lastBrakes = editedVehicle.last_brake_change_km || 0
-            const nextBrakes = lastBrakes + editedVehicle.maintenance_brake_interval_km
-            const remaining = nextBrakes - currentKm
+            // Check front brakes
+            const lastBrakesFront = editedVehicle.last_brake_change_front_km || editedVehicle.last_brake_change_km || 0
+            const nextBrakesFront = lastBrakesFront + editedVehicle.maintenance_brake_interval_km
+            const remainingFront = nextBrakesFront - currentKm
 
-            if (remaining <= ALERT_THRESHOLD) {
+            if (remainingFront <= ALERT_THRESHOLD) {
                 alerts.push({
                     type: 'brakes',
-                    label: 'Pastiglie Freni',
+                    label: 'Pastiglie Freni Anteriori',
                     current: currentKm,
-                    due: nextBrakes,
-                    remaining,
-                    urgent: remaining <= 0
+                    due: nextBrakesFront,
+                    remaining: remainingFront,
+                    urgent: remainingFront <= 0
+                })
+            }
+
+            // Check rear brakes
+            const lastBrakesRear = editedVehicle.last_brake_change_rear_km || editedVehicle.last_brake_change_km || 0
+            const nextBrakesRear = lastBrakesRear + editedVehicle.maintenance_brake_interval_km
+            const remainingRear = nextBrakesRear - currentKm
+
+            if (remainingRear <= ALERT_THRESHOLD) {
+                alerts.push({
+                    type: 'brakes',
+                    label: 'Pastiglie Freni Posteriori',
+                    current: currentKm,
+                    due: nextBrakesRear,
+                    remaining: remainingRear,
+                    urgent: remainingRear <= 0
                 })
             }
         }
@@ -352,13 +386,22 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             {/* Tires (Gomme) */}
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Gomme</h4>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-3 gap-4">
                                     <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Ultimo Cambio (km)</label>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Anteriori - Ultimo Cambio (km)</label>
                                         <input
                                             type="number"
-                                            value={editedVehicle.last_tire_change_km || 0}
-                                            onChange={(e) => updateField('last_tire_change_km', parseInt(e.target.value) || 0)}
+                                            value={editedVehicle.last_tire_change_front_km || 0}
+                                            onChange={(e) => updateField('last_tire_change_front_km', parseInt(e.target.value) || 0)}
+                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Posteriori - Ultimo Cambio (km)</label>
+                                        <input
+                                            type="number"
+                                            value={editedVehicle.last_tire_change_rear_km || 0}
+                                            onChange={(e) => updateField('last_tire_change_rear_km', parseInt(e.target.value) || 0)}
                                             className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
@@ -373,22 +416,32 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                     </div>
                                 </div>
                                 {editedVehicle.maintenance_tires_interval_km && (
-                                    <p className="text-theme-text-muted text-sm mt-2">
-                                        Prossimo cambio: {((editedVehicle.last_tire_change_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km
-                                    </p>
+                                    <div className="text-theme-text-muted text-sm mt-2 space-y-1">
+                                        <p>Prossimo cambio anteriori: {((editedVehicle.last_tire_change_front_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km</p>
+                                        <p>Prossimo cambio posteriori: {((editedVehicle.last_tire_change_rear_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km</p>
+                                    </div>
                                 )}
                             </div>
 
                             {/* Brakes (Pastiglie) */}
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Pastiglie Freni</h4>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-3 gap-4">
                                     <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Ultimo Cambio (km)</label>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Anteriori - Ultimo Cambio (km)</label>
                                         <input
                                             type="number"
-                                            value={editedVehicle.last_brake_change_km || 0}
-                                            onChange={(e) => updateField('last_brake_change_km', parseInt(e.target.value) || 0)}
+                                            value={editedVehicle.last_brake_change_front_km || 0}
+                                            onChange={(e) => updateField('last_brake_change_front_km', parseInt(e.target.value) || 0)}
+                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Posteriori - Ultimo Cambio (km)</label>
+                                        <input
+                                            type="number"
+                                            value={editedVehicle.last_brake_change_rear_km || 0}
+                                            onChange={(e) => updateField('last_brake_change_rear_km', parseInt(e.target.value) || 0)}
                                             className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
@@ -404,9 +457,10 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                     </div>
                                 </div>
                                 {editedVehicle.maintenance_brake_interval_km && editedVehicle.maintenance_brake_interval_km > 0 && (
-                                    <p className="text-theme-text-muted text-sm mt-2">
-                                        Prossimo cambio: {((editedVehicle.last_brake_change_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km
-                                    </p>
+                                    <div className="text-theme-text-muted text-sm mt-2 space-y-1">
+                                        <p>Prossimo cambio anteriori: {((editedVehicle.last_brake_change_front_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km</p>
+                                        <p>Prossimo cambio posteriori: {((editedVehicle.last_brake_change_rear_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km</p>
+                                    </div>
                                 )}
                             </div>
                         </div>
