@@ -1337,14 +1337,14 @@ const LotteriaBoard: React.FC = () => {
               onClick={handleOpenEmailEditor}
               className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-semibold"
             >
-              ✉️ Modifica Email Template
+              Modifica Email Template
             </button>
             <button
               onClick={handleSendPostponementEmails}
               disabled={sendingEmails}
               className="px-4 py-2 bg-yellow-600 text-black rounded hover:bg-yellow-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {sendingEmails ? '📧 Invio in corso...' : '📧 Manda Email'}
+              {sendingEmails ? 'Invio in corso...' : 'Manda Email'}
             </button>
           </div>
         </div>
@@ -1892,7 +1892,7 @@ const LotteriaBoard: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-theme-border">
-              <h2 className="text-2xl font-bold text-theme-text-primary">✉️ Modifica Email Template</h2>
+              <h2 className="text-2xl font-bold text-theme-text-primary">Modifica Email Template</h2>
               <p className="text-sm text-theme-text-secondary mt-2">
                 Modifica il contenuto dell'email che verrà inviata a tutti i clienti che hanno comprato biglietti
               </p>
@@ -1933,7 +1933,7 @@ const LotteriaBoard: React.FC = () => {
                       placeholder="Inserisci il contenuto HTML dell'email..."
                     />
                     <p className="text-xs text-theme-text-muted mt-2">
-                      💡 Puoi usare HTML per formattare l'email (grassetto, colori, link, ecc.)
+                      Puoi usare HTML per formattare l'email (grassetto, colori, link, ecc.)
                     </p>
                   </div>
 
@@ -1950,7 +1950,7 @@ const LotteriaBoard: React.FC = () => {
                       placeholder="Inserisci la versione testo dell'email (per client email che non supportano HTML)..."
                     />
                     <p className="text-xs text-theme-text-muted mt-2">
-                      📝 Versione semplice senza formattazione per client email che non supportano HTML
+                      Versione semplice senza formattazione per client email che non supportano HTML
                     </p>
                   </div>
                 </>
@@ -1970,7 +1970,7 @@ const LotteriaBoard: React.FC = () => {
                 disabled={savingTemplate || loadingTemplate}
                 className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {savingTemplate ? '💾 Salvataggio...' : '💾 Salva Template'}
+                {savingTemplate ? 'Salvataggio...' : 'Salva Template'}
               </button>
             </div>
           </div>
