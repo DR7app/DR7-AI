@@ -320,17 +320,26 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   }
 
   // Helper to parse date strings into Date objects
-  // We use standard Date parsing to ensure timestamps are converted to the user's local timezone (CET)
-  // This fixes issues where a UTC timestamp like "2026-01-08T23:00:00Z" (which is Jan 9th CET)
-  // was being incorrectly parsed as Jan 8th by the regex matcher.
+  // We explicitly convert to 'Europe/Rome' timezone to prevent "one day earlier" issues
+  // caused by browser timezone differences or late-night UTC bookings (e.g. 23:00Z = 00:00 CET).
   const parseLocalDate = (dateString: string): Date => {
     const date = new Date(dateString)
+
     // Validate date
     if (isNaN(date.getTime())) {
       console.warn(`⚠️ parseLocalDate: Invalid date "${dateString}"`)
       return new Date() // Fallback
     }
-    return date
+
+    // Force date to be interpreted in Rome timezone
+    // "en-US" locale produces MM/DD/YYYY, which new Date() parses correctly
+    const romeTimeStr = date.toLocaleString('en-US', { timeZone: 'Europe/Rome' })
+    const romeDate = new Date(romeTimeStr)
+
+    // Set to midnight to align with calendar cell checks
+    romeDate.setHours(0, 0, 0, 0)
+
+    return romeDate
   }
 
   // ... inside component ...
