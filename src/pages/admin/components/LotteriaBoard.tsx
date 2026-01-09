@@ -1080,7 +1080,7 @@ const LotteriaBoard: React.FC = () => {
   };
 
   const handleSendPostponementEmails = async () => {
-    if (!confirm('Sei sicuro di voler mandare l\'email di rinvio a TUTTI i clienti che hanno comprato biglietti?\n\nQuesta azione invierà un\'email a tutti gli acquirenti informandoli che l\'estrazione è stata rinviata al 24 gennaio.')) {
+    if (!confirm('Sei sicuro di voler inviare l\'email a TUTTI i clienti che hanno comprato biglietti?\n\nQuesta azione invierà un\'email personalizzata a tutti gli acquirenti utilizzando il template che hai configurato.')) {
       return;
     }
 
