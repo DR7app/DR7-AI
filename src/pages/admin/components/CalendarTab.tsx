@@ -262,42 +262,25 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
     // Find bookings for this vehicle on this day
     const vehicleBookings = bookings.filter(booking => {
-      let isMatch = false
-      // Check root vehicle_id first, then nested
+      // ... same matching logic ...
       const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
+      const bookingPlate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle?.targa || booking.booking_details?.targa
 
-      // Get plate from any possible source
-      const bookingPlate = booking.vehicle_plate ||
-        booking.booking_details?.vehicle?.plate ||
-        booking.booking_details?.vehicle?.targa ||
-        booking.booking_details?.targa
-
-      // 1. Match by Vehicle ID (most accurate)
-      if (bookingVehicleId && bookingVehicleId === vehicle.id) {
-        isMatch = true
-      }
-      // 2. Match by Plate (Strict)
-      else if (bookingPlate) {
-        if (vehicle.plate) {
-          isMatch = vehicle.plate.trim().toUpperCase() === bookingPlate.trim().toUpperCase()
-        } else {
-          // Booking has plate, Vehicle doesn't. 
-          // STRICTLY reject match to avoid duplicates across generic "Clio Blue" rows.
-          isMatch = false
-        }
-      }
-      // 3. Fallback to Name (Only if no ID and no Plate info on booking)
-      else {
-        isMatch = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
-      }
+      const isMatch = (bookingVehicleId && bookingVehicleId === vehicle.id) ||
+        (bookingPlate && vehicle.plate && vehicle.plate.trim().toUpperCase() === bookingPlate.trim().toUpperCase()) ||
+        (!bookingVehicleId && !bookingPlate && booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase())
 
       if (!isMatch) return false
 
-      // Use parseLocalDate for consistency with booking segment calculation
       const pickupDate = parseLocalDate(booking.pickup_date)
       const dropoffDate = parseLocalDate(booking.dropoff_date)
 
-      return checkDate >= pickupDate && checkDate < dropoffDate
+      // A day is "rented" if any part of the booking overlaps with it
+      // Day range: [00:00:00, 23:59:59]
+      const checkStart = new Date(year, month, day, 0, 0, 0)
+      const checkEnd = new Date(year, month, day, 23, 59, 59)
+
+      return pickupDate <= checkEnd && dropoffDate > checkStart
     })
 
     return vehicleBookings.length > 0 ? 'rented' : 'available'
@@ -323,24 +306,34 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   // We extract components specifically in Europe/Rome timezone to ensure
   // "2026-01-10T23:00:00Z" (UTC) correctly becomes Jan 11 (Rome) on ALL browsers.
   const parseLocalDate = (dateString: string): Date => {
-    const utcDate = new Date(dateString)
-    if (isNaN(utcDate.getTime())) {
-      console.warn(`⚠️ parseLocalDate: Invalid date "${dateString}"`)
-      return new Date()
-    }
+    const d = new Date(dateString)
+    if (isNaN(d.getTime())) return new Date()
 
-    // sv-SE locale gives YYYY-MM-DD which is easy to parse
-    const romeStr = utcDate.toLocaleString('sv-SE', {
+    // Extract components identifying the date/time in Rome
+    // We get individual components to be 100% safe across browsers
+    const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Europe/Rome',
       year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
     })
 
-    const [y, m, d] = romeStr.split(' ')[0].split('-').map(Number)
-    const localDate = new Date(y, m - 1, d, 0, 0, 0, 0)
+    const parts = formatter.formatToParts(d)
+    const p: Record<string, string> = {}
+    parts.forEach(part => { p[part.type] = part.value })
 
-    return localDate
+    // Create a local date with those exact components
+    return new Date(
+      parseInt(p.year),
+      parseInt(p.month) - 1,
+      parseInt(p.day),
+      parseInt(p.hour),
+      parseInt(p.minute),
+      0, 0
+    )
   }
 
   // ... inside component ...
@@ -408,23 +401,18 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
         if (dropoffDate <= monthStart || pickupDate > monthEnd) continue
 
         // Calculate start/end days within month
-        // CRITICAL: Use getDate() which returns the day of the month (1-31)
-        let startDay: number
-        let endDay: number
+        let startDay = pickupDate.getFullYear() === year && pickupDate.getMonth() === month
+          ? pickupDate.getDate()
+          : 1
 
-        if (pickupDate.getMonth() === month && pickupDate.getFullYear() === year) {
-          startDay = pickupDate.getDate()
-        } else {
-          // Booking starts before this month, so it starts on day 1 of this month
-          startDay = 1
-        }
+        let endDay = dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month
+          ? dropoffDate.getDate()
+          : lastDay
 
-        if (dropoffDate.getMonth() === month && dropoffDate.getFullYear() === year) {
-          // For the end day, we subtract 1 because dropoff is exclusive (check-out day is not rented)
-          endDay = dropoffDate.getDate() - 1
-        } else {
-          // Booking ends after this month, so it ends on the last day of this month
-          endDay = lastDay
+        // If dropoff is exactly at midnight, the booking ends at the end of the previous day
+        if (dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month &&
+          dropoffDate.getHours() === 0 && dropoffDate.getMinutes() === 0) {
+          endDay = endDay - 1
         }
 
         // Only create segment if valid range
