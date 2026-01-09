@@ -320,26 +320,22 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   }
 
   // Helper to parse date strings into Date objects
-  // We explicitly convert to 'Europe/Rome' timezone to prevent "one day earlier" issues
-  // caused by browser timezone differences or late-night UTC bookings (e.g. 23:00Z = 00:00 CET).
+  // We simply extract the YYYY-MM-DD components to create a local date at midnight.
+  // This avoids ALL timezone offset issues (UTC vs Local) by treating the date string as absolute truth.
   const parseLocalDate = (dateString: string): Date => {
-    const date = new Date(dateString)
-
-    // Validate date
-    if (isNaN(date.getTime())) {
-      console.warn(`⚠️ parseLocalDate: Invalid date "${dateString}"`)
-      return new Date() // Fallback
+    // 1. Try to match YYYY-MM-DD format first
+    const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, year, month, day] = match
+      // Construct date exactly as it appears in the string, at 00:00:00 local time
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0)
     }
 
-    // Force date to be interpreted in Rome timezone
-    // "en-US" locale produces MM/DD/YYYY, which new Date() parses correctly
-    const romeTimeStr = date.toLocaleString('en-US', { timeZone: 'Europe/Rome' })
-    const romeDate = new Date(romeTimeStr)
-
-    // Set to midnight to align with calendar cell checks
-    romeDate.setHours(0, 0, 0, 0)
-
-    return romeDate
+    // 2. Fallback: Parse as standard date but reset time to midnight local
+    // This handles other valid formats if they occur
+    const date = new Date(dateString)
+    date.setHours(0, 0, 0, 0)
+    return date
   }
 
   // ... inside component ...
