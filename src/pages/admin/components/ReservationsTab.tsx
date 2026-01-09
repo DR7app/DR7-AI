@@ -652,6 +652,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return
     }
 
+    // Skip auto-adjustment if admin has enabled override
+    if (editingId) {
+      console.log('[Vehicle Availability] Editing mode - skipping auto-adjustment to allow manual control')
+      return
+    }
+
     if (formData.vehicle_id && formData.pickup_date) {
       const earliestTime = vehicleEarliestTimes.get(formData.vehicle_id)
 
@@ -687,7 +693,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
     }
-  }, [formData.vehicle_id, formData.pickup_date, vehicleEarliestTimes, vehicles])
+  }, [formData.vehicle_id, formData.pickup_date, vehicleEarliestTimes, vehicles, editingId])
 
 
   const LOCATIONS = [
@@ -3367,6 +3373,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
               />
             </div>
+
             <div className="flex gap-3 mt-4">
               <Button type="submit">
                 Salva

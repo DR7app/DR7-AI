@@ -35,7 +35,22 @@ export const handler: Handler = async (event) => {
         // We'll try to fetch from customers_extended first
         const { data: users, error: usersError } = await supabase
             .from('customers_extended')
-            .select('id, nome, cognome, email, created_at')
+            .select(`
+                id, 
+                nome, 
+                cognome, 
+                email, 
+                telefono,
+                codice_fiscale,
+                data_nascita,
+                luogo_nascita,
+                indirizzo_residenza,
+                citta_residenza,
+                cap_residenza,
+                provincia_residenza,
+                tipo_cliente,
+                created_at
+            `)
             .in('id', userIds)
 
         if (usersError) console.error('Error fetching users:', usersError)
@@ -129,6 +144,15 @@ export const handler: Handler = async (event) => {
                     id: doc.user_id,
                     full_name: fullName,
                     email: user?.email || doc.user_email || 'Email non disponibile',
+                    telefono: user?.telefono,
+                    codice_fiscale: user?.codice_fiscale,
+                    data_nascita: user?.data_nascita,
+                    luogo_nascita: user?.luogo_nascita,
+                    indirizzo_residenza: user?.indirizzo_residenza,
+                    citta_residenza: user?.citta_residenza,
+                    cap_residenza: user?.cap_residenza,
+                    provincia_residenza: user?.provincia_residenza,
+                    tipo_cliente: user?.tipo_cliente,
                     is_new: user?.created_at ? (new Date().getTime() - new Date(user.created_at).getTime()) < (7 * 24 * 60 * 60 * 1000) : false,
                     created_at: user?.created_at || doc.upload_date
                 }

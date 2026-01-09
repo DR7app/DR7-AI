@@ -15,6 +15,15 @@ interface UserDocument {
     id: string
     full_name: string
     email: string
+    telefono?: string
+    codice_fiscale?: string
+    data_nascita?: string
+    luogo_nascita?: string
+    indirizzo_residenza?: string
+    citta_residenza?: string
+    cap_residenza?: string
+    provincia_residenza?: string
+    tipo_cliente?: string
   }
 }
 
@@ -286,28 +295,66 @@ export default function DocumentsVerificationTab() {
             <div key={userId} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
               {/* User Header */}
               <div className="bg-theme-bg-tertiary p-4 border-b border-theme-border">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div>
+                <div className="flex flex-col lg:flex-row lg:justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-xl font-bold text-theme-text-primary">{user?.full_name || 'Nome non disponibile'}</h3>
+                      {(user as any)?.is_new && (
+                        <span className="px-2 py-1 text-xs font-bold bg-green-600 text-theme-text-primary rounded">
+                          NUOVO CLIENTE
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-theme-text-primary">{user?.full_name || 'Nome non disponibile'}</h3>
-                        {(user as any)?.is_new && (
-                          <span className="px-2 py-1 text-xs font-bold bg-green-600 text-theme-text-primary rounded">
-                            NUOVO CLIENTE
-                          </span>
-                        )}
+                        <span className="text-theme-text-muted">Email:</span>
+                        <span className="text-theme-text-primary">{user?.email || 'Non disponibile'}</span>
                       </div>
-                      <p className="text-sm text-theme-text-muted">{user?.email || 'Email non disponibile'}</p>
+                      {user?.telefono && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-text-muted">Telefono:</span>
+                          <span className="text-theme-text-primary">{user.telefono}</span>
+                        </div>
+                      )}
+                      {user?.codice_fiscale && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-text-muted">Codice Fiscale:</span>
+                          <span className="text-theme-text-primary font-mono">{user.codice_fiscale}</span>
+                        </div>
+                      )}
+                      {user?.data_nascita && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-text-muted">Nato il:</span>
+                          <span className="text-theme-text-primary">
+                            {new Date(user.data_nascita).toLocaleDateString('it-IT')}
+                            {user.luogo_nascita && ` a ${user.luogo_nascita}`}
+                          </span>
+                        </div>
+                      )}
+                      {user?.indirizzo_residenza && (
+                        <div className="flex items-center gap-2 md:col-span-2">
+                          <span className="text-theme-text-muted">Residenza:</span>
+                          <span className="text-theme-text-primary">
+                            {user.indirizzo_residenza}
+                            {user.citta_residenza && `, ${user.citta_residenza}`}
+                            {user.cap_residenza && ` ${user.cap_residenza}`}
+                            {user.provincia_residenza && ` (${user.provincia_residenza})`}
+                          </span>
+                        </div>
+                      )}
                       {(user as any)?.created_at && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Registrato: {new Date((user as any).created_at).toLocaleDateString('it-IT')}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-text-muted">Registrato:</span>
+                          <span className="text-theme-text-primary">{new Date((user as any).created_at).toLocaleDateString('it-IT')}</span>
+                        </div>
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-theme-text-muted">Documenti: {userDocs.length}</p>
-                    <p className="text-xs text-gray-500">User ID: {userId.slice(0, 8)}...</p>
+                  <div className="flex flex-col items-end justify-between">
+                    <div className="text-right mb-2">
+                      <p className="text-sm text-theme-text-muted">Documenti: {userDocs.length}</p>
+                      <p className="text-xs text-gray-500">ID: {userId.slice(0, 8)}...</p>
+                    </div>
                   </div>
                 </div>
               </div>
