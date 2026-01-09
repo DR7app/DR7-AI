@@ -6,8 +6,15 @@ interface AlarmBooking {
     vehicleName: string
     returnTime: string
     customerName: string
-    type?: 'return' | 'deposit' | 'unpaid_pickup' | 'car_wash'
+    type?: 'return' | 'deposit' | 'unpaid_pickup' | 'car_wash' | 'fleet_maintenance_km' | 'fleet_maintenance_date'
     deposit?: number
+    // Fleet maintenance specific fields
+    vehicleId?: string
+    maintenanceType?: string
+    currentValue?: number | string
+    dueValue?: number | string
+    remaining?: number
+    urgent?: boolean
 }
 
 interface AlarmState {
@@ -341,10 +348,274 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
+    // Check for fleet maintenance alarms
+    const checkFleetMaintenanceAlarms = async () => {
+        try {
+            const { data: vehicles, error } = await supabase
+                .from('vehicles')
+                .select('*')
+                .eq('status', 'available')
+
+            if (error || !vehicles) return
+
+            const ALERT_THRESHOLD_KM = 1000
+            const ALERT_THRESHOLD_DAYS = 7
+            const now = new Date()
+
+            for (const vehicle of vehicles) {
+                const currentKm = vehicle.current_km || 0
+                const vehicleId = vehicle.id
+
+                // Check Service (Tagliando)
+                if (vehicle.maintenance_service_interval_km) {
+                    const lastService = vehicle.last_service_km || 0
+                    const nextService = lastService + vehicle.maintenance_service_interval_km
+                    const remaining = nextService - currentKm
+
+                    if (remaining <= ALERT_THRESHOLD_KM) {
+                        const trackingId = `fleet_service_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: `${nextService.toLocaleString()} km`,
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_km',
+                            maintenanceType: 'Tagliando',
+                            currentValue: currentKm,
+                            dueValue: nextService,
+                            remaining: remaining,
+                            urgent: remaining <= 0
+                        })
+                        return
+                    }
+                }
+
+                // Check Front Tires
+                if (vehicle.maintenance_tires_interval_km) {
+                    const lastTiresFront = vehicle.last_tire_change_front_km || vehicle.last_tire_change_km || 0
+                    const nextTiresFront = lastTiresFront + vehicle.maintenance_tires_interval_km
+                    const remainingFront = nextTiresFront - currentKm
+
+                    if (remainingFront <= ALERT_THRESHOLD_KM) {
+                        const trackingId = `fleet_tires_front_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: `${nextTiresFront.toLocaleString()} km`,
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_km',
+                            maintenanceType: 'Gomme Anteriori',
+                            currentValue: currentKm,
+                            dueValue: nextTiresFront,
+                            remaining: remainingFront,
+                            urgent: remainingFront <= 0
+                        })
+                        return
+                    }
+                }
+
+                // Check Rear Tires
+                if (vehicle.maintenance_tires_interval_km) {
+                    const lastTiresRear = vehicle.last_tire_change_rear_km || vehicle.last_tire_change_km || 0
+                    const nextTiresRear = lastTiresRear + vehicle.maintenance_tires_interval_km
+                    const remainingRear = nextTiresRear - currentKm
+
+                    if (remainingRear <= ALERT_THRESHOLD_KM) {
+                        const trackingId = `fleet_tires_rear_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: `${nextTiresRear.toLocaleString()} km`,
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_km',
+                            maintenanceType: 'Gomme Posteriori',
+                            currentValue: currentKm,
+                            dueValue: nextTiresRear,
+                            remaining: remainingRear,
+                            urgent: remainingRear <= 0
+                        })
+                        return
+                    }
+                }
+
+                // Check Front Brakes
+                if (vehicle.maintenance_brake_interval_km) {
+                    const lastBrakesFront = vehicle.last_brake_change_front_km || vehicle.last_brake_change_km || 0
+                    const nextBrakesFront = lastBrakesFront + vehicle.maintenance_brake_interval_km
+                    const remainingFront = nextBrakesFront - currentKm
+
+                    if (remainingFront <= ALERT_THRESHOLD_KM) {
+                        const trackingId = `fleet_brakes_front_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: `${nextBrakesFront.toLocaleString()} km`,
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_km',
+                            maintenanceType: 'Pastiglie Freni Anteriori',
+                            currentValue: currentKm,
+                            dueValue: nextBrakesFront,
+                            remaining: remainingFront,
+                            urgent: remainingFront <= 0
+                        })
+                        return
+                    }
+                }
+
+                // Check Rear Brakes
+                if (vehicle.maintenance_brake_interval_km) {
+                    const lastBrakesRear = vehicle.last_brake_change_rear_km || vehicle.last_brake_change_km || 0
+                    const nextBrakesRear = lastBrakesRear + vehicle.maintenance_brake_interval_km
+                    const remainingRear = nextBrakesRear - currentKm
+
+                    if (remainingRear <= ALERT_THRESHOLD_KM) {
+                        const trackingId = `fleet_brakes_rear_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: `${nextBrakesRear.toLocaleString()} km`,
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_km',
+                            maintenanceType: 'Pastiglie Freni Posteriori',
+                            currentValue: currentKm,
+                            dueValue: nextBrakesRear,
+                            remaining: remainingRear,
+                            urgent: remainingRear <= 0
+                        })
+                        return
+                    }
+                }
+
+                // Check Insurance
+                if (vehicle.insurance_expiry) {
+                    const expiryDate = new Date(vehicle.insurance_expiry)
+                    const daysRemaining = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+                    if (daysRemaining <= ALERT_THRESHOLD_DAYS) {
+                        const trackingId = `fleet_insurance_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: expiryDate.toLocaleDateString('it-IT'),
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_date',
+                            maintenanceType: 'Assicurazione',
+                            currentValue: now.toLocaleDateString('it-IT'),
+                            dueValue: expiryDate.toLocaleDateString('it-IT'),
+                            remaining: daysRemaining,
+                            urgent: daysRemaining <= 0
+                        })
+                        return
+                    }
+                }
+
+                // Check Tax (Bollo)
+                if (vehicle.tax_expiry) {
+                    const expiryDate = new Date(vehicle.tax_expiry)
+                    const daysRemaining = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+                    if (daysRemaining <= ALERT_THRESHOLD_DAYS) {
+                        const trackingId = `fleet_tax_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: expiryDate.toLocaleDateString('it-IT'),
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_date',
+                            maintenanceType: 'Bollo',
+                            currentValue: now.toLocaleDateString('it-IT'),
+                            dueValue: expiryDate.toLocaleDateString('it-IT'),
+                            remaining: daysRemaining,
+                            urgent: daysRemaining <= 0
+                        })
+                        return
+                    }
+                }
+
+                // Check Inspection (Revisione)
+                if (vehicle.inspection_expiry) {
+                    const expiryDate = new Date(vehicle.inspection_expiry)
+                    const daysRemaining = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+                    if (daysRemaining <= ALERT_THRESHOLD_DAYS) {
+                        const trackingId = `fleet_inspection_${vehicleId}`
+                        if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: vehicleId,
+                            vehicleId: vehicleId,
+                            vehicleName: vehicle.display_name || vehicle.plate || 'Unknown Vehicle',
+                            returnTime: expiryDate.toLocaleDateString('it-IT'),
+                            customerName: 'Fleet Maintenance',
+                            type: 'fleet_maintenance_date',
+                            maintenanceType: 'Revisione',
+                            currentValue: now.toLocaleDateString('it-IT'),
+                            dueValue: expiryDate.toLocaleDateString('it-IT'),
+                            remaining: daysRemaining,
+                            urgent: daysRemaining <= 0
+                        })
+                        return
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking fleet maintenance alarms:', error)
+        }
+    }
+
     // Poll every 30 seconds
     useEffect(() => {
         checkAlarms()
-        const interval = setInterval(checkAlarms, 30000)
+        checkFleetMaintenanceAlarms()
+        const interval = setInterval(() => {
+            checkAlarms()
+            checkFleetMaintenanceAlarms()
+        }, 30000)
         return () => clearInterval(interval)
     }, []) // Empty deps - runs once on mount
 
