@@ -317,15 +317,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       height: 8px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-      background: #1a1a1a;
+      background: var(--color-theme-bg-secondary);
       border-radius: 10px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #4a4a4a;
+      background: var(--color-theme-border);
       border-radius: 10px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: #6a6a6a;
+      background: var(--color-theme-text-muted);
     }
   `
 

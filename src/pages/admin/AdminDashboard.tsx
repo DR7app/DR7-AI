@@ -123,7 +123,7 @@ export default function AdminDashboard() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black/75 dark:bg-black/75 light:bg-black/50" onClick={() => setMobileMenuOpen(false)}>
+        <div className="lg:hidden fixed inset-0 z-50 bg-theme-bg-primary opacity-75 dark:bg-theme-bg-primary opacity-75 light:bg-theme-bg-primary/50" onClick={() => setMobileMenuOpen(false)}>
           <div className="bg-theme-bg-secondary w-64 h-full shadow-xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-theme-border flex justify-between items-center">
               <h2 className="text-theme-text-primary font-semibold">Menu</h2>

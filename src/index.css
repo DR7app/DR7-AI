@@ -24,18 +24,18 @@
 
 .light {
   --color-theme-bg-primary: #ffffff;
-  --color-theme-bg-secondary: #f5f5f5;
-  --color-theme-bg-tertiary: #e5e5e5;
-  --color-theme-bg-hover: #d4d4d4;
-  --color-theme-text-primary: #171717;
-  --color-theme-text-secondary: #404040;
+  --color-theme-bg-secondary: #fafafa;
+  --color-theme-bg-tertiary: #f5f5f5;
+  --color-theme-bg-hover: #eeeeee;
+  --color-theme-text-primary: #0a0a0a;
+  --color-theme-text-secondary: #525252;
   --color-theme-text-muted: #737373;
-  --color-theme-border: #d4d4d4;
-  --color-theme-border-light: #e5e5e5;
+  --color-theme-border: #e0e0e0;
+  --color-theme-border-light: #eeeeee;
   --color-theme-input-bg: #ffffff;
   --color-theme-input-border: #d4d4d4;
-  --color-theme-shadow: rgba(0, 0, 0, 0.1);
-  --color-theme-overlay: rgba(0, 0, 0, 0.5);
+  --color-theme-shadow: rgba(0, 0, 0, 0.08);
+  --color-theme-overlay: rgba(0, 0, 0, 0.4);
 }
 
 .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
