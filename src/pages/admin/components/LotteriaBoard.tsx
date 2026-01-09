@@ -1283,7 +1283,7 @@ const LotteriaBoard: React.FC = () => {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-4">Tabellone LOTTERIA</h2>
+        <h2 className="text-2xl font-bold mb-4 text-theme-text-primary">Tabellone LOTTERIA</h2>
 
         {/* Search Bar */}
         <div className="mb-6 bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
