@@ -53,11 +53,18 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         </tr>
                     </thead>
                     <tbody>
-                        {vehicles.map(vehicle => {
+                        {vehicles.map((vehicle, index) => {
                             const { status, nearestDeadline } = getVehicleStatus(vehicle, null) // Pass maintenance data when available
 
                             return (
-                                <tr key={vehicle.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary cursor-pointer" onClick={() => onOpenDetail(vehicle.id)}>
+                                <tr
+                                    key={vehicle.id}
+                                    className={`border-t border-gray-700/30 transition-all duration-200 cursor-pointer ${index % 2 === 0
+                                            ? 'bg-gray-800/20 hover:bg-gray-800/40'
+                                            : 'bg-gray-900/20 hover:bg-gray-900/40'
+                                        } backdrop-blur-sm`}
+                                    onClick={() => onOpenDetail(vehicle.id)}
+                                >
                                     <td className="px-4 py-3 text-theme-text-primary font-medium">
                                         {vehicle.display_name}
                                         {nearestDeadline && (
