@@ -132,7 +132,7 @@ BEGIN
       0, -- €0 for internal car wash (rientro)
       'EUR',
       'confirmed',
-      'pending',
+      'paid',  -- Set to paid since there's no cost for internal car wash
       jsonb_build_object(
         'auto_created', true,
         'source_booking_id', NEW.id,
