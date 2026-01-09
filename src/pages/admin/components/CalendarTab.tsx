@@ -238,8 +238,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   const getCellStatus = (vehicle: Vehicle, day: number): CellStatus => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-    const checkDate = new Date(year, month, day)
-    checkDate.setHours(0, 0, 0, 0)
+
+    // Create checkDate at midnight local time - this will be comparable with parseLocalDate results
+    const checkDate = new Date(year, month, day, 0, 0, 0, 0)
 
     // Check if vehicle is marked as unavailable
     if (vehicle.status === 'unavailable') {
@@ -250,10 +251,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       // If date range specified, check if current date falls within range
       if (vehicle.metadata?.unavailable_from && vehicle.metadata?.unavailable_until) {
-        const unavailableFrom = new Date(vehicle.metadata.unavailable_from)
-        const unavailableUntil = new Date(vehicle.metadata.unavailable_until)
-        unavailableFrom.setHours(0, 0, 0, 0)
-        unavailableUntil.setHours(0, 0, 0, 0)
+        const unavailableFrom = parseLocalDate(vehicle.metadata.unavailable_from)
+        const unavailableUntil = parseLocalDate(vehicle.metadata.unavailable_until)
 
         if (checkDate >= unavailableFrom && checkDate <= unavailableUntil) {
           return 'unavailable'
