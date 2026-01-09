@@ -101,7 +101,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-dr7-gold to-yellow-500 hover:from-yellow-500 hover:to-dr7-gold text-black font-semibold py-3.5 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-dr7-gold/25 transform hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full bg-black hover:bg-gray-900 text-white font-medium py-3.5 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg border border-gray-700/50 hover:border-gray-600 tracking-wide uppercase text-sm"
               >
                 {loading ? 'Accesso in corso...' : 'Accedi'}
               </button>
