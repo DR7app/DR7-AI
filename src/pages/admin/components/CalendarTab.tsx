@@ -294,10 +294,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       if (!isMatch) return false
 
-      const pickupDate = new Date(booking.pickup_date)
-      const dropoffDate = new Date(booking.dropoff_date)
-      pickupDate.setHours(0, 0, 0, 0)
-      dropoffDate.setHours(0, 0, 0, 0)
+      // Use parseLocalDate for consistency with booking segment calculation
+      const pickupDate = parseLocalDate(booking.pickup_date)
+      const dropoffDate = parseLocalDate(booking.dropoff_date)
 
       return checkDate >= pickupDate && checkDate < dropoffDate
     })
@@ -318,6 +317,27 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   const normalizePlate = (s: string | null | undefined) => {
     if (!s) return ''
     return s.replace(/\s+/g, '').toUpperCase()
+  }
+
+  // Helper to parse date strings as local dates (not UTC)
+  // This prevents timezone offset issues that cause booking bars to shift
+  const parseLocalDate = (dateString: string): Date => {
+    // Extract date components from ISO string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss...)
+    // This regex captures the date part regardless of time/timezone info
+    const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, year, month, day] = match
+      // Create date in local timezone (month is 0-indexed)
+      // CRITICAL: Always use local timezone constructor to avoid timezone shifts
+      const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0)
+      console.log(`📅 parseLocalDate: "${dateString}" -> Day ${localDate.getDate()}`)
+      return localDate
+    }
+    // Fallback to standard parsing if format doesn't match
+    console.warn(`⚠️ parseLocalDate: Unexpected format "${dateString}", using fallback`)
+    const date = new Date(dateString)
+    date.setHours(0, 0, 0, 0)
+    return date
   }
 
   // ... inside component ...
@@ -372,24 +392,55 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
         if (!isMatch) continue
 
-        const pickupDate = new Date(booking.pickup_date)
-        const dropoffDate = new Date(booking.dropoff_date)
-        pickupDate.setHours(0, 0, 0, 0)
-        dropoffDate.setHours(0, 0, 0, 0)
+        // CRITICAL FIX: Parse dates as LOCAL dates to prevent timezone offset issues
+        // Using parseLocalDate ensures dates are interpreted in local timezone, not UTC
+        // This prevents the +2 day shift that was occurring
+        const pickupDate = parseLocalDate(booking.pickup_date)
+        const dropoffDate = parseLocalDate(booking.dropoff_date)
 
-        const monthStart = new Date(year, month, 1)
-        const monthEnd = new Date(year, month + 1, 0)
-        monthStart.setHours(0, 0, 0, 0)
-        monthEnd.setHours(23, 59, 59, 999)
+        const monthStart = new Date(year, month, 1, 0, 0, 0, 0)
+        const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999)
 
         // Skip if booking doesn't overlap this month
         if (dropoffDate <= monthStart || pickupDate > monthEnd) continue
 
         // Calculate start/end days within month
-        const startDay = pickupDate.getMonth() === month ? pickupDate.getDate() : 1
-        const endDay = dropoffDate.getMonth() === month ? Math.min(dropoffDate.getDate() - 1, lastDay) : lastDay
+        // CRITICAL: Use getDate() which returns the day of the month (1-31)
+        let startDay: number
+        let endDay: number
 
-        if (startDay <= endDay) {
+        if (pickupDate.getMonth() === month && pickupDate.getFullYear() === year) {
+          startDay = pickupDate.getDate()
+        } else {
+          // Booking starts before this month, so it starts on day 1 of this month
+          startDay = 1
+        }
+
+        if (dropoffDate.getMonth() === month && dropoffDate.getFullYear() === year) {
+          // For the end day, we subtract 1 because dropoff is exclusive (check-out day is not rented)
+          endDay = dropoffDate.getDate() - 1
+        } else {
+          // Booking ends after this month, so it ends on the last day of this month
+          endDay = lastDay
+        }
+
+        // Only create segment if valid range
+        if (startDay <= endDay && startDay >= 1 && endDay <= lastDay) {
+          console.log(`📊 [Booking Segment] ${vehicle.display_name}:`, {
+            bookingId: booking.id.substring(0, 8),
+            pickup_raw: booking.pickup_date,
+            dropoff_raw: booking.dropoff_date,
+            pickup_parsed: `${pickupDate.getFullYear()}-${String(pickupDate.getMonth() + 1).padStart(2, '0')}-${String(pickupDate.getDate()).padStart(2, '0')}`,
+            dropoff_parsed: `${dropoffDate.getFullYear()}-${String(dropoffDate.getMonth() + 1).padStart(2, '0')}-${String(dropoffDate.getDate()).padStart(2, '0')}`,
+            pickup_day: pickupDate.getDate(),
+            dropoff_day: dropoffDate.getDate(),
+            startDay,
+            endDay,
+            columnSpan: endDay - startDay + 1,
+            currentMonth: month,
+            currentYear: year
+          })
+
           segments.push({
             bookingId: booking.id,
             vehicleId: vehicle.id,
@@ -754,9 +805,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
                     .map(segment => {
-                      const cellWidth = 40 // min-w-[40px]
-                      const left = (segment.startDay - 1) * cellWidth
-                      const width = segment.columnSpan * cellWidth
+                      // CRITICAL FIX: Account for cell borders in positioning
+                      // Each cell is 40px wide + 2px borders (1px left + 1px right)
+                      const cellWidth = 40
+                      const borderWidth = 2 // 1px border on each side
+                      const totalCellWidth = cellWidth + borderWidth
+
+                      // Calculate position accounting for borders
+                      const left = (segment.startDay - 1) * totalCellWidth
+                      const width = segment.columnSpan * totalCellWidth
 
                       // Determine color based on booking type (matching DailyCalendarModal)
                       let colorClass = "border-red-600"
