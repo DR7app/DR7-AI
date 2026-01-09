@@ -108,7 +108,7 @@ async function processFile(filePath) {
     // 4. Automatically trigger OCR processing
     try {
         console.log(`Triggering auto-OCR for document ${dbData[0].id}...`);
-        const ocrResponse = await fetch(`${process.env.NETLIFY_SITE_URL || 'https://dr7empirerentals.netlify.app'}/.netlify/functions/process-document-ocr`, {
+        const ocrResponse = await fetch(`${process.env.NETLIFY_SITE_URL || 'https://www.dr7empire.com'}/.netlify/functions/process-document-ocr`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ documentId: dbData[0].id })
