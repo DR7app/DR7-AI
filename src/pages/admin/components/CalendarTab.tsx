@@ -319,24 +319,17 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return s.replace(/\s+/g, '').toUpperCase()
   }
 
-  // Helper to parse date strings as local dates (not UTC)
-  // This prevents timezone offset issues that cause booking bars to shift
+  // Helper to parse date strings into Date objects
+  // We use standard Date parsing to ensure timestamps are converted to the user's local timezone (CET)
+  // This fixes issues where a UTC timestamp like "2026-01-08T23:00:00Z" (which is Jan 9th CET)
+  // was being incorrectly parsed as Jan 8th by the regex matcher.
   const parseLocalDate = (dateString: string): Date => {
-    // Extract date components from ISO string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss...)
-    // This regex captures the date part regardless of time/timezone info
-    const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (match) {
-      const [, year, month, day] = match
-      // Create date in local timezone (month is 0-indexed)
-      // CRITICAL: Always use local timezone constructor to avoid timezone shifts
-      const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0)
-      console.log(`📅 parseLocalDate: "${dateString}" -> Day ${localDate.getDate()}`)
-      return localDate
-    }
-    // Fallback to standard parsing if format doesn't match
-    console.warn(`⚠️ parseLocalDate: Unexpected format "${dateString}", using fallback`)
     const date = new Date(dateString)
-    date.setHours(0, 0, 0, 0)
+    // Validate date
+    if (isNaN(date.getTime())) {
+      console.warn(`⚠️ parseLocalDate: Invalid date "${dateString}"`)
+      return new Date() // Fallback
+    }
     return date
   }
 
@@ -805,16 +798,15 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
                     .map(segment => {
-                      // CRITICAL FIX: Account for cell borders in positioning
-                      // Each cell is 40px wide + 2px borders (1px left + 1px right)
+                      // CELL WIDTH FIX: Must match exact CSS width of grid cells (40px)
+                      // Do not add border width here as border-collapse handles it
                       const cellWidth = 40
-                      const borderWidth = 2 // 1px border on each side
-                      const totalCellWidth = cellWidth + borderWidth
 
-                      // Calculate position accounting for borders
-                      // SAFARI FIX: Add 1 cell offset because Safari parses dates 1 day earlier
-                      const left = segment.startDay * totalCellWidth // Changed from (startDay - 1)
-                      const width = segment.columnSpan * totalCellWidth
+                      // POSITIONING FIX: 
+                      // 1. Use (day - 1) because columns are 0-indexed for positioning (Day 1 is at 0px)
+                      // 2. Use exact cell width (40px) for perfect alignment
+                      const left = (segment.startDay - 1) * cellWidth
+                      const width = segment.columnSpan * cellWidth
 
                       // Determine color based on booking type (matching DailyCalendarModal)
                       let colorClass = "border-red-600"
