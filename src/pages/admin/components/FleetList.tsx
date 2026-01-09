@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 import { getVehicleStatus } from '../../../utils/fleetUtils'
-import Button from './Button'
 
 interface FleetListProps {
     onOpenDetail: (vehicleId: string) => void
@@ -106,12 +105,12 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <Button
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
-                                                    className="text-xs py-1 px-3"
+                                                    className="bg-black text-white px-4 py-2 rounded-full text-xs font-medium hover:bg-gray-900 transition-colors"
                                                 >
                                                     Apri Scheda
-                                                </Button>
+                                                </button>
                                             </td>
                                         </tr>
                                     )
@@ -168,12 +167,12 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <Button
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
-                                                    className="text-xs py-1 px-3"
+                                                    className="bg-black text-white px-4 py-2 rounded-full text-xs font-medium hover:bg-gray-900 transition-colors"
                                                 >
                                                     Apri Scheda
-                                                </Button>
+                                                </button>
                                             </td>
                                         </tr>
                                     )
@@ -230,12 +229,12 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <Button
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
-                                                    className="text-xs py-1 px-3"
+                                                    className="bg-black text-white px-4 py-2 rounded-full text-xs font-medium hover:bg-gray-900 transition-colors"
                                                 >
                                                     Apri Scheda
-                                                </Button>
+                                                </button>
                                             </td>
                                         </tr>
                                     )
