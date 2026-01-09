@@ -5,7 +5,6 @@ import DocumentReviewModal from './DocumentReviewModal';
 export default function IncomingScansList() {
     const [scans, setScans] = useState<any[]>([]);
     const [selectedScan, setSelectedScan] = useState<any | null>(null);
-    const [processingOcr, setProcessingOcr] = useState<string | null>(null);
 
     useEffect(() => {
         fetchScans();
@@ -37,32 +36,6 @@ export default function IncomingScansList() {
         }
     }
 
-    async function runOcr(scanId: string) {
-        setProcessingOcr(scanId);
-        try {
-            const response = await fetch('/.netlify/functions/process-document-ocr', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ documentId: scanId }),
-            });
-
-            if (!response.ok) {
-                throw new Error('OCR processing failed');
-            }
-
-            const result = await response.json();
-            console.log('OCR Result:', result);
-
-            // Refresh list to show updated data
-            await fetchScans();
-            alert('OCR completato con successo!');
-        } catch (error: any) {
-            console.error('OCR error:', error);
-            alert(`Errore OCR: ${error.message}`);
-        } finally {
-            setProcessingOcr(null);
-        }
-    }
 
     return (
         <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-theme-border">
@@ -100,30 +73,19 @@ export default function IncomingScansList() {
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className={`px-2 py-1 text-xs rounded-full ${scan.status === 'confirmed' ? 'bg-green-900 text-green-300' :
-                                            scan.status === 'processing' ? 'bg-blue-900 text-blue-300' :
-                                                'bg-yellow-900 text-yellow-300'
+                                        scan.status === 'processing' ? 'bg-blue-900 text-blue-300' :
+                                            'bg-yellow-900 text-yellow-300'
                                         }`}>
                                         {scan.status}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <div className="flex gap-2">
-                                        {!scan.extracted_data?.nome && (
-                                            <button
-                                                onClick={() => runOcr(scan.id)}
-                                                disabled={processingOcr === scan.id}
-                                                className="text-blue-400 hover:text-blue-300 font-medium text-sm disabled:opacity-50"
-                                            >
-                                                {processingOcr === scan.id ? '⏳ OCR...' : '🔍 OCR'}
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={() => setSelectedScan(scan)}
-                                            className="text-dr7-gold hover:text-theme-text-primary font-medium text-sm"
-                                        >
-                                            Revisiona
-                                        </button>
-                                    </div>
+                                    <button
+                                        onClick={() => setSelectedScan(scan)}
+                                        className="text-dr7-gold hover:text-theme-text-primary font-medium text-sm"
+                                    >
+                                        {scan.extracted_data?.nome ? 'Revisiona' : 'Visualizza'}
+                                    </button>
                                 </td>
                             </tr>
                         ))}

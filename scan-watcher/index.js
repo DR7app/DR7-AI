@@ -105,7 +105,26 @@ async function processFile(filePath) {
 
     console.log(`Successfully processed: ${fileName} -> DB ID: ${dbData[0].id}`);
 
-    // 4. Move to Processed folder
+    // 4. Automatically trigger OCR processing
+    try {
+        console.log(`Triggering auto-OCR for document ${dbData[0].id}...`);
+        const ocrResponse = await fetch(`${process.env.NETLIFY_SITE_URL || 'https://dr7empirerentals.netlify.app'}/.netlify/functions/process-document-ocr`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documentId: dbData[0].id })
+        });
+
+        if (ocrResponse.ok) {
+            console.log(`✅ Auto-OCR completed successfully for ${fileName}`);
+        } else {
+            console.warn(`⚠️ Auto-OCR failed for ${fileName}: ${ocrResponse.statusText}`);
+        }
+    } catch (ocrError) {
+        console.error(`❌ Auto-OCR error for ${fileName}:`, ocrError.message);
+        // Don't throw - we still want to move the file even if OCR fails
+    }
+
+    // 5. Move to Processed folder
     const destPath = path.join(PROCESSED_DIR, fileName);
     fs.renameSync(filePath, destPath);
     console.log(`Moved local file to: ${destPath}`);
