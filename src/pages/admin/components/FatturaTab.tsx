@@ -67,14 +67,6 @@ export default function FatturaTab() {
     }
   }
 
-  const toggleSelectAll = () => {
-    if (selectedIds.length === invoices.length) {
-      setSelectedIds([])
-    } else {
-      setSelectedIds(invoices.map(invoice => invoice.id))
-    }
-  }
-
   const toggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter(i => i !== id))
@@ -92,7 +84,7 @@ export default function FatturaTab() {
       loadInvoices()
     } catch (error) {
       console.error('Error deleting invoice:', error)
-      alert('Errore durante l\\'eliminazione')
+      alert('Errore durante l\'eliminazione')
     }
   }
 
@@ -106,7 +98,7 @@ export default function FatturaTab() {
       loadInvoices()
     } catch (error) {
       console.error('Error bulk deleting invoices:', error)
-      alert('Errore durante l\\'eliminazione multipla')
+      alert('Errore durante l\'eliminazione multipla')
     }
   }
 
@@ -168,10 +160,10 @@ export default function FatturaTab() {
       const result = await response.json()
 
       if (response.ok) {
-        alert(`✅ Stato aggiornato: ${result.status}\\n\\nDettagli: ${JSON.stringify(result.details, null, 2)}`)
+        alert(`Stato aggiornato: ${result.status}\n\nDettagli: ${JSON.stringify(result.details, null, 2)}`)
         loadInvoices()
       } else {
-        alert(`❌ Errore nel controllo stato:\\n\\n${result.error}`)
+        alert(`Errore nel controllo stato:\n\n${result.error}`)
       }
     } catch (error) {
       console.error('Error checking status:', error)
@@ -183,7 +175,7 @@ export default function FatturaTab() {
 
   async function handleSendToSDI(invoice: Invoice) {
     if (!invoice.customer_tax_code) {
-      alert('⚠️ Il Codice Fiscale è obbligatorio per la fatturazione elettronica.')
+      alert('Il Codice Fiscale è obbligatorio per la fatturazione elettronica.')
       return
     }
 
@@ -204,9 +196,9 @@ export default function FatturaTab() {
       const result = await response.json()
 
       if (response.ok) {
-        alert('✅ Fattura inviata con successo allo SDI')
+        alert('Fattura inviata con successo allo SDI')
       } else {
-        alert(`❌ Errore durante l'invio:\\n\\n${result.error}\\n${result.details ? JSON.stringify(result.details) : ''}`)
+        alert(`Errore durante l'invio:\n\n${result.error}\n${result.details ? JSON.stringify(result.details) : ''}`)
       }
 
       loadInvoices()
