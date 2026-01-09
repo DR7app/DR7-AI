@@ -84,7 +84,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                     return (
                                         <tr
                                             key={vehicle.id}
-                                            className="border-t border-gray-700/30 transition-all duration-200 cursor-pointer hover:bg-white/5"
+                                            className="border-t border-gray-700/30 cursor-pointer"
                                             onClick={() => onOpenDetail(vehicle.id)}
                                         >
                                             <td className="px-4 py-3 text-theme-text-primary font-medium">
@@ -146,7 +146,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                     return (
                                         <tr
                                             key={vehicle.id}
-                                            className="border-t border-gray-700/30 transition-all duration-200 cursor-pointer hover:bg-white/5"
+                                            className="border-t border-gray-700/30 cursor-pointer"
                                             onClick={() => onOpenDetail(vehicle.id)}
                                         >
                                             <td className="px-4 py-3 text-theme-text-primary font-medium">
@@ -208,7 +208,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                     return (
                                         <tr
                                             key={vehicle.id}
-                                            className="border-t border-gray-700/30 transition-all duration-200 cursor-pointer hover:bg-white/5"
+                                            className="border-t border-gray-700/30 cursor-pointer"
                                             onClick={() => onOpenDetail(vehicle.id)}
                                         >
                                             <td className="px-4 py-3 text-theme-text-primary font-medium">
