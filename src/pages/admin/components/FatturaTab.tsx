@@ -230,7 +230,7 @@ export default function FatturaTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-theme-text-primary">🧾 Fatture</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">Fatture</h2>
         <div className="flex gap-2">
           <button
             onClick={() => {
@@ -310,12 +310,12 @@ export default function FatturaTab() {
                             invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-600 text-white' :
                               'bg-gray-600 text-white'
                         }`}>
-                        {invoice.sdi_status === 'accepted' ? '✅ Accettata SDI' :
-                          invoice.sdi_status === 'sent' ? '📤 Inviata SDI' :
-                            invoice.sdi_status === 'sending' ? '⏳ Invio...' :
-                              invoice.sdi_status === 'rejected' ? '❌ Rifiutata' :
-                                invoice.sdi_status === 'error' ? '⚠️ Errore SDI' :
-                                  '📝 Bozza'}
+                        {invoice.sdi_status === 'accepted' ? 'Accettata SDI' :
+                          invoice.sdi_status === 'sent' ? 'Inviata SDI' :
+                            invoice.sdi_status === 'sending' ? 'Invio...' :
+                              invoice.sdi_status === 'rejected' ? 'Rifiutata' :
+                                invoice.sdi_status === 'error' ? 'Errore SDI' :
+                                  'Bozza'}
                       </span>
                     )}
                   </div>
@@ -345,14 +345,14 @@ export default function FatturaTab() {
                     onClick={() => downloadPDF(invoice)}
                     className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors text-center flex items-center justify-center gap-1"
                   >
-                    <span>📄</span> PDF
+                    PDF
                   </button>
                   {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error') ? (
                     <button
                       onClick={() => handleSendToSDI(invoice)}
                       className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
                     >
-                      <span>🚀</span> Invia SDI
+                      Invia SDI
                     </button>
                   ) : (
                     <button
@@ -360,7 +360,7 @@ export default function FatturaTab() {
                       disabled={checkingStatus === invoice.id}
                       className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
                     >
-                      <span>🔄</span> {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
+                      {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
                     </button>
                   )}
                   <button
