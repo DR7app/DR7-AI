@@ -1676,14 +1676,19 @@ export default function CustomersTab() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((customer) => (
+              {customers.map((customer, index) => (
                 <tr
                   key={customer.id}
-                  className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${customer.status === 'blacklist' ? 'bg-red-900/40' :
-                    customer.status === 'vip' ? 'bg-yellow-500/10' :
-                      customer.status === 'has_rental' ? 'bg-green-500/10' :
-                        ''
-                    }`}
+                  className={`border-t border-gray-700/30 transition-all duration-200 ${customer.status === 'blacklist'
+                      ? 'bg-gradient-to-r from-red-900/30 via-red-800/20 to-transparent hover:from-red-900/40 hover:via-red-800/30'
+                      : customer.status === 'vip'
+                        ? 'bg-gradient-to-r from-yellow-500/15 via-yellow-600/10 to-transparent hover:from-yellow-500/25 hover:via-yellow-600/15'
+                        : customer.status === 'has_rental'
+                          ? 'bg-gradient-to-r from-green-500/15 via-green-600/10 to-transparent hover:from-green-500/25 hover:via-green-600/15'
+                          : index % 2 === 0
+                            ? 'bg-gray-800/20 hover:bg-gray-800/40'
+                            : 'bg-gray-900/20 hover:bg-gray-900/40'
+                    } backdrop-blur-sm`}
                 >
                   <td className="px-4 py-3">
                     <input
