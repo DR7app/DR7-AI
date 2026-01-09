@@ -37,6 +37,7 @@ export interface Vehicle {
   plate: string | null
   status: 'available' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
+  category: 'exotic' | 'urban' | 'aziendali' | null
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
