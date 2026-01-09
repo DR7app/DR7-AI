@@ -285,50 +285,16 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return s.replace(/[^A-Z0-9]/gi, '').toUpperCase()
   }
 
-  // Helper to parse date strings into Date objects
-  // We extract components specifically in Europe/Rome timezone to ensure
-  // "2026-01-10T23:00:00Z" (UTC) correctly becomes Jan 11 (Rome) on ALL browsers.
+  // DEFINITIVE FIX: Database dates are ALREADY in local time (Europe/Rome)
+  // DO NOT apply timezone conversion - it causes the -1 day shift
   const parseLocalDate = (dateString: string): Date => {
     if (!dateString) return new Date()
 
-    // 1. If it's a simple YYYY-MM-DD string, parse it as local midnight
-    // This is the safest way for date-only strings coming from the DB
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
-      const [y, m, d] = dateString.trim().split('-').map(Number)
-      return new Date(y, m - 1, d, 0, 0, 0, 0)
-    }
-
+    // Parse the date string directly - it's already in local time
     const d = new Date(dateString)
     if (isNaN(d.getTime())) return new Date()
 
-    // 2. If it's an ISO string (likely UTC), adjust to Rome timezone components
-    // We extract individual components in Rome to ensure "2026-01-07T23:00Z" becomes Jan 8.
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Rome',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: false
-    })
-
-    const parts = formatter.formatToParts(d)
-    const p: Record<string, string> = {}
-    parts.forEach(part => {
-      // Remove any non-numeric chars (like LTR marks \u200E)
-      p[part.type] = part.value.replace(/[^\d]/g, '')
-    })
-
-    // Create a date object that will return these components via .getDate()
-    return new Date(
-      parseInt(p.year),
-      parseInt(p.month) - 1,
-      parseInt(p.day),
-      parseInt(p.hour) || 0,
-      parseInt(p.minute) || 0,
-      0, 0
-    )
+    return d
   }
 
   // Unified helper to calculate startDay and endDay for a booking within the current month
