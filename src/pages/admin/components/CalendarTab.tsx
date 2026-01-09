@@ -819,15 +819,18 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
                     .map(segment => {
-                      // CRITICAL FIX: Account for cell borders in positioning
-                      // Each cell is 40px wide + 2px borders (1px left + 1px right)
+                      // CRITICAL FIX: Account for border-collapse table layout
+                      // With border-collapse, borders are SHARED between cells
+                      // Each cell is 40px wide, and borders add 1px between cells
+                      // So: Cell 1 at 0px, Cell 2 at 41px, Cell 3 at 82px, etc.
                       const cellWidth = 40
-                      const borderWidth = 2 // 1px border on each side
+                      const borderWidth = 1 // Shared border between cells
                       const totalCellWidth = cellWidth + borderWidth
 
-                      // Calculate position accounting for borders
+                      // Calculate position: startDay is 1-indexed (1 = first day of month)
+                      // So day 1 starts at position 0, day 2 at 41px, day 3 at 82px, etc.
                       const left = (segment.startDay - 1) * totalCellWidth
-                      const width = segment.columnSpan * totalCellWidth
+                      const width = segment.columnSpan * totalCellWidth - borderWidth // Subtract 1px to avoid overlap
 
                       // Determine color based on booking type (matching DailyCalendarModal)
                       let colorClass = "border-red-600"
