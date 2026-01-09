@@ -235,53 +235,49 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return Array.from({ length: lastDay }, (_, i) => i + 1)
   }, [currentDate])
 
+  interface BookingSegment {
+    bookingId: string
+    vehicleId: string
+    startDay: number
+    endDay: number
+    columnSpan: number
+    booking: Booking
+  }
+
   const getCellStatus = (vehicle: Vehicle, day: number): CellStatus => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
 
     // Check if vehicle is marked as unavailable
     if (vehicle.status === 'unavailable') {
-      // If no date range specified, mark ALL dates as unavailable
       if (!vehicle.metadata?.unavailable_from && !vehicle.metadata?.unavailable_until) {
         return 'unavailable'
       }
 
-      // If date range specified, check if current date falls within range
       if (vehicle.metadata?.unavailable_from && vehicle.metadata?.unavailable_until) {
+        const checkDate = new Date(year, month, day, 0, 0, 0, 0)
         const unavailableFrom = parseLocalDate(vehicle.metadata.unavailable_from)
         const unavailableUntil = parseLocalDate(vehicle.metadata.unavailable_until)
-
         if (checkDate >= unavailableFrom && checkDate <= unavailableUntil) {
           return 'unavailable'
         }
       }
     }
 
-    // Find bookings for this vehicle on this day
-    const vehicleBookings = bookings.filter(booking => {
-      // ... same matching logic ...
-      const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
-      const bookingPlate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle?.targa || booking.booking_details?.targa
+    // Find if ANY booking covers this day
+    const isBooked = bookings.some(booking => {
+      if (!isBookingForVehicle(booking, vehicle)) return false
 
-      const isMatch = (bookingVehicleId && bookingVehicleId === vehicle.id) ||
-        (bookingPlate && vehicle.plate && vehicle.plate.trim().toUpperCase() === bookingPlate.trim().toUpperCase()) ||
-        (!bookingVehicleId && !bookingPlate && booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase())
+      const range = getBookingRange(booking, year, month)
+      if (!range) return false
 
-      if (!isMatch) return false
-
-      const pickupDate = parseLocalDate(booking.pickup_date)
-      const dropoffDate = parseLocalDate(booking.dropoff_date)
-
-      // A day is "rented" if any part of the booking overlaps with it
-      // Day range: [00:00:00, 23:59:59]
-      const checkStart = new Date(year, month, day, 0, 0, 0)
-      const checkEnd = new Date(year, month, day, 23, 59, 59)
-
-      return pickupDate <= checkEnd && dropoffDate > checkStart
+      return day >= range.startDay && day <= range.endDay
     })
 
-    return vehicleBookings.length > 0 ? 'rented' : 'available'
+    return isBooked ? 'rented' : 'available'
   }
+
+
 
   // Helper to normalize plate strings (remove spaces, uppercase)
   const normalizePlate = (s: string | null | undefined) => {
@@ -848,8 +844,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                             height: '36px' // Fill the cell height
                           }}
                           onClick={() => {
-                            const pickup = new Date(segment.booking.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
-                            const dropoff = new Date(segment.booking.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
+                            const pickup = parseLocalDate(segment.booking.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
+                            const dropoff = parseLocalDate(segment.booking.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
                             setSelectedCell({
                               vehicle: vehicle.display_name,
                               date: `${pickup} - ${dropoff}`,
