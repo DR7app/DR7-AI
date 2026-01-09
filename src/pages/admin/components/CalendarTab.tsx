@@ -239,9 +239,6 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
 
-    // Create checkDate at midnight local time - this will be comparable with parseLocalDate results
-    const checkDate = new Date(year, month, day, 0, 0, 0, 0)
-
     // Check if vehicle is marked as unavailable
     if (vehicle.status === 'unavailable') {
       // If no date range specified, mark ALL dates as unavailable
@@ -286,31 +283,30 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return vehicleBookings.length > 0 ? 'rented' : 'available'
   }
 
-  interface BookingSegment {
-    bookingId: string
-    vehicleId: string
-    startDay: number
-    endDay: number
-    columnSpan: number
-    booking: Booking
-  }
-
   // Helper to normalize plate strings (remove spaces, uppercase)
   const normalizePlate = (s: string | null | undefined) => {
     if (!s) return ''
-    return s.replace(/\s+/g, '').toUpperCase()
+    return s.replace(/[^A-Z0-9]/gi, '').toUpperCase()
   }
 
-  // Helper to parse date strings into Date objects
   // Helper to parse date strings into Date objects
   // We extract components specifically in Europe/Rome timezone to ensure
   // "2026-01-10T23:00:00Z" (UTC) correctly becomes Jan 11 (Rome) on ALL browsers.
   const parseLocalDate = (dateString: string): Date => {
+    if (!dateString) return new Date()
+
+    // 1. If it's a simple YYYY-MM-DD string, parse it as local midnight
+    // This is the safest way for date-only strings coming from the DB
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
+      const [y, m, d] = dateString.trim().split('-').map(Number)
+      return new Date(y, m - 1, d, 0, 0, 0, 0)
+    }
+
     const d = new Date(dateString)
     if (isNaN(d.getTime())) return new Date()
 
-    // Extract components identifying the date/time in Rome
-    // We get individual components to be 100% safe across browsers
+    // 2. If it's an ISO string (likely UTC), adjust to Rome timezone components
+    // We extract individual components in Rome to ensure "2026-01-07T23:00Z" becomes Jan 8.
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Europe/Rome',
       year: 'numeric',
@@ -323,124 +319,92 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
     const parts = formatter.formatToParts(d)
     const p: Record<string, string> = {}
-    parts.forEach(part => { p[part.type] = part.value })
+    parts.forEach(part => {
+      // Remove any non-numeric chars (like LTR marks \u200E)
+      p[part.type] = part.value.replace(/[^\d]/g, '')
+    })
 
-    // Create a local date with those exact components
+    // Create a date object that will return these components via .getDate()
     return new Date(
       parseInt(p.year),
       parseInt(p.month) - 1,
       parseInt(p.day),
-      parseInt(p.hour),
-      parseInt(p.minute),
+      parseInt(p.hour) || 0,
+      parseInt(p.minute) || 0,
       0, 0
     )
   }
 
-  // ... inside component ...
+  // Unified helper to calculate startDay and endDay for a booking within the current month
+  const getBookingRange = (booking: Booking, year: number, month: number) => {
+    const pickupDate = parseLocalDate(booking.pickup_date)
+    const dropoffDate = parseLocalDate(booking.dropoff_date)
+    const lastDayInMonth = new Date(year, month + 1, 0).getDate()
+
+    const monthStart = new Date(year, month, 1, 0, 0, 0, 0)
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999)
+
+    // Skip if booking doesn't overlap this month
+    if (dropoffDate <= monthStart || pickupDate > monthEnd) return null
+
+    let startDay = pickupDate.getFullYear() === year && pickupDate.getMonth() === month
+      ? pickupDate.getDate()
+      : 1
+
+    let endDay = dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month
+      ? dropoffDate.getDate()
+      : lastDayInMonth
+
+    // If dropoff is exactly at midnight, the booking ends at the end of the previous day
+    if (dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month &&
+      dropoffDate.getHours() === 0 && dropoffDate.getMinutes() === 0) {
+      endDay = Math.max(startDay, endDay - 1)
+    }
+
+    return { startDay, endDay }
+  }
+
+  // Unified helper to match a booking to a vehicle
+  const isBookingForVehicle = (booking: Booking, vehicle: Vehicle) => {
+    const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
+    const rawBookingPlate = booking.vehicle_plate ||
+      booking.booking_details?.vehicle?.plate ||
+      booking.booking_details?.vehicle?.targa ||
+      booking.booking_details?.targa
+
+    const vehiclePlate = normalizePlate(vehicle.plate)
+    const bookingPlate = normalizePlate(rawBookingPlate)
+
+    if (bookingVehicleId && bookingVehicleId === vehicle.id) return true
+    if (bookingPlate && vehiclePlate) return vehiclePlate === bookingPlate
+
+    // Fallback to name match only if no ID and no plate info on one side
+    return booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+  }
+
+
 
   // Build booking segments for overlay bars
   const buildBookingSegments = useMemo(() => {
     const segments: BookingSegment[] = []
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-    const lastDay = new Date(year, month + 1, 0).getDate()
 
     for (const vehicle of vehicles) {
       for (const booking of bookings) {
-        // Match booking to vehicle with strict priority:
-        // 1. Match by Vehicle ID (most accurate)
-        // 2. Match by Plate (Strict but robust)
-        // 3. Match by Name (Fallback)
+        if (!isBookingForVehicle(booking, vehicle)) continue
 
-        let isMatch = false
-        // Check root vehicle_id first, then nested
-        const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
+        const range = getBookingRange(booking, year, month)
+        if (!range) continue
 
-        // Get plate from any possible source
-        const rawBookingPlate = booking.vehicle_plate ||
-          booking.booking_details?.vehicle?.plate ||
-          booking.booking_details?.vehicle?.targa ||
-          booking.booking_details?.targa
-
-        const vehiclePlate = normalizePlate(vehicle.plate)
-        const bookingPlate = normalizePlate(rawBookingPlate)
-
-        if (bookingVehicleId && bookingVehicleId === vehicle.id) {
-          isMatch = true
-          console.log(`📍 [Calendar] Booking ${booking.id.substring(0, 8)} matched to ${vehicle.display_name} by vehicle_id`)
-        } else if (bookingPlate && vehiclePlate) {
-          // Both have plates - MUST match
-          isMatch = vehiclePlate === bookingPlate
-          if (isMatch) {
-            console.log(`📍 [Calendar] Booking ${booking.id.substring(0, 8)} matched to ${vehicle.display_name} by plate: ${vehiclePlate}`)
-          }
-        } else {
-          // One or both missing plate - Fallback to name match
-          // This covers: 
-          // 1. Booking has plate, Vehicle doesn't
-          // 2. Vehicle has plate, Booking doesn't
-          // 3. Neither has plate
-          isMatch = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
-          if (isMatch) {
-            console.log(`⚠️ [Calendar] Booking ${booking.id.substring(0, 8)} matched to ${vehicle.display_name} by NAME ONLY (plate missing)`)
-          }
-        }
-
-        if (!isMatch) continue
-
-        // CRITICAL FIX: Parse dates as LOCAL dates to prevent timezone offset issues
-        // Using parseLocalDate ensures dates are interpreted in local timezone, not UTC
-        // This prevents the +2 day shift that was occurring
-        const pickupDate = parseLocalDate(booking.pickup_date)
-        const dropoffDate = parseLocalDate(booking.dropoff_date)
-
-        const monthStart = new Date(year, month, 1, 0, 0, 0, 0)
-        const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999)
-
-        // Skip if booking doesn't overlap this month
-        if (dropoffDate <= monthStart || pickupDate > monthEnd) continue
-
-        // Calculate start/end days within month
-        let startDay = pickupDate.getFullYear() === year && pickupDate.getMonth() === month
-          ? pickupDate.getDate()
-          : 1
-
-        let endDay = dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month
-          ? dropoffDate.getDate()
-          : lastDay
-
-        // If dropoff is exactly at midnight, the booking ends at the end of the previous day
-        if (dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month &&
-          dropoffDate.getHours() === 0 && dropoffDate.getMinutes() === 0) {
-          endDay = endDay - 1
-        }
-
-        // Only create segment if valid range
-        if (startDay <= endDay && startDay >= 1 && endDay <= lastDay) {
-          console.log(`📊 [Booking Segment] ${vehicle.display_name}:`, {
-            bookingId: booking.id.substring(0, 8),
-            pickup_raw: booking.pickup_date,
-            dropoff_raw: booking.dropoff_date,
-            pickup_parsed: `${pickupDate.getFullYear()}-${String(pickupDate.getMonth() + 1).padStart(2, '0')}-${String(pickupDate.getDate()).padStart(2, '0')}`,
-            dropoff_parsed: `${dropoffDate.getFullYear()}-${String(dropoffDate.getMonth() + 1).padStart(2, '0')}-${String(dropoffDate.getDate()).padStart(2, '0')}`,
-            pickup_day: pickupDate.getDate(),
-            dropoff_day: dropoffDate.getDate(),
-            startDay,
-            endDay,
-            columnSpan: endDay - startDay + 1,
-            currentMonth: month,
-            currentYear: year
-          })
-
-          segments.push({
-            bookingId: booking.id,
-            vehicleId: vehicle.id,
-            startDay,
-            endDay,
-            columnSpan: endDay - startDay + 1,
-            booking
-          })
-        }
+        segments.push({
+          bookingId: booking.id,
+          vehicleId: vehicle.id,
+          startDay: range.startDay,
+          endDay: range.endDay,
+          columnSpan: range.endDay - range.startDay + 1,
+          booking
+        })
       }
     }
 
@@ -1040,10 +1004,19 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                         </div>
                         {(() => {
                           const totalAmount = booking.price_total || 0
-                          const paidAmount = booking.booking_details?.amount_paid || 0
+                          // Check all possible places for paid amount
+                          const paidAmount = booking.booking_details?.amountPaid ||
+                            booking.booking_details?.amount_paid ||
+                            (booking.amount_paid ? parseFloat(booking.amount_paid) : 0) || 0
+
                           const remaining = totalAmount - paidAmount
 
-                          if (remaining > 0) {
+                          // DEFINITIVE FIX: If payment_status is 'paid', it's paid.
+                          const isPaid = (booking.payment_status?.toLowerCase() === 'paid') ||
+                            (booking.status?.toLowerCase() === 'completed') ||
+                            (remaining <= 10)
+
+                          if (!isPaid) {
                             return (
                               <div className="flex justify-between pt-2 border-t border-orange-500/30">
                                 <span className="text-orange-400 font-medium">Da Saldare:</span>
@@ -1053,7 +1026,14 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               </div>
                             )
                           }
-                          return null
+                          return (
+                            <div className="flex justify-between pt-2 border-t border-green-500/30">
+                              <span className="text-green-400 font-medium">Stato Pagamento:</span>
+                              <span className="text-green-400 font-bold text-lg">
+                                SALDATO
+                              </span>
+                            </div>
+                          )
                         })()}
                       </div>
 
