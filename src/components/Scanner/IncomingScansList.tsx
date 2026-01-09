@@ -65,7 +65,7 @@ export default function IncomingScansList() {
     }
 
     return (
-        <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-gray-800">
+        <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-theme-border">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-theme-text-primary">Inbox Scansioni</h2>
                 <button onClick={fetchScans} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -87,7 +87,7 @@ export default function IncomingScansList() {
                     </thead>
                     <tbody>
                         {scans.map((scan) => (
-                            <tr key={scan.id} className="border-b border-gray-800 hover:bg-theme-bg-tertiary/30 transition-colors">
+                            <tr key={scan.id} className="border-b border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
                                 <td className="px-6 py-4">{new Date(scan.created_at).toLocaleString()}</td>
                                 <td className="px-6 py-4 font-mono text-sm">{scan.original_filename}</td>
                                 <td className="px-6 py-4 text-xs font-mono">{scan.scan_job_id || '-'}</td>

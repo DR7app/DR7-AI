@@ -441,7 +441,7 @@ export default function CarWashCalendarTab() {
             className="bg-theme-bg-secondary rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6 border-b border-gray-800">
+            <div className="p-6 border-b border-theme-border">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-2xl font-bold text-theme-text-primary mb-2">

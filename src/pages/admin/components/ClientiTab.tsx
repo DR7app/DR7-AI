@@ -176,7 +176,7 @@ export default function ClientiTab() {
 
       {/* Customers Table */}
       {filteredCustomers.length === 0 ? (
-        <div className="bg-dr7-dark rounded-lg border border-gray-800 p-8 text-center text-gray-500">
+        <div className="bg-theme-bg-primary rounded-lg border border-theme-border p-8 text-center text-gray-500">
           Nessun cliente trovato
         </div>
       ) : (

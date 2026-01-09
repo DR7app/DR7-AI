@@ -62,7 +62,7 @@ export default function ScannerTab() {
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Scanner Interface */}
-            <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-gray-800">
+            <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-theme-border">
                 <h2 className="text-2xl font-bold text-theme-text-primary mb-4">Scanner Brother</h2>
                 <p className="text-theme-text-muted mb-6">
                     Scansiona documenti direttamente dalla stampante Brother e caricali per estrarre i dati del cliente.

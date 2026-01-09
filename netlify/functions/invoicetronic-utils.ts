@@ -77,36 +77,34 @@ export function generateInvoicetronicPayload(invoice: any) {
         throw new Error('Either customer tax code or VAT number is required')
     }
 
+    // Invoicetronic expects 'customer' not 'company' for B2C invoices
     return {
-        // Invoicetronic specific fields
         external_id: invoice.id,
-        print_template: true, // Auto-generate PDF
 
-        // FatturaPA core data
-        header: {
-            date: invoice.data_emissione, // YYYY-MM-DD
-            number: invoice.numero_fattura,
-            currency: 'EUR'
-        },
-        company: {
-            vat: invoice.customer_vat || '',
-            fiscal_code: invoice.customer_tax_code || '',
+        date: invoice.data_emissione,
+        number: invoice.numero_fattura,
+        currency: 'EUR',
+
+        customer: {
             name: invoice.customer_name,
-            recipient_code: invoice.customer_sdi_code || '0000000',
-            pec: invoice.customer_pec || '',
+            fiscal_code: invoice.customer_tax_code || '',
+            vat_number: invoice.customer_vat || '',
             address: {
                 street: address.street || invoice.customer_address || 'N/A',
                 city: address.comune || 'N/A',
                 province: address.provincia || 'CA',
                 zip: address.cap || '00000',
                 country: 'IT'
-            }
+            },
+            recipient_code: invoice.customer_sdi_code || '0000000',
+            pec: invoice.customer_pec || ''
         },
+
         items: (invoice.items || []).map((item: any) => ({
-            name: item.description || 'Servizio',
-            price: item.unit_price || 0,
+            description: item.description || 'Servizio',
+            unit_price: item.unit_price || 0,
             quantity: item.quantity || 1,
-            vat: item.vat_rate || 0
+            vat_rate: item.vat_rate || 0
         }))
     }
 }

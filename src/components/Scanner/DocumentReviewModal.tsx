@@ -289,7 +289,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                         </div>
 
                         {/* Actions */}
-                        <div className="flex gap-4 pt-4 border-t border-gray-800">
+                        <div className="flex gap-4 pt-4 border-t border-theme-border">
                             {!customerId && extractedData && extractedData.nome && (
                                 <button
                                     onClick={handleCreateCustomer}

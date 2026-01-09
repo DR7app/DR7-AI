@@ -244,7 +244,7 @@ export default function AviationQuotesTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-dr7-dark p-6 rounded-lg border border-gray-800 mb-6 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-primary p-6 rounded-lg border border-theme-border mb-6 space-y-6">
           {/* Customer Info */}
           <div className="border-b border-theme-border pb-4">
             <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Informazioni Cliente</h3>
@@ -737,10 +737,10 @@ export default function AviationQuotesTab() {
       )}
 
       {/* Quotes List */}
-      <div className="bg-dr7-dark rounded-lg border border-gray-800 overflow-hidden">
+      <div className="bg-theme-bg-primary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-dr7-darker">
+            <thead className="bg-theme-bg-primaryer">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Tratta</th>
@@ -753,7 +753,7 @@ export default function AviationQuotesTab() {
             </thead>
             <tbody>
               {quotes.map((quote) => (
-                <tr key={quote.id} className="border-t border-gray-800 hover:bg-dr7-darker/50">
+                <tr key={quote.id} className="border-t border-theme-border hover:bg-theme-bg-primaryer/50">
                   <td className="px-4 py-3 text-sm">
                     <div className="text-theme-text-primary font-medium">{quote.customer_name}</div>
                     <div className="text-theme-text-muted text-xs">{quote.customer_email}</div>

@@ -30,7 +30,7 @@ export default function ScanJobCreator() {
     }
 
     return (
-        <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-gray-800">
+        <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-theme-border">
             <h2 className="text-2xl font-bold text-theme-text-primary mb-6">Nuova Scansione</h2>
 
             {!currentJobId ? (

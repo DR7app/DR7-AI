@@ -356,27 +356,27 @@ export default function DailyCalendarTab() {
                                     } hover:bg-theme-bg-tertiary/30 transition-colors`}
                             >
                                 {/* Time Column */}
-                                <div className="p-2 text-theme-text-muted font-mono text-xs font-semibold border-r border-gray-800">
+                                <div className="p-2 text-theme-text-muted font-mono text-xs font-semibold border-r border-theme-border">
                                     {slot}
                                 </div>
 
                                 {/* Noleggio Column */}
-                                <div className="p-1.5 border-l border-gray-800">
+                                <div className="p-1.5 border-l border-theme-border">
                                     {renderBookings(noleggioBookings, 'bg-green-600')}
                                 </div>
 
                                 {/* Lavaggio Column */}
-                                <div className="p-1.5 border-l border-gray-800">
+                                <div className="p-1.5 border-l border-theme-border">
                                     {renderBookings(lavaggioBookings, 'bg-blue-600')}
                                 </div>
 
                                 {/* Meccanica Column */}
-                                <div className="p-1.5 border-l border-gray-800">
+                                <div className="p-1.5 border-l border-theme-border">
                                     {renderBookings(meccanicaBookings, 'bg-orange-600')}
                                 </div>
 
                                 {/* Varie Column */}
-                                <div className="p-1.5 border-l border-gray-800">
+                                <div className="p-1.5 border-l border-theme-border">
                                     {renderBookings(varieBookings, 'bg-purple-600')}
                                 </div>
                             </div>

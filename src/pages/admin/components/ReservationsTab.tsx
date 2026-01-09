@@ -2747,14 +2747,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-dr7-dark p-4 sm:p-6 rounded-lg mb-6 border border-gray-800">
+          <form onSubmit={handleSubmit} className="bg-theme-bg-primary p-4 sm:p-6 rounded-lg mb-6 border border-theme-border">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
               {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione'}
             </h3>
 
             {/* Booking Type Selection - Mobile Optimized */}
             {/* Customer Selection - Mobile Optimized */}
-            <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-dr7-darker rounded-lg border border-theme-border">
+            <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-theme-bg-primaryer rounded-lg border border-theme-border">
               <div className="border-b border-theme-border pb-4">
                 <div className="flex items-center gap-4 mb-4">
                   <button
@@ -2873,7 +2873,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             {/* Service Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* DATE SELECTION FIRST - Moved before vehicle selection */}
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-dr7-darker rounded-lg border border-theme-border">
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-theme-bg-primaryer rounded-lg border border-theme-border">
                 <div className="space-y-3">
                   <Input
                     label="Data Ritiro"
@@ -2995,7 +2995,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             </div>
 
             {/* Second Driver Section */}
-            <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-theme-border">
+            <div className="md:col-span-2 bg-theme-bg-primaryer p-4 rounded-lg border border-theme-border">
               <div className="flex items-center mb-4">
                 <input
                   type="checkbox"
@@ -3180,7 +3180,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             </div>
 
             {/* Kasko Selection & Deposit */}
-            <div className="md:col-span-2 bg-dr7-darker p-4 rounded-lg border border-theme-border">
+            <div className="md:col-span-2 bg-theme-bg-primaryer p-4 rounded-lg border border-theme-border">
               <h4 className="text-theme-text-primary font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
@@ -3316,7 +3316,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 placeholder="es. 150 (Lascia vuoto se Illimitati)"
                 disabled={formData.unlimited_km}
               />
-              <div className="flex items-center gap-2 p-3 bg-dr7-darker rounded-lg border border-theme-border">
+              <div className="flex items-center gap-2 p-3 bg-theme-bg-primaryer rounded-lg border border-theme-border">
                 <input
                   type="checkbox"
                   id="unlimited_km"
@@ -3387,7 +3387,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
             return customerName.includes(query)
           }).length === 0 && (
-              <div className="bg-dr7-dark rounded-lg border border-gray-800 p-8 text-center text-gray-500">
+              <div className="bg-theme-bg-primary rounded-lg border border-theme-border p-8 text-center text-gray-500">
                 {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
               </div>
             )}
@@ -3404,7 +3404,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             return (
               <div
                 key={`booking-card-${booking.id}`}
-                className="bg-dr7-dark rounded-lg p-4 cursor-pointer hover:bg-dr7-darker transition-colors"
+                className="bg-theme-bg-primary rounded-lg p-4 cursor-pointer hover:bg-theme-bg-primaryer transition-colors"
                 onClick={() => setSelectedBooking(booking)}
               >
                 <div className="flex justify-between items-start mb-3">
@@ -3525,10 +3525,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden lg:block bg-dr7-dark rounded-lg overflow-hidden">
+        <div className="hidden lg:block bg-theme-bg-primary rounded-lg overflow-hidden">
           <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
             <table className="w-full min-w-max">
-              <thead className="bg-dr7-darker sticky top-0 z-10">
+              <thead className="bg-theme-bg-primaryer sticky top-0 z-10">
                 <tr>
                   <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
                   <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
@@ -3551,7 +3551,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
-                    <tr key={`booking-${booking.id}`} className="border-t border-gray-800 hover:bg-dr7-darker/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
+                    <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:bg-theme-bg-primaryer/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                       </td>
@@ -3676,9 +3676,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
           <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-            <div className="bg-dr7-dark w-full sm:max-w-2xl sm:rounded-lg max-h-[90vh] overflow-y-auto">
+            <div className="bg-theme-bg-primary w-full sm:max-w-2xl sm:rounded-lg max-h-[90vh] overflow-y-auto">
               {/* Modal Header */}
-              <div className="sticky top-0 bg-dr7-darker p-4 border-b border-theme-border flex justify-between items-center">
+              <div className="sticky top-0 bg-theme-bg-primaryer p-4 border-b border-theme-border flex justify-between items-center">
                 <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
                 <button
                   onClick={() => setSelectedBooking(null)}
@@ -3691,7 +3691,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               {/* Modal Content */}
               <div className="p-4 sm:p-6 space-y-4">
                 {/* Customer Info */}
-                <div className="bg-dr7-darker p-4 rounded-lg">
+                <div className="bg-theme-bg-primaryer p-4 rounded-lg">
                   <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                     Cliente
                   </h4>
@@ -3714,7 +3714,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
 
                 {/* Service Info */}
-                <div className="bg-dr7-darker p-4 rounded-lg">
+                <div className="bg-theme-bg-primaryer p-4 rounded-lg">
                   <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                     Car
                   </h4>
@@ -3746,7 +3746,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
 
                 {/* Payment Info */}
-                <div className="bg-dr7-darker p-4 rounded-lg">
+                <div className="bg-theme-bg-primaryer p-4 rounded-lg">
                   <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                     Pagamento
                   </h4>
@@ -3781,7 +3781,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 {/* Notes */}
                 {selectedBooking.booking_details?.notes && (
-                  <div className="bg-dr7-darker p-4 rounded-lg">
+                  <div className="bg-theme-bg-primaryer p-4 rounded-lg">
                     <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
                       Note
                     </h4>

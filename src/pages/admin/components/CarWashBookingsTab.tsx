@@ -1296,14 +1296,14 @@ export default function CarWashBookingsTab() {
 
       {
         bookings.length === 0 ? (
-          <div className="bg-dr7-dark rounded-lg border border-gray-800 p-8 text-center text-gray-500">
+          <div className="bg-theme-bg-primary rounded-lg border border-theme-border p-8 text-center text-gray-500">
             Nessuna prenotazione lavaggio trovata
           </div>
         ) : (
-          <div className="bg-dr7-dark rounded-lg overflow-hidden">
+          <div className="bg-theme-bg-primary rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-max">
-                <thead className="bg-dr7-darker">
+                <thead className="bg-theme-bg-primaryer">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Servizio</th>
@@ -1322,7 +1322,7 @@ export default function CarWashBookingsTab() {
                     const customerName = (booking.customer_name || '').toLowerCase()
                     return customerName.includes(query)
                   }).map((booking) => (
-                    <tr key={booking.id} className="border-t border-gray-800 hover:bg-dr7-darker/50">
+                    <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-primaryer/50">
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div className="font-medium">{booking.customer_name}</div>
                         <div className="text-xs text-theme-text-muted">{booking.customer_email}</div>
@@ -1413,7 +1413,7 @@ export default function CarWashBookingsTab() {
         editingBooking && (
           <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
             <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border">
-              <div className="p-6 border-b border-gray-800">
+              <div className="p-6 border-b border-theme-border">
                 <div className="flex justify-between items-start">
                   <h3 className="text-2xl font-bold text-theme-text-primary">Modifica Prenotazione</h3>
                   <button
@@ -1528,7 +1528,7 @@ export default function CarWashBookingsTab() {
                 </div>
               </div>
 
-              <div className="p-6 border-t border-gray-800 flex gap-3">
+              <div className="p-6 border-t border-theme-border flex gap-3">
                 <button
                   onClick={async () => {
                     try {

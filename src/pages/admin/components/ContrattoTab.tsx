@@ -457,7 +457,7 @@ export default function ContrattoTab() {
       </div>
 
       {/* Search Bar */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-gray-800">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <input
           type="text"
           placeholder="Cerca cliente..."
@@ -489,7 +489,7 @@ export default function ContrattoTab() {
               contract.customer_email.toLowerCase().includes(query)
             )
           }).map((contract) => (
-            <div key={contract.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-gray-800">
+            <div key={contract.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">

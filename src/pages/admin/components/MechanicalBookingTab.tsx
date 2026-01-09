@@ -308,7 +308,7 @@ export default function MechanicalBookingTab() {
               const customerName = (booking.customer_name || '').toLowerCase()
               return customerName.includes(query)
             }).map(booking => (
-              <tr key={booking.id} className="border-t border-gray-800 hover:bg-theme-bg-tertiary/50">
+              <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/50">
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
                   <div>{booking.customer_name}</div>
                   <div className="text-theme-text-muted text-xs">{booking.customer_phone}</div>

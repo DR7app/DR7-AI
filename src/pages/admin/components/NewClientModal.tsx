@@ -755,7 +755,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             </div>
           </div>
 
-          <hr className="border-gray-800" />
+          <hr className="border-theme-border" />
 
           {/* 2. FORM FIELDS BASED ON TYPE */}
           <div className="space-y-6">
@@ -1264,7 +1264,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           </div>
 
           {/* OPTIONAL DOCUMENT UPLOAD SECTION */}
-          <div className="border-t border-gray-800 pt-6">
+          <div className="border-t border-theme-border pt-6">
             <button
               type="button"
               onClick={() => setShowDocumentSection(!showDocumentSection)}
@@ -1433,7 +1433,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           </div>
 
           {/* FOOTER ACTIONS */}
-          <div className="flex justify-end gap-3 pt-6 border-t border-gray-800">
+          <div className="flex justify-end gap-3 pt-6 border-t border-theme-border">
             <button
               onClick={handleClose}
               disabled={isSaving}

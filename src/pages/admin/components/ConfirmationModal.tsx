@@ -24,9 +24,9 @@ export default function ConfirmationModal({
 
     return (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-dr7-dark max-w-md w-full rounded-lg shadow-xl">
+            <div className="bg-theme-bg-primary max-w-md w-full rounded-lg shadow-xl">
                 {/* Header */}
-                <div className="bg-dr7-darker p-4 border-b border-theme-border flex justify-between items-center rounded-t-lg">
+                <div className="bg-theme-bg-primaryer p-4 border-b border-theme-border flex justify-between items-center rounded-t-lg">
                     <h3 className={`text-lg font-bold ${isDangerous ? 'text-red-400' : 'text-dr7-gold'}`}>
                         {title}
                     </h3>

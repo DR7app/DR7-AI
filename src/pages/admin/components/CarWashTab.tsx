@@ -197,7 +197,7 @@ export default function CarWashTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-dr7-dark p-4 sm:p-6 rounded-lg mb-6 border border-gray-800">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-primary p-4 sm:p-6 rounded-lg mb-6 border border-theme-border">
           <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
             {editingId ? 'Modifica Servizio' : 'Nuovo Servizio'}
           </h3>
@@ -342,8 +342,8 @@ export default function CarWashTab() {
         {services.map((service) => (
           <div
             key={service.id}
-            className={`bg-dr7-dark rounded-lg border p-6 ${
-              service.is_active ? 'border-gray-800' : 'border-red-800 opacity-60'
+            className={`bg-theme-bg-primary rounded-lg border p-6 ${
+              service.is_active ? 'border-theme-border' : 'border-red-800 opacity-60'
             }`}
           >
             <div className="flex justify-between items-start mb-4">
@@ -410,7 +410,7 @@ export default function CarWashTab() {
       </div>
 
       {services.length === 0 && (
-        <div className="bg-dr7-dark rounded-lg border border-gray-800 p-8 text-center text-gray-500">
+        <div className="bg-theme-bg-primary rounded-lg border border-theme-border p-8 text-center text-gray-500">
           Nessun servizio trovato. Crea il primo servizio!
         </div>
       )}

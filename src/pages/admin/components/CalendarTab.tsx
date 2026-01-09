@@ -1030,7 +1030,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
               className="bg-theme-bg-secondary rounded-xl max-w-lg w-full border border-theme-border shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-gray-800">
+              <div className="p-6 border-b border-theme-border">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
@@ -1121,7 +1121,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                 )}
               </div>
 
-              <div className="p-6 border-t border-gray-800">
+              <div className="p-6 border-t border-theme-border">
                 <button
                   onClick={() => setSelectedUnavailability(null)}
                   className="w-full bg-gray-700 hover:bg-gray-600 text-theme-text-primary px-4 py-3 rounded-lg transition-colors font-medium"
