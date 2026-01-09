@@ -41,6 +41,13 @@ export const handler: Handler = async (event) => {
 
         const invoicePayload = generateInvoicetronicPayload(invoice)
 
+        console.log('[SDI] Sending invoice to Invoicetronic:', {
+            invoiceId: invoice.id,
+            numero_fattura: invoice.numero_fattura,
+            customer: invoice.customer_name,
+            payload: JSON.stringify(invoicePayload, null, 2)
+        })
+
         // Send to Invoicetronic SDI
         const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/invoices`, {
             method: 'POST',

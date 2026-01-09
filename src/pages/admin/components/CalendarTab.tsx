@@ -351,9 +351,13 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
         if (bookingVehicleId && bookingVehicleId === vehicle.id) {
           isMatch = true
+          console.log(`📍 [Calendar] Booking ${booking.id.substring(0, 8)} matched to ${vehicle.display_name} by vehicle_id`)
         } else if (bookingPlate && vehiclePlate) {
           // Both have plates - MUST match
           isMatch = vehiclePlate === bookingPlate
+          if (isMatch) {
+            console.log(`📍 [Calendar] Booking ${booking.id.substring(0, 8)} matched to ${vehicle.display_name} by plate: ${vehiclePlate}`)
+          }
         } else {
           // One or both missing plate - Fallback to name match
           // This covers: 
@@ -361,6 +365,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
           // 2. Vehicle has plate, Booking doesn't
           // 3. Neither has plate
           isMatch = booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+          if (isMatch) {
+            console.log(`⚠️ [Calendar] Booking ${booking.id.substring(0, 8)} matched to ${vehicle.display_name} by NAME ONLY (plate missing)`)
+          }
         }
 
         if (!isMatch) continue
@@ -792,6 +799,30 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       const dropoffDay = dropoffDate.getDate()
                       const dropoffTime = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 
+                      // Build detailed tooltip with vehicle linkage info
+                      const buildTooltip = () => {
+                        const parts = [
+                          `👤 ${segment.booking.customer_name}`,
+                          `🚗 ${segment.booking.vehicle_name}`,
+                          `🔖 Targa: ${getTarga() || 'N/A'}`
+                        ]
+
+                        // Add vehicle linkage details for debugging
+                        if (segment.booking.vehicle_id) {
+                          parts.push(`🔗 Vehicle ID: ${segment.booking.vehicle_id.substring(0, 8)}...`)
+                        }
+
+                        // Show how this booking was matched to this vehicle row
+                        const matchMethod = segment.booking.vehicle_id === vehicle.id
+                          ? '✅ Matched by ID'
+                          : normalizePlate(segment.booking.vehicle_plate) === normalizePlate(vehicle.plate)
+                            ? '✅ Matched by Plate'
+                            : '⚠️ Matched by Name'
+                        parts.push(matchMethod)
+
+                        return parts.join('\n')
+                      }
+
                       return (
                         <div
                           key={segment.bookingId}
@@ -811,7 +842,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                               bookings: [segment.booking]
                             })
                           }}
-                          title={`${segment.booking.customer_name} - ${segment.booking.vehicle_name} - ${getTarga()}`}
+                          title={buildTooltip()}
                         >
                           {/* Match DailyCalendarModal layout */}
                           <div className="flex items-center gap-2 h-full">

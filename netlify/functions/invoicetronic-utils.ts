@@ -63,6 +63,20 @@ export function generateInvoicetronicPayload(invoice: any) {
     // Parse address to get structured data for Invoicetronic
     const address = parseAddress(invoice.customer_address || '')
 
+    // Ensure we have required fields
+    if (!invoice.numero_fattura) {
+        throw new Error('Invoice number (numero_fattura) is required')
+    }
+    if (!invoice.data_emissione) {
+        throw new Error('Invoice date (data_emissione) is required')
+    }
+    if (!invoice.customer_name) {
+        throw new Error('Customer name is required')
+    }
+    if (!invoice.customer_tax_code && !invoice.customer_vat) {
+        throw new Error('Either customer tax code or VAT number is required')
+    }
+
     return {
         // Invoicetronic specific fields
         external_id: invoice.id,
@@ -81,18 +95,18 @@ export function generateInvoicetronicPayload(invoice: any) {
             recipient_code: invoice.customer_sdi_code || '0000000',
             pec: invoice.customer_pec || '',
             address: {
-                street: address.street,
-                city: address.comune,
-                province: address.provincia,
-                zip: address.cap,
+                street: address.street || invoice.customer_address || 'N/A',
+                city: address.comune || 'N/A',
+                province: address.provincia || 'CA',
+                zip: address.cap || '00000',
                 country: 'IT'
             }
         },
         items: (invoice.items || []).map((item: any) => ({
-            name: item.description,
-            price: item.unit_price,
-            quantity: item.quantity,
-            vat: item.vat_rate
+            name: item.description || 'Servizio',
+            price: item.unit_price || 0,
+            quantity: item.quantity || 1,
+            vat: item.vat_rate || 0
         }))
     }
 }

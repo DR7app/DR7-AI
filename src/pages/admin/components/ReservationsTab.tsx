@@ -2255,6 +2255,75 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customerInfo = customers.find(c => c.id === customerId)
       }
 
+      // ===== VEHICLE CONSISTENCY VALIDATION =====
+      // Ensure vehicle linkage is consistent and warn about any changes
+      if (editingId) {
+        // When editing, check if the vehicle has changed
+        const { data: existingBooking } = await supabase
+          .from('bookings')
+          .select('vehicle_id, vehicle_plate, vehicle_name')
+          .eq('id', editingId)
+          .single()
+
+        if (existingBooking && vehicle) {
+          const vehicleChanged = existingBooking.vehicle_id !== vehicle.id
+          const plateChanged = existingBooking.vehicle_plate !== vehicle.plate
+
+          if (vehicleChanged) {
+            const confirmed = confirm(
+              `⚠️ ATTENZIONE: CAMBIO VEICOLO\n\n` +
+              `Stai cambiando il veicolo di questa prenotazione:\n\n` +
+              `VECCHIO: ${existingBooking.vehicle_name} (${existingBooking.vehicle_plate || 'N/A'})\n` +
+              `NUOVO: ${vehicle.display_name} (${vehicle.plate || 'N/A'})\n\n` +
+              `Questo aggiornerà:\n` +
+              `• vehicle_id: ${existingBooking.vehicle_id} → ${vehicle.id}\n` +
+              `• vehicle_plate: ${existingBooking.vehicle_plate || 'N/A'} → ${vehicle.plate || 'N/A'}\n` +
+              `• vehicle_name: ${existingBooking.vehicle_name} → ${vehicle.display_name}\n\n` +
+              `Il calendario verrà aggiornato automaticamente.\n\n` +
+              `Confermi il cambio di veicolo?`
+            )
+            if (!confirmed) {
+              setIsSubmitting(false)
+              return
+            }
+            console.log('✅ Vehicle change confirmed by user')
+          } else if (plateChanged && existingBooking.vehicle_plate) {
+            // Same vehicle but plate has changed - this might indicate the vehicle's plate was updated
+            const confirmed = confirm(
+              `⚠️ ATTENZIONE: TARGA MODIFICATA\n\n` +
+              `La targa del veicolo "${vehicle.display_name}" è cambiata:\n\n` +
+              `VECCHIA: ${existingBooking.vehicle_plate}\n` +
+              `NUOVA: ${vehicle.plate || 'N/A'}\n\n` +
+              `Questo potrebbe significare che:\n` +
+              `1. La targa del veicolo è stata aggiornata nel sistema\n` +
+              `2. Stai selezionando un veicolo diverso con lo stesso nome\n\n` +
+              `La prenotazione verrà aggiornata con la nuova targa.\n\n` +
+              `Confermi l'aggiornamento?`
+            )
+            if (!confirmed) {
+              setIsSubmitting(false)
+              return
+            }
+            console.log('✅ Plate change confirmed by user')
+          }
+        }
+      }
+
+      // Validate that vehicle still exists and has consistent data
+      if (vehicle) {
+        console.log('🔍 Vehicle consistency check:', {
+          vehicle_id: vehicle.id,
+          vehicle_plate: vehicle.plate,
+          vehicle_name: vehicle.display_name,
+          booking_mode: editingId ? 'edit' : 'create'
+        })
+      } else {
+        console.error('❌ Vehicle not found for vehicle_id:', formData.vehicle_id)
+        alert('Errore: Veicolo non trovato. Seleziona un veicolo valido.')
+        setIsSubmitting(false)
+        return
+      }
+
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
       // Note: vehicle is already declared above in scheduling validation block
 
