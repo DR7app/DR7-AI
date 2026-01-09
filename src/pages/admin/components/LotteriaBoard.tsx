@@ -583,6 +583,14 @@ const LotteriaBoard: React.FC = () => {
   const [showTicketDetailsModal, setShowTicketDetailsModal] = useState(false);
   const [selectedTicketForDetails, setSelectedTicketForDetails] = useState<Ticket | null>(null);
 
+  // Email template editor states
+  const [showEmailEditorModal, setShowEmailEditorModal] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailHtmlContent, setEmailHtmlContent] = useState('');
+  const [emailTextContent, setEmailTextContent] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
+
   const fetchSoldTickets = async () => {
     try {
       setLoading(true);
@@ -1102,6 +1110,99 @@ const LotteriaBoard: React.FC = () => {
     }
   };
 
+  const handleLoadEmailTemplate = async () => {
+    setLoadingTemplate(true);
+    try {
+      const response = await fetch('/.netlify/functions/get-lottery-email-template');
+      const result = await response.json();
+
+      if (response.ok && result.success && result.template) {
+        setEmailSubject(result.template.subject);
+        setEmailHtmlContent(result.template.html_content);
+        setEmailTextContent(result.template.text_content);
+      } else {
+        // Load default template
+        setEmailSubject('🎟️ Importante: Estrazione Lotteria DR7 Rinviata al 24 Gennaio 2026 - ULTIMI BIGLIETTI');
+        setEmailHtmlContent(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); color: #000; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .highlight { background: #FFD700; color: #000; padding: 15px; border-radius: 5px; text-align: center; font-weight: bold; font-size: 18px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+        .button { display: inline-block; background: #FFD700; color: #000; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="margin: 0;">🎟️ DR7 EMPIRE LOTTERIA</h1>
+            <p style="margin: 10px 0 0 0; font-size: 16px;">Comunicazione Importante</p>
+        </div>
+        <div class="content">
+            <p>Gentile Cliente,</p>
+            <p>Inserisci qui il contenuto della tua email...</p>
+        </div>
+        <div class="footer">
+            <p>DR7 Empire - Luxury Car Rental & Services</p>
+        </div>
+    </div>
+</body>
+</html>`);
+        setEmailTextContent('Gentile Cliente,\n\nInserisci qui il contenuto della tua email...\n\nCordiali saluti,\nIl Team DR7 Empire');
+      }
+    } catch (error: any) {
+      console.error('[LotteriaBoard] Error loading template:', error);
+      alert(`Errore nel caricamento del template: ${error.message}`);
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
+  const handleSaveEmailTemplate = async () => {
+    if (!emailSubject.trim() || !emailHtmlContent.trim() || !emailTextContent.trim()) {
+      alert('Tutti i campi sono obbligatori: Oggetto, Contenuto HTML e Contenuto Testo');
+      return;
+    }
+
+    setSavingTemplate(true);
+    try {
+      const response = await fetch('/.netlify/functions/save-lottery-email-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateName: `Email Lotteria - ${new Date().toLocaleDateString('it-IT')}`,
+          subject: emailSubject,
+          htmlContent: emailHtmlContent,
+          textContent: emailTextContent
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        alert('✅ Template salvato con successo!\n\nQuesto template verrà utilizzato per le prossime email inviate ai clienti.');
+        setShowEmailEditorModal(false);
+      } else {
+        throw new Error(result.error || 'Errore sconosciuto');
+      }
+    } catch (error: any) {
+      console.error('[LotteriaBoard] Error saving template:', error);
+      alert(`❌ Errore nel salvataggio del template:\n${error.message}`);
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleOpenEmailEditor = async () => {
+    setShowEmailEditorModal(true);
+    await handleLoadEmailTemplate();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1233,11 +1334,17 @@ const LotteriaBoard: React.FC = () => {
               Aggiorna
             </button>
             <button
+              onClick={handleOpenEmailEditor}
+              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-semibold"
+            >
+              ✉️ Modifica Email Template
+            </button>
+            <button
               onClick={handleSendPostponementEmails}
               disabled={sendingEmails}
               className="px-4 py-2 bg-yellow-600 text-black rounded hover:bg-yellow-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {sendingEmails ? '📧 Invio in corso...' : '📧 Manda Email Rinvio'}
+              {sendingEmails ? '📧 Invio in corso...' : '📧 Manda Email'}
             </button>
           </div>
         </div>
@@ -1774,6 +1881,96 @@ const LotteriaBoard: React.FC = () => {
                 className="flex-1 px-4 py-2 bg-red-600 text-theme-text-primary rounded hover:bg-red-700 font-semibold"
               >
                 Cancella Biglietto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Template Editor Modal */}
+      {showEmailEditorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-theme-border">
+              <h2 className="text-2xl font-bold text-theme-text-primary">✉️ Modifica Email Template</h2>
+              <p className="text-sm text-theme-text-secondary mt-2">
+                Modifica il contenuto dell'email che verrà inviata a tutti i clienti che hanno comprato biglietti
+              </p>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {loadingTemplate ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-dr7-gold mx-auto mb-4"></div>
+                  <p className="text-theme-text-secondary">Caricamento template...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Subject Field */}
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      Oggetto Email *
+                    </label>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                      placeholder="Inserisci l'oggetto dell'email..."
+                    />
+                  </div>
+
+                  {/* HTML Content Field */}
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      Contenuto HTML *
+                    </label>
+                    <textarea
+                      value={emailHtmlContent}
+                      onChange={(e) => setEmailHtmlContent(e.target.value)}
+                      rows={12}
+                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono text-sm focus:outline-none focus:border-dr7-gold transition-colors"
+                      placeholder="Inserisci il contenuto HTML dell'email..."
+                    />
+                    <p className="text-xs text-theme-text-muted mt-2">
+                      💡 Puoi usare HTML per formattare l'email (grassetto, colori, link, ecc.)
+                    </p>
+                  </div>
+
+                  {/* Text Content Field */}
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      Contenuto Testo (fallback) *
+                    </label>
+                    <textarea
+                      value={emailTextContent}
+                      onChange={(e) => setEmailTextContent(e.target.value)}
+                      rows={8}
+                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                      placeholder="Inserisci la versione testo dell'email (per client email che non supportano HTML)..."
+                    />
+                    <p className="text-xs text-theme-text-muted mt-2">
+                      📝 Versione semplice senza formattazione per client email che non supportano HTML
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-theme-border flex gap-3 justify-end">
+              <button
+                onClick={() => setShowEmailEditorModal(false)}
+                disabled={savingTemplate}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleSaveEmailTemplate}
+                disabled={savingTemplate || loadingTemplate}
+                className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingTemplate ? '💾 Salvataggio...' : '💾 Salva Template'}
               </button>
             </div>
           </div>
