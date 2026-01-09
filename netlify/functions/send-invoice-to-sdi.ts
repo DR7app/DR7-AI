@@ -45,6 +45,8 @@ export const handler: Handler = async (event) => {
             invoiceId: invoice.id,
             numero_fattura: invoice.numero_fattura,
             customer: invoice.customer_name,
+            endpoint: `${INVOICETRONIC_BASE_URL}/invoices`,
+            apiKey: INVOICETRONIC_API_KEY ? `${INVOICETRONIC_API_KEY.substring(0, 10)}...` : 'MISSING',
             payload: JSON.stringify(invoicePayload, null, 2)
         })
 
@@ -61,63 +63,60 @@ export const handler: Handler = async (event) => {
         const responseText = await sdiResponse.text()
         let responseData: any = {}
 
+        console.log('[SDI] Response status:', sdiResponse.status, sdiResponse.statusText)
+        console.log('[SDI] Response headers:', Object.fromEntries(sdiResponse.headers.entries()))
+        console.log('[SDI] Response body:', responseText)
+
         if (responseText && responseText.trim()) {
             try {
                 responseData = JSON.parse(responseText)
             } catch (parseError) {
                 console.error('[SDI] Failed to parse response JSON:', parseError)
+                console.error('[SDI] Raw Response:', responseText)
                 responseData = { error: 'Invalid JSON response', raw: responseText }
             }
+        } else {
+            console.log('[SDI] Received empty response from API')
         }
 
         if (!sdiResponse.ok) {
-            // Update status to 'error'
-            await supabase
-                .from('fatture')
-                .update({
-                    sdi_status: 'error',
-                    sdi_response: responseData
-                })
-                .eq('id', invoiceId)
-
-            return {
-                statusCode: sdiResponse.status,
+            statusCode: sdiResponse.status,
                 body: JSON.stringify({
                     error: 'Failed to send invoice to Invoicetronic',
                     details: responseData
                 })
-            }
         }
+    }
 
         // Update invoice with SDI response
         await supabase
-            .from('fatture')
-            .update({
-                sdi_status: 'sent',
-                sdi_id: responseData.id,
-                sdi_sent_at: new Date().toISOString(),
-                sdi_response: responseData
-                // xml_fattura_pa: ... we don't have the XML here unless we generate it
-            })
-            .eq('id', invoiceId)
+        .from('fatture')
+        .update({
+            sdi_status: 'sent',
+            sdi_id: responseData.id,
+            sdi_sent_at: new Date().toISOString(),
+            sdi_response: responseData
+            // xml_fattura_pa: ... we don't have the XML here unless we generate it
+        })
+        .eq('id', invoiceId)
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                success: true,
-                message: 'Invoice sent to Invoicetronic successfully',
-                sdi_id: responseData.id,
-                response: responseData
-            })
-        }
-    } catch (error: any) {
-        console.error('Error sending invoice to SDI:', error)
-        return {
-            statusCode: 500,
-            body: JSON.stringify({
-                error: 'Internal server error',
-                message: error.message
-            })
-        }
+    return {
+        statusCode: 200,
+        body: JSON.stringify({
+            success: true,
+            message: 'Invoice sent to Invoicetronic successfully',
+            sdi_id: responseData.id,
+            response: responseData
+        })
     }
+} catch (error: any) {
+    console.error('Error sending invoice to SDI:', error)
+    return {
+        statusCode: 500,
+        body: JSON.stringify({
+            error: 'Internal server error',
+            message: error.message
+        })
+    }
+}
 }
