@@ -860,7 +860,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                           ''
                       }
 
-                      const dropoffDate = new Date(segment.booking.dropoff_date)
+                      const dropoffDate = parseLocalDate(segment.booking.dropoff_date)
                       const dropoffDay = dropoffDate.getDate()
                       const dropoffTime = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 
