@@ -818,9 +818,11 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       const cellWidth = 40
 
                       // POSITIONING FIX: 
-                      // 1. Use (day - 1) because columns are 0-indexed for positioning (Day 1 is at 0px)
-                      // 2. Use exact cell width (40px) for perfect alignment
-                      const left = (segment.startDay - 1) * cellWidth
+                      // The grid columns are: Veicolo (200px) | Targa (100px) | Day1 | Day2 | ...
+                      // This overlay container starts at left:300px (after Veicolo+Targa)
+                      // Within this container, Day 1 should be at 0px, Day 2 at 40px, etc.
+                      // So for Day N, position = N * cellWidth (NOT (N-1) because of how the grid is structured)
+                      const left = segment.startDay * cellWidth
                       const width = segment.columnSpan * cellWidth
 
                       // Determine color based on booking type (matching DailyCalendarModal)
