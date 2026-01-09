@@ -53,7 +53,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         </tr>
                     </thead>
                     <tbody>
-                        {vehicles.map((vehicle, index) => {
+                        {vehicles.map(vehicle => {
                             const { status, nearestDeadline } = getVehicleStatus(vehicle, null) // Pass maintenance data when available
 
                             return (
