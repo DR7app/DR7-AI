@@ -22,7 +22,7 @@ INSERT INTO lottery_email_templates (
   is_active
 ) VALUES (
   'Default Postponement Email',
-  '🎟️ Importante: Estrazione Lotteria DR7 Rinviata al 24 Gennaio 2026 - ULTIMI BIGLIETTI',
+  'Importante: Estrazione Lotteria DR7 Rinviata al 24 Gennaio 2026 - ULTIMI BIGLIETTI',
   '<!DOCTYPE html>
 <html>
 <head>
@@ -40,7 +40,7 @@ INSERT INTO lottery_email_templates (
 <body>
     <div class="container">
         <div class="header">
-            <h1 style="margin: 0;">🎟️ DR7 EMPIRE LOTTERIA</h1>
+            <h1 style="margin: 0;">DR7 EMPIRE LOTTERIA</h1>
             <p style="margin: 10px 0 0 0; font-size: 16px;">Comunicazione Importante - ULTIMI BIGLIETTI</p>
         </div>
         <div class="content">
@@ -49,7 +49,7 @@ INSERT INTO lottery_email_templates (
             <p>Ti scriviamo per informarti di un importante aggiornamento riguardo alla <strong>Lotteria DR7 Empire. ULTIMI BIGLIETTI.</strong></p>
             
             <div class="highlight">
-                📅 L''estrazione è stata RINVIATA al<br>
+                L''estrazione è stata RINVIATA al<br>
                 <span style="font-size: 24px;">24 GENNAIO 2026</span><br>
                 <span style="font-size: 14px; font-weight: normal;">TEMPO MASSIMO COME DA REGOLAMENTO</span>
             </div>
@@ -60,10 +60,10 @@ INSERT INTO lottery_email_templates (
             
             <p><strong>Cosa significa per te:</strong></p>
             <ul>
-                <li>✅ Il tuo biglietto è confermato e valido</li>
-                <li>✅ Hai più tempo per acquistare biglietti aggiuntivi</li>
-                <li>✅ L''estrazione si terrà il 24 gennaio 2026</li>
-                <li>✅ I premi rimangono invariati</li>
+                <li>Il tuo biglietto è confermato e valido</li>
+                <li>Hai più tempo per acquistare biglietti aggiuntivi</li>
+                <li>L''estrazione si terrà il 24 gennaio 2026</li>
+                <li>I premi rimangono invariati</li>
             </ul>
             
             <p>Ci scusiamo per l''inconveniente e ti ringraziamo per la comprensione.</p>
@@ -74,7 +74,7 @@ INSERT INTO lottery_email_templates (
             
             <p style="margin-top: 30px;">Per qualsiasi domanda, non esitare a contattarci.</p>
             
-            <p><strong>Buona fortuna! 🍀</strong></p>
+            <p><strong>Buona fortuna!</strong></p>
             
             <p style="margin-top: 20px;">
                 Cordiali saluti,<br>
@@ -92,7 +92,7 @@ INSERT INTO lottery_email_templates (
 
 Ti scriviamo per informarti di un importante aggiornamento riguardo alla Lotteria DR7 Empire. ULTIMI BIGLIETTI.
 
-📅 L''ESTRAZIONE È STATA RINVIATA AL 24 GENNAIO 2026
+L''ESTRAZIONE È STATA RINVIATA AL 24 GENNAIO 2026
 TEMPO MASSIMO COME DA REGOLAMENTO
 
 Il tuo biglietto rimane valido!
@@ -100,16 +100,16 @@ Il tuo biglietto rimane valido!
 Tutti i biglietti acquistati parteciperanno regolarmente all''estrazione nella nuova data. Non è necessaria alcuna azione da parte tua.
 
 Cosa significa per te:
-✅ Il tuo biglietto è confermato e valido
-✅ Hai più tempo per acquistare biglietti aggiuntivi
-✅ L''estrazione si terrà il 24 gennaio 2026
-✅ I premi rimangono invariati
+Il tuo biglietto è confermato e valido
+Hai più tempo per acquistare biglietti aggiuntivi
+L''estrazione si terrà il 24 gennaio 2026
+I premi rimangono invariati
 
 Ci scusiamo per l''inconveniente e ti ringraziamo per la comprensione.
 
 Per qualsiasi domanda, non esitare a contattarci.
 
-Buona fortuna! 🍀
+Buona fortuna!
 
 Cordiali saluti,
 Il Team DR7 Empire
