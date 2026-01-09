@@ -59,7 +59,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
             {/* Three Column Layout: Exotic, Urban, and Aziendali */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 {/* Exotic Vehicles Column */}
-                <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                <div className="rounded-lg border border-gray-700/30 overflow-hidden">
                     <div className="bg-purple-900/30 px-4 py-3 border-b border-theme-border">
                         <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
                             <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Exotic Supercars</span>
@@ -68,7 +68,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-theme-bg-primary">
+                            <thead>
                                 <tr>
                                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Veicolo</th>
                                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
@@ -121,7 +121,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                 </div>
 
                 {/* Urban Vehicles Column */}
-                <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                <div className="rounded-lg border border-gray-700/30 overflow-hidden">
                     <div className="bg-cyan-900/30 px-4 py-3 border-b border-theme-border">
                         <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
                             <span className="px-3 py-1 bg-cyan-900 text-cyan-200 rounded text-sm">Urban</span>
@@ -130,7 +130,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-theme-bg-primary">
+                            <thead>
                                 <tr>
                                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Veicolo</th>
                                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
@@ -183,7 +183,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                 </div>
 
                 {/* Aziendali Vehicles Column */}
-                <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                <div className="rounded-lg border border-gray-700/30 overflow-hidden">
                     <div className="bg-green-900/30 px-4 py-3 border-b border-theme-border">
                         <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
                             <span className="px-3 py-1 bg-green-900 text-green-200 rounded text-sm">Aziendali</span>
@@ -192,7 +192,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-theme-bg-primary">
+                            <thead>
                                 <tr>
                                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Veicolo</th>
                                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
