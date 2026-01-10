@@ -303,14 +303,14 @@ export default function AdminDashboard() {
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('reservations')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
                       }`}
                   >
                     Noleggio
                   </button>
                   <button
                     onClick={() => setActiveTab('calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
                       }`}
                   >
                     Calendario
@@ -332,14 +332,14 @@ export default function AdminDashboard() {
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('carwash')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
                       }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('carwash-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
                       }`}
                   >
                     Calendario
@@ -361,14 +361,14 @@ export default function AdminDashboard() {
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                   <button
                     onClick={() => setActiveTab('mechanical')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
                       }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('mechanical-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-gray-300'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
                       }`}
                   >
                     Calendario
