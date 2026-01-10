@@ -354,7 +354,7 @@ export default function MechanicalBookingTab() {
                       disabled={generatingInvoice}
                       className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
                     >
-                      {generatingInvoice ? '...' : 'Genera Fattura'}
+                      {generatingInvoice ? '...' : 'Fattura'}
                     </button>
                     <button
                       onClick={() => handleDelete(booking.id)}
