@@ -7,6 +7,7 @@ import {
   filterRentalTimeSlots
 } from '../../../utils/bookingConflictUtils'
 import { validateRentalBooking } from '../../../utils/schedulingRules'
+import { createRomeDate } from '../../../utils/timezoneUtils'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
@@ -2368,16 +2369,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const pickupLocationLabel = LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
       const dropoffLocationLabel = LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
 
-      // Combine date and time - Create as local time to preserve exact hours entered
+      // Combine date and time - CRITICAL: Interpret form inputs as Europe/Rome timezone
       // Parse the date and time components
       const [pickupYear, pickupMonth, pickupDay] = formData.pickup_date.split('-').map(Number)
       const [pickupHour, pickupMinute] = formData.pickup_time.split(':').map(Number)
       const [returnYear, returnMonth, returnDay] = formData.return_date.split('-').map(Number)
       const [returnHour, returnMinute] = formData.return_time.split(':').map(Number)
 
-      // Create Date objects in local timezone (Europe/Rome)
-      const pickupDate = new Date(pickupYear, pickupMonth - 1, pickupDay, pickupHour, pickupMinute, 0)
-      const returnDate = new Date(returnYear, returnMonth - 1, returnDay, returnHour, returnMinute, 0)
+      // Create Date objects as Europe/Rome timezone, then convert to UTC for storage
+      // This ensures "Jan 5, 11:00" entered in the form is stored as "Jan 5, 10:00 UTC" (UTC+1 in winter)
+      const pickupDate = createRomeDate(pickupYear, pickupMonth, pickupDay, pickupHour, pickupMinute, 0)
+      const returnDate = createRomeDate(returnYear, returnMonth, returnDay, returnHour, returnMinute, 0)
 
       const bookingData = {
         user_id: customerId, // Store customer ID to link booking to customer for contract generation
