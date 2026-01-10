@@ -522,7 +522,7 @@ export default function UnpaidBookingsTab() {
                         onClick={() => deleteSingleBooking(booking.id)}
                         className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
                       >
-                        Elimina
+                        ×
                       </button>
                     </div>
                   </td>

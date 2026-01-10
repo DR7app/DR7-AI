@@ -1831,7 +1831,7 @@ export default function CustomersTab() {
                       variant="secondary"
                       className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
                     >
-                      Elimina
+                      ×
                     </Button>
                   </td>
                 </tr>

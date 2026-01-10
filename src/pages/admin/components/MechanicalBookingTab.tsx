@@ -360,7 +360,7 @@ export default function MechanicalBookingTab() {
                       onClick={() => handleDelete(booking.id)}
                       className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
-                      Elimina
+                      ×
                     </button>
                   </div>
                 </td>

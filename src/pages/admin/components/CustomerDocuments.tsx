@@ -376,7 +376,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
                     onClick={() => handleDelete(doc.id, doc.file_path, doc.bucket_id)}
                     className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded text-sm font-medium transition-colors"
                   >
-                    Elimina
+                    ×
                   </button>
                 </div>
               </div>

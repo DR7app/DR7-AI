@@ -396,7 +396,7 @@ export default function CarWashTab() {
                 onClick={() => handleDelete(service.id)}
                 className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm rounded-full transition-colors"
               >
-                Elimina
+                ×
               </button>
             </div>
 

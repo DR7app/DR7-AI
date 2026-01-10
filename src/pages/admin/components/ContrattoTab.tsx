@@ -572,7 +572,7 @@ export default function ContrattoTab() {
                       onClick={() => handleDelete(contract.id)}
                       className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
                     >
-                      Elimina
+                      ×
                     </button>
                   </div>
                 </div>

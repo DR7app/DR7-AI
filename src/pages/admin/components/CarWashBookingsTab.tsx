@@ -1395,7 +1395,7 @@ export default function CarWashBookingsTab() {
                             onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
                             className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                           >
-                            Elimina
+                            ×
                           </button>
                         </div>
                       </td>
