@@ -4,24 +4,25 @@ import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 interface BookingDetailsPanelProps {
   booking: any
   onClose: () => void
+  onEdit?: (bookingId: string) => void
 }
 
-export default function BookingDetailsPanel({ booking, onClose }: BookingDetailsPanelProps) {
+export default function BookingDetailsPanel({ booking, onClose, onEdit }: BookingDetailsPanelProps) {
   // MONETARY UNIT CONTRACT: All price fields are stored in CENTS (integer)
   // Example: price_total = 60000 means €600.00
-  
+
   // Raw values (in cents)
   const totalCents = booking.price_total || 0
   const paidCents = booking.amount_paid || booking.booking_details?.amount_paid || 0
-  
+
   // Convert to euros for calculations
   const totalEur = centsToEuros(totalCents)
   const paidEur = centsToEuros(paidCents)
   const remainingEur = Math.max(totalEur - paidEur, 0)
-  
+
   // Payment status
   const isPaid = remainingEur === 0 || booking.payment_status === 'paid'
-  
+
   // DEBUG: Always log monetary values to verify correct conversion
   console.group(`💰 Payment Debug: Booking ${booking.id}`)
   console.log('Raw total (cents):', totalCents, '→', formatEUR(totalCents))
@@ -38,14 +39,14 @@ export default function BookingDetailsPanel({ booking, onClose }: BookingDetails
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div 
+      <div
         className="bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
           <h2 className="text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
-          <button 
+          <button
             onClick={onClose}
             className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-2 hover:bg-white/5 rounded"
           >
@@ -57,7 +58,7 @@ export default function BookingDetailsPanel({ booking, onClose }: BookingDetails
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          
+
           {/* Customer Info */}
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Cliente</h3>
@@ -111,14 +112,13 @@ export default function BookingDetailsPanel({ booking, onClose }: BookingDetails
           {/* Payment Status */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Pagamento</h3>
-            
+
             {/* Payment Status Badge */}
             <div className="flex items-center gap-2">
-              <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
-                isPaid 
-                  ? 'bg-green-900/50 text-green-300 border border-green-700/50' 
+              <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${isPaid
+                  ? 'bg-green-900/50 text-green-300 border border-green-700/50'
                   : 'bg-red-900/50 text-red-300 border border-red-700/50'
-              }`}>
+                }`}>
                 {isPaid ? '✓ Pagato' : '⚠ Da Saldare'}
               </span>
             </div>
@@ -146,15 +146,6 @@ export default function BookingDetailsPanel({ booking, onClose }: BookingDetails
             </div>
           </div>
 
-          {/* Booking Status */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Stato Prenotazione</h3>
-            <div className="px-3 py-2 bg-white/5 rounded border border-white/10 inline-block">
-              <span className="font-mono text-sm uppercase tracking-wider text-theme-text-primary">
-                {booking.status}
-              </span>
-            </div>
-          </div>
 
           {/* Notes/Extras */}
           {booking.booking_details?.notes && (
@@ -168,14 +159,14 @@ export default function BookingDetailsPanel({ booking, onClose }: BookingDetails
 
           {/* Quick Actions */}
           <div className="flex gap-3 pt-4 border-t border-theme-border">
-            <button 
-              onClick={() => window.dispatchEvent(new CustomEvent('openBookingEdit', { detail: { bookingId: booking.id } }))}
+            <button
+              onClick={() => { if (onEdit) { onEdit(booking.id); onClose(); } }}
               className="flex-1 px-4 py-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold rounded border border-dr7-gold/30 font-medium transition-colors"
             >
               Modifica Prenotazione
             </button>
             {booking.contract_url && (
-              <button 
+              <button
                 onClick={() => window.open(booking.contract_url, '_blank')}
                 className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-primary rounded border border-white/10 font-medium transition-colors"
               >
