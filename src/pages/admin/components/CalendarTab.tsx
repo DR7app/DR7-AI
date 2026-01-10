@@ -347,15 +347,21 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   {/* 3. Rendered Events Layer */}
                   <div className="absolute inset-0 z-20 pointer-events-none">
                     {row.events.map(evt => {
-                      // Styling
-                      const isPending = evt.booking.status === 'pending'
-                      const isConfirmed = evt.booking.status === 'confirmed'
-
-                      let bgClass = "bg-gray-600"
-                      let borderClass = "border-gray-500"
-
-                      if (isPending) { bgClass = "bg-yellow-600/90"; borderClass = "border-yellow-400/50" }
-                      else if (isConfirmed) { bgClass = "bg-green-600/90"; borderClass = "border-green-400/50" }
+                      // STRICT COLOR CONTRACT (Non-negotiable)
+                      // RED = Customer booking (all statuses)
+                      // ORANGE = Unavailable (mechanic, internal block)
+                      // GREEN = Availability (background only, not bars)
+                      
+                      let bgClass = "bg-red-600/90"
+                      let borderClass = "border-red-400/50"
+                      
+                      // Check if this is an unavailability/mechanic booking
+                      const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
+                      
+                      if (isUnavailability) {
+                        bgClass = "bg-orange-600/90"
+                        borderClass = "border-orange-400/50"
+                      }
 
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
