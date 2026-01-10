@@ -869,7 +869,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.error('Failed to load customers from bookings:', bookingsCustomerError)
       }
 
-      // Merge customers by email or phone (same logic as CustomersTab)
+      // CRITICAL FIX: Use customer ID as the canonical Map key
+      // This ensures no duplicates and all customers from customers_extended are loaded
       const customerMap = new Map<string, Customer>()
 
       if (bookingsForCustomers) {
@@ -879,41 +880,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const customerEmail = booking.customer_email || details.email || null
           const customerPhone = booking.customer_phone || details.phone || null
 
-          const key = customerEmail || customerPhone || booking.user_id
+          // Only create customer entry if we have a valid UUID for user_id
+          // Otherwise, skip it - the customer will be loaded from customers_extended table
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          const hasValidUserId = booking.user_id && uuidRegex.test(booking.user_id)
 
-          if (key) {
-            // Only create customer entry if we have a valid UUID for user_id
-            // Otherwise, skip it - the customer will be loaded from customers_extended table
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-            const hasValidUserId = booking.user_id && uuidRegex.test(booking.user_id)
+          if (!hasValidUserId) {
+            // Skip customers without valid UUID - they'll come from customers_extended
+            return
+          }
 
-            if (!hasValidUserId) {
-              // Skip customers without valid UUID - they'll come from customers_extended
-              return
-            }
-
-            const existing = customerMap.get(key)
-            if (existing) {
-              if (!existing.phone && customerPhone) existing.phone = customerPhone
-              if (!existing.email && customerEmail) existing.email = customerEmail
-              if (existing.full_name === 'Cliente' && customerName) existing.full_name = customerName
-            } else {
-              customerMap.set(key, {
-                id: booking.user_id, // Always a valid UUID at this point
-                full_name: customerName,
-                email: customerEmail,
-                phone: customerPhone,
-                driver_license_number: null,
-                notes: null,
-                created_at: booking.booked_at,
-                updated_at: booking.booked_at
-              })
-            }
+          // ✅ FIX: Always use user_id (UUID) as the Map key
+          const existing = customerMap.get(booking.user_id)
+          if (existing) {
+            // Update existing entry with additional data
+            if (!existing.phone && customerPhone) existing.phone = customerPhone
+            if (!existing.email && customerEmail) existing.email = customerEmail
+            if (existing.full_name === 'Cliente' && customerName) existing.full_name = customerName
+          } else {
+            // Create new entry with user_id as key
+            customerMap.set(booking.user_id, {
+              id: booking.user_id, // Always a valid UUID at this point
+              full_name: customerName,
+              email: customerEmail,
+              phone: customerPhone,
+              driver_license_number: null,
+              notes: null,
+              created_at: booking.booked_at,
+              updated_at: booking.booked_at
+            })
           }
         })
       }
 
-      // Also check customers table if it exists
+      console.log('[ReservationsTab] Customers from bookings:', customerMap.size)
+
       // Also fetch from customers_extended (the main source of truth)
       const { data: customersExtendedData, error: customersExtendedError } = await supabase
         .from('customers_extended')
@@ -923,11 +924,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (customersExtendedError) {
         console.error('Failed to load customers_extended:', customersExtendedError)
       } else if (customersExtendedData) {
+        console.log('[ReservationsTab] Customers from customers_extended:', customersExtendedData.length)
+
         customersExtendedData.forEach((c: any) => {
           // Map to local Customer interface
           let fullName = 'N/A'
           if (c.tipo_cliente === 'azienda') {
-            fullName = c.denominazione || 'N/A'
+            fullName = c.denominazione || c.ragione_sociale || 'N/A'
           } else if (c.tipo_cliente === 'persona_fisica') {
             fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
           } else if (c.tipo_cliente === 'pubblica_amministrazione') {
@@ -939,21 +942,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             full_name: fullName,
             email: c.email || null,
             phone: c.telefono || null,
-            driver_license_number: null,
-            notes: null,
+            driver_license_number: c.numero_patente || null,
+            notes: c.note || null,
             created_at: c.created_at,
-            updated_at: c.created_at
+            updated_at: c.updated_at || c.created_at
           }
 
-          // Use ID, email, or phone as key to merge with existing inferred customers
-          // IMPORTANT: customers_extended is the authoritative source, so we ALWAYS set it
-          // This overwrites any inferred customer data from bookings table
-          const key = c.email || c.telefono || c.id
-          if (key) {
-            customerMap.set(key, mappedCustomer)
-          }
+          // ✅ FIX: ALWAYS use customer ID as the Map key
+          // This is the authoritative source - it will overwrite any booking-derived data
+          customerMap.set(c.id, mappedCustomer)
         })
       }
+
+      console.log('[ReservationsTab] Total unique customers after customers_extended:', customerMap.size)
 
       // Also check legacy customers table if it exists (for backward compatibility)
       const { data: customersTableData, error: customersTableError } = await supabase
@@ -963,15 +964,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (!customersTableError && customersTableData) {
         customersTableData.forEach(c => {
-          const key = c.email || c.phone || c.id
-          if (key && !customerMap.has(key)) {
-            customerMap.set(key, c)
+          // Only add if not already in map (customers_extended takes precedence)
+          if (!customerMap.has(c.id)) {
+            customerMap.set(c.id, c)
           }
         })
       }
 
+
       const customersArray = Array.from(customerMap.values())
       console.log('CUSTOMERS LOADED:', customersArray.length, customersArray)
+
+      // Debug: Check if Riccardo Pilia is in the list
+      const riccardoPilia = customersArray.find(c =>
+        c.full_name?.toLowerCase().includes('riccardo') &&
+        c.full_name?.toLowerCase().includes('pilia')
+      )
+      console.log('[DEBUG] Riccardo Pilia in customers array:', riccardoPilia)
+
+      // Debug: Show first 10 customer names
+      console.log('[DEBUG] First 10 customers:', customersArray.slice(0, 10).map(c => ({
+        id: c.id,
+        name: c.full_name,
+        email: c.email,
+        phone: c.phone
+      })))
+
       setCustomers(customersArray)
 
       const { data: vehiclesData, error: vehiclesError } = await supabase
