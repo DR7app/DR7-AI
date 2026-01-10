@@ -91,14 +91,18 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass }: Activit
             </div>
 
             <div className="text-theme-text-primary font-medium text-sm leading-tight mb-1">
-                {parseCustomerName(booking.customer_name)}
+                {booking.customer_name === 'Lavaggio Rientro' ? 'Lavaggio Rientro' : parseCustomerName(booking.customer_name)}
             </div>
 
             <div className="text-theme-text-secondary text-xs">
-                {booking.vehicle_name}
+                {booking.customer_name === 'Lavaggio Rientro' && booking.vehicle_name ? booking.vehicle_name : booking.vehicle_name}
             </div>
 
-            {booking.type !== 'lavaggio' && (
+            {booking.customer_name === 'Lavaggio Rientro' && booking.vehicle_plate ? (
+                <div className="text-dr7-gold font-mono text-[10px] mt-1">
+                    {booking.vehicle_plate}
+                </div>
+            ) : booking.type !== 'lavaggio' && (
                 <div className="text-theme-text-muted font-mono text-[10px] mt-1">
                     {getTarga(booking)}
                 </div>
