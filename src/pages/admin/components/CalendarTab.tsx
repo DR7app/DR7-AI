@@ -207,10 +207,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
 
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-theme-bg-secondary rounded-xl border border-theme-border shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-200px)] bg-[#0a0a0b] rounded-xl border border-white/5 shadow-2xl overflow-hidden">
 
       {/* 1. Control Bar */}
-      <div className="flex justify-between items-center p-4 bg-theme-bg-secondary border-b border-theme-border z-50 shadow-sm">
+      <div className="flex justify-between items-center p-4 bg-[#0d0d0e] border-b border-white/5 z-50 shadow-sm">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
@@ -241,9 +241,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
       <div className="flex-1 overflow-auto relative flex flex-col w-full" ref={gridRef}>
 
         {/* A. Sticky Header Row */}
-        <div className="flex sticky top-0 z-[40] bg-theme-bg-secondary shadow-md min-w-max h-[42px] border-b border-theme-border/50">
+        <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-md min-w-max h-[42px] border-b border-white/5">
           {/* Header Spacer for Left Column */}
-          <div className="sticky left-0 w-[300px] z-[41] bg-theme-bg-secondary border-r border-theme-border/50 flex items-center px-4 font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+          <div className="sticky left-0 w-[300px] z-[41] bg-[#0d0d0e] border-r border-white/5 flex items-center px-4 font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
             Veicolo / Targa
           </div>
 
@@ -259,9 +259,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                 <div
                   key={day}
                   className={`
-                     flex flex-col items-center justify-center border-r border-theme-border/30 relative
-                     ${isToday ? 'bg-dr7-gold/10 text-dr7-gold font-bold' : ''}
-                     ${(isHol || isSun) && !isToday ? 'bg-red-500/5 text-red-400' : ''}
+                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
+                     ${isToday ? 'bg-amber-500/10 text-amber-400 font-bold' : ''}
+                     ${(isHol || isSun) && !isToday ? 'bg-white/[0.02] text-gray-500' : ''}
                    `}
                   style={{ width: CELL_WIDTH }}
                 >
@@ -320,9 +320,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                         <div
                           key={day}
                           className={`
-                                border-r border-theme-border/10 h-full
-                                ${isToday ? 'bg-dr7-gold/5' : ''}
-                                ${isRedDay && !isToday ? 'bg-red-500/5' : ''}
+                                border-r border-white/[0.02] h-full
+                                ${isToday ? 'bg-amber-500/5' : ''}
+                                ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
                               `}
                           style={{ width: CELL_WIDTH }}
                         />
@@ -349,15 +349,20 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   {/* 3. Rendered Events Layer */}
                   <div className="absolute inset-0 z-20 pointer-events-none">
                     {row.events.map(evt => {
-                      // Styling
-                      const isPending = evt.booking.status === 'pending'
-                      const isConfirmed = evt.booking.status === 'confirmed'
-
-                      let bgClass = "bg-gray-600"
-                      let borderClass = "border-gray-500"
-
-                      if (isPending) { bgClass = "bg-yellow-600/90"; borderClass = "border-yellow-400/50" }
-                      else if (isConfirmed) { bgClass = "bg-green-600/90"; borderClass = "border-green-400/50" }
+                       // STRICT COLOR CONTRACT (Premium Dark Theme)
+                       // RED = Customer booking (clean, modern red)
+                       // ORANGE = Unavailable (muted orange)
+                       
+                       let bgClass = "bg-red-500"
+                       let borderClass = "border-red-400/30"
+                       
+                       // Check if this is an unavailability/mechanic booking
+                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
+                       
+                       if (isUnavailability) {
+                         bgClass = "bg-orange-500/80"
+                         borderClass = "border-orange-400/30"
+                       }
 
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
@@ -390,7 +395,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                               {evt.booking.customer_name || 'Cliente Sconosciuto'} u2022 {evt.endDayIndex0 + 1}
+                              {evt.booking.customer_name || 'Cliente Sconosciuto'} u2022 {evt.endDayIndex0 + 1}
                             </span>
 
                           </div>
