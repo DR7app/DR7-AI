@@ -292,16 +292,35 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     if (!dateString) return new Date()
 
     // 1. If it's a simple YYYY-MM-DD string, parse it as local midnight
+    // This is the most common case and should NOT go through timezone conversion
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
       const [y, m, d] = dateString.trim().split('-').map(Number)
       return new Date(y, m - 1, d, 0, 0, 0, 0)
     }
 
+    // 2. If it's a date with time but NO timezone (YYYY-MM-DD HH:MM:SS)
+    // Parse it as local time
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(dateString.trim())) {
+      const parts = dateString.trim().match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/)
+      if (parts) {
+        return new Date(
+          parseInt(parts[1]),      // year
+          parseInt(parts[2]) - 1,  // month (0-indexed)
+          parseInt(parts[3]),      // day
+          parseInt(parts[4]),      // hour
+          parseInt(parts[5]),      // minute
+          parseInt(parts[6] || '0'), // second
+          0
+        )
+      }
+    }
+
+    // 3. For ISO strings with timezone (e.g., "2026-01-07T23:00:00Z")
+    // Convert from UTC to Europe/Rome timezone
     const d = new Date(dateString)
     if (isNaN(d.getTime())) return new Date()
 
-    // 2. Extract components specifically in Europe/Rome
-    // This ensures "2026-01-07T23:00:00Z" becomes Jan 8 in Rome (not Jan 7)
+    // Extract components specifically in Europe/Rome
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Europe/Rome',
       year: 'numeric',
@@ -320,7 +339,6 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     })
 
     // Create a Date object with the Rome timezone components
-    // This will return the correct day when we call .getDate()
     return new Date(
       parseInt(p.year),
       parseInt(p.month) - 1,
@@ -386,12 +404,35 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
 
+    console.log('🔍 CALENDAR DEBUG - Building segments for:', { year, month: month + 1 })
+
     for (const vehicle of vehicles) {
       for (const booking of bookings) {
         if (!isBookingForVehicle(booking, vehicle)) continue
 
         const range = getBookingRange(booking, year, month)
         if (!range) continue
+
+        // DEBUG: Log the first few bookings to see what's happening
+        if (segments.length < 3) {
+          const pickupRaw = booking.pickup_date
+          const dropoffRaw = booking.dropoff_date
+          const pickupParsed = parseLocalDate(pickupRaw)
+          const dropoffParsed = parseLocalDate(dropoffRaw)
+
+          console.log('📅 Booking Debug:', {
+            customer: booking.customer_name,
+            vehicle: vehicle.display_name,
+            pickupRaw,
+            dropoffRaw,
+            pickupParsed: pickupParsed.toISOString(),
+            dropoffParsed: dropoffParsed.toISOString(),
+            pickupDay: pickupParsed.getDate(),
+            dropoffDay: dropoffParsed.getDate(),
+            calculatedStartDay: range.startDay,
+            calculatedEndDay: range.endDay
+          })
+        }
 
         segments.push({
           bookingId: booking.id,
@@ -404,6 +445,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       }
     }
 
+    console.log('✅ Total segments built:', segments.length)
     return segments
   }, [vehicles, bookings, currentDate])
 
@@ -759,9 +801,8 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
                     .map(segment => {
-                      // CELL WIDTH FIX: Must match exact visual width including border
-                      // With border-collapse, each cell is 40px + 1px border = 41px visual width
-                      const cellWidth = 41
+                      // CELL WIDTH: Must match exact CSS width of grid cells (40px)
+                      const cellWidth = 40
 
                       // POSITIONING FIX: 
                       // The grid columns are: Veicolo (200px) | Targa (100px) | Day1 | Day2 | ...
