@@ -142,22 +142,22 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
       const vehicleBookings = bookings.filter(b => {
         // STRICT PLATE-ONLY MATCHING (Non-negotiable)
         // A booking belongs to ONE physical car identified by license plate
-        
+
         // Normalize plates for comparison (remove spaces, uppercase)
         const vPlate = vehicle.plate?.replace(/\s/g, '').toUpperCase()
         const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
-        
+
         // Data integrity check: flag bookings with missing plate
         if (!bPlate) {
           console.warn(`⚠️ MISSING PLATE: Booking ${b.id} for customer "${b.customer_name}" has no license plate. Skipping.`)
           return false
         }
-        
+
         if (!vPlate) {
           console.warn(`⚠️ MISSING PLATE: Vehicle "${vehicle.display_name}" has no license plate. Cannot match bookings.`)
           return false
         }
-        
+
         // STRICT EQUALITY: booking.license_plate === vehicle.license_plate
         // Forbidden: matching by model name, display name, or any fuzzy matching
         return vPlate === bPlate
@@ -205,7 +205,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
           bookingToVehicles.get(bookingId)!.push(row.vehicle.display_name)
         })
       })
-      
+
       // Check for duplicates
       bookingToVehicles.forEach((vehicleNames, bookingId) => {
         if (vehicleNames.length > 1) {
@@ -304,20 +304,20 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                 >
                   {/* Red dot for Sundays and holidays */}
                   {(isHol || isSun) && (
-                    <div 
+                    <div
                       className="absolute top-1 right-1 w-1 h-1 rounded-full bg-red-500/70"
                       title={isHol ? isHol.name : 'Domenica'}
                     />
                   )}
-                  
-                  <span 
-                    className="text-[10px]" 
+
+                  <span
+                    className="text-[10px]"
                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)' }}
                   >
                     {day}
                   </span>
-                  <span 
-                    className="text-[8px] uppercase" 
+                  <span
+                    className="text-[8px] uppercase"
                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.45)' }}
                   >
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
@@ -348,8 +348,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
                       {row.vehicle.category && (
                         <span className={`text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-wider ${row.vehicle.category === 'exotic' ? 'bg-purple-900/50 text-purple-200' :
-                            row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
-                              'bg-orange-900/50 text-orange-200'
+                          row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
+                            'bg-orange-900/50 text-orange-200'
                           }`}>
                           {row.vehicle.category === 'aziendali' ? 'AZIENDALE' : row.vehicle.category.toUpperCase()}
                         </span>
@@ -369,6 +369,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
                       const isRedDay = getHolidayForDate(d) || isSunday(d)
 
+                      // Check if this day is available (no bookings/blocks)
+                      const dayIndex0 = day - 1
+                      const hasBooking = row.events.some(evt =>
+                        dayIndex0 >= evt.startDayIndex0 && dayIndex0 <= evt.endDayIndex0
+                      )
+                      const isAvailable = !hasBooking
+
                       return (
                         <div
                           key={day}
@@ -376,6 +383,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                                 border-r border-white/[0.02] h-full
                                 ${isToday ? 'bg-amber-500/5' : ''}
                                 ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
+                                ${isAvailable && !isToday ? 'bg-green-500/[0.08]' : ''}
                               `}
                           style={{ width: CELL_WIDTH }}
                         />
