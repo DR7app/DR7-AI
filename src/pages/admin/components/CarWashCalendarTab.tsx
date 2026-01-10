@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 
 interface CarWashBooking {
   id: string
@@ -144,16 +145,20 @@ export default function CarWashCalendarTab() {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
 
-    // Format date as YYYY-MM-DD in local timezone (no UTC conversion)
-    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-
     // Convert timeSlot to minutes
     const [slotHours, slotMinutes] = timeSlot.split(':').map(Number)
     const slotTimeInMinutes = slotHours * 60 + slotMinutes
 
     return bookings.some(booking => {
-      const bookingDate = booking.appointment_date?.split('T')[0]
-      if (bookingDate !== dateString) return false
+      // Get booking date in Rome timezone
+      const bookingComponents = getRomeDateComponents(booking.appointment_date)
+
+      // Check if booking is on this day
+      if (bookingComponents.year !== year ||
+        bookingComponents.month !== (month + 1) || // month is 1-indexed in components
+        bookingComponents.day !== day) {
+        return false
+      }
 
       // Get booking start time and duration
       const [bookingHours, bookingMinutes] = booking.appointment_time.split(':').map(Number)
@@ -170,16 +175,20 @@ export default function CarWashCalendarTab() {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
 
-    // Format date as YYYY-MM-DD in local timezone (no UTC conversion)
-    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-
     // Convert timeSlot to minutes
     const [slotHours, slotMinutes] = timeSlot.split(':').map(Number)
     const slotTimeInMinutes = slotHours * 60 + slotMinutes
 
     return bookings.filter(booking => {
-      const bookingDate = booking.appointment_date?.split('T')[0]
-      if (bookingDate !== dateString) return false
+      // Get booking date in Rome timezone
+      const bookingComponents = getRomeDateComponents(booking.appointment_date)
+
+      // Check if booking is on this day
+      if (bookingComponents.year !== year ||
+        bookingComponents.month !== (month + 1) || // month is 1-indexed in components
+        bookingComponents.day !== day) {
+        return false
+      }
 
       // Get booking start time and duration
       const [bookingHours, bookingMinutes] = booking.appointment_time.split(':').map(Number)

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { getRomeDateComponents, formatRomeDate, parseUTCToRome } from '../../../utils/timezoneUtils'
 
 interface Booking {
     id: string
@@ -192,13 +193,13 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
 
             const categorized: Booking[] = []
 
-            // Helper to check if a date string falls on the selected local date
+            // Helper to check if a date string falls on the selected local date in Europe/Rome timezone
             const isSameDay = (dateStr?: string) => {
                 if (!dateStr) return false
-                const date = new Date(dateStr)
-                return date.getDate() === selectedDate.getDate() &&
-                    date.getMonth() === selectedDate.getMonth() &&
-                    date.getFullYear() === selectedDate.getFullYear()
+                const components = getRomeDateComponents(dateStr)
+                return components.day === selectedDate.getDate() &&
+                    components.month === (selectedDate.getMonth() + 1) && // components.month is 1-indexed
+                    components.year === selectedDate.getFullYear()
             }
 
             data?.forEach((booking: any) => {
@@ -247,11 +248,11 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
     const getBookingTime = (booking: Booking): string => {
         if (booking.type === 'check-in') {
             return booking.booking_details?.pickupTime ||
-                new Date(booking.pickup_date!).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                formatRomeDate(parseUTCToRome(booking.pickup_date!), { hour: '2-digit', minute: '2-digit', hour12: false })
         }
         if (booking.type === 'check-out') {
             return booking.booking_details?.returnTime ||
-                new Date(booking.dropoff_date!).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                formatRomeDate(parseUTCToRome(booking.dropoff_date!), { hour: '2-digit', minute: '2-digit', hour12: false })
         }
         return booking.appointment_time || '00:00'
     }

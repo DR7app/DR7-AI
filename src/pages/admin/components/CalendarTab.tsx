@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
+import { parseUTCToRome, getRomeDateComponents, formatRomeDate, debugTimezone } from '../../../utils/timezoneUtils'
 
 interface Vehicle {
   id: string
@@ -285,77 +286,53 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return s.replace(/[^A-Z0-9]/gi, '').toUpperCase()
   }
 
-  // DEFINITIVE FIX: Parse dates correctly regardless of format
-  const parseLocalDate = (dateString: string): Date => {
-    if (!dateString) return new Date()
-
-    const trimmed = dateString.trim()
-
-    // 1. Simple YYYY-MM-DD format - parse as local midnight
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const [y, m, d] = trimmed.split('-').map(Number)
-      return new Date(y, m - 1, d, 0, 0, 0, 0)
-    }
-
-    // 2. ISO format with timezone offset (e.g., "2026-01-06T21:00:00+01:00")
-    // Extract the date/time components BEFORE the timezone offset
-    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})([+-]\d{2}:\d{2}|Z)?$/)
-    if (isoMatch) {
-      return new Date(
-        parseInt(isoMatch[1]),      // year
-        parseInt(isoMatch[2]) - 1,  // month (0-indexed)
-        parseInt(isoMatch[3]),      // day
-        parseInt(isoMatch[4]),      // hour
-        parseInt(isoMatch[5]),      // minute
-        parseInt(isoMatch[6]),      // second
-        0
-      )
-    }
-
-    // 3. Datetime without timezone (YYYY-MM-DD HH:MM:SS)
-    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-      const parts = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/)
-      if (parts) {
-        return new Date(
-          parseInt(parts[1]),
-          parseInt(parts[2]) - 1,
-          parseInt(parts[3]),
-          parseInt(parts[4]),
-          parseInt(parts[5]),
-          parseInt(parts[6] || '0'),
-          0
-        )
-      }
-    }
-
-    // 4. Fallback: use JavaScript's Date parser
-    return new Date(trimmed)
-  }
+  // TIMEZONE FIX: Use centralized utilities for UTC → Europe/Rome conversion
+  // This ensures bookings are always displayed on the correct day in Italy timezone
+  const parseLocalDate = parseUTCToRome
 
   // Unified helper to calculate startDay and endDay for a booking within the current month
+  // TIMEZONE FIX: Use Rome timezone components for accurate day calculation
   const getBookingRange = (booking: Booking, year: number, month: number) => {
-    const pickupDate = parseLocalDate(booking.pickup_date)
-    const dropoffDate = parseLocalDate(booking.dropoff_date)
+    // Get date components in Europe/Rome timezone
+    const pickupComponents = getRomeDateComponents(booking.pickup_date)
+    const dropoffComponents = getRomeDateComponents(booking.dropoff_date)
     const lastDayInMonth = new Date(year, month + 1, 0).getDate()
 
-    const monthStart = new Date(year, month, 1, 0, 0, 0, 0)
-    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999)
+    // Check if booking overlaps this month in Rome timezone
+    // Month is 0-indexed in JS, but 1-indexed in our components
+    const jsMonth = month + 1
 
-    // Skip if booking doesn't overlap this month
-    if (dropoffDate <= monthStart || pickupDate > monthEnd) return null
+    // Booking is before this month
+    if (dropoffComponents.year < year ||
+      (dropoffComponents.year === year && dropoffComponents.month < jsMonth)) {
+      return null
+    }
 
-    let startDay = pickupDate.getFullYear() === year && pickupDate.getMonth() === month
-      ? pickupDate.getDate()
-      : 1
+    // Booking is after this month
+    if (pickupComponents.year > year ||
+      (pickupComponents.year === year && pickupComponents.month > jsMonth)) {
+      return null
+    }
 
-    let endDay = dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month
-      ? dropoffDate.getDate()
-      : lastDayInMonth
+    // Calculate start day in this month
+    let startDay: number
+    if (pickupComponents.year === year && pickupComponents.month === jsMonth) {
+      startDay = pickupComponents.day
+    } else {
+      startDay = 1 // Booking started in a previous month
+    }
 
-    // If dropoff is exactly at midnight, the booking ends at the end of the previous day
-    if (dropoffDate.getFullYear() === year && dropoffDate.getMonth() === month &&
-      dropoffDate.getHours() === 0 && dropoffDate.getMinutes() === 0) {
-      endDay = Math.max(startDay, endDay - 1)
+    // Calculate end day in this month
+    let endDay: number
+    if (dropoffComponents.year === year && dropoffComponents.month === jsMonth) {
+      endDay = dropoffComponents.day
+
+      // If dropoff is exactly at midnight (00:00), the booking ends at the end of the previous day
+      if (dropoffComponents.hour === 0 && dropoffComponents.minute === 0) {
+        endDay = Math.max(startDay, endDay - 1)
+      }
+    } else {
+      endDay = lastDayInMonth // Booking continues into next month
     }
 
     return { startDay, endDay }
@@ -396,20 +373,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
         const range = getBookingRange(booking, year, month)
         if (!range) continue
 
-        // DEBUG: Log the first few bookings to see what's happening
+        // DEBUG: Log the first few bookings with timezone conversion details
         if (segments.length < 3) {
-          const pickupRaw = booking.pickup_date
-          const dropoffRaw = booking.dropoff_date
-          const pickupParsed = parseLocalDate(pickupRaw)
-          const dropoffParsed = parseLocalDate(dropoffRaw)
-
-          console.log(`📅 Booking #${segments.length + 1}: ${booking.customer_name} / ${vehicle.display_name}`)
-          console.log(`   pickupRaw: "${pickupRaw}"`)
-          console.log(`   pickupParsed: ${pickupParsed.toISOString()} → Day ${pickupParsed.getDate()}`)
-          console.log(`   calculatedStartDay: ${range.startDay}`)
-          console.log(`   dropoffRaw: "${dropoffRaw}"`)
-          console.log(`   dropoffParsed: ${dropoffParsed.toISOString()} → Day ${dropoffParsed.getDate()}`)
-          console.log(`   calculatedEndDay: ${range.endDay}`)
+          console.log(`\n📅 Booking #${segments.length + 1}: ${booking.customer_name} / ${vehicle.display_name}`)
+          debugTimezone('Pickup', booking.pickup_date)
+          debugTimezone('Dropoff', booking.dropoff_date)
+          console.log(`   ✅ Calculated Range: Day ${range.startDay} → Day ${range.endDay}`)
         }
 
         segments.push({

@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import MechanicalBookingForm from './MechanicalBookingForm'
+import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 
 interface MechanicalBooking {
   id: string
@@ -137,24 +138,32 @@ export default function MechanicalCalendarTab() {
   const isSlotBooked = (day: number, timeSlot: string): boolean => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-    const checkDate = new Date(year, month, day)
-    const dateString = checkDate.toISOString().split('T')[0]
 
     return bookings.some(booking => {
-      const bookingDate = booking.appointment_date?.split('T')[0]
-      return bookingDate === dateString && booking.appointment_time === timeSlot
+      // Get booking date in Rome timezone
+      const bookingComponents = getRomeDateComponents(booking.appointment_date)
+
+      // Check if booking is on this day and time
+      return bookingComponents.year === year &&
+        bookingComponents.month === (month + 1) && // month is 1-indexed in components
+        bookingComponents.day === day &&
+        booking.appointment_time === timeSlot
     })
   }
 
   const getSlotBookings = (day: number, timeSlot: string): MechanicalBooking[] => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-    const checkDate = new Date(year, month, day)
-    const dateString = checkDate.toISOString().split('T')[0]
 
     return bookings.filter(booking => {
-      const bookingDate = booking.appointment_date?.split('T')[0]
-      return bookingDate === dateString && booking.appointment_time === timeSlot
+      // Get booking date in Rome timezone
+      const bookingComponents = getRomeDateComponents(booking.appointment_date)
+
+      // Check if booking is on this day and time
+      return bookingComponents.year === year &&
+        bookingComponents.month === (month + 1) && // month is 1-indexed in components
+        bookingComponents.day === day &&
+        booking.appointment_time === timeSlot
     })
   }
 
