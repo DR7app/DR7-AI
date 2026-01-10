@@ -256,18 +256,28 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
               const isToday = i === highlightTodayIndex
 
               return (
-                <div
-                  key={day}
-                  className={`
+                 <div
+                   key={day}
+                   className={`
                      flex flex-col items-center justify-center border-r border-white/[0.03] relative
-                     ${isToday ? 'bg-amber-500/10 text-amber-400 font-bold' : ''}
-                     ${(isHol || isSun) && !isToday ? 'bg-white/[0.02] text-gray-500' : ''}
+                     ${isToday ? 'bg-amber-500/10 font-bold' : ''}
+                     ${(isHol || isSun) && !isToday ? 'bg-white/[0.02]' : ''}
                    `}
-                  style={{ width: CELL_WIDTH }}
-                >
-                  <span className="text-[10px]">{day}</span>
-                  <span className="text-[8px] opacity-60 uppercase">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
-                </div>
+                   style={{ width: CELL_WIDTH }}
+                 >
+                   <span 
+                     className="text-[10px]" 
+                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)' }}
+                   >
+                     {day}
+                   </span>
+                   <span 
+                     className="text-[8px] uppercase" 
+                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.45)' }}
+                   >
+                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
+                   </span>
+                 </div>
               )
             })}
           </div>
