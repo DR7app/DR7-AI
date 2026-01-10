@@ -900,7 +900,7 @@ export default function CustomersTab() {
               {/* Customer Type Badge */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-theme-text-muted">Tipo Cliente:</span>
-                <span className={`px-3 py-1 rounded text-sm font-medium ${viewingCustomerDetails.tipo_cliente === 'persona_fisica'
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${viewingCustomerDetails.tipo_cliente === 'persona_fisica'
                   ? 'bg-blue-500/20 text-blue-400'
                   : viewingCustomerDetails.tipo_cliente === 'azienda'
                     ? 'bg-purple-500/20 text-purple-400'
@@ -1368,7 +1368,7 @@ export default function CustomersTab() {
                                 disabled={uploadingLicense}
                                 id="license-upload"
                               />
-                              <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
+                              <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
                                 ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
@@ -1445,7 +1445,7 @@ export default function CustomersTab() {
                                 disabled={uploadingId}
                                 id="id-upload"
                               />
-                              <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingId
+                              <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingId
                                 ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
@@ -1522,7 +1522,7 @@ export default function CustomersTab() {
                                 disabled={uploadingCodiceFiscale}
                                 id="codice-fiscale-upload"
                               />
-                              <span className={`inline-block px-4 py-2 rounded text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
+                              <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
                                 ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>

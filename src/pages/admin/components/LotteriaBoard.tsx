@@ -1354,7 +1354,7 @@ const LotteriaBoard: React.FC = () => {
             {canViewFinancials && (
               <button
                 onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-4 py-2 rounded font-semibold transition-colors ${hideFinancials
+                className={`px-4 py-2 rounded-full font-semibold transition-colors ${hideFinancials
                   ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
                   : 'bg-yellow-600 text-black hover:bg-yellow-700'
                   }`}
@@ -1367,7 +1367,7 @@ const LotteriaBoard: React.FC = () => {
                 setMultiSelectMode(!multiSelectMode)
                 setSelectedTickets([])
               }}
-              className={`px-4 py-2 rounded font-semibold transition-colors ${multiSelectMode
+              className={`px-4 py-2 rounded-full font-semibold transition-colors ${multiSelectMode
                 ? 'bg-orange-600 text-theme-text-primary hover:bg-orange-700'
                 : 'bg-gray-700 text-theme-text-primary hover:bg-gray-600'
                 }`}

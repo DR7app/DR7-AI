@@ -885,7 +885,7 @@ export default function CarWashBookingsTab() {
                 <button
                   type="button"
                   onClick={() => setNewCustomerMode(false)}
-                  className={`px-4 py-2 rounded ${!newCustomerMode
+                  className={`px-4 py-2 rounded-full ${!newCustomerMode
                     ? 'bg-white text-black font-semibold'
                     : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                     }`}
@@ -895,7 +895,7 @@ export default function CarWashBookingsTab() {
                 <button
                   type="button"
                   onClick={() => setNewCustomerMode(true)}
-                  className={`px-4 py-2 rounded ${newCustomerMode
+                  className={`px-4 py-2 rounded-full ${newCustomerMode
                     ? 'bg-white text-black font-semibold'
                     : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                     }`}
@@ -1557,7 +1557,7 @@ export default function CarWashBookingsTab() {
                       alert('❌ Errore durante l\'aggiornamento')
                     }
                   }}
-                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded font-medium transition-colors"
+                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"
                 >
                   Salva Modifiche
                 </button>

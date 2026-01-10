@@ -229,7 +229,7 @@ export default function FatturaTab() {
               setMultiSelectMode(!multiSelectMode)
               setSelectedIds([])
             }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${multiSelectMode
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${multiSelectMode
               ? 'bg-blue-600 text-white'
               : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
@@ -240,7 +240,7 @@ export default function FatturaTab() {
           {multiSelectMode && selectedIds.length > 0 && (
             <button
               onClick={handleBulkDelete}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium transition-colors"
             >
               Elimina Selezionati ({selectedIds.length})
             </button>
@@ -335,14 +335,14 @@ export default function FatturaTab() {
                 <div className="flex flex-col gap-2 ml-4">
                   <button
                     onClick={() => downloadPDF(invoice)}
-                    className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors text-center flex items-center justify-center gap-1"
+                    className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex items-center justify-center gap-1"
                   >
                     PDF
                   </button>
                   {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error') ? (
                     <button
                       onClick={() => handleSendToSDI(invoice)}
-                      className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
+                      className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
                     >
                       Invia SDI
                     </button>
@@ -350,14 +350,14 @@ export default function FatturaTab() {
                     <button
                       onClick={() => handleCheckStatus(invoice.id)}
                       disabled={checkingStatus === invoice.id}
-                      className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+                      className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
                     >
                       {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
                     </button>
                   )}
                   <button
                     onClick={() => handleDelete(invoice.id)}
-                    className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors"
+                    className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors"
                   >
                     Elimina
                   </button>

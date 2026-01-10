@@ -297,7 +297,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                 <button
                                     type="button"
                                     onClick={handleEditCustomerClick}
-                                    className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm rounded transition-colors"
+                                    className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm rounded-full transition-colors"
                                 >
                                     Modifica Dati Cliente
                                 </button>

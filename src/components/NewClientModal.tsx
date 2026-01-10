@@ -1319,7 +1319,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               onClick={handleSave}
               disabled={isSaveDisabled() || isSaving}
-              className={`px-6 py-2 rounded-lg font-medium transition-colors ${isSaveDisabled() || isSaving
+              className={`px-6 py-2 rounded-full font-medium transition-colors ${isSaveDisabled() || isSaving
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-theme-text-primary hover:bg-blue-700'
                 }`}

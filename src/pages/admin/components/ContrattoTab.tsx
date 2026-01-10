@@ -422,7 +422,7 @@ export default function ContrattoTab() {
           <div className="flex gap-3">
             <button
               type="submit"
-              className="flex-1 bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-3 px-4 rounded transition-colors"
+              className="flex-1 bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-3 px-4 rounded-full transition-colors"
             >
               {editingId ? 'Aggiorna Contratto' : 'Crea Contratto'}
             </button>
@@ -433,7 +433,7 @@ export default function ContrattoTab() {
                 setEditingId(null)
                 resetForm()
               }}
-              className="px-6 bg-gray-700 hover:bg-gray-600 text-theme-text-primary font-bold py-3 rounded transition-colors"
+              className="px-6 bg-gray-700 hover:bg-gray-600 text-theme-text-primary font-bold py-3 rounded-full transition-colors"
             >
               Annulla
             </button>
@@ -450,7 +450,7 @@ export default function ContrattoTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">📄 Contratti</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-4 rounded transition-colors"
+          className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-4 rounded-full transition-colors"
         >
           + Nuovo Contratto
         </button>
@@ -473,7 +473,7 @@ export default function ContrattoTab() {
           <p className="text-theme-text-muted text-lg mb-4">Nessun contratto trovato</p>
           <button
             onClick={() => setShowForm(true)}
-            className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-6 rounded transition-colors"
+            className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-6 rounded-full transition-colors"
           >
             Crea il primo contratto
           </button>
@@ -530,13 +530,13 @@ export default function ContrattoTab() {
                         href={contract.pdf_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                        className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
                       >
                         <span>📄</span> PDF
                       </a>
                       <a
                         href={`mailto:${contract.customer_email}?subject=Contratto Noleggio ${contract.contract_number}&body=Gentile Cliente,%0D%0A%0D%0AEcco il link al tuo contratto di noleggio:%0D%0A${encodeURIComponent(contract.pdf_url)}%0D%0A%0D%0AGrazie per aver scelto DR7 Empire.`}
-                        className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                        className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
                       >
                         <span>✉️</span> Email
                       </a>
@@ -545,18 +545,18 @@ export default function ContrattoTab() {
                   {contract.yousign_status === 'signed' && contract.signed_pdf_url ? (
                     <button
                       onClick={() => window.open(contract.signed_pdf_url, '_blank')}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
                     >
                       <span>🖊️</span> Contratto Firmato
                     </button>
                   ) : contract.yousign_status === 'ongoing' ? (
-                    <div className="w-full bg-yellow-600 text-theme-text-primary px-3 py-1 rounded text-sm text-center opacity-70 cursor-not-allowed">
+                    <div className="w-full bg-yellow-600 text-theme-text-primary px-3 py-1 rounded-full text-sm text-center opacity-70 cursor-not-allowed">
                       <span>⏳</span> In Attesa di Firma
                     </div>
                   ) : (
                     <button
                       onClick={() => handleSendToYousign(contract)}
-                      className="w-full bg-pink-600 hover:bg-pink-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex items-center justify-center gap-1"
+                      className="w-full bg-pink-600 hover:bg-pink-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
                     >
                       <span>✍️</span> Invia a Yousign
                     </button>
@@ -564,13 +564,13 @@ export default function ContrattoTab() {
                   <div className="flex gap-2 w-full">
                     <button
                       onClick={() => handleEdit(contract)}
-                      className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex-1"
+                      className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
                     >
                       Modifica
                     </button>
                     <button
                       onClick={() => handleDelete(contract.id)}
-                      className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded text-sm transition-colors flex-1"
+                      className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
                     >
                       Elimina
                     </button>

@@ -312,7 +312,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                         <button
                             type="button"
                             onClick={() => setIsNewClientModalOpen(false)}
-                            className={`px-4 py-2 rounded ${!isNewClientModalOpen
+                            className={`px-4 py-2 rounded-full ${!isNewClientModalOpen
                                 ? 'bg-white text-black font-semibold'
                                 : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                                 }`}
@@ -322,7 +322,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                         <button
                             type="button"
                             onClick={() => setIsNewClientModalOpen(true)}
-                            className={`px-4 py-2 rounded ${isNewClientModalOpen
+                            className={`px-4 py-2 rounded-full ${isNewClientModalOpen
                                 ? 'bg-white text-black font-semibold'
                                 : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
                                 }`}

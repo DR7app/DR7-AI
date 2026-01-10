@@ -118,7 +118,7 @@ export default function ClientiTab() {
           <div className="flex gap-2">
             <button
               onClick={() => setFilter('all')}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`px-3 py-1 rounded-full text-sm ${
                 filter === 'all'
                   ? 'bg-dr7-gold text-black font-semibold'
                   : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
@@ -128,7 +128,7 @@ export default function ClientiTab() {
             </button>
             <button
               onClick={() => setFilter('azienda')}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`px-3 py-1 rounded-full text-sm ${
                 filter === 'azienda'
                   ? 'bg-dr7-gold text-black font-semibold'
                   : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
@@ -138,7 +138,7 @@ export default function ClientiTab() {
             </button>
             <button
               onClick={() => setFilter('persona_fisica')}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`px-3 py-1 rounded-full text-sm ${
                 filter === 'persona_fisica'
                   ? 'bg-dr7-gold text-black font-semibold'
                   : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
@@ -148,7 +148,7 @@ export default function ClientiTab() {
             </button>
             <button
               onClick={() => setFilter('pubblica_amministrazione')}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`px-3 py-1 rounded-full text-sm ${
                 filter === 'pubblica_amministrazione'
                   ? 'bg-dr7-gold text-black font-semibold'
                   : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'

@@ -213,7 +213,7 @@ export default function ReviewsTab() {
                     placeholder="Cerca cliente o email..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-theme-bg-tertiary border border-theme-border-light text-theme-text-primary px-4 py-2 rounded w-full max-w-md focus:outline-none focus:border-dr7-gold"
+                    className="bg-theme-bg-tertiary border border-theme-border-light text-theme-text-primary px-4 py-2 rounded-full w-full max-w-md focus:outline-none focus:border-dr7-gold"
                 />
             </div>
 

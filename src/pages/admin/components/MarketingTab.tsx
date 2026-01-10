@@ -336,7 +336,7 @@ export default function MarketingTab() {
                                 setSelectedCustomerIds(new Set())
                             }
                         }}
-                        className={`px-4 py-2 rounded font-semibold transition-colors ${multiSelectMode
+                        className={`px-4 py-2 rounded-full font-semibold transition-colors ${multiSelectMode
                                 ? 'bg-orange-600 text-theme-text-primary hover:bg-orange-700'
                                 : 'bg-gray-700 text-theme-text-primary hover:bg-gray-600'
                             }`}

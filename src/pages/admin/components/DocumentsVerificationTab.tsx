@@ -250,7 +250,7 @@ export default function DocumentsVerificationTab() {
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setFilterStatus('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'all'
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'all'
               ? 'bg-dr7-gold text-black'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}
@@ -259,7 +259,7 @@ export default function DocumentsVerificationTab() {
           </button>
           <button
             onClick={() => setFilterStatus('pending_verification')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'pending_verification'
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'pending_verification'
               ? 'bg-dr7-gold text-black'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}
@@ -268,7 +268,7 @@ export default function DocumentsVerificationTab() {
           </button>
           <button
             onClick={() => setFilterStatus('verified')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'verified'
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'verified'
               ? 'bg-dr7-gold text-black'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}
@@ -277,7 +277,7 @@ export default function DocumentsVerificationTab() {
           </button>
           <button
             onClick={() => setFilterStatus('rejected')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === 'rejected'
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'rejected'
               ? 'bg-dr7-gold text-black'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}

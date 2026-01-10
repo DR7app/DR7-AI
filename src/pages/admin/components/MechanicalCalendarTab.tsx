@@ -500,7 +500,7 @@ export default function MechanicalCalendarTab() {
                   <div className="mt-4 flex justify-end">
                     <button
                       onClick={() => setEditingBooking(booking)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm font-bold rounded transition-colors"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm font-bold rounded-full transition-colors"
                     >
                       Modifica
                     </button>
@@ -511,7 +511,7 @@ export default function MechanicalCalendarTab() {
 
             <button
               onClick={() => setSelectedCell(null)}
-              className="mt-6 w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-bold py-2 px-4 rounded transition-colors"
+              className="mt-6 w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-bold py-2 px-4 rounded-full transition-colors"
             >
               Chiudi
             </button>

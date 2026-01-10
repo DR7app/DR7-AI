@@ -378,7 +378,7 @@ export default function CarWashTab() {
             <div className="flex flex-wrap gap-2 pt-4 border-t border-theme-border">
               <button
                 onClick={() => handleEdit(service)}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm rounded transition-colors"
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-sm rounded-full transition-colors"
               >
                 Modifica
               </button>
@@ -394,7 +394,7 @@ export default function CarWashTab() {
               </button>
               <button
                 onClick={() => handleDelete(service.id)}
-                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm rounded transition-colors"
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm rounded-full transition-colors"
               >
                 Elimina
               </button>

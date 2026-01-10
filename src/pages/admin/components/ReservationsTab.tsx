@@ -2766,14 +2766,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(false)}
-                    className={`px-4 py-2 rounded ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                    className={`px-4 py-2 rounded-full ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                   >
                     Seleziona Cliente
                   </button>
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(true)}
-                    className={`px-4 py-2 rounded ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                    className={`px-4 py-2 rounded-full ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                   >
                     Nuovo Cliente
                   </button>
@@ -3022,14 +3022,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(false)}
-                      className={`px-4 py-2 rounded ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                     >
                       Seleziona Cliente
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(true)}
-                      className={`px-4 py-2 rounded ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
                     >
                       Nuovo Guidatore
                     </button>
@@ -3484,7 +3484,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <a
                           href={`mailto:${booking.customer_email || ''}?subject=${encodeURIComponent(`Contratto Noleggio DR7 - ${booking.vehicle_name}`)}&body=${encodeURIComponent(`Gentile Cliente,\n\nEcco il link al tuo contratto di noleggio:\n${booking.contract_url}\n\nGrazie per aver scelto DR7 Empire.`)}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="px-3 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 rounded-full text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                          className="px-3 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 rounded-full text-theme-text-primary text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1"
                           title="Invia Email"
                         >
                           <span>✉️</span> Email
@@ -3619,7 +3619,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
                                 disabled={generatingContract}
-                                className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
+                                className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap disabled:opacity-50"
                               >
                                 {generatingContract ? '...' : 'Contratto'}
                               </button>
@@ -3632,13 +3632,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
-                                className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
+                                className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                               >
                                 Modifica
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                                className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
+                                className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                               >
                                 Cancella
                               </button>
@@ -3646,13 +3646,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           )}
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedBookingForPenalty(booking); setPenaltyModalOpen(true) }}
-                            className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
+                            className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                           >
                             Penali
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
-                            className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
+                            className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                           >
                             Elimina
                           </button>

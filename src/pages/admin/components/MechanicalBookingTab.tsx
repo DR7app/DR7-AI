@@ -345,7 +345,7 @@ export default function MechanicalBookingTab() {
                         setEditingId(booking.id)
                         setShowForm(true)
                       }}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-xs rounded transition-colors"
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       Modifica
                     </button>
@@ -358,7 +358,7 @@ export default function MechanicalBookingTab() {
                     </button>
                     <button
                       onClick={() => handleDelete(booking.id)}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-xs rounded transition-colors"
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       Elimina
                     </button>

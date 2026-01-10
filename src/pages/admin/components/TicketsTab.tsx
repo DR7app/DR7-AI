@@ -144,7 +144,7 @@ export default function TicketsTab() {
       <div className="mb-6 flex gap-2">
         <button
           onClick={() => setViewMode('commercial')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'commercial'
+          className={`px-4 py-2 rounded-full font-medium transition-colors ${viewMode === 'commercial'
             ? 'bg-white text-black'
             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
             }`}
@@ -153,7 +153,7 @@ export default function TicketsTab() {
         </button>
         <button
           onClick={() => setViewMode('gift_cards')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'gift_cards'
+          className={`px-4 py-2 rounded-full font-medium transition-colors ${viewMode === 'gift_cards'
             ? 'bg-white text-black'
             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
             }`}
