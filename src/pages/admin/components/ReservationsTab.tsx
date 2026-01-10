@@ -3494,7 +3494,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
                           disabled={generatingInvoice}
-                          className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
+                          className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                           title="Genera Fattura"
                         >
                           {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
@@ -3513,7 +3513,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {booking.status !== 'cancelled' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                        className="px-3 py-1 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-theme-text-primary text-sm transition-colors whitespace-nowrap"
                       >
                         Cancella
                       </button>
@@ -3638,7 +3638,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                                className="px-3 py-1 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
+                                className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
                               >
                                 Cancella
                               </button>
