@@ -1651,7 +1651,7 @@ export default function CustomersTab() {
       <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="">
+            <thead className="bg-theme-bg-tertiary">
               <tr>
                 <th className="px-4 py-3 text-left">
                   <input
