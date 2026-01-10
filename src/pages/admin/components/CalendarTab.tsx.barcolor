@@ -349,20 +349,15 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   {/* 3. Rendered Events Layer */}
                   <div className="absolute inset-0 z-20 pointer-events-none">
                     {row.events.map(evt => {
-                      // STRICT COLOR CONTRACT (Premium Dark Theme)
-                      // RED = Customer booking (clean, modern red)
-                      // ORANGE = Unavailable (muted orange)
+                      // Styling
+                      const isPending = evt.booking.status === 'pending'
+                      const isConfirmed = evt.booking.status === 'confirmed'
 
-                      let bgClass = "bg-red-500"
-                      let borderClass = "border-red-400/30"
+                      let bgClass = "bg-gray-600"
+                      let borderClass = "border-gray-500"
 
-                      // Check if this is an unavailability/mechanic booking
-                      const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
-
-                      if (isUnavailability) {
-                        bgClass = "bg-orange-500/80"
-                        borderClass = "border-orange-400/30"
-                      }
+                      if (isPending) { bgClass = "bg-yellow-600/90"; borderClass = "border-yellow-400/50" }
+                      else if (isConfirmed) { bgClass = "bg-green-600/90"; borderClass = "border-green-400/50" }
 
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
@@ -395,20 +390,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {evt.booking.customer_name || 'Cliente Sconosciuto'} • {(() => {
-                                // Calculate drop-off day: if end time is exactly 00:00, use previous day
-                                const endHours = evt.endLocal.getHours()
-                                const endMinutes = evt.endLocal.getMinutes()
-                                if (endHours === 0 && endMinutes === 0) {
-                                  // Exactly midnight - drop-off is previous day
-                                  const prevDay = new Date(evt.endLocal)
-                                  prevDay.setDate(prevDay.getDate() - 1)
-                                  return prevDay.getDate()
-                                } else {
-                                  // Any other time - drop-off is this day
-                                  return evt.endLocal.getDate()
-                                }
-                              })()}
+                              {evt.booking.customer_name || 'Cliente Sconosciuto'} u2022 {evt.endDayIndex0 + 1}
                             </span>
 
                           </div>

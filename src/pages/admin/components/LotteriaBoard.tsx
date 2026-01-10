@@ -592,6 +592,7 @@ const LotteriaBoard: React.FC = () => {
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [availableClients, setAvailableClients] = useState<Array<{ email: string; full_name: string }>>([]);
   const [loadingClients, setLoadingClients] = useState(false);
+  const [clientSearchFilter, setClientSearchFilter] = useState('');
 
   const fetchSoldTickets = async () => {
     try {
@@ -1307,6 +1308,7 @@ const LotteriaBoard: React.FC = () => {
   const handleOpenEmailEditor = async () => {
     setShowEmailEditorModal(true);
     setSelectedRecipients([]); // Reset selection when opening
+    setClientSearchFilter(''); // Reset search filter
     await Promise.all([
       handleLoadEmailTemplate(),
       handleLoadAvailableClients()
@@ -2028,24 +2030,53 @@ const LotteriaBoard: React.FC = () => {
                     <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                       Invia a:
                     </label>
-                    <div className="space-y-2">
-                      <select
-                        multiple
-                        value={selectedRecipients}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions, option => option.value);
-                          setSelectedRecipients(selected);
-                        }}
-                        className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors min-h-[120px]"
-                      >
-                        {availableClients.map((client) => (
-                          <option key={client.email} value={client.email} className="py-1">
-                            {client.full_name} ({client.email})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex items-center justify-between text-xs text-theme-text-muted">
-                        <span>
+                    <div className="space-y-3">
+                      {/* Search Input */}
+                      <input
+                        type="text"
+                        placeholder="🔍 Cerca cliente per nome o email..."
+                        value={clientSearchFilter}
+                        onChange={(e) => setClientSearchFilter(e.target.value)}
+                        className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+                      />
+
+                      {/* Client List with Checkboxes */}
+                      <div className="border border-theme-border rounded-lg bg-theme-bg-tertiary max-h-[200px] overflow-y-auto">
+                        {availableClients
+                          .filter(client => {
+                            if (!clientSearchFilter.trim()) return true;
+                            const search = clientSearchFilter.toLowerCase();
+                            return client.full_name.toLowerCase().includes(search) ||
+                              client.email.toLowerCase().includes(search);
+                          })
+                          .map((client) => (
+                            <label
+                              key={client.email}
+                              className="flex items-center px-4 py-2 hover:bg-theme-bg-hover cursor-pointer border-b border-theme-border last:border-b-0"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedRecipients.includes(client.email)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedRecipients([...selectedRecipients, client.email]);
+                                  } else {
+                                    setSelectedRecipients(selectedRecipients.filter(email => email !== client.email));
+                                  }
+                                }}
+                                className="mr-3 w-4 h-4 accent-dr7-gold"
+                              />
+                              <div className="flex-1 text-sm">
+                                <div className="text-theme-text-primary font-medium">{client.full_name}</div>
+                                <div className="text-theme-text-muted text-xs">{client.email}</div>
+                              </div>
+                            </label>
+                          ))}
+                      </div>
+
+                      {/* Status and Actions */}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-theme-text-muted">
                           {selectedRecipients.length === 0
                             ? `Nessun cliente selezionato - invierà a TUTTI i ${availableClients.length} clienti`
                             : `${selectedRecipients.length} cliente${selectedRecipients.length > 1 ? 'i' : ''} selezionat${selectedRecipients.length > 1 ? 'i' : 'o'}`
@@ -2060,10 +2091,6 @@ const LotteriaBoard: React.FC = () => {
                           </button>
                         )}
                       </div>
-                      <p className="text-xs text-theme-text-muted">
-                        💡 Tieni premuto Ctrl (Windows) o Cmd (Mac) per selezionare più clienti.
-                        Lascia vuoto per inviare a tutti.
-                      </p>
                     </div>
                   </div>
 

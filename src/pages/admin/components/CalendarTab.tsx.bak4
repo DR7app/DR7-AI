@@ -48,8 +48,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Scroll Sync Refs
   const gridRef = useRef<HTMLDivElement>(null)
@@ -207,10 +207,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
 
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-[#0a0a0b] rounded-xl border border-white/5 shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-200px)] bg-theme-bg-secondary rounded-xl border border-theme-border shadow-2xl overflow-hidden">
 
       {/* 1. Control Bar */}
-      <div className="flex justify-between items-center p-4 bg-[#0d0d0e] border-b border-white/5 z-50 shadow-sm">
+      <div className="flex justify-between items-center p-4 bg-theme-bg-secondary border-b border-theme-border z-50 shadow-sm">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
@@ -241,9 +241,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
       <div className="flex-1 overflow-auto relative flex flex-col w-full" ref={gridRef}>
 
         {/* A. Sticky Header Row */}
-        <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-md min-w-max h-[42px] border-b border-white/5">
+        <div className="flex sticky top-0 z-[40] bg-theme-bg-secondary shadow-md min-w-max h-[42px] border-b border-theme-border/50">
           {/* Header Spacer for Left Column */}
-          <div className="sticky left-0 w-[300px] z-[41] bg-[#0d0d0e] border-r border-white/5 flex items-center px-4 font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+          <div className="sticky left-0 w-[300px] z-[41] bg-theme-bg-secondary border-r border-theme-border/50 flex items-center px-4 font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
             Veicolo / Targa
           </div>
 
@@ -259,9 +259,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                 <div
                   key={day}
                   className={`
-                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
-                     ${isToday ? 'bg-amber-500/10 text-amber-400 font-bold' : ''}
-                     ${(isHol || isSun) && !isToday ? 'bg-white/[0.02] text-gray-500' : ''}
+                     flex flex-col items-center justify-center border-r border-theme-border/30 relative
+                     ${isToday ? 'bg-dr7-gold/10 text-dr7-gold font-bold' : ''}
+                     ${(isHol || isSun) && !isToday ? 'bg-red-500/5 text-red-400' : ''}
                    `}
                   style={{ width: CELL_WIDTH }}
                 >
@@ -293,8 +293,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
                       {row.vehicle.category && (
                         <span className={`text-[8px] px-1 rounded uppercase font-bold tracking-wide ${row.vehicle.category === 'exotic' ? 'bg-purple-900/50 text-purple-200' :
-                          row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
-                            'bg-orange-900/50 text-orange-200'
+                            row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
+                              'bg-orange-900/50 text-orange-200'
                           }`}>{row.vehicle.category.substring(0, 1)}</span>
                       )}
                     </div>
@@ -320,9 +320,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                         <div
                           key={day}
                           className={`
-                                border-r border-white/[0.02] h-full
-                                ${isToday ? 'bg-amber-500/5' : ''}
-                                ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
+                                border-r border-theme-border/10 h-full
+                                ${isToday ? 'bg-dr7-gold/5' : ''}
+                                ${isRedDay && !isToday ? 'bg-red-500/5' : ''}
                               `}
                           style={{ width: CELL_WIDTH }}
                         />
@@ -349,24 +349,27 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   {/* 3. Rendered Events Layer */}
                   <div className="absolute inset-0 z-20 pointer-events-none">
                     {row.events.map(evt => {
-                      // STRICT COLOR CONTRACT (Premium Dark Theme)
-                      // RED = Customer booking (clean, modern red)
-                      // ORANGE = Unavailable (muted orange)
-
-                      let bgClass = "bg-red-500"
-                      let borderClass = "border-red-400/30"
-
+                      // STRICT COLOR CONTRACT (Non-negotiable)
+                      // RED = Customer booking (all statuses)
+                      // ORANGE = Unavailable (mechanic, internal block)
+                      // GREEN = Availability (background only, not bars)
+                      
+                      let bgClass = "bg-red-600/90"
+                      let borderClass = "border-red-400/50"
+                      
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
-
+                      
                       if (isUnavailability) {
-                        bgClass = "bg-orange-500/80"
-                        borderClass = "border-orange-400/30"
+                        bgClass = "bg-orange-600/90"
+                        borderClass = "border-orange-400/50"
                       }
 
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
                       // Markers text
+                      const startLabel = formatRomeDate(evt.startLocal, { hour: '2-digit', minute: '2-digit' })
+                      const endLabel = formatRomeDate(evt.endLocal, { hour: '2-digit', minute: '2-digit' })
 
                       // Visual Width Logic: At least 1 cell, but real width is strictly calc'd
                       // If strict width is 0 (e.g. same day small hours?), force min width
@@ -386,31 +389,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                             top: top,
                             height: BAR_HEIGHT,
                           }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            // TODO: Properly open booking edit modal
-                            // For now we just alert, but in real integration this should open the modal
-                            setSelectedBooking(evt.booking)
-                          }}
-                        >
-                          <div className="px-2 flex flex-col justify-center h-full">
-                            <span className="font-bold text-[10px] truncate leading-tight">
-                              {evt.booking.customer_name || 'Cliente Sconosciuto'} • {(() => {
-                                // Calculate drop-off day: if end time is exactly 00:00, use previous day
-                                const endHours = evt.endLocal.getHours()
-                                const endMinutes = evt.endLocal.getMinutes()
-                                if (endHours === 0 && endMinutes === 0) {
-                                  // Exactly midnight - drop-off is previous day
-                                  const prevDay = new Date(evt.endLocal)
-                                  prevDay.setDate(prevDay.getDate() - 1)
-                                  return prevDay.getDate()
-                                } else {
-                                  // Any other time - drop-off is this day
-                                  return evt.endLocal.getDate()
-                                }
-                              })()}
-                            </span>
-
                           </div>
 
                           {/* Left Edge Marker (Pickup) */}
@@ -473,14 +451,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
         </div>
 
       </div>
-
-      {/* Booking Details Panel */}
-      {selectedBooking && (
-        <BookingDetailsPanel
-          booking={selectedBooking}
-          onClose={() => setSelectedBooking(null)}
-        />
-      )}
     </div>
   )
 }
