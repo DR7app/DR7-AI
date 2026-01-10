@@ -2148,7 +2148,12 @@ const LotteriaBoard: React.FC = () => {
                 disabled={savingTemplate || loadingTemplate || sendingEmails}
                 className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {sendingEmails ? 'Invio in corso...' : 'Invia a Tutti'}
+                {sendingEmails
+                  ? 'Invio in corso...'
+                  : selectedRecipients.length > 0
+                    ? `Invia a ${selectedRecipients.length} Selezionat${selectedRecipients.length > 1 ? 'i' : 'o'}`
+                    : 'Invia a Tutti'
+                }
               </button>
             </div>
           </div>
