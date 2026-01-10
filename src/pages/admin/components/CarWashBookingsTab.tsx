@@ -30,6 +30,8 @@ interface CarWashBooking {
   customer_cap?: string
   customer_provincia?: string
   service_name: string
+  vehicle_name?: string
+  vehicle_plate?: string
   appointment_date: string
   appointment_time: string
   price_total: number
@@ -1326,15 +1328,15 @@ export default function CarWashBookingsTab() {
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         {booking.customer_name === 'Lavaggio Rientro' ? (
                           <>
-                            <div className="font-medium text-blue-400">Lavaggio Rientro</div>
-                            {booking.booking_details?.vehicleName && (
+                            <div className="font-medium">Lavaggio Rientro</div>
+                            {booking.vehicle_name && (
                               <div className="text-xs text-theme-text-primary mt-1">
-                                🚗 {booking.booking_details.vehicleName}
+                                🚗 {booking.vehicle_name}
                               </div>
                             )}
-                            {booking.booking_details?.targa && (
+                            {booking.vehicle_plate && (
                               <div className="text-xs text-dr7-gold font-mono">
-                                🔖 {booking.booking_details.targa}
+                                🔖 {booking.vehicle_plate}
                               </div>
                             )}
                           </>
