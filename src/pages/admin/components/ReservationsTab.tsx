@@ -864,6 +864,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .from('bookings')
         .select('customer_name, customer_email, customer_phone, user_id, booked_at, booking_details')
         .order('booked_at', { ascending: false })
+        .range(0, 9999)
 
       if (bookingsCustomerError) {
         console.error('Failed to load customers from bookings:', bookingsCustomerError)
@@ -920,6 +921,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .from('customers_extended')
         .select('*')
         .order('created_at', { ascending: false })
+        .range(0, 9999)
 
       if (customersExtendedError) {
         console.error('Failed to load customers_extended:', customersExtendedError)
@@ -961,6 +963,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .from('customers')
         .select('*')
         .order('created_at', { ascending: false })
+        .range(0, 9999)
 
       if (!customersTableError && customersTableData) {
         customersTableData.forEach(c => {
@@ -973,7 +976,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
       const customersArray = Array.from(customerMap.values())
-      console.log('CUSTOMERS LOADED:', customersArray.length, customersArray)
+      console.log('✅ CUSTOMERS LOADED:', customersArray.length, customersArray)
+      console.log('📊 Customer sources breakdown:', {
+        fromBookings: customerMap.size - (customersExtendedData?.length || 0),
+        fromCustomersExtended: customersExtendedData?.length || 0,
+        fromLegacyCustomers: customersTableData?.length || 0,
+        totalUnique: customersArray.length
+      })
 
       // Debug: Check if Riccardo Pilia is in the list
       const riccardoPilia = customersArray.find(c =>

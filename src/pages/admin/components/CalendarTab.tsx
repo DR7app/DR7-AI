@@ -291,10 +291,16 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   const parseLocalDate = (dateString: string): Date => {
     if (!dateString) return new Date()
 
+    // 1. If it's a simple YYYY-MM-DD string, parse it as local midnight
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
+      const [y, m, d] = dateString.trim().split('-').map(Number)
+      return new Date(y, m - 1, d, 0, 0, 0, 0)
+    }
+
     const d = new Date(dateString)
     if (isNaN(d.getTime())) return new Date()
 
-    // Extract components in Europe/Rome timezone
+    // 2. Extract components specifically in Europe/Rome
     // This ensures "2026-01-07T23:00:00Z" becomes Jan 8 in Rome (not Jan 7)
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Europe/Rome',
