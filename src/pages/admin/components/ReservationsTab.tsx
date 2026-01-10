@@ -264,7 +264,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
-export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleName?: string; pickupDate?: Date } | null; onDataConsumed?: () => void }) {
+export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleName?: string; pickupDate?: Date; bookingId?: string } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -457,8 +457,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Handle initial data from Calendar click
   useEffect(() => {
     if (initialData && vehicles.length > 0) {
-      const { vehicleName, pickupDate } = initialData
+      const { vehicleName, pickupDate, bookingId } = initialData
 
+      // If bookingId is provided, load that booking in edit mode
+      if (bookingId) {
+        const booking = bookings.find(b => b.id === bookingId)
+        if (booking) {
+          console.log('📝 Opening booking in edit mode:', bookingId)
+          handleEditBooking(booking)
+          // Notify parent to clear data
+          if (onDataConsumed) onDataConsumed()
+          return
+        }
+      }
+
+      // Otherwise, create new booking with prefilled data
       // Find vehicle by name (rough match)
       const vehicle = vehicles.find(v => v.display_name === vehicleName)
 
@@ -486,7 +499,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (onDataConsumed) onDataConsumed()
       }
     }
-  }, [initialData, vehicles])
+  }, [initialData, vehicles, bookings])
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
   const [newCustomerData, setNewCustomerData] = useState({
