@@ -247,9 +247,20 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                         <p className="text-theme-text-muted">{editedVehicle.plate || 'No Targa'} • {editedVehicle.current_km?.toLocaleString() || 0} km</p>
                     </div>
                 </div>
-                <Button onClick={handleSave} disabled={saving}>
-                    {saving ? 'Salvataggio...' : 'Salva Modifiche'}
-                </Button>
+                <div className="flex items-center gap-3">
+                    <Button onClick={handleSave} disabled={saving}>
+                        {saving ? 'Salvataggio...' : 'Salva Modifiche'}
+                    </Button>
+                    <button
+                        onClick={onBack}
+                        className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-2"
+                        title="Chiudi"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* Internal Navigation */}
