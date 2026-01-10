@@ -492,7 +492,7 @@ export default function InvoicesTab() {
         </form>
       )}
 
-      <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">

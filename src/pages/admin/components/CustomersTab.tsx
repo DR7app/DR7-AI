@@ -913,7 +913,7 @@ export default function CustomersTab() {
               </div>
 
               {/* Membership Section */}
-              <div className="bg-theme-bg-tertiary rounded-full p-4 border border-dr7-gold/20 mb-4">
+              <div className="bg-theme-bg-tertiary rounded-lg p-4 border border-dr7-gold/20 mb-4">
                 <h4 className="text-sm font-semibold text-dr7-gold mb-3 border-b border-theme-border pb-2 flex justify-between items-center">
                   <span>Pacchetto Membership</span>
                   {(viewingCustomerDetails as any).active_membership && (
@@ -965,7 +965,7 @@ export default function CustomersTab() {
 
               {/* Persona Fisica Details */}
               {viewingCustomerDetails.tipo_cliente === 'persona_fisica' && (
-                <div className="bg-theme-bg-tertiary rounded-full p-4">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Persona Fisica
                   </h4>
@@ -1073,7 +1073,7 @@ export default function CustomersTab() {
 
               {/* Azienda Details */}
               {viewingCustomerDetails.tipo_cliente === 'azienda' && (
-                <div className="bg-theme-bg-tertiary rounded-full p-4">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Azienda
                   </h4>
@@ -1155,7 +1155,7 @@ export default function CustomersTab() {
 
               {/* Pubblica Amministrazione Details */}
               {viewingCustomerDetails.tipo_cliente === 'pubblica_amministrazione' && (
-                <div className="bg-theme-bg-tertiary rounded-full p-4">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Pubblica Amministrazione
                   </h4>
@@ -1185,7 +1185,7 @@ export default function CustomersTab() {
               )}
 
               {/* Common Contact Information */}
-              <div className="bg-theme-bg-tertiary rounded-full p-4">
+              <div className="bg-theme-bg-tertiary rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                   Informazioni di Contatto
                 </h4>
@@ -1216,7 +1216,7 @@ export default function CustomersTab() {
               </div>
 
               {/* Metadata */}
-              <div className="bg-theme-bg-tertiary rounded-full p-4">
+              <div className="bg-theme-bg-tertiary rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                   Metadata
                 </h4>
@@ -1239,7 +1239,7 @@ export default function CustomersTab() {
 
               {/* Note */}
               {(viewingCustomerDetails.notes || (viewingCustomerDetails.metadata as any)?.note || (viewingCustomerDetails as any).note) && (
-                <div className="bg-theme-bg-tertiary rounded-full p-4">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Note
                   </h4>
@@ -1284,7 +1284,7 @@ export default function CustomersTab() {
               </div>
               <div className="p-6 space-y-6">
                 {/* Customer Info */}
-                <div className="bg-theme-bg-tertiary rounded-full p-4">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Informazioni Cliente</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between">
@@ -1299,7 +1299,7 @@ export default function CustomersTab() {
                 </div>
 
                 {/* Uploaded Documents */}
-                <div className="bg-theme-bg-tertiary rounded-full p-4">
+                <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Documenti Caricati</h4>
                   {loadingDocuments ? (
                     <div className="text-center py-4">
@@ -1543,7 +1543,7 @@ export default function CustomersTab() {
 
                 {/* Note */}
                 {viewingDocuments.notes && (
-                  <div className="bg-theme-bg-tertiary rounded-full p-4">
+                  <div className="bg-theme-bg-tertiary rounded-lg p-4">
                     <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">Note</h4>
                     <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{viewingDocuments.notes}</p>
                   </div>
@@ -1647,7 +1647,7 @@ export default function CustomersTab() {
 
 
 
-      <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">

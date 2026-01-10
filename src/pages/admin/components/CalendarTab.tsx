@@ -534,7 +534,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       {/* Search Results - Show matching bookings */}
       {searchQuery && (
-        <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
+        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
           <h3 className="text-lg font-bold text-theme-text-primary mb-3">
             Risultati ricerca: "{searchQuery}"
           </h3>
@@ -595,7 +595,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       {/* Month Grid */}
       {vehicles.length > 0 && (
-        <div className="bg-theme-bg-secondary rounded-full p-4 lg:p-6 overflow-x-auto">
+        <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
           <h3 className="text-lg font-bold text-theme-text-primary mb-4 flex items-center gap-2">
             <span className="text-sm text-theme-text-muted">Tutti i Veicoli ({vehicles.length})</span>
           </h3>
@@ -855,7 +855,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
       {
         vehicles.length === 0 && (
-          <div className="bg-theme-bg-secondary rounded-full p-8 text-center">
+          <div className="bg-theme-bg-secondary rounded-lg p-8 text-center">
             <p className="text-theme-text-muted">Nessun veicolo trovato</p>
           </div>
         )
@@ -912,7 +912,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
                       {/* Vehicle selection dropdown */}
                       {hasAlternatives && (
-                        <div className="mb-4 p-3 bg-theme-bg-secondary/50 rounded-full border border-theme-border">
+                        <div className="mb-4 p-3 bg-theme-bg-secondary/50 rounded-lg border border-theme-border">
                           <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                             Veicolo Assegnato (Targa)
                           </label>
@@ -1022,7 +1022,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
             onClick={() => setSelectedUnavailability(null)}
           >
             <div
-              className="bg-theme-bg-secondary rounded-full max-w-lg w-full border border-theme-border shadow-2xl"
+              className="bg-theme-bg-secondary rounded-lg max-w-lg w-full border border-theme-border shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6 border-b border-theme-border">
@@ -1043,7 +1043,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
               <div className="p-6 space-y-4">
                 {/* Vehicle Name */}
-                <div className="bg-theme-bg-tertiary/50 rounded-full p-4">
+                <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
                   <p className="text-sm text-theme-text-muted mb-1">Veicolo</p>
                   <p className="text-lg font-semibold text-theme-text-primary">
                     {selectedUnavailability.display_name}
@@ -1066,7 +1066,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                 {/* Date Range */}
                 {selectedUnavailability.metadata?.unavailable_from && selectedUnavailability.metadata?.unavailable_until && (
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-theme-bg-tertiary/50 rounded-full p-4">
+                    <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
                       <p className="text-sm text-theme-text-muted mb-1">Dal</p>
                       <p className="text-theme-text-primary font-medium">
                         {parseLocalDate(selectedUnavailability.metadata.unavailable_from).toLocaleDateString('it-IT', {
@@ -1082,7 +1082,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                       )}
                     </div>
 
-                    <div className="bg-theme-bg-tertiary/50 rounded-full p-4">
+                    <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
                       <p className="text-sm text-theme-text-muted mb-1">Al</p>
                       <p className="text-theme-text-primary font-medium">
                         {parseLocalDate(selectedUnavailability.metadata.unavailable_until).toLocaleDateString('it-IT', {
@@ -1102,7 +1102,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
 
                 {/* Duration */}
                 {selectedUnavailability.metadata?.unavailable_from && selectedUnavailability.metadata?.unavailable_until && (
-                  <div className="bg-theme-bg-tertiary/50 rounded-full p-4">
+                  <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
                     <p className="text-sm text-theme-text-muted mb-1">Durata</p>
                     <p className="text-theme-text-primary font-medium">
                       {(() => {

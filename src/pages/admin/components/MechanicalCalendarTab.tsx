@@ -205,7 +205,7 @@ export default function MechanicalCalendarTab() {
   return (
     <div className="space-y-6">
       {/* Header Controls */}
-      <div className="bg-theme-bg-secondary rounded-full p-3 lg:p-4">
+      <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap flex-1">
             <h2 className="text-lg font-bold text-theme-text-primary">Calendario Meccanica</h2>
@@ -292,7 +292,7 @@ export default function MechanicalCalendarTab() {
 
       {/* Search Results */}
       {searchQuery && (
-        <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
+        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
           <h3 className="text-lg font-bold text-theme-text-primary mb-3">
             Risultati ricerca: "{searchQuery}"
           </h3>
@@ -345,7 +345,7 @@ export default function MechanicalCalendarTab() {
       )}
 
       {/* Battleship-style Calendar Grid */}
-      <div className="bg-theme-bg-secondary rounded-full p-4 lg:p-6 overflow-x-auto">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
         <div className="min-w-max">
           <table className="w-full border-collapse">
             <thead>

@@ -743,7 +743,7 @@ export default function VehiclesTab() {
       {/* Three Column Layout: Urban, Exotic, and Aziendali */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Urban Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="bg-cyan-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-cyan-900 text-cyan-200 rounded text-sm">Urban</span>
@@ -841,7 +841,7 @@ export default function VehiclesTab() {
         </div>
 
         {/* Exotic Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="bg-purple-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Exotic Supercars</span>
@@ -939,7 +939,7 @@ export default function VehiclesTab() {
         </div>
 
         {/* Aziendali Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="bg-orange-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Aziendali</span>

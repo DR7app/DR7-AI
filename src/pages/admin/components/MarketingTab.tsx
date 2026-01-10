@@ -352,7 +352,7 @@ export default function MarketingTab() {
             </div>
 
             {/* Customers List Table */}
-            <div className="bg-theme-bg-tertiary rounded-full overflow-hidden border border-theme-border">
+            <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden border border-theme-border">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-theme-text-muted">
                         <thead className="bg-theme-bg-secondary/50 text-theme-text-secondary uppercase font-medium">

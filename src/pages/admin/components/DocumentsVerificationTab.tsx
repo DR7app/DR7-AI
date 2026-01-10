@@ -208,7 +208,7 @@ export default function DocumentsVerificationTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-theme-text-primary">Verifica Documenti Utenti</h2>
@@ -246,7 +246,7 @@ export default function DocumentsVerificationTab() {
       </div>
 
       {/* Filter Buttons */}
-      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setFilterStatus('all')}
@@ -292,7 +292,7 @@ export default function DocumentsVerificationTab() {
         {Object.entries(documentsByUser).map(([userId, userDocs]) => {
           const user = userDocs[0].user
           return (
-            <div key={userId} className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+            <div key={userId} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
               {/* User Header */}
               <div className="bg-theme-bg-tertiary p-4 border-b border-theme-border">
                 <div className="flex flex-col lg:flex-row lg:justify-between gap-4">
@@ -412,7 +412,7 @@ export default function DocumentsVerificationTab() {
         })}
 
         {Object.keys(documentsByUser).length === 0 && (
-          <div className="bg-theme-bg-secondary rounded-full border border-theme-border p-8 text-center">
+          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-8 text-center">
             <p className="text-gray-500">
               {filterStatus === 'all'
                 ? 'Nessun documento caricato'

@@ -100,7 +100,7 @@ export default function LavaggioTab() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-theme-bg-secondary rounded-full p-4">
+            <div className="bg-theme-bg-secondary rounded-lg p-4">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold text-theme-text-primary">Lavaggi Oggi</h2>
                     <div className="text-dr7-gold font-bold text-lg">
@@ -118,11 +118,11 @@ export default function LavaggioTab() {
             </div>
 
             {bookings.length === 0 ? (
-                <div className="bg-theme-bg-secondary rounded-full p-8 text-center">
+                <div className="bg-theme-bg-secondary rounded-lg p-8 text-center">
                     <p className="text-theme-text-muted">Nessun lavaggio previsto per oggi</p>
                 </div>
             ) : (
-                <div className="bg-theme-bg-secondary rounded-full overflow-hidden">
+                <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-theme-bg-tertiary">

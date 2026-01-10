@@ -229,7 +229,7 @@ export default function DailyCalendarTab() {
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="bg-theme-bg-secondary rounded-full p-3 border border-theme-border shadow-lg">
+            <div className="bg-theme-bg-secondary rounded-lg p-3 border border-theme-border shadow-lg">
                 <div className="flex justify-between items-center mb-3">
                     <h2 className="text-xl font-bold text-theme-text-primary">Calendario Giornaliero</h2>
                     <div className="flex gap-2">
@@ -264,7 +264,7 @@ export default function DailyCalendarTab() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="bg-theme-bg-secondary rounded-full border border-theme-border shadow-lg overflow-x-auto">
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-x-auto">
                 {/* Header Row with Categories */}
                 <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-theme-border bg-theme-bg-tertiary sticky top-0">
                     <div className="p-2 text-xs font-bold text-theme-text-muted">ORA</div>

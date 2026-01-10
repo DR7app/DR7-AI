@@ -280,7 +280,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
             </div>
 
             {/* Content Area */}
-            <div className="bg-theme-bg-secondary rounded-full p-6 border border-theme-border min-h-[400px]">
+            <div className="bg-theme-bg-secondary rounded-lg p-6 border border-theme-border min-h-[400px]">
                 {activeTab === 'dashboard' && (
                     <div>
                         <h3 className="text-xl text-theme-text-primary mb-4">Cruscotto</h3>
@@ -325,11 +325,11 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                         )}
 
                         <div className="mt-6 grid grid-cols-2 gap-4">
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <p className="text-theme-text-muted text-sm">KM Attuali</p>
                                 <p className="text-2xl font-bold text-theme-text-primary">{editedVehicle.current_km?.toLocaleString() || 0}</p>
                             </div>
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <p className="text-theme-text-muted text-sm">Stato</p>
                                 <p className="text-2xl font-bold text-theme-text-primary capitalize">{editedVehicle.status}</p>
                             </div>
@@ -343,7 +343,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
                         <div className="space-y-6">
                             {/* Current KM */}
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <label className="block text-theme-text-secondary font-medium mb-2">KM Attuali</label>
                                 <input
                                     type="number"
@@ -354,7 +354,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             </div>
 
                             {/* Service (Tagliando) */}
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Tagliando</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -384,7 +384,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             </div>
 
                             {/* Tires (Gomme) */}
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Gomme</h4>
                                 <div className="grid grid-cols-3 gap-4">
                                     <div>
@@ -424,7 +424,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             </div>
 
                             {/* Brakes (Pastiglie) */}
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Pastiglie Freni</h4>
                                 <div className="grid grid-cols-3 gap-4">
                                     <div>
@@ -473,7 +473,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
                         <div className="space-y-6">
                             {/* Basic Info */}
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Informazioni Base</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -520,7 +520,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             </div>
 
                             {/* Administrative Dates */}
-                            <div className="bg-theme-bg-tertiary rounded-full p-4">
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Scadenze Amministrative</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>

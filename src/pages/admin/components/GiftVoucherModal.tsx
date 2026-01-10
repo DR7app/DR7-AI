@@ -98,7 +98,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
 
                 <div className="p-6 space-y-6">
                     {/* Channel Selection */}
-                    <div className="bg-theme-bg-tertiary rounded-full p-4">
+                    <div className="bg-theme-bg-tertiary rounded-lg p-4">
                         <label className="block text-sm font-medium text-theme-text-secondary mb-3">Canale di Invio</label>
                         <div className="flex gap-4">
                             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${channel === 'email' ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border-light hover:bg-theme-bg-hover'}`}>
@@ -127,7 +127,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                     </div>
 
                     {/* Selected Customers */}
-                    <div className="bg-theme-bg-tertiary rounded-full p-4">
+                    <div className="bg-theme-bg-tertiary rounded-lg p-4">
                         <h3 className="text-sm font-semibold text-theme-text-secondary mb-2">
                             Destinatari ({selectedCustomers.length})
                         </h3>

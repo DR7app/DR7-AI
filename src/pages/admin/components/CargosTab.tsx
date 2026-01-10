@@ -369,7 +369,7 @@ export default function CargosTab() {
                     <p className="text-theme-text-muted text-sm">Portale Polizia di Stato</p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="flex bg-theme-bg-tertiary rounded-full p-1 border border-theme-border">
+                    <div className="flex bg-theme-bg-tertiary rounded-lg p-1 border border-theme-border">
                         <button
                             onClick={() => setActiveSubTab('fines')}
                             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black shadow-sm' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
@@ -516,7 +516,7 @@ export default function CargosTab() {
                     {/* Results Area */}
                     <div className="lg:col-span-2">
                         {searchResult ? (
-                            <div className="bg-theme-bg-tertiary rounded-full border border-theme-border overflow-hidden">
+                            <div className="bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
                                 <div className="p-6 border-b border-theme-border bg-theme-bg-tertiary/50">
                                     <div className="flex justify-between items-start">
                                         <div>
@@ -617,7 +617,7 @@ export default function CargosTab() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-full border border-theme-border border-dashed text-gray-500">
+                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-lg border border-theme-border border-dashed text-gray-500">
                                 <span className="text-4xl mb-4">👮‍♂️</span>
                                 <p className="text-lg font-medium">In attesa di ricerca</p>
                                 <p className="text-sm max-w-md text-center mt-2">

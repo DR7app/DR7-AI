@@ -286,7 +286,7 @@ export default function MechanicalBookingTab() {
       />
 
       {/* Bookings Table */}
-      <div className="bg-theme-bg-secondary rounded-full overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
         <table className="w-full">
           <thead className="bg-theme-bg-tertiary">
             <tr>

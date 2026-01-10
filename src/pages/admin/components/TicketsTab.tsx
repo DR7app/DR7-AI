@@ -190,7 +190,7 @@ export default function TicketsTab() {
           </div>
 
           {/* Commercial Tickets Table */}
-          <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="">
@@ -305,7 +305,7 @@ export default function TicketsTab() {
           </div>
 
           {/* Gift Cards Table */}
-          <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="">

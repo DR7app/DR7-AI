@@ -312,7 +312,7 @@ export default function UnpaidBookingsTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-theme-text-primary">Prenotazioni Da Saldare</h2>
@@ -350,7 +350,7 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* Filter and Actions */}
-      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row justify-between gap-4">
           <div className="flex gap-2 flex-wrap">
             <button
@@ -425,7 +425,7 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* Bookings Table */}
-      <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">

@@ -172,7 +172,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                             <button
                                                 key={c.id}
                                                 onClick={() => setCustomerId(c.id)}
-                                                className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover rounded-full text-sm text-theme-text-secondary"
+                                                className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover rounded-lg text-sm text-theme-text-secondary"
                                             >
                                                 {c.nome} {c.cognome} <span className="text-gray-500 text-xs">({c.email})</span>
                                             </button>
@@ -282,7 +282,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                     </div>
                                 </div>
                             ) : (
-                                <div className="p-4 bg-theme-bg-secondary/50 rounded-full text-sm text-gray-500 text-center">
+                                <div className="p-4 bg-theme-bg-secondary/50 rounded-lg text-sm text-gray-500 text-center">
                                     Nessun dato OCR disponibile. Esegui OCR o inserisci manualmente.
                                 </div>
                             )}

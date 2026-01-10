@@ -292,7 +292,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
     }
 
     return (
-        <div className="bg-theme-bg-secondary rounded-full w-full border border-theme-border">
+        <div className="bg-theme-bg-secondary rounded-lg w-full border border-theme-border">
             <div className="p-6 border-b border-theme-border flex justify-between items-center">
                 <h3 className="text-xl font-bold text-theme-text-primary">
                     {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione Meccanica'}

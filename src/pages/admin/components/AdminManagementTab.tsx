@@ -96,7 +96,7 @@ export default function AdminManagementTab() {
                 <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Amministratori</h2>
             </div>
 
-            <div className="bg-theme-bg-tertiary rounded-full overflow-hidden">
+            <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden">
                 <table className="w-full">
                     <thead className="bg-gray-700">
                         <tr>

@@ -217,7 +217,7 @@ export default function ReviewsTab() {
                 />
             </div>
 
-            <div className="bg-theme-bg-secondary rounded-full overflow-hidden border border-theme-border shadow-2xl">
+            <div className="bg-theme-bg-secondary rounded-lg overflow-hidden border border-theme-border shadow-2xl">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className=" text-theme-text-primary uppercase text-xs tracking-wider">

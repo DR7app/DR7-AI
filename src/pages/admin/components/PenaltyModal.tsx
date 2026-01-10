@@ -203,7 +203,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     return (
         <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary rounded-full shadow-xl max-w-md w-full p-6 border border-theme-border">
+            <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-md w-full p-6 border border-theme-border">
                 <h2 className="text-2xl font-bold text-dr7-gold mb-4">Penali</h2>
 
                 <div className="mb-4 p-3 bg-theme-bg-tertiary rounded border border-theme-border">

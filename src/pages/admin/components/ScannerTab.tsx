@@ -259,7 +259,7 @@ export default function ScannerTab() {
 
                 {/* Instructions */}
                 {!latestScan && (
-                    <div className="p-4 bg-theme-bg-tertiary/50 rounded-full border border-theme-border">
+                    <div className="p-4 bg-theme-bg-tertiary/50 rounded-lg border border-theme-border">
                         <h3 className="text-sm font-semibold text-dr7-gold mb-2">Come funziona:</h3>
                         <ol className="text-sm text-theme-text-muted space-y-1 list-decimal list-inside">
                             <li>Clicca "🖨️ Scansiona Documento" (o usa il pulsante fisico sulla stampante)</li>
