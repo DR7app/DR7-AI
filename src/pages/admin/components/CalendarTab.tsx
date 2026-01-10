@@ -3,7 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
-import { parseUTCToRome, getRomeDateComponents, formatRomeDate, debugTimezone } from '../../../utils/timezoneUtils'
+import { parseUTCToRome, getRomeDateComponents, debugTimezone } from '../../../utils/timezoneUtils'
 
 interface Vehicle {
   id: string
