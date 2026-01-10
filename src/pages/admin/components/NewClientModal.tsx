@@ -708,7 +708,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
           <h2 className="text-2xl font-bold text-theme-text-primary">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
@@ -1268,7 +1268,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               type="button"
               onClick={() => setShowDocumentSection(!showDocumentSection)}
-              className="w-full flex items-center justify-between p-4 bg-theme-bg-tertiary hover:bg-gray-750 rounded-lg transition-colors"
+              className="w-full flex items-center justify-between p-4 bg-theme-bg-tertiary hover:bg-gray-750 rounded-full transition-colors"
             >
               <div className="flex items-center gap-3">
                 <svg className="w-6 h-6 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1293,7 +1293,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               <div className="mt-4 space-y-4 animate-fadeIn">
 
                 {/* Driver's License Upload */}
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-full p-4">
                   <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
                     <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -1335,7 +1335,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 {/* Identity Document Upload */}
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-full p-4">
                   <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
                     <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
@@ -1377,7 +1377,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 {/* Codice Fiscale Upload */}
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-full p-4">
                   <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
                     <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1419,7 +1419,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
-                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-full p-3">
                     <p className="text-sm text-green-300 flex items-center gap-2">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1437,14 +1437,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               onClick={handleClose}
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-lg text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
+              className="px-6 py-2.5 rounded-full text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
             >
               Annulla
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-8 py-2.5 rounded-lg bg-dr7-gold text-black font-bold hover:bg-yellow-500 transition-colors shadow-lg disabled:opacity-50"
+              className="px-8 py-2.5 rounded-full bg-dr7-gold text-black font-bold hover:bg-yellow-500 transition-colors shadow-lg disabled:opacity-50"
             >
               {isSaving ? 'Salvataggio...' : (initialData ? 'Aggiorna Cliente' : 'Crea Cliente')}
             </button>

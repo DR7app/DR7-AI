@@ -208,7 +208,7 @@ export default function DocumentsVerificationTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-theme-text-primary">Verifica Documenti Utenti</h2>
@@ -221,23 +221,23 @@ export default function DocumentsVerificationTab() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Totale Documenti</div>
           <div className="text-2xl font-bold text-theme-text-primary">{documents.length}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Da Verificare</div>
           <div className="text-2xl font-bold text-yellow-400">
             {documents.filter(d => d.status === 'pending_verification').length}
           </div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Verificati</div>
           <div className="text-2xl font-bold text-green-400">
             {documents.filter(d => d.status === 'verified').length}
           </div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Rifiutati</div>
           <div className="text-2xl font-bold text-red-400">
             {documents.filter(d => d.status === 'rejected').length}
@@ -246,7 +246,7 @@ export default function DocumentsVerificationTab() {
       </div>
 
       {/* Filter Buttons */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setFilterStatus('all')}
@@ -292,7 +292,7 @@ export default function DocumentsVerificationTab() {
         {Object.entries(documentsByUser).map(([userId, userDocs]) => {
           const user = userDocs[0].user
           return (
-            <div key={userId} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+            <div key={userId} className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
               {/* User Header */}
               <div className="bg-theme-bg-tertiary p-4 border-b border-theme-border">
                 <div className="flex flex-col lg:flex-row lg:justify-between gap-4">
@@ -363,7 +363,7 @@ export default function DocumentsVerificationTab() {
               <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {userDocs.map((doc) => (
-                    <div key={doc.id} className="bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-4">
+                    <div key={doc.id} className="bg-theme-bg-tertiary/50 border border-theme-border rounded-full p-4">
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="text-theme-text-primary font-medium">{getDocumentLabel(doc.document_type)}</h4>
                         {getStatusBadge(doc.status)}
@@ -412,7 +412,7 @@ export default function DocumentsVerificationTab() {
         })}
 
         {Object.keys(documentsByUser).length === 0 && (
-          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-8 text-center">
+          <div className="bg-theme-bg-secondary rounded-full border border-theme-border p-8 text-center">
             <p className="text-gray-500">
               {filterStatus === 'all'
                 ? 'Nessun documento caricato'
@@ -426,7 +426,7 @@ export default function DocumentsVerificationTab() {
       {/* Rejection Modal */}
       {showDocModal && selectedDoc && selectedDoc.status === 'pending_verification' && (
         <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-md w-full p-6">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-theme-text-primary mb-4">Rifiuta Documento</h3>
             <p className="text-theme-text-muted mb-4">
               Stai rifiutando: <strong className="text-theme-text-primary">{getDocumentLabel(selectedDoc.document_type)}</strong>

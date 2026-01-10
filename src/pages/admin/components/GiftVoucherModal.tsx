@@ -89,7 +89,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
 
     return (
         <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-theme-text-primary">🎁 Invia Buono Regalo</h2>
@@ -98,7 +98,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
 
                 <div className="p-6 space-y-6">
                     {/* Channel Selection */}
-                    <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                    <div className="bg-theme-bg-tertiary rounded-full p-4">
                         <label className="block text-sm font-medium text-theme-text-secondary mb-3">Canale di Invio</label>
                         <div className="flex gap-4">
                             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${channel === 'email' ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border-light hover:bg-theme-bg-hover'}`}>
@@ -127,7 +127,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                     </div>
 
                     {/* Selected Customers */}
-                    <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                    <div className="bg-theme-bg-tertiary rounded-full p-4">
                         <h3 className="text-sm font-semibold text-theme-text-secondary mb-2">
                             Destinatari ({selectedCustomers.length})
                         </h3>
@@ -187,7 +187,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                         />
                                         <label
                                             htmlFor="voucher-image"
-                                            className="cursor-pointer inline-block px-4 py-2 bg-dr7-gold text-black rounded hover:bg-dr7-gold/90"
+                                            className="cursor-pointer inline-block px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-dr7-gold/90"
                                         >
                                             Carica Immagini Multiple (JPEG/PNG)
                                         </label>

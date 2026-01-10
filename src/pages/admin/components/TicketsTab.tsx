@@ -175,22 +175,22 @@ export default function TicketsTab() {
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
               <div className="text-sm text-theme-text-muted">Totale Biglietti Venduti</div>
               <div className="text-2xl font-bold text-theme-text-primary">{totalCommercialTickets}</div>
             </div>
-            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
               <div className="text-sm text-theme-text-muted">Ricavo Totale</div>
               <div className="text-2xl font-bold text-theme-text-primary">{formatPriceCents(totalCommercialRevenue)}</div>
             </div>
-            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
               <div className="text-sm text-theme-text-muted">Acquisti Unici</div>
               <div className="text-2xl font-bold text-green-400">{uniquePurchases}</div>
             </div>
           </div>
 
           {/* Commercial Tickets Table */}
-          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+          <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="">
@@ -243,7 +243,7 @@ export default function TicketsTab() {
           </div>
 
           {commercialTickets.length === 0 && (
-            <div className="mt-6 p-6 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+            <div className="mt-6 p-6 bg-blue-900/20 border border-blue-700/50 rounded-full">
               <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
                 📝 Operazione Commerciale "7 MILIONI DI EURO"
               </h3>
@@ -271,19 +271,19 @@ export default function TicketsTab() {
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
               <div className="text-sm text-theme-text-muted">Totale Buoni</div>
               <div className="text-2xl font-bold text-theme-text-primary">{filteredCards.length}</div>
             </div>
-            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
               <div className="text-sm text-theme-text-muted">Valore Totale</div>
               <div className="text-2xl font-bold text-theme-text-primary">{formatPrice(totalValue)}</div>
             </div>
-            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
               <div className="text-sm text-theme-text-muted">Attivi</div>
               <div className="text-2xl font-bold text-green-400">{totalActive}</div>
             </div>
-            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
               <div className="text-sm text-theme-text-muted">Riscattati</div>
               <div className="text-2xl font-bold text-blue-400">{totalRedeemed}</div>
             </div>
@@ -305,7 +305,7 @@ export default function TicketsTab() {
           </div>
 
           {/* Gift Cards Table */}
-          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+          <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="">
@@ -357,7 +357,7 @@ export default function TicketsTab() {
           </div>
 
           {giftCards.length === 0 && (
-            <div className="mt-6 p-6 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+            <div className="mt-6 p-6 bg-blue-900/20 border border-blue-700/50 rounded-full">
               <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
                 📝 Come funzionano i Buoni Promozionali
               </h3>

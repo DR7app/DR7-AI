@@ -164,7 +164,7 @@ export default function ScannerTab() {
                             );
                             if (scanWindow) scanWindow.focus();
                         }}
-                        className="px-8 py-6 bg-dr7-gold text-black text-2xl font-bold rounded-xl hover:bg-yellow-500 transition-all transform hover:scale-105"
+                        className="px-8 py-6 bg-dr7-gold text-black text-2xl font-bold rounded-full hover:bg-yellow-500 transition-all transform hover:scale-105"
                     >
                         🖨️ Scansiona Documento
                     </button>
@@ -177,7 +177,7 @@ export default function ScannerTab() {
                             disabled={uploading}
                             className="hidden"
                         />
-                        <div className="px-8 py-6 bg-gray-700 text-theme-text-primary text-2xl font-bold rounded-xl hover:bg-gray-600 transition-all text-center">
+                        <div className="px-8 py-6 bg-gray-700 text-theme-text-primary text-2xl font-bold rounded-full hover:bg-gray-600 transition-all text-center">
                             {uploading ? '⏳ Caricamento...' : '📄 Carica PDF'}
                         </div>
                     </label>
@@ -185,7 +185,7 @@ export default function ScannerTab() {
 
                 {/* Status Indicator */}
                 {isProcessing && (
-                    <div className="p-4 bg-blue-900/30 border border-blue-500 rounded-xl mb-6">
+                    <div className="p-4 bg-blue-900/30 border border-blue-500 rounded-full mb-6">
                         <div className="flex items-center gap-3">
                             <div className="animate-spin text-2xl">🔄</div>
                             <div>
@@ -198,7 +198,7 @@ export default function ScannerTab() {
 
                 {/* Latest Scan Card with Extracted Data */}
                 {hasExtractedData && (
-                    <div className="p-6 bg-gradient-to-br from-green-900/20 to-emerald-900/20 border-2 border-green-500 rounded-xl">
+                    <div className="p-6 bg-gradient-to-br from-green-900/20 to-emerald-900/20 border-2 border-green-500 rounded-full">
                         <div className="flex justify-between items-start mb-4">
                             <h3 className="text-xl font-bold text-green-300">✅ Ultimo Documento Scansionato</h3>
                             <span className="text-xs text-theme-text-muted">
@@ -243,12 +243,12 @@ export default function ScannerTab() {
                             <button
                                 onClick={createCustomerFromScan}
                                 disabled={creatingCustomer}
-                                className="w-full px-6 py-4 bg-dr7-gold text-black text-xl font-bold rounded-xl hover:bg-yellow-500 transition-all disabled:opacity-50"
+                                className="w-full px-6 py-4 bg-dr7-gold text-black text-xl font-bold rounded-full hover:bg-yellow-500 transition-all disabled:opacity-50"
                             >
                                 {creatingCustomer ? '⏳ Creazione...' : '✅ Crea Nuovo Cliente'}
                             </button>
                         ) : (
-                            <div className="p-4 bg-green-900/30 rounded-xl text-center">
+                            <div className="p-4 bg-green-900/30 rounded-full text-center">
                                 <p className="text-green-300 font-semibold">
                                     ✅ Cliente già creato: {latestScan.customers_extended?.nome} {latestScan.customers_extended?.cognome}
                                 </p>
@@ -259,7 +259,7 @@ export default function ScannerTab() {
 
                 {/* Instructions */}
                 {!latestScan && (
-                    <div className="p-4 bg-theme-bg-tertiary/50 rounded-xl border border-theme-border">
+                    <div className="p-4 bg-theme-bg-tertiary/50 rounded-full border border-theme-border">
                         <h3 className="text-sm font-semibold text-dr7-gold mb-2">Come funziona:</h3>
                         <ol className="text-sm text-theme-text-muted space-y-1 list-decimal list-inside">
                             <li>Clicca "🖨️ Scansiona Documento" (o usa il pulsante fisico sulla stampante)</li>

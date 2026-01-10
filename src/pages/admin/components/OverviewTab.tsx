@@ -109,7 +109,7 @@ export default function OverviewTab({ onTabChange }: OverviewTabProps) {
                     <button
                         key={card.tab}
                         onClick={() => onTabChange(card.tab)}
-                        className={`bg-gradient-to-br ${card.color} p-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105`}
+                        className={`bg-gradient-to-br ${card.color} p-6 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105`}
                     >
                         <h3 className="text-theme-text-primary text-sm font-medium mb-2">{card.title}</h3>
                         <p className="text-theme-text-primary text-4xl font-bold">{card.value}</p>
@@ -117,26 +117,26 @@ export default function OverviewTab({ onTabChange }: OverviewTabProps) {
                 ))}
             </div>
 
-            <div className="mt-8 bg-theme-bg-tertiary p-6 rounded-xl">
+            <div className="mt-8 bg-theme-bg-tertiary p-6 rounded-full">
                 <h3 className="text-xl font-semibold text-theme-text-primary mb-4">Azioni Rapide</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <button
                         onClick={() => onTabChange('rentals')}
-                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-lg transition-colors text-left"
+                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-full transition-colors text-left"
                     >
                         <div className="font-semibold">Gestisci Noleggi</div>
                         <div className="text-sm text-theme-text-secondary mt-1">Visualizza e modifica prenotazioni</div>
                     </button>
                     <button
                         onClick={() => onTabChange('customers')}
-                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-lg transition-colors text-left"
+                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-full transition-colors text-left"
                     >
                         <div className="font-semibold">Gestisci Clienti</div>
                         <div className="text-sm text-theme-text-secondary mt-1">Aggiungi o modifica clienti</div>
                     </button>
                     <button
                         onClick={() => onTabChange('verify')}
-                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-lg transition-colors text-left"
+                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-full transition-colors text-left"
                     >
                         <div className="font-semibold">Verifiche Documenti</div>
                         <div className="text-sm text-theme-text-secondary mt-1">Approva richieste pendenti</div>

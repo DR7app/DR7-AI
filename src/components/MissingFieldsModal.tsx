@@ -216,7 +216,7 @@ export default function MissingFieldsModal({
                     <select
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     >
                         <option value="">Seleziona...</option>
                         <option value="M">Maschio</option>
@@ -239,7 +239,7 @@ export default function MissingFieldsModal({
                         type="date"
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     />
                     {errors[field] && (
                         <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
@@ -258,7 +258,7 @@ export default function MissingFieldsModal({
                         type="email"
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                         placeholder="esempio@email.com"
                     />
                     {errors[field] && (
@@ -278,7 +278,7 @@ export default function MissingFieldsModal({
                     type="text"
                     value={value}
                     onChange={(e) => handleChange(field, e.target.value)}
-                    className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-lg px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     placeholder={`Inserisci ${label.toLowerCase()}`}
                 />
                 {errors[field] && (
@@ -292,7 +292,7 @@ export default function MissingFieldsModal({
 
     return (
         <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
                 {/* Header */}
                 <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
                     <div>
@@ -311,7 +311,7 @@ export default function MissingFieldsModal({
 
                 {/* Body */}
                 <div className="p-6">
-                    <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
+                    <div className="bg-blue-900/20 border border-blue-700 rounded-full p-4 mb-6">
                         <p className="text-blue-300 text-sm">
                             ℹ️ Sono richiesti {missingFields.length} campi per completare il profilo del cliente
                         </p>
@@ -327,14 +327,14 @@ export default function MissingFieldsModal({
                     <button
                         onClick={onClose}
                         disabled={isSaving}
-                        className="px-6 py-2.5 border border-theme-border-light text-theme-text-secondary rounded-lg hover:bg-theme-bg-tertiary transition-colors font-medium disabled:opacity-50"
+                        className="px-6 py-2.5 border border-theme-border-light text-theme-text-secondary rounded-full hover:bg-theme-bg-tertiary transition-colors font-medium disabled:opacity-50"
                     >
                         Annulla
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="px-6 py-2.5 bg-blue-600 text-theme-text-primary rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-2.5 bg-blue-600 text-theme-text-primary rounded-full hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isSaving ? 'Salvataggio...' : 'Salva e Continua'}
                     </button>

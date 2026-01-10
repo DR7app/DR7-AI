@@ -176,7 +176,7 @@ const LateReturnAlarm: React.FC = () => {
                     initial={{ scale: 0.9, y: 20 }}
                     animate={{ scale: 1, y: 0 }}
                     exit={{ scale: 0.9, y: 20 }}
-                    className="bg-white rounded-lg shadow-2xl max-w-2xl w-full mx-4 p-8"
+                    className="bg-white rounded-full shadow-2xl max-w-2xl w-full mx-4 p-8"
                 >
                     <div className="text-center mb-6">
                         <h2 className="text-3xl font-bold text-red-600 mb-2">LATE RETURN ALERT</h2>
@@ -185,7 +185,7 @@ const LateReturnAlarm: React.FC = () => {
 
                     <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
                         {lateBookings.map((booking) => (
-                            <div key={booking.id} className="border border-red-300 rounded-lg p-4 bg-red-50">
+                            <div key={booking.id} className="border border-red-300 rounded-full p-4 bg-red-50">
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
                                         <h3 className="font-bold text-lg text-gray-900">{booking.vehicle_name}</h3>

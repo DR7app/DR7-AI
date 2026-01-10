@@ -2966,7 +2966,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               {/* VEHICLE SELECTION - Now appears after dates */}
               <div className="md:col-span-2">
                 {!formData.pickup_date || !formData.return_date ? (
-                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
+                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-full">
                     <p className="text-yellow-400 text-sm">
                       ⚠️ Seleziona le date per vedere i veicoli disponibili
                     </p>
@@ -3411,7 +3411,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             return (
               <div
                 key={`booking-card-${booking.id}`}
-                className="rounded-lg p-4 cursor-pointer hover:bg-white/5 transition-colors border border-gray-700/30"
+                className="rounded-full p-4 cursor-pointer hover:bg-white/5 transition-colors border border-gray-700/30"
                 onClick={() => setSelectedBooking(booking)}
               >
                 <div className="flex justify-between items-start mb-3">
@@ -3802,7 +3802,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <button
                       onClick={() => handleGenerateContract(selectedBooking)}
                       disabled={generatingContract}
-                      className="flex-1 px-4 py-3 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary rounded-lg transition-colors font-medium disabled:opacity-50"
+                      className="flex-1 px-4 py-3 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary rounded-full transition-colors font-medium disabled:opacity-50"
                     >
                       {generatingContract ? 'Generazione in corso...' : 'Scarica Contratto'}
                     </button>
@@ -3813,14 +3813,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         handleCancelBooking(selectedBooking.id, 'booking')
                         setSelectedBooking(null)
                       }}
-                      className="flex-1 px-4 py-3 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary rounded-lg transition-colors font-medium"
+                      className="flex-1 px-4 py-3 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary rounded-full transition-colors font-medium"
                     >
                       Cancella Prenotazione
                     </button>
                   )}
                   <button
                     onClick={() => setSelectedBooking(null)}
-                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-lg transition-colors font-medium"
+                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-full transition-colors font-medium"
                   >
                     Chiudi
                   </button>

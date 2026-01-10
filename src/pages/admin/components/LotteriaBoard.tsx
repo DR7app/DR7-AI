@@ -106,7 +106,7 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({ isOpen, onClose
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-96">
+      <div className="bg-white rounded-full p-6 w-96">
         <h3 className="text-xl font-bold mb-4">
           Seleziona Metodo di Pagamento
         </h3>
@@ -154,13 +154,13 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({ isOpen, onClose
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+            className="px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
           >
             Annulla
           </button>
           <button
             onClick={() => onConfirm(paymentMethod)}
-            className="px-4 py-2 bg-blue-600 text-theme-text-primary rounded hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 text-theme-text-primary rounded-full hover:bg-blue-700"
           >
             Conferma Vendita
           </button>
@@ -389,7 +389,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-[600px] max-h-[80vh] overflow-y-auto">
+      <div className="bg-white rounded-full p-6 w-[600px] max-h-[80vh] overflow-y-auto">
         <h3 className="text-xl font-bold mb-4">
           {isBulkSale
             ? `Vendita Multipla - ${tickets.length} Biglietti`
@@ -465,7 +465,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
                 onOpenNewClientModal();
                 onClose();
               }}
-              className="w-full mt-4 px-4 py-3 bg-green-600 text-theme-text-primary rounded hover:bg-green-700 font-semibold"
+              className="w-full mt-4 px-4 py-3 bg-green-600 text-theme-text-primary rounded-full hover:bg-green-700 font-semibold"
             >
               + Crea Nuovo Cliente
             </button>
@@ -473,7 +473,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
             <button
               type="button"
               onClick={onClose}
-              className="w-full mt-2 px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+              className="w-full mt-2 px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
             >
               Annulla
             </button>
@@ -540,14 +540,14 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                className="px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
               >
                 Annulla
               </button>
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="px-4 py-2 bg-blue-600 text-theme-text-primary rounded hover:bg-blue-700 font-semibold"
+                className="px-4 py-2 bg-blue-600 text-theme-text-primary rounded-full hover:bg-blue-700 font-semibold"
               >
                 Conferma Vendita
               </button>
@@ -1286,7 +1286,7 @@ const LotteriaBoard: React.FC = () => {
         <h2 className="text-2xl font-bold mb-4 text-theme-text-primary">Tabellone LOTTERIA</h2>
 
         {/* Search Bar */}
-        <div className="mb-6 bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+        <div className="mb-6 bg-theme-bg-tertiary border border-theme-border rounded-full p-4">
           <div className="flex gap-3 items-end">
             <div className="flex-1">
               <label className="block text-sm font-medium text-theme-text-secondary mb-2">
@@ -1298,12 +1298,12 @@ const LotteriaBoard: React.FC = () => {
                 value={searchEmail}
                 onChange={(e) => setSearchEmail(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearchTickets()}
-                className="w-full px-4 py-2 bg-gray-700 border border-theme-border-light rounded-lg text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+                className="w-full px-4 py-2 bg-gray-700 border border-theme-border-light rounded-full text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
               />
             </div>
             <button
               onClick={handleSearchTickets}
-              className="px-6 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-lg transition-colors whitespace-nowrap"
+              className="px-6 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors whitespace-nowrap"
             >
               🔍 Cerca Biglietti
             </button>
@@ -1315,19 +1315,19 @@ const LotteriaBoard: React.FC = () => {
 
         {canViewFinancials && !hideFinancials && (
           <div className="grid gap-4 mb-4 grid-cols-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="bg-blue-50 p-4 rounded-full">
               <div className="text-sm text-gray-600">Totale Biglietti</div>
               <div className="text-2xl font-bold">{totalTickets}</div>
             </div>
-            <div className="bg-red-50 p-4 rounded-lg">
+            <div className="bg-red-50 p-4 rounded-full">
               <div className="text-sm text-gray-600">Venduti</div>
               <div className="text-2xl font-bold text-red-600">{soldCount}</div>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg">
+            <div className="bg-green-50 p-4 rounded-full">
               <div className="text-sm text-gray-600">Disponibili</div>
               <div className="text-2xl font-bold text-green-600">{availableCount}</div>
             </div>
-            <div className="bg-yellow-50 p-4 rounded-lg">
+            <div className="bg-yellow-50 p-4 rounded-full">
               <div className="text-sm text-gray-600">Fatturato Totale</div>
               <div className="text-2xl font-bold text-yellow-600">
                 €{((soldCount * 2500) / 100).toFixed(2)}
@@ -1378,7 +1378,7 @@ const LotteriaBoard: React.FC = () => {
               <>
                 <button
                   onClick={() => setSelectedTickets([])}
-                  className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded hover:bg-theme-bg-hover"
+                  className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded-full hover:bg-theme-bg-hover"
                 >
                   Pulisci ({selectedTickets.length})
                 </button>
@@ -1386,7 +1386,7 @@ const LotteriaBoard: React.FC = () => {
                   onClick={() => {
                     setSelectedTicket(-1); // -1 indicates bulk sale mode
                   }}
-                  className="px-4 py-2 bg-green-600 text-theme-text-primary rounded hover:bg-green-700 font-semibold"
+                  className="px-4 py-2 bg-green-600 text-theme-text-primary rounded-full hover:bg-green-700 font-semibold"
                 >
                   Vendi {selectedTickets.length} Biglietti
                 </button>
@@ -1394,14 +1394,14 @@ const LotteriaBoard: React.FC = () => {
             )}
             <button
               onClick={fetchSoldTickets}
-              className="px-4 py-2 bg-blue-600 text-theme-text-primary rounded hover:bg-blue-700"
+              className="px-4 py-2 bg-blue-600 text-theme-text-primary rounded-full hover:bg-blue-700"
             >
               Aggiorna
             </button>
             <button
               onClick={handleOpenEmailEditor}
               disabled={sendingEmails}
-              className="px-4 py-2 bg-yellow-600 text-black rounded hover:bg-yellow-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-yellow-600 text-black rounded-full hover:bg-yellow-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sendingEmails ? 'Invio in corso...' : 'Manda Email'}
             </button>
@@ -1437,7 +1437,7 @@ const LotteriaBoard: React.FC = () => {
               </div>
 
               {isHovered && ticket && (
-                <div className="absolute z-10 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-theme-bg-primary text-theme-text-primary p-3 rounded-lg shadow-lg text-xs">
+                <div className="absolute z-10 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-theme-bg-primary text-theme-text-primary p-3 rounded-full shadow-lg text-xs">
                   <div className="font-bold mb-1">Biglietto #{String(ticketNumber).padStart(4, '0')}</div>
                   <div><strong>Cliente:</strong> {ticket.full_name}</div>
                   <div><strong>Email:</strong> {ticket.email}</div>
@@ -1650,7 +1650,7 @@ const LotteriaBoard: React.FC = () => {
 
       {generatingPdf && (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 text-center">
+          <div className="bg-white rounded-full p-8 text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
             <h3 className="text-xl font-bold mb-2">Generazione PDF in corso...</h3>
             <p className="text-gray-600">Invio email al cliente</p>
@@ -1661,7 +1661,7 @@ const LotteriaBoard: React.FC = () => {
       {/* Search Results Modal */}
       {showSearchModal && searchResults.length > 0 && (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-full p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">
                 Biglietti Trovati ({searchResults.length})
@@ -1682,7 +1682,7 @@ const LotteriaBoard: React.FC = () => {
 
             <div className="space-y-3">
               {searchResults.map((ticket) => (
-                <div key={ticket.ticket_number} className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+                <div key={ticket.ticket_number} className="border border-gray-300 rounded-full p-4 bg-gray-50">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
@@ -1707,7 +1707,7 @@ const LotteriaBoard: React.FC = () => {
                     </div>
                     <button
                       onClick={() => handleCancelTicket(ticket.ticket_number, ticket.email, ticket.full_name)}
-                      className="ml-4 px-4 py-2 bg-red-600 text-theme-text-primary rounded hover:bg-red-700 font-semibold"
+                      className="ml-4 px-4 py-2 bg-red-600 text-theme-text-primary rounded-full hover:bg-red-700 font-semibold"
                     >
                       Cancella
                     </button>
@@ -1723,7 +1723,7 @@ const LotteriaBoard: React.FC = () => {
                   setSearchResults([]);
                   setSearchEmail('');
                 }}
-                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                className="px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
               >
                 Chiudi
               </button>
@@ -1735,7 +1735,7 @@ const LotteriaBoard: React.FC = () => {
       {/* Ticket Details Modal */}
       {showTicketDetailsModal && selectedTicketForDetails && (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+          <div className="bg-white rounded-full p-6 max-w-md w-full">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-gray-900">
                 Biglietto #{String(selectedTicketForDetails.ticket_number).padStart(4, '0')}
@@ -1925,7 +1925,7 @@ const LotteriaBoard: React.FC = () => {
                   setShowTicketDetailsModal(false);
                   setSelectedTicketForDetails(null);
                 }}
-                className="flex-1 px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 font-semibold"
+                className="flex-1 px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400 font-semibold"
               >
                 Chiudi
               </button>
@@ -1937,7 +1937,7 @@ const LotteriaBoard: React.FC = () => {
                     setSelectedTicketForDetails(null);
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-red-600 text-theme-text-primary rounded hover:bg-red-700 font-semibold"
+                className="flex-1 px-4 py-2 bg-red-600 text-theme-text-primary rounded-full hover:bg-red-700 font-semibold"
               >
                 Cancella Biglietto
               </button>
@@ -1949,7 +1949,7 @@ const LotteriaBoard: React.FC = () => {
       {/* Email Template Editor Modal */}
       {showEmailEditorModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-bg-secondary rounded-full shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-theme-border">
               <h2 className="text-2xl font-bold text-theme-text-primary">Invia Email a Tutti i Clienti</h2>
               <p className="text-sm text-theme-text-secondary mt-2">
@@ -1974,7 +1974,7 @@ const LotteriaBoard: React.FC = () => {
                       type="text"
                       value={emailSubject}
                       onChange={(e) => setEmailSubject(e.target.value)}
-                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                       placeholder="Inserisci l'oggetto dell'email..."
                     />
                   </div>
@@ -1988,7 +1988,7 @@ const LotteriaBoard: React.FC = () => {
                       value={emailTextContent}
                       onChange={(e) => setEmailTextContent(e.target.value)}
                       rows={12}
-                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                       placeholder="Inserisci il contenuto dell'email...\n\nEsempio:\nGentile Cliente,\n\nTi informiamo che...\n\nCordiali saluti,\nIl Team DR7 Empire"
                     />
                     <p className="text-xs text-theme-text-muted mt-2">
@@ -2003,21 +2003,21 @@ const LotteriaBoard: React.FC = () => {
               <button
                 onClick={() => setShowEmailEditorModal(false)}
                 disabled={savingTemplate || sendingEmails}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+                className="px-6 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
                 Annulla
               </button>
               <button
                 onClick={handleSaveEmailTemplate}
                 disabled={savingTemplate || loadingTemplate || sendingEmails}
-                className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {savingTemplate ? 'Salvataggio...' : 'Salva Bozza'}
               </button>
               <button
                 onClick={handleSendEmailsFromModal}
                 disabled={savingTemplate || loadingTemplate || sendingEmails}
-                className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sendingEmails ? 'Invio in corso...' : 'Invia a Tutti'}
               </button>

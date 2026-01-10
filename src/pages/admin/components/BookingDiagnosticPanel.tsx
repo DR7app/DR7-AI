@@ -176,7 +176,7 @@ export default function BookingDiagnosticPanel() {
                     </div>
                     <button
                         onClick={loadConsistencyReport}
-                        className="px-4 py-2 bg-dr7-gold text-black rounded-lg font-semibold hover:bg-dr7-gold/90 transition-colors"
+                        className="px-4 py-2 bg-dr7-gold text-black rounded-full font-semibold hover:bg-dr7-gold/90 transition-colors"
                     >
                         🔄 Aggiorna
                     </button>
@@ -184,17 +184,17 @@ export default function BookingDiagnosticPanel() {
 
                 {/* Summary */}
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="bg-white/5 rounded-full p-4 border border-white/10">
                         <div className="text-3xl font-bold text-white">{issues.length}</div>
                         <div className="text-gray-400 text-sm">Problemi Totali</div>
                     </div>
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="bg-white/5 rounded-full p-4 border border-white/10">
                         <div className="text-3xl font-bold text-red-400">
                             {issues.filter(i => getIssueSeverity(i.issue_type) === 'critical' || getIssueSeverity(i.issue_type) === 'high').length}
                         </div>
                         <div className="text-gray-400 text-sm">Critici/Alti</div>
                     </div>
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="bg-white/5 rounded-full p-4 border border-white/10">
                         <div className="text-3xl font-bold text-yellow-400">
                             {issues.filter(i => getIssueSeverity(i.issue_type) === 'medium' || getIssueSeverity(i.issue_type) === 'low').length}
                         </div>
@@ -205,7 +205,7 @@ export default function BookingDiagnosticPanel() {
 
             {/* Issues by Type */}
             {issues.length === 0 ? (
-                <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-8 text-center">
+                <div className="bg-green-900/20 border border-green-500/30 rounded-full p-8 text-center">
                     <div className="text-6xl mb-4">✅</div>
                     <h3 className="text-2xl font-semibold text-green-400 mb-2">Nessun Problema Rilevato</h3>
                     <p className="text-gray-400">
@@ -214,7 +214,7 @@ export default function BookingDiagnosticPanel() {
                 </div>
             ) : (
                 Object.entries(groupedIssues).map(([type, typeIssues]) => (
-                    <div key={type} className="bg-gray-900/50 rounded-lg border border-white/10 overflow-hidden">
+                    <div key={type} className="bg-gray-900/50 rounded-full border border-white/10 overflow-hidden">
                         <div className={`p-4 border-l-4 ${getSeverityColor(getIssueSeverity(type))}`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
@@ -267,7 +267,7 @@ export default function BookingDiagnosticPanel() {
                                                 <button
                                                     onClick={() => fixMissingPlate(issue.booking_id, issue.vehicle_id!)}
                                                     disabled={fixing === issue.booking_id}
-                                                    className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="px-3 py-1 bg-blue-600 text-white rounded-full text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     {fixing === issue.booking_id ? '⏳' : '🔧'} Correggi
                                                 </button>
@@ -276,7 +276,7 @@ export default function BookingDiagnosticPanel() {
                                                 <button
                                                     onClick={() => fixPlateMismatch(issue.booking_id, issue.vehicle_id!)}
                                                     disabled={fixing === issue.booking_id}
-                                                    className="px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="px-3 py-1 bg-yellow-600 text-white rounded-full text-sm hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     {fixing === issue.booking_id ? '⏳' : '🔧'} Aggiorna
                                                 </button>
@@ -291,7 +291,7 @@ export default function BookingDiagnosticPanel() {
             )}
 
             {/* Help Section */}
-            <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-6">
+            <div className="bg-blue-900/20 border border-blue-500/30 rounded-full p-6">
                 <h3 className="text-lg font-semibold text-blue-400 mb-3">ℹ️ Guida ai Problemi</h3>
                 <div className="space-y-2 text-sm text-gray-300">
                     <p><strong>MISSING_VEHICLE_ID:</strong> La prenotazione non ha un vehicle_id. Usa solo nome/targa per il matching.</p>

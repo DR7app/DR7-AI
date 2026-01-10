@@ -882,7 +882,7 @@ export default function CustomersTab() {
       {/* Customer Details Modal - For Fattura Generation */}
       {viewingCustomerDetails && (
         <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
               <h3 className="text-xl font-bold text-theme-text-primary">
                 Dettagli Cliente Completi - {viewingCustomerDetails.full_name}
@@ -913,7 +913,7 @@ export default function CustomersTab() {
               </div>
 
               {/* Membership Section */}
-              <div className="bg-theme-bg-tertiary rounded-lg p-4 border border-dr7-gold/20 mb-4">
+              <div className="bg-theme-bg-tertiary rounded-full p-4 border border-dr7-gold/20 mb-4">
                 <h4 className="text-sm font-semibold text-dr7-gold mb-3 border-b border-theme-border pb-2 flex justify-between items-center">
                   <span>Pacchetto Membership</span>
                   {(viewingCustomerDetails as any).active_membership && (
@@ -965,7 +965,7 @@ export default function CustomersTab() {
 
               {/* Persona Fisica Details */}
               {viewingCustomerDetails.tipo_cliente === 'persona_fisica' && (
-                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary rounded-full p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Persona Fisica
                   </h4>
@@ -1073,7 +1073,7 @@ export default function CustomersTab() {
 
               {/* Azienda Details */}
               {viewingCustomerDetails.tipo_cliente === 'azienda' && (
-                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary rounded-full p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Azienda
                   </h4>
@@ -1155,7 +1155,7 @@ export default function CustomersTab() {
 
               {/* Pubblica Amministrazione Details */}
               {viewingCustomerDetails.tipo_cliente === 'pubblica_amministrazione' && (
-                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary rounded-full p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Dati Pubblica Amministrazione
                   </h4>
@@ -1185,7 +1185,7 @@ export default function CustomersTab() {
               )}
 
               {/* Common Contact Information */}
-              <div className="bg-theme-bg-tertiary rounded-lg p-4">
+              <div className="bg-theme-bg-tertiary rounded-full p-4">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                   Informazioni di Contatto
                 </h4>
@@ -1216,7 +1216,7 @@ export default function CustomersTab() {
               </div>
 
               {/* Metadata */}
-              <div className="bg-theme-bg-tertiary rounded-lg p-4">
+              <div className="bg-theme-bg-tertiary rounded-full p-4">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                   Metadata
                 </h4>
@@ -1239,7 +1239,7 @@ export default function CustomersTab() {
 
               {/* Note */}
               {(viewingCustomerDetails.notes || (viewingCustomerDetails.metadata as any)?.note || (viewingCustomerDetails as any).note) && (
-                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary rounded-full p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 border-b border-theme-border pb-2">
                     Note
                   </h4>
@@ -1268,7 +1268,7 @@ export default function CustomersTab() {
       {
         viewingDocuments && (
           <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-theme-text-primary">
                   Documenti - {viewingDocuments.full_name}
@@ -1284,7 +1284,7 @@ export default function CustomersTab() {
               </div>
               <div className="p-6 space-y-6">
                 {/* Customer Info */}
-                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary rounded-full p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Informazioni Cliente</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between">
@@ -1299,7 +1299,7 @@ export default function CustomersTab() {
                 </div>
 
                 {/* Uploaded Documents */}
-                <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                <div className="bg-theme-bg-tertiary rounded-full p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Documenti Caricati</h4>
                   {loadingDocuments ? (
                     <div className="text-center py-4">
@@ -1543,7 +1543,7 @@ export default function CustomersTab() {
 
                 {/* Note */}
                 {viewingDocuments.notes && (
-                  <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                  <div className="bg-theme-bg-tertiary rounded-full p-4">
                     <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">Note</h4>
                     <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{viewingDocuments.notes}</p>
                   </div>
@@ -1554,7 +1554,7 @@ export default function CustomersTab() {
         )
       }
       {/* Stats Card */}
-      <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-lg p-6">
+      <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-full p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
@@ -1580,28 +1580,28 @@ export default function CustomersTab() {
                   <span className="text-sm text-theme-text-muted">Cambia Status:</span>
                   <button
                     onClick={() => handleBulkStatusUpdate('blacklist')}
-                    className="px-3 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 border border-red-400/20 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 border border-red-400/20 backdrop-blur-sm transition-all"
                     title="Imposta come Blacklist"
                   >
                     ⛔ Blacklist
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate('vip')}
-                    className="px-3 py-2 rounded-lg text-sm font-medium bg-yellow-500/20 text-yellow-200 hover:bg-yellow-500/30 border border-yellow-400/20 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-medium bg-yellow-500/20 text-yellow-200 hover:bg-yellow-500/30 border border-yellow-400/20 backdrop-blur-sm transition-all"
                     title="Imposta come VIP"
                   >
                     ⭐ VIP
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate('has_rental')}
-                    className="px-3 py-2 rounded-lg text-sm font-medium bg-green-500/20 text-green-200 hover:bg-green-500/30 border border-green-400/20 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-medium bg-green-500/20 text-green-200 hover:bg-green-500/30 border border-green-400/20 backdrop-blur-sm transition-all"
                     title="Imposta come Fidelizzato"
                   >
                     ✓ Fidelizzato
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate(null)}
-                    className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 border border-white/10 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 border border-white/10 backdrop-blur-sm transition-all"
                     title="Rimuovi Status"
                   >
                     ✕ Rimuovi
@@ -1622,7 +1622,7 @@ export default function CustomersTab() {
             placeholder="Cerca cliente per nome, email o telefono..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-4 py-3 pl-10 text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold focus:border-transparent"
+            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-4 py-3 pl-10 text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold focus:border-transparent"
           />
           <svg
             className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted"
@@ -1647,7 +1647,7 @@ export default function CustomersTab() {
 
 
 
-      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">
@@ -1663,7 +1663,7 @@ export default function CustomersTab() {
                         setSelectedCustomerIds(new Set())
                       }
                     }}
-                    className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                    className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
@@ -1703,7 +1703,7 @@ export default function CustomersTab() {
                         }
                         setSelectedCustomerIds(newSet)
                       }}
-                      className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                      className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                     />
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">
@@ -1793,21 +1793,21 @@ export default function CustomersTab() {
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-theme-text-primary border border-red-500/30 backdrop-blur-sm transition-all"
+                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-theme-text-primary border border-red-500/30 backdrop-blur-sm transition-all"
                             title="Blacklist"
                           >
                             BL
                           </button>
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-yellow-500/20 text-yellow-200/70 hover:bg-yellow-500/30 hover:text-yellow-200 border border-yellow-400/20 backdrop-blur-sm transition-all"
+                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-200/70 hover:bg-yellow-500/30 hover:text-yellow-200 border border-yellow-400/20 backdrop-blur-sm transition-all"
                             title="VIP"
                           >
                             VIP
                           </button>
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-200/70 hover:bg-green-500/30 hover:text-green-200 border border-green-400/20 backdrop-blur-sm transition-all"
+                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-green-500/20 text-green-200/70 hover:bg-green-500/30 hover:text-green-200 border border-green-400/20 backdrop-blur-sm transition-all"
                             title="Fidelizzato"
                           >
                             FID
@@ -1817,7 +1817,7 @@ export default function CustomersTab() {
                       {customer.status && (
                         <button
                           onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                          className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
+                          className="px-2 py-1.5 rounded-full text-xs font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
                           title="Rimuovi Status"
                         >
                           ✕
@@ -1856,17 +1856,17 @@ export default function CustomersTab() {
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-full hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               ← Precedente
             </button>
-            <div className="flex items-center gap-2 px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg">
+            <div className="flex items-center gap-2 px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-full">
               Pagina {currentPage} di {Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE)}
             </div>
             <button
               onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE), prev + 1))}
               disabled={currentPage >= Math.ceil(totalCustomers / CUSTOMERS_PER_PAGE)}
-              className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-full hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Successiva →
             </button>

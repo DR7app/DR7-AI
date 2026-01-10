@@ -306,7 +306,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     const selectedFile = selectedFiles[type]
 
     return (
-      <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-6">
+      <div className="bg-theme-bg-tertiary border border-theme-border rounded-full p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h4 className="text-lg font-semibold text-dr7-gold">{label}</h4>
@@ -321,7 +321,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
         {/* Existing Document Preview */}
         {doc && previewUrl && (
-          <div className="mb-4 bg-theme-bg-secondary border border-theme-border-light rounded-lg p-4">
+          <div className="mb-4 bg-theme-bg-secondary border border-theme-border-light rounded-full p-4">
             <div className="flex gap-4">
               {/* Preview */}
               {isImage(doc.mime_type) ? (
@@ -420,7 +420,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
   if (loading) {
     return (
       <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50">
-        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-8 text-center">
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-full p-8 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
           <p className="text-theme-text-primary">Caricamento documenti...</p>
         </div>
@@ -430,7 +430,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
           <div>
@@ -448,7 +448,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         <div className="p-6 space-y-6">
           {/* Customer Details Section */}
           {customerDetails && (
-            <div className="bg-gradient-to-r from-dr7-gold/10 to-transparent border border-dr7-gold/30 rounded-lg p-6">
+            <div className="bg-gradient-to-r from-dr7-gold/10 to-transparent border border-dr7-gold/30 rounded-full p-6">
               <h4 className="text-lg font-bold text-dr7-gold mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -546,7 +546,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
           )}
 
           {/* Info Box */}
-          <div className="bg-blue-900/30 border-2 border-blue-500 rounded-lg p-4">
+          <div className="bg-blue-900/30 border-2 border-blue-500 rounded-full p-4">
             <div className="flex items-start gap-3">
               <div className="text-blue-400 text-2xl">ℹ️</div>
               <div className="flex-1">
@@ -574,7 +574,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
           )}
 
           {/* Storage Info */}
-          <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-4">
+          <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-full p-4">
             <h5 className="text-sm font-semibold text-theme-text-primary mb-2">Informazioni Storage</h5>
             <div className="space-y-1">
               <p className="text-xs text-theme-text-muted">

@@ -203,7 +203,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     return (
         <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-md w-full p-6 border border-theme-border">
+            <div className="bg-theme-bg-secondary rounded-full shadow-xl max-w-md w-full p-6 border border-theme-border">
                 <h2 className="text-2xl font-bold text-dr7-gold mb-4">Penali</h2>
 
                 <div className="mb-4 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
@@ -220,7 +220,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                         <select
                             value={selectedPenalty}
                             onChange={handlePenaltySelect}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                             disabled={isGenerating}
                         >
                             <option value="">-- Seleziona una penale --</option>
@@ -251,7 +251,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                 min="0"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="w-full pl-8 pr-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                                className="w-full pl-8 pr-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                                 placeholder="0.00"
                                 disabled={isGenerating}
                                 required
@@ -268,7 +268,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             type="text"
                             value={motivo}
                             onChange={(e) => setMotivo(e.target.value)}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                             placeholder="Es: Ritardo nella riconsegna"
                             disabled={isGenerating}
                         />
@@ -283,7 +283,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                             rows={3}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold resize-none"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold resize-none"
                             placeholder="Note per uso interno..."
                             disabled={isGenerating}
                         />
@@ -291,7 +291,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
                     {/* Error message with edit customer button */}
                     {error && (
-                        <div className="p-3 bg-red-900/30 border border-red-700 rounded-md space-y-2">
+                        <div className="p-3 bg-red-900/30 border border-red-700 rounded-full space-y-2">
                             <p className="text-red-300 text-sm">{error}</p>
                             {isCustomerDataError && onEditCustomer && (booking.customer_id || booking.user_id) && (
                                 <button
@@ -311,14 +311,14 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             type="button"
                             onClick={handleClose}
                             disabled={isGenerating}
-                            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Annulla
                         </button>
                         <button
                             type="submit"
                             disabled={isGenerating}
-                            className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isGenerating ? 'Generazione...' : 'Genera Fattura'}
                         </button>

@@ -205,7 +205,7 @@ export default function MechanicalCalendarTab() {
   return (
     <div className="space-y-6">
       {/* Header Controls */}
-      <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4">
+      <div className="bg-theme-bg-secondary rounded-full p-3 lg:p-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap flex-1">
             <h2 className="text-lg font-bold text-theme-text-primary">Calendario Meccanica</h2>
@@ -217,7 +217,7 @@ export default function MechanicalCalendarTab() {
                 placeholder="Cerca clienti..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-primary rounded-md border border-theme-border focus:border-dr7-gold focus:outline-none text-sm w-48"
+                className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-primary rounded-full border border-theme-border focus:border-dr7-gold focus:outline-none text-sm w-48"
               />
               {searchQuery && (
                 <button
@@ -270,14 +270,14 @@ export default function MechanicalCalendarTab() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigateMonth('prev')}
-              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md transition-colors text-sm font-semibold"
+              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm font-semibold"
               aria-label="Mese precedente"
             >
               ← Precedente
             </button>
             <button
               onClick={() => navigateMonth('next')}
-              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md transition-colors text-sm font-semibold"
+              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm font-semibold"
               aria-label="Mese successivo"
             >
               Successivo →
@@ -292,7 +292,7 @@ export default function MechanicalCalendarTab() {
 
       {/* Search Results */}
       {searchQuery && (
-        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+        <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
           <h3 className="text-lg font-bold text-theme-text-primary mb-3">
             Risultati ricerca: "{searchQuery}"
           </h3>
@@ -303,7 +303,7 @@ export default function MechanicalCalendarTab() {
               {matchingBookings.map(booking => (
                 <div
                   key={booking.id}
-                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3 hover:border-dr7-gold transition-colors cursor-pointer"
+                  className="bg-theme-bg-tertiary border border-theme-border rounded-full p-3 hover:border-dr7-gold transition-colors cursor-pointer"
                   onClick={() => {
                     const dateString = booking.appointment_date.split('T')[0]
                     setSelectedCell({
@@ -345,7 +345,7 @@ export default function MechanicalCalendarTab() {
       )}
 
       {/* Battleship-style Calendar Grid */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
+      <div className="bg-theme-bg-secondary rounded-full p-4 lg:p-6 overflow-x-auto">
         <div className="min-w-max">
           <table className="w-full border-collapse">
             <thead>
@@ -403,7 +403,7 @@ export default function MechanicalCalendarTab() {
           onClick={() => setSelectedCell(null)}
         >
           <div
-            className="bg-theme-bg-secondary border-2 border-dr7-gold rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-theme-bg-secondary border-2 border-dr7-gold rounded-full p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-4">
@@ -432,7 +432,7 @@ export default function MechanicalCalendarTab() {
               {selectedCell.bookings.map((booking) => (
                 <div
                   key={booking.id}
-                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4"
+                  className="bg-theme-bg-tertiary border border-theme-border rounded-full p-4"
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div>

@@ -221,7 +221,7 @@ export default function ContrattoTab() {
 
   if (showForm) {
     return (
-      <div className="bg-theme-bg-secondary rounded-lg p-6">
+      <div className="bg-theme-bg-secondary rounded-full p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-theme-text-primary">
             {editingId ? 'Modifica Contratto' : 'Nuovo Contratto'}
@@ -457,7 +457,7 @@ export default function ContrattoTab() {
       </div>
 
       {/* Search Bar */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
         <input
           type="text"
           placeholder="Cerca cliente..."
@@ -469,7 +469,7 @@ export default function ContrattoTab() {
 
       {/* Contracts List */}
       {contracts.length === 0 ? (
-        <div className="bg-theme-bg-secondary rounded-lg p-12 text-center">
+        <div className="bg-theme-bg-secondary rounded-full p-12 text-center">
           <p className="text-theme-text-muted text-lg mb-4">Nessun contratto trovato</p>
           <button
             onClick={() => setShowForm(true)}
@@ -489,7 +489,7 @@ export default function ContrattoTab() {
               contract.customer_email.toLowerCase().includes(query)
             )
           }).map((contract) => (
-            <div key={contract.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+            <div key={contract.id} className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">

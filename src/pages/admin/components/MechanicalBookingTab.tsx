@@ -234,7 +234,7 @@ export default function MechanicalBookingTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">🔧 Prenotazioni Meccanica</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-md transition-colors"
+          className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
         >
           + Nuova Prenotazione
         </button>
@@ -247,7 +247,7 @@ export default function MechanicalBookingTab() {
           placeholder="Cerca prenotazione per nome cliente..."
           value={bookingSearchQuery}
           onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
       </div>
 
@@ -286,7 +286,7 @@ export default function MechanicalBookingTab() {
       />
 
       {/* Bookings Table */}
-      <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-full overflow-hidden">
         <table className="w-full">
           <thead className="bg-theme-bg-tertiary">
             <tr>
@@ -345,7 +345,7 @@ export default function MechanicalBookingTab() {
                         setEditingId(booking.id)
                         setShowForm(true)
                       }}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary text-xs rounded-full transition-colors"
+                      className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       Modifica
                     </button>
@@ -358,7 +358,7 @@ export default function MechanicalBookingTab() {
                     </button>
                     <button
                       onClick={() => handleDelete(booking.id)}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-xs rounded-full transition-colors"
+                      className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       Elimina
                     </button>
@@ -378,7 +378,7 @@ export default function MechanicalBookingTab() {
       </div>
 
       {/* Info Note */}
-      <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-4">
+      <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-full p-4">
         <h4 className="text-theme-text-primary font-semibold mb-2">📝 Note Importanti</h4>
         <ul className="text-theme-text-secondary text-sm space-y-1">
           <li>• Tutti i prezzi, tranne le lucidature, sono di sola manodopera</li>

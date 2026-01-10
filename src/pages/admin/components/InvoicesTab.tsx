@@ -293,7 +293,7 @@ export default function InvoicesTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-lg mb-6 border border-theme-border">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-full mb-6 border border-theme-border">
           <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
             {editingId ? 'Modifica Fattura' : 'Nuova Fattura'}
           </h3>
@@ -305,7 +305,7 @@ export default function InvoicesTab() {
                 type="text"
                 value={formData.invoice_number}
                 onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 placeholder="1448/FE"
                 required
               />
@@ -316,7 +316,7 @@ export default function InvoicesTab() {
                 type="date"
                 value={formData.invoice_date}
                 onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
@@ -330,7 +330,7 @@ export default function InvoicesTab() {
                 type="text"
                 value={formData.customer_name}
                 onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
@@ -340,7 +340,7 @@ export default function InvoicesTab() {
                 type="text"
                 value={formData.customer_address}
                 onChange={(e) => setFormData({ ...formData, customer_address: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 placeholder="Via Roma 43, 09070 Cagliari (CA)"
                 required
               />
@@ -352,7 +352,7 @@ export default function InvoicesTab() {
                   type="text"
                   value={formData.customer_tax_code}
                   onChange={(e) => setFormData({ ...formData, customer_tax_code: e.target.value })}
-                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
@@ -362,7 +362,7 @@ export default function InvoicesTab() {
                   type="text"
                   value={formData.customer_vat}
                   onChange={(e) => setFormData({ ...formData, customer_vat: e.target.value })}
-                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 />
               </div>
             </div>
@@ -375,14 +375,14 @@ export default function InvoicesTab() {
             </div>
 
             {formData.items.map((item, index) => (
-              <div key={index} className="bg-theme-bg-tertiary p-4 rounded-lg mb-3">
+              <div key={index} className="bg-theme-bg-tertiary p-4 rounded-full mb-3">
                 <div className="grid grid-cols-12 gap-3">
                   <div className="col-span-12 md:col-span-5">
                     <input
                       type="text"
                       value={item.description}
                       onChange={(e) => updateItem(index, 'description', e.target.value)}
-                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Descrizione"
                       required
                     />
@@ -393,7 +393,7 @@ export default function InvoicesTab() {
                       step="0.01"
                       value={item.unit_price}
                       onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Prezzo"
                       required
                     />
@@ -403,7 +403,7 @@ export default function InvoicesTab() {
                       type="number"
                       value={item.quantity}
                       onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Q.tà"
                       min="1"
                       required
@@ -414,7 +414,7 @@ export default function InvoicesTab() {
                       type="number"
                       value={item.vat_rate}
                       onChange={(e) => updateItem(index, 'vat_rate', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-theme-bg-secondary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
+                      className="w-full bg-theme-bg-secondary border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="IVA %"
                       required
                     />
@@ -434,7 +434,7 @@ export default function InvoicesTab() {
               </div>
             ))}
 
-            <div className="bg-theme-bg-tertiary p-4 rounded-lg mt-4">
+            <div className="bg-theme-bg-tertiary p-4 rounded-full mt-4">
               <div className="space-y-2 text-sm">
                 {subtotal > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">Imponibile:</span><span className="text-theme-text-primary">€{subtotal.toFixed(2)}</span></div>}
                 {vatAmount > 0 && <div className="flex justify-between"><span className="text-theme-text-muted">IVA:</span><span className="text-theme-text-primary">€{vatAmount.toFixed(2)}</span></div>}
@@ -450,7 +450,7 @@ export default function InvoicesTab() {
               <select
                 value={formData.payment_method}
                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
               >
                 <option value="Carta di credito / bancomat">Carta di credito / bancomat</option>
                 <option value="Bonifico bancario">Bonifico bancario</option>
@@ -464,7 +464,7 @@ export default function InvoicesTab() {
                 type="date"
                 value={formData.payment_date}
                 onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 required
               />
             </div>
@@ -475,7 +475,7 @@ export default function InvoicesTab() {
             <select
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-              className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+              className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
             >
               <option value="paid">Pagata</option>
               <option value="pending">In attesa</option>
@@ -492,7 +492,7 @@ export default function InvoicesTab() {
         </form>
       )}
 
-      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">

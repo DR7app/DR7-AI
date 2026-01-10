@@ -513,7 +513,7 @@ export default function VehiclesTab() {
       </div>
 
       {multiSelectMode && selectedVehicles.size > 0 && (
-        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4 mb-6 flex items-center justify-between">
+        <div className="bg-blue-900/30 border border-blue-700/50 rounded-full p-4 mb-6 flex items-center justify-between">
           <div className="text-blue-200">
             <strong>{selectedVehicles.size}</strong> veicoli selezionati
           </div>
@@ -543,14 +543,14 @@ export default function VehiclesTab() {
       )}
 
       {/* Price Adjustment Section - Compact */}
-      <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-lg p-4 mb-6">
+      <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-full p-4 mb-6">
         <div className="flex items-end gap-3">
           <div className="flex-1">
             <label className="block text-xs text-theme-text-muted mb-1">Veicolo</label>
             <select
               value={selectedVehicle}
               onChange={(e) => setSelectedVehicle(e.target.value)}
-              className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
+              className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm"
             >
               <option value="all">Tutti i veicoli ({vehicles.length})</option>
               {vehicles.map((vehicle) => (
@@ -569,7 +569,7 @@ export default function VehiclesTab() {
               onChange={(e) => setAdjustmentPercentage(e.target.value)}
               min="1"
               max="100"
-              className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary text-sm"
+              className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm"
               placeholder="10"
             />
           </div>
@@ -577,7 +577,7 @@ export default function VehiclesTab() {
           <button
             onClick={() => handlePriceAdjustment(true)}
             disabled={isAdjusting}
-            className="bg-green-700 hover:bg-green-600 text-theme-text-primary px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-green-700 hover:bg-green-600 text-theme-text-primary px-4 py-2 rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             + Aumenta
           </button>
@@ -585,7 +585,7 @@ export default function VehiclesTab() {
           <button
             onClick={() => handlePriceAdjustment(false)}
             disabled={isAdjusting}
-            className="bg-red-700 hover:bg-red-600 text-theme-text-primary px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-red-700 hover:bg-red-600 text-theme-text-primary px-4 py-2 rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             - Diminuisci
           </button>
@@ -599,7 +599,7 @@ export default function VehiclesTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-lg mb-6 border border-theme-border">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-full mb-6 border border-theme-border">
           <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
             {editingId ? 'Modifica Veicolo' : 'Nuovo Veicolo'}
           </h3>
@@ -655,14 +655,14 @@ export default function VehiclesTab() {
 
           {/* Date Range for Unavailability */}
           {formData.status === 'unavailable' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-full">
               <div>
                 <label className="block text-sm text-yellow-200 mb-1 font-semibold">📅 Non Disponibile Dal *</label>
                 <EuropeanDateInput
                   value={formData.unavailable_from}
                   onChange={(value) => setFormData({ ...formData, unavailable_from: value })}
                   required={formData.status === 'unavailable'}
-                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
@@ -671,7 +671,7 @@ export default function VehiclesTab() {
                   type="text"
                   value={formData.unavailable_from_time}
                   onChange={(e) => setFormData({ ...formData, unavailable_from_time: e.target.value })}
-                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary font-mono"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary font-mono"
                   placeholder="10:00"
                   pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
                   maxLength={5}
@@ -685,7 +685,7 @@ export default function VehiclesTab() {
                   value={formData.unavailable_until}
                   onChange={(value) => setFormData({ ...formData, unavailable_until: value })}
                   required={formData.status === 'unavailable'}
-                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 />
               </div>
               <div>
@@ -694,7 +694,7 @@ export default function VehiclesTab() {
                   type="text"
                   value={formData.unavailable_until_time}
                   onChange={(e) => setFormData({ ...formData, unavailable_until_time: e.target.value })}
-                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary font-mono"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary font-mono"
                   placeholder="16:00"
                   pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
                   maxLength={5}
@@ -708,7 +708,7 @@ export default function VehiclesTab() {
                   value={formData.unavailable_reason}
                   onChange={(e) => setFormData({ ...formData, unavailable_reason: e.target.value })}
                   required={formData.status === 'unavailable'}
-                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-md px-3 py-2 text-theme-text-primary"
+                  className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 >
                   <option value="">Seleziona un motivo...</option>
                   <option value="Tagliando">Tagliando</option>
@@ -743,7 +743,7 @@ export default function VehiclesTab() {
       {/* Three Column Layout: Urban, Exotic, and Aziendali */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Urban Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
           <div className="bg-cyan-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-cyan-900 text-cyan-200 rounded text-sm">Urban</span>
@@ -760,7 +760,7 @@ export default function VehiclesTab() {
                         type="checkbox"
                         checked={urbanVehicles.length > 0 && urbanVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(urbanVehicles)}
-                        className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
@@ -780,7 +780,7 @@ export default function VehiclesTab() {
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
@@ -841,7 +841,7 @@ export default function VehiclesTab() {
         </div>
 
         {/* Exotic Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
           <div className="bg-purple-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Exotic Supercars</span>
@@ -858,7 +858,7 @@ export default function VehiclesTab() {
                         type="checkbox"
                         checked={exoticVehicles.length > 0 && exoticVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(exoticVehicles)}
-                        className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
@@ -878,7 +878,7 @@ export default function VehiclesTab() {
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
@@ -939,7 +939,7 @@ export default function VehiclesTab() {
         </div>
 
         {/* Aziendali Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
           <div className="bg-orange-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
               <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Aziendali</span>
@@ -956,7 +956,7 @@ export default function VehiclesTab() {
                         type="checkbox"
                         checked={aziendaliVehicles.length > 0 && aziendaliVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(aziendaliVehicles)}
-                        className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
@@ -976,7 +976,7 @@ export default function VehiclesTab() {
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}

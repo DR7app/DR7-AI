@@ -97,7 +97,7 @@ export default function ClientiTab() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-lg p-6">
+      <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-full p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
@@ -180,7 +180,7 @@ export default function ClientiTab() {
           Nessun cliente trovato
         </div>
       ) : (
-        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+        <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="">
@@ -199,7 +199,7 @@ export default function ClientiTab() {
                 {filteredCustomers.map((customer) => (
                   <tr key={customer.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary">
                     <td className="px-4 py-3 text-sm text-theme-text-primary">
-                      <span className="inline-block px-2 py-1 rounded bg-dr7-gold/20 text-dr7-gold text-xs font-medium">
+                      <span className="inline-block px-2 py-1 rounded-full bg-dr7-gold/20 text-dr7-gold text-xs font-medium">
                         {getTipoLabel(customer.tipo_cliente)}
                       </span>
                     </td>

@@ -847,7 +847,7 @@ export default function CarWashBookingsTab() {
           </div>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-md transition-colors"
+            className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
           >
             {showForm ? 'Chiudi' : '+ Nuova Prenotazione'}
           </button>
@@ -861,7 +861,7 @@ export default function CarWashBookingsTab() {
           placeholder="Cerca prenotazione per nome cliente..."
           value={bookingSearchQuery}
           onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
       </div>
 
@@ -876,7 +876,7 @@ export default function CarWashBookingsTab() {
       />
 
       {showForm && (
-        <div className="bg-theme-bg-tertiary rounded-lg p-6 border border-theme-border mb-6">
+        <div className="bg-theme-bg-tertiary rounded-full p-6 border border-theme-border mb-6">
           <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Crea Nuova Prenotazione Lavaggio</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Customer Selection */}
@@ -1131,13 +1131,13 @@ export default function CarWashBookingsTab() {
               {/* AVAILABLE HOURS THIRD - Only shown after date and service are selected */}
               <div className="md:col-span-2">
                 {!formData.appointment_date || !formData.service_name ? (
-                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
+                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-full">
                     <p className="text-yellow-400 text-sm">
                       ⚠️ Seleziona la data e il tipo di servizio per vedere gli orari disponibili
                     </p>
                   </div>
                 ) : availableTimeSlots.length === 0 ? (
-                  <div className="p-4 bg-red-900/20 border border-red-600/50 rounded-lg">
+                  <div className="p-4 bg-red-900/20 border border-red-600/50 rounded-full">
                     <p className="text-red-400 text-sm font-semibold mb-2">
                       ❌ Nessun orario disponibile per questa data
                     </p>
@@ -1368,7 +1368,7 @@ export default function CarWashBookingsTab() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => setEditingBooking(booking)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                           >
                             Modifica
                           </button>
@@ -1393,7 +1393,7 @@ export default function CarWashBookingsTab() {
                           )}
                           <button
                             onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                           >
                             Elimina
                           </button>
@@ -1412,7 +1412,7 @@ export default function CarWashBookingsTab() {
       {
         editingBooking && (
           <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border">
+            <div className="bg-theme-bg-secondary rounded-full max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border">
               <div className="p-6 border-b border-theme-border">
                 <div className="flex justify-between items-start">
                   <h3 className="text-2xl font-bold text-theme-text-primary">Modifica Prenotazione</h3>

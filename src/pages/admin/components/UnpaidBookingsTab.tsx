@@ -312,7 +312,7 @@ export default function UnpaidBookingsTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-theme-text-primary">Prenotazioni Da Saldare</h2>
@@ -325,23 +325,23 @@ export default function UnpaidBookingsTab() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Totale Da Saldare</div>
           <div className="text-2xl font-bold text-red-400">
             €{(totalUnpaid / 100).toFixed(2)}
           </div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Prenotazioni</div>
           <div className="text-2xl font-bold text-theme-text-primary">{filteredBookings.length}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Noleggio</div>
           <div className="text-2xl font-bold text-theme-text-primary">
             {bookings.filter(b => b.service_type === 'rental').length}
           </div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
           <div className="text-sm text-theme-text-muted">Lavaggio + Meccanica</div>
           <div className="text-2xl font-bold text-theme-text-primary">
             {bookings.filter(b => b.service_type === 'car_wash' || b.service_type === 'mechanical_service').length}
@@ -350,7 +350,7 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* Filter and Actions */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row justify-between gap-4">
           <div className="flex gap-2 flex-wrap">
             <button
@@ -425,7 +425,7 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* Bookings Table */}
-      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+      <div className="bg-theme-bg-secondary rounded-full border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">

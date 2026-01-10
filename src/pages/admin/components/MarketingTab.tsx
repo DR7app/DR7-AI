@@ -295,7 +295,7 @@ export default function MarketingTab() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-xl border border-theme-border">
+            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-full border border-theme-border">
                 <div>
                     <h2 className="text-xl font-bold text-theme-text-primary">Marketing & Promozioni</h2>
                     <p className="text-theme-text-muted text-sm">Gestisci campagne e invio buoni regalo</p>
@@ -317,7 +317,7 @@ export default function MarketingTab() {
             {/* Tools Bar */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Search */}
-                <div className="bg-theme-bg-tertiary p-3 rounded-lg border border-theme-border">
+                <div className="bg-theme-bg-tertiary p-3 rounded-full border border-theme-border">
                     <input
                         type="text"
                         placeholder="Cerca cliente..."
@@ -352,7 +352,7 @@ export default function MarketingTab() {
             </div>
 
             {/* Customers List Table */}
-            <div className="bg-theme-bg-tertiary rounded-xl overflow-hidden border border-theme-border">
+            <div className="bg-theme-bg-tertiary rounded-full overflow-hidden border border-theme-border">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-theme-text-muted">
                         <thead className="bg-theme-bg-secondary/50 text-theme-text-secondary uppercase font-medium">
@@ -374,7 +374,7 @@ export default function MarketingTab() {
                                                 setSelectedCustomerIds(newSet)
                                             }
                                         }}
-                                        className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                        className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                                     />
                                 </th>
                                 <th className="p-4">Cliente</th>
@@ -395,7 +395,7 @@ export default function MarketingTab() {
                                             type="checkbox"
                                             checked={selectedCustomerIds.has(customer.id)}
                                             onChange={() => toggleSelection(customer.id)}
-                                            className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                            className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
                                         />
                                     </td>
                                     <td className="p-4 font-medium text-theme-text-primary">{customer.full_name}</td>

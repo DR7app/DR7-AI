@@ -72,7 +72,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="admin@dr7empire.com"
                 />
               </div>
@@ -87,13 +87,13 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="••••••••"
                 />
               </div>
 
               {error && (
-                <div className="bg-red-900/30 backdrop-blur-sm border border-red-700/50 text-red-200 px-4 py-3 rounded-xl text-sm">
+                <div className="bg-red-900/30 backdrop-blur-sm border border-red-700/50 text-red-200 px-4 py-3 rounded-full text-sm">
                   {error}
                 </div>
               )}

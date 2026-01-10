@@ -117,7 +117,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
   }
 
   return (
-    <div className="bg-theme-bg-secondary p-6 rounded-lg border border-theme-border mb-6">
+    <div className="bg-theme-bg-secondary p-6 rounded-full border border-theme-border mb-6">
       <h3 className="text-xl font-semibold text-theme-text-primary mb-4">Crea Nuovo Cliente</h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -169,7 +169,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                 <button
                   type="button"
                   onClick={() => handleSearch('denominazione', formData.denominazione)}
-                  className="px-4 py-2 bg-dr7-gold text-black rounded hover:bg-yellow-500 transition-colors whitespace-nowrap"
+                  className="px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-yellow-500 transition-colors whitespace-nowrap"
                 >
                   🔍 Cerca
                 </button>
@@ -193,7 +193,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                 <button
                   type="button"
                   onClick={() => handleSearch('partita_iva', formData.partitaIVA)}
-                  className="px-4 py-2 bg-dr7-gold text-black rounded hover:bg-yellow-500 transition-colors whitespace-nowrap"
+                  className="px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-yellow-500 transition-colors whitespace-nowrap"
                 >
                   🔍 Cerca
                 </button>
@@ -329,7 +329,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                 <button
                   type="button"
                   onClick={() => handleSearch('codice_univoco', formData.codiceUnivoco)}
-                  className="px-4 py-2 bg-dr7-gold text-black rounded hover:bg-yellow-500 transition-colors whitespace-nowrap"
+                  className="px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-yellow-500 transition-colors whitespace-nowrap"
                 >
                   🔍 Cerca
                 </button>
@@ -353,7 +353,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                 <button
                   type="button"
                   onClick={() => handleSearch('codice_fiscale', formData.codiceFiscale)}
-                  className="px-4 py-2 bg-dr7-gold text-black rounded hover:bg-yellow-500 transition-colors whitespace-nowrap"
+                  className="px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-yellow-500 transition-colors whitespace-nowrap"
                 >
                   🔍 Cerca
                 </button>
@@ -377,7 +377,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                 <button
                   type="button"
                   onClick={() => handleSearch('ente_ufficio', formData.enteUfficio)}
-                  className="px-4 py-2 bg-dr7-gold text-black rounded hover:bg-yellow-500 transition-colors whitespace-nowrap"
+                  className="px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-yellow-500 transition-colors whitespace-nowrap"
                 >
                   🔍 Cerca
                 </button>
@@ -401,7 +401,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                 <button
                   type="button"
                   onClick={() => handleSearch('citta', formData.citta)}
-                  className="px-4 py-2 bg-dr7-gold text-black rounded hover:bg-yellow-500 transition-colors whitespace-nowrap"
+                  className="px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-yellow-500 transition-colors whitespace-nowrap"
                 >
                   🔍 Cerca
                 </button>

@@ -363,13 +363,13 @@ export default function CargosTab() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-xl border border-theme-border">
+            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-full border border-theme-border">
                 <div>
                     <h2 className="text-xl font-bold text-theme-text-primary">Gestione Multe & Cargos</h2>
                     <p className="text-theme-text-muted text-sm">Portale Polizia di Stato</p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="flex bg-theme-bg-tertiary rounded-lg p-1 border border-theme-border">
+                    <div className="flex bg-theme-bg-tertiary rounded-full p-1 border border-theme-border">
                         <button
                             onClick={() => setActiveSubTab('fines')}
                             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black shadow-sm' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
@@ -386,7 +386,7 @@ export default function CargosTab() {
 
                     <button
                         onClick={() => setShowSettings(!showSettings)}
-                        className="px-3 py-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-lg border border-theme-border transition-colors"
+                        className="px-3 py-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-full border border-theme-border transition-colors"
                         title="Impostazioni API"
                     >
                         ⚙️
@@ -396,7 +396,7 @@ export default function CargosTab() {
                         href="https://cargos.poliziadistato.it/Cargos_Portale/"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 bg-gray-700 text-theme-text-primary font-medium rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
+                        className="px-4 py-2 bg-gray-700 text-theme-text-primary font-medium rounded-full hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
                     >
                         Apri Portale Cargos ↗
                     </a>
@@ -405,7 +405,7 @@ export default function CargosTab() {
 
             {/* API Settings Modal */}
             {showSettings && (
-                <div className="bg-theme-bg-tertiary border border-theme-border p-6 rounded-xl mb-6 animate-fadeIn">
+                <div className="bg-theme-bg-tertiary border border-theme-border p-6 rounded-full mb-6 animate-fadeIn">
                     <h3 className="text-lg font-bold text-theme-text-primary mb-4 border-b border-theme-border pb-2">⚙️ Configurazione API Cargos</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -455,7 +455,7 @@ export default function CargosTab() {
             {activeSubTab === 'fines' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Search Form */}
-                    <div className="bg-theme-bg-tertiary p-6 rounded-xl border border-theme-border space-y-4 h-fit">
+                    <div className="bg-theme-bg-tertiary p-6 rounded-full border border-theme-border space-y-4 h-fit">
                         <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Dati Multa (Ricerca Driver)</h3>
 
                         <div>
@@ -466,7 +466,7 @@ export default function CargosTab() {
                                     value={plate}
                                     onChange={(e) => setPlate(e.target.value.toUpperCase())}
                                     placeholder="Esempio: GB123XY"
-                                    className="w-full text-theme-text-primary bg-theme-bg-secondary border border-theme-border rounded-lg p-2.5 font-mono uppercase tracking-wider focus:ring-2 focus:ring-dr7-gold outline-none"
+                                    className="w-full text-theme-text-primary bg-theme-bg-secondary border border-theme-border rounded-full p-2.5 font-mono uppercase tracking-wider focus:ring-2 focus:ring-dr7-gold outline-none"
                                 />
                             </div>
                             {/* Quick select from vehicles helper */}
@@ -475,7 +475,7 @@ export default function CargosTab() {
                                     <button
                                         key={v.id}
                                         onClick={() => setPlate(v.plate || v.targa || '')}
-                                        className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                                        className="px-2 py-1 bg-gray-700 rounded-full hover:bg-gray-600"
                                     >
                                         {v.display_name}
                                     </button>
@@ -507,7 +507,7 @@ export default function CargosTab() {
                         </Button>
 
                         {error && (
-                            <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg text-red-200 text-sm">
+                            <div className="p-3 bg-red-900/30 border border-red-800 rounded-full text-red-200 text-sm">
                                 {error}
                             </div>
                         )}
@@ -516,7 +516,7 @@ export default function CargosTab() {
                     {/* Results Area */}
                     <div className="lg:col-span-2">
                         {searchResult ? (
-                            <div className="bg-theme-bg-tertiary rounded-xl border border-theme-border overflow-hidden">
+                            <div className="bg-theme-bg-tertiary rounded-full border border-theme-border overflow-hidden">
                                 <div className="p-6 border-b border-theme-border bg-theme-bg-tertiary/50">
                                     <div className="flex justify-between items-start">
                                         <div>
@@ -536,7 +536,7 @@ export default function CargosTab() {
                                                 href={searchResult.contract_url}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-colors text-sm font-medium flex items-center gap-2"
+                                                className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-full hover:bg-blue-600/30 transition-colors text-sm font-medium flex items-center gap-2"
                                             >
                                                 📄 Vedi Contratto
                                             </a>
@@ -617,7 +617,7 @@ export default function CargosTab() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-xl border border-theme-border border-dashed text-gray-500">
+                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-full border border-theme-border border-dashed text-gray-500">
                                 <span className="text-4xl mb-4">👮‍♂️</span>
                                 <p className="text-lg font-medium">In attesa di ricerca</p>
                                 <p className="text-sm max-w-md text-center mt-2">
@@ -630,7 +630,7 @@ export default function CargosTab() {
             )}
 
             {activeSubTab === 'export' && (
-                <div className="bg-theme-bg-tertiary p-8 rounded-xl border border-theme-border">
+                <div className="bg-theme-bg-tertiary p-8 rounded-full border border-theme-border">
                     <div className="max-w-2xl mx-auto space-y-8">
                         <div className="text-center">
                             <span className="text-5xl mb-4 block">📤</span>
@@ -648,7 +648,7 @@ export default function CargosTab() {
                             )}
                         </div>
 
-                        <div className="bg-theme-bg-secondary/50 p-6 rounded-xl border border-theme-border max-w-md mx-auto">
+                        <div className="bg-theme-bg-secondary/50 p-6 rounded-full border border-theme-border max-w-md mx-auto">
                             <label className="block text-sm font-medium text-theme-text-muted mb-2">Seleziona Data Inizio Noleggio</label>
                             <Input
                                 type="date"

@@ -239,7 +239,7 @@ export default function CarWashCalendarTab() {
   return (
     <div className="space-y-6">
       {/* Header Controls */}
-      <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4">
+      <div className="bg-theme-bg-secondary rounded-full p-3 lg:p-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap flex-1">
             <h2 className="text-lg font-bold text-theme-text-primary">Calendario Lavaggi</h2>
@@ -251,7 +251,7 @@ export default function CarWashCalendarTab() {
                 placeholder="Cerca clienti..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-primary rounded-md border border-theme-border focus:border-dr7-gold focus:outline-none text-sm w-48"
+                className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-primary rounded-full border border-theme-border focus:border-dr7-gold focus:outline-none text-sm w-48"
               />
               {searchQuery && (
                 <button
@@ -304,14 +304,14 @@ export default function CarWashCalendarTab() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigateMonth('prev')}
-              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md transition-colors text-sm font-semibold"
+              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm font-semibold"
               aria-label="Mese precedente"
             >
               ← Precedente
             </button>
             <button
               onClick={() => navigateMonth('next')}
-              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md transition-colors text-sm font-semibold"
+              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm font-semibold"
               aria-label="Mese successivo"
             >
               Successivo →
@@ -326,7 +326,7 @@ export default function CarWashCalendarTab() {
 
       {/* Search Results */}
       {searchQuery && (
-        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+        <div className="bg-theme-bg-secondary rounded-full p-4 border border-theme-border">
           <h3 className="text-lg font-bold text-theme-text-primary mb-3">
             Risultati ricerca: "{searchQuery}"
           </h3>
@@ -337,7 +337,7 @@ export default function CarWashCalendarTab() {
               {matchingBookings.map(booking => (
                 <div
                   key={booking.id}
-                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3 hover:border-dr7-gold transition-colors cursor-pointer"
+                  className="bg-theme-bg-tertiary border border-theme-border rounded-full p-3 hover:border-dr7-gold transition-colors cursor-pointer"
                   onClick={() => {
                     setSelectedCell({
                       date: `${new Date(booking.appointment_date).getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
@@ -380,7 +380,7 @@ export default function CarWashCalendarTab() {
       )}
 
       {/* Battleship-style Calendar Grid */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
+      <div className="bg-theme-bg-secondary rounded-full p-4 lg:p-6 overflow-x-auto">
         <div className="min-w-max">
           <table className="w-full border-collapse">
             <thead>
@@ -438,7 +438,7 @@ export default function CarWashCalendarTab() {
           onClick={() => setSelectedCell(null)}
         >
           <div
-            className="bg-theme-bg-secondary rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border shadow-2xl"
+            className="bg-theme-bg-secondary rounded-full max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-theme-border">
@@ -460,7 +460,7 @@ export default function CarWashCalendarTab() {
 
             <div className="p-6 space-y-4">
               {selectedCell.bookings.map(booking => (
-                <div key={booking.id} className="bg-theme-bg-tertiary/50 rounded-lg p-5 border border-red-500/30">
+                <div key={booking.id} className="bg-theme-bg-tertiary/50 rounded-full p-5 border border-red-500/30">
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <div className="text-theme-text-primary font-bold text-lg mb-1">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>

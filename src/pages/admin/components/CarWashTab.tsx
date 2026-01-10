@@ -416,7 +416,7 @@ export default function CarWashTab() {
       )}
 
       {/* Info Box */}
-      <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4 mt-6">
+      <div className="bg-blue-900/20 border border-blue-800 rounded-full p-4 mt-6">
         <h4 className="text-theme-text-primary font-semibold mb-2">ℹ️ Informazioni</h4>
         <ul className="text-sm text-theme-text-secondary space-y-1">
           <li>• Le modifiche ai prezzi si riflettono immediatamente sul sito principale</li>

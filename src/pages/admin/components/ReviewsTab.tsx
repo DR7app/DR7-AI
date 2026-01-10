@@ -207,7 +207,7 @@ export default function ReviewsTab() {
             </div>
 
             {/* Filters */}
-            <div className="bg-theme-bg-secondary p-4 rounded-xl border border-theme-border flex gap-4">
+            <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border flex gap-4">
                 <input
                     type="text"
                     placeholder="Cerca cliente o email..."
@@ -217,7 +217,7 @@ export default function ReviewsTab() {
                 />
             </div>
 
-            <div className="bg-theme-bg-secondary rounded-xl overflow-hidden border border-theme-border shadow-2xl">
+            <div className="bg-theme-bg-secondary rounded-full overflow-hidden border border-theme-border shadow-2xl">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className=" text-theme-text-primary uppercase text-xs tracking-wider">
@@ -228,7 +228,7 @@ export default function ReviewsTab() {
                                             type="checkbox"
                                             checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.filter(b => !b.review_sent_at).length}
                                             onChange={handleSelectAll}
-                                            className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                            className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
                                         />
                                     </th>
                                 )}
@@ -263,7 +263,7 @@ export default function ReviewsTab() {
                                                         type="checkbox"
                                                         checked={selectedIds.has(b.id)}
                                                         onChange={() => toggleSelection(b.id)}
-                                                        className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                                        className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
                                                     />
                                                 ) : (
                                                     <span title="Recensione già richiesta" className="text-xs text-green-500">✅</span>
@@ -306,7 +306,7 @@ export default function ReviewsTab() {
                                                 </Button>
                                             )}
                                             {b.review_sent_at && (
-                                                <span className="text-xs text-green-500 font-medium border border-green-500/30 px-2 py-1 rounded bg-green-500/10">Inviata</span>
+                                                <span className="text-xs text-green-500 font-medium border border-green-500/30 px-2 py-1 rounded-full bg-green-500/10">Inviata</span>
                                             )}
                                         </td>
                                     </tr>

@@ -94,7 +94,7 @@ export default function AdminDashboard() {
               {!alarmState.audioEnabled && (
                 <button
                   onClick={enableAudio}
-                  className="px-3 py-2 bg-dr7-gold text-black font-semibold rounded-lg hover:bg-yellow-500 transition-colors flex items-center gap-2 text-sm"
+                  className="px-3 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors flex items-center gap-2 text-sm"
                   title="Enable sound alerts for vehicle returns"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

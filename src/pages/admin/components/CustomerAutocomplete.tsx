@@ -144,7 +144,7 @@ export default function CustomerAutocomplete({
             {isOpen && filteredCustomers.length > 0 && (
                 <div
                     ref={dropdownRef}
-                    className="absolute z-50 w-full mt-1 bg-theme-bg-tertiary border border-theme-border-light rounded-md shadow-lg max-h-60 overflow-y-auto"
+                    className="absolute z-50 w-full mt-1 bg-theme-bg-tertiary border border-theme-border-light rounded-full shadow-lg max-h-60 overflow-y-auto"
                 >
                     {filteredCustomers.map((customer, index) => (
                         <div
@@ -169,7 +169,7 @@ export default function CustomerAutocomplete({
             {isOpen && searchQuery && filteredCustomers.length === 0 && (
                 <div
                     ref={dropdownRef}
-                    className="absolute z-50 w-full mt-1 bg-theme-bg-tertiary border border-theme-border-light rounded-md shadow-lg px-3 py-2"
+                    className="absolute z-50 w-full mt-1 bg-theme-bg-tertiary border border-theme-border-light rounded-full shadow-lg px-3 py-2"
                 >
                     <div className="text-theme-text-muted text-sm">Nessun cliente trovato</div>
                 </div>
