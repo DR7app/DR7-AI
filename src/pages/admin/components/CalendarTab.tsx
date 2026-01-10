@@ -3,7 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
-import { parseUTCToRome, getRomeDateComponents, debugTimezone } from '../../../utils/timezoneUtils'
+import { parseUTCToRome, debugTimezone } from '../../../utils/timezoneUtils'
 
 interface Vehicle {
   id: string
@@ -293,42 +293,51 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
   // Unified helper to calculate startDay and endDay for a booking within the current month
   // TIMEZONE FIX: Use Rome timezone components for accurate day calculation
   const getBookingRange = (booking: Booking, year: number, month: number) => {
-    // Get date components in Europe/Rome timezone
-    const pickupComponents = getRomeDateComponents(booking.pickup_date)
-    const dropoffComponents = getRomeDateComponents(booking.dropoff_date)
+    // SIMPLIFIED: Database timestamps already have timezone info (+01:00 or +02:00)
+    // JavaScript Date object handles this correctly
+    const pickupDate = new Date(booking.pickup_date)
+    const dropoffDate = new Date(booking.dropoff_date)
+
     const lastDayInMonth = new Date(year, month + 1, 0).getDate()
 
-    // Check if booking overlaps this month in Rome timezone
-    // Month is 0-indexed in JS, but 1-indexed in our components
-    const jsMonth = month + 1
+    // Get the actual date components as they appear in Italy
+    // The Date object's getFullYear/getMonth/getDate methods return LOCAL time
+    // But since our timestamps have +01:00, they're already in Rome time!
+    const pickupYear = pickupDate.getFullYear()
+    const pickupMonth = pickupDate.getMonth() // 0-indexed
+    const pickupDay = pickupDate.getDate()
+
+    const dropoffYear = dropoffDate.getFullYear()
+    const dropoffMonth = dropoffDate.getMonth() // 0-indexed  
+    const dropoffDay = dropoffDate.getDate()
+    const dropoffHour = dropoffDate.getHours()
+    const dropoffMinute = dropoffDate.getMinutes()
 
     // Booking is before this month
-    if (dropoffComponents.year < year ||
-      (dropoffComponents.year === year && dropoffComponents.month < jsMonth)) {
+    if (dropoffYear < year || (dropoffYear === year && dropoffMonth < month)) {
       return null
     }
 
     // Booking is after this month
-    if (pickupComponents.year > year ||
-      (pickupComponents.year === year && pickupComponents.month > jsMonth)) {
+    if (pickupYear > year || (pickupYear === year && pickupMonth > month)) {
       return null
     }
 
     // Calculate start day in this month
     let startDay: number
-    if (pickupComponents.year === year && pickupComponents.month === jsMonth) {
-      startDay = pickupComponents.day
+    if (pickupYear === year && pickupMonth === month) {
+      startDay = pickupDay
     } else {
       startDay = 1 // Booking started in a previous month
     }
 
     // Calculate end day in this month
     let endDay: number
-    if (dropoffComponents.year === year && dropoffComponents.month === jsMonth) {
-      endDay = dropoffComponents.day
+    if (dropoffYear === year && dropoffMonth === month) {
+      endDay = dropoffDay
 
       // If dropoff is exactly at midnight (00:00), the booking ends at the end of the previous day
-      if (dropoffComponents.hour === 0 && dropoffComponents.minute === 0) {
+      if (dropoffHour === 0 && dropoffMinute === 0) {
         endDay = Math.max(startDay, endDay - 1)
       }
     } else {

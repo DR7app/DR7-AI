@@ -589,6 +589,9 @@ const LotteriaBoard: React.FC = () => {
   const [emailTextContent, setEmailTextContent] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [availableClients, setAvailableClients] = useState<Array<{ email: string; full_name: string }>>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
 
   const fetchSoldTickets = async () => {
     try {
@@ -1079,6 +1082,30 @@ const LotteriaBoard: React.FC = () => {
     }
   };
 
+  const handleLoadAvailableClients = async () => {
+    setLoadingClients(true);
+    try {
+      const { data, error } = await supabase
+        .from('commercial_operation_tickets')
+        .select('email, full_name')
+        .order('full_name');
+
+      if (error) throw error;
+
+      // Get unique clients by email
+      const uniqueClients = Array.from(
+        new Map(data?.map(c => [c.email.toLowerCase(), c]) || []).values()
+      );
+
+      setAvailableClients(uniqueClients);
+    } catch (error: any) {
+      console.error('[LotteriaBoard] Error loading clients:', error);
+      alert(`Errore nel caricamento dei clienti: ${error.message}`);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
   const handleSendEmailsFromModal = async () => {
     // Validate fields
     if (!emailSubject.trim() || !emailTextContent.trim()) {
@@ -1086,8 +1113,16 @@ const LotteriaBoard: React.FC = () => {
       return;
     }
 
+    // Determine recipients
+    const sendToAll = selectedRecipients.length === 0;
+    const recipientCount = sendToAll ? availableClients.length : selectedRecipients.length;
+
     // Confirm send
-    if (!confirm('Sei sicuro di voler inviare l\'email a TUTTI i clienti che hanno comprato biglietti?\n\nQuesta azione invierà un\'email personalizzata a tutti gli acquirenti.')) {
+    const confirmMessage = sendToAll
+      ? `Sei sicuro di voler inviare l'email a TUTTI i ${recipientCount} clienti che hanno comprato biglietti?\n\nQuesta azione invierà un'email personalizzata a tutti gli acquirenti.`
+      : `Sei sicuro di voler inviare l'email a ${recipientCount} cliente${recipientCount > 1 ? 'i' : ''} selezionat${recipientCount > 1 ? 'i' : 'o'}?\n\nQuesta azione invierà un'email ai clienti selezionati.`;
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -1147,10 +1182,15 @@ const LotteriaBoard: React.FC = () => {
       // Then send emails
       console.log('[LotteriaBoard] Sending emails...');
 
+      const requestBody: any = {};
+      if (!sendToAll) {
+        requestBody.recipientEmails = selectedRecipients;
+      }
+
       const response = await fetch('/.netlify/functions/send-lottery-postponement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify(requestBody)
       });
 
       const result = await response.json();
@@ -1158,6 +1198,7 @@ const LotteriaBoard: React.FC = () => {
       if (response.ok && result.success) {
         alert(`✅ Email inviate con successo!\n\nInviate: ${result.sent}\nFallite: ${result.failed}\nTotale clienti: ${result.total}`);
         setShowEmailEditorModal(false);
+        setSelectedRecipients([]); // Reset selection
       } else {
         throw new Error(result.error || 'Errore sconosciuto');
       }
@@ -1265,7 +1306,11 @@ const LotteriaBoard: React.FC = () => {
 
   const handleOpenEmailEditor = async () => {
     setShowEmailEditorModal(true);
-    await handleLoadEmailTemplate();
+    setSelectedRecipients([]); // Reset selection when opening
+    await Promise.all([
+      handleLoadEmailTemplate(),
+      handleLoadAvailableClients()
+    ]);
   };
 
   if (loading) {
@@ -1952,9 +1997,11 @@ const LotteriaBoard: React.FC = () => {
           <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-theme-border flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold text-theme-text-primary">Invia Email a Tutti i Clienti</h2>
+                <h2 className="text-2xl font-bold text-theme-text-primary">
+                  Invia Email Clienti Lotteria
+                </h2>
                 <p className="text-sm text-theme-text-secondary mt-2">
-                  Rivedi e modifica il contenuto dell'email prima di inviarla a tutti i clienti che hanno comprato biglietti
+                  Seleziona i destinatari e personalizza il contenuto dell'email
                 </p>
               </div>
               <button
@@ -1967,13 +2014,59 @@ const LotteriaBoard: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-6">
-              {loadingTemplate ? (
+              {loadingTemplate || loadingClients ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-dr7-gold mx-auto mb-4"></div>
-                  <p className="text-theme-text-secondary">Caricamento template...</p>
+                  <p className="text-theme-text-secondary">
+                    {loadingTemplate ? 'Caricamento template...' : 'Caricamento clienti...'}
+                  </p>
                 </div>
               ) : (
                 <>
+                  {/* Recipient Selector */}
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      Invia a:
+                    </label>
+                    <div className="space-y-2">
+                      <select
+                        multiple
+                        value={selectedRecipients}
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.selectedOptions, option => option.value);
+                          setSelectedRecipients(selected);
+                        }}
+                        className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors min-h-[120px]"
+                      >
+                        {availableClients.map((client) => (
+                          <option key={client.email} value={client.email} className="py-1">
+                            {client.full_name} ({client.email})
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex items-center justify-between text-xs text-theme-text-muted">
+                        <span>
+                          {selectedRecipients.length === 0
+                            ? `Nessun cliente selezionato - invierà a TUTTI i ${availableClients.length} clienti`
+                            : `${selectedRecipients.length} cliente${selectedRecipients.length > 1 ? 'i' : ''} selezionat${selectedRecipients.length > 1 ? 'i' : 'o'}`
+                          }
+                        </span>
+                        {selectedRecipients.length > 0 && (
+                          <button
+                            onClick={() => setSelectedRecipients([])}
+                            className="text-dr7-gold hover:text-yellow-500 font-medium"
+                          >
+                            Deseleziona Tutti
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-theme-text-muted">
+                        💡 Tieni premuto Ctrl (Windows) o Cmd (Mac) per selezionare più clienti.
+                        Lascia vuoto per inviare a tutti.
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Subject Field */}
                   <div>
                     <label className="block text-sm font-semibold text-theme-text-primary mb-2">

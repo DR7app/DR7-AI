@@ -20,7 +20,16 @@ export const handler: Handler = async (event) => {
     }
 
     try {
+        // Parse request body to get optional recipient emails
+        const body = event.body ? JSON.parse(event.body) : {}
+        const recipientEmails: string[] | undefined = body.recipientEmails
+
         console.log('[send-lottery-postponement] Starting email campaign...')
+        if (recipientEmails && recipientEmails.length > 0) {
+            console.log('[send-lottery-postponement] Sending to specific recipients:', recipientEmails.length)
+        } else {
+            console.log('[send-lottery-postponement] Sending to ALL ticket buyers')
+        }
 
         // 1. Fetch active email template from database
         const { data: template, error: templateError } = await supabase
@@ -144,10 +153,17 @@ Questa è una comunicazione ufficiale riguardante la tua partecipazione alla Lot
         console.log('[send-lottery-postponement] Using template:', template ? template.template_name : 'Default (hardcoded)')
 
         // 2. Get all unique customers who bought lottery tickets
-        const { data: tickets, error: ticketsError } = await supabase
+        let query = supabase
             .from('commercial_operation_tickets')
             .select('email, full_name')
             .order('email')
+
+        // Filter by specific recipients if provided
+        if (recipientEmails && recipientEmails.length > 0) {
+            query = query.in('email', recipientEmails)
+        }
+
+        const { data: tickets, error: ticketsError } = await query
 
         if (ticketsError) {
             console.error('[send-lottery-postponement] Error fetching tickets:', ticketsError)
@@ -155,8 +171,11 @@ Questa è una comunicazione ufficiale riguardante la tua partecipazione alla Lot
         }
 
         if (!tickets || tickets.length === 0) {
-            console.log('[send-lottery-postponement] No tickets found')
-            return { statusCode: 200, body: JSON.stringify({ success: true, message: 'No tickets found', sent: 0 }) }
+            const message = recipientEmails && recipientEmails.length > 0
+                ? 'No tickets found for selected recipients'
+                : 'No tickets found'
+            console.log('[send-lottery-postponement]', message)
+            return { statusCode: 200, body: JSON.stringify({ success: true, message, sent: 0 }) }
         }
 
         // 3. Get unique customers (deduplicate by email)
