@@ -377,15 +377,7 @@ export default function MechanicalBookingTab() {
         </table>
       </div>
 
-      {/* Info Note */}
-      <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-4">
-        <h4 className="text-theme-text-primary font-semibold mb-2">Note Importanti</h4>
-        <ul className="text-theme-text-secondary text-sm space-y-1">
-          <li>• Tutti i prezzi, tranne le lucidature, sono di sola manodopera</li>
-          <li>• I pezzi possono essere forniti dal cliente o acquistati tramite DR7</li>
-          <li>• Controllo livelli incluso nei tagliandi rapidi</li>
-        </ul>
-      </div>
+
     </div>
   )
 }
