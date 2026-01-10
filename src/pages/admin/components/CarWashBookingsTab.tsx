@@ -1164,7 +1164,7 @@ export default function CarWashBookingsTab() {
                             </p>
                             <div className="flex flex-wrap gap-2">
                               {nextSlots.map(slot => (
-                                <span key={slot} className="px-3 py-1 bg-green-900/30 border border-green-600/50 rounded text-green-300 text-sm">
+                                <span key={slot} className="px-3 py-1 bg-green-900/30 border border-green-600/50 rounded-full text-green-300 text-sm">
                                   {formatTimeSlotWithDuration(slot, selectedService.durationMinutes)}
                                 </span>
                               ))}
@@ -1296,14 +1296,14 @@ export default function CarWashBookingsTab() {
 
       {
         bookings.length === 0 ? (
-          <div className="bg-theme-bg-primary rounded-lg border border-theme-border p-8 text-center text-gray-500">
+          <div className=" rounded-lg border border-theme-border p-8 text-center text-gray-500">
             Nessuna prenotazione lavaggio trovata
           </div>
         ) : (
-          <div className="bg-theme-bg-primary rounded-lg overflow-hidden">
+          <div className=" rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-max">
-                <thead className="bg-theme-bg-primaryer">
+                <thead className="er">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Servizio</th>
@@ -1322,7 +1322,7 @@ export default function CarWashBookingsTab() {
                     const customerName = (booking.customer_name || '').toLowerCase()
                     return customerName.includes(query)
                   }).map((booking) => (
-                    <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-primaryer/50">
+                    <tr key={booking.id} className="border-t border-theme-border hover:er/50">
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div className="font-medium">{booking.customer_name}</div>
                         <div className="text-xs text-theme-text-muted">{booking.customer_email}</div>
@@ -1356,7 +1356,7 @@ export default function CarWashBookingsTab() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid'
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid'
                             ? 'bg-green-900 text-green-300'
                             : 'bg-red-900 text-red-300'
                             }`}
@@ -1368,32 +1368,32 @@ export default function CarWashBookingsTab() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => setEditingBooking(booking)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                           >
                             Modifica
                           </button>
                           <button
                             onClick={() => handleGenerateInvoice(booking)}
                             disabled={generatingInvoice}
-                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded text-xs font-medium transition-colors`}
+                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
                           >
                             {generatingInvoice ? '...' : 'Genera Fattura'}
                           </button>
                           {booking.status !== 'cancelled' ? (
                             <button
                               onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-theme-text-primary rounded text-xs font-medium transition-colors"
+                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                             >
                               Annulla
                             </button>
                           ) : (
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-theme-text-muted">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-theme-text-muted">
                               Annullata
                             </span>
                           )}
                           <button
                             onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                           >
                             Elimina
                           </button>
@@ -1411,7 +1411,7 @@ export default function CarWashBookingsTab() {
       {/* Edit Booking Modal */}
       {
         editingBooking && (
-          <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
             <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border">
               <div className="p-6 border-b border-theme-border">
                 <div className="flex justify-between items-start">
