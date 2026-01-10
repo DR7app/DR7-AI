@@ -895,7 +895,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   const hasAlternatives = alternativeVehicles.length > 1
 
                   return (
-                    <div key={booking.id} className="bg-gradient-to-br from-red-500/20 to-red-600/10 backdrop-blur-sm rounded-full p-5 border-l-2 border-red-500 border border-white/10 hover:scale-[1.01] transition-all duration-200">
+                    <div key={booking.id} className="bg-gradient-to-br from-red-500/20 to-red-600/10 backdrop-blur-sm rounded-lg p-5 border-l-2 border-red-500 border border-white/10 hover:scale-[1.01] transition-all duration-200">
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <div className="text-theme-text-primary font-medium text-lg mb-1">
@@ -1056,7 +1056,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                 </div>
 
                 {/* Reason */}
-                <div className="bg-orange-500/10 border border-orange-500/30 rounded-full p-4">
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
                   <p className="text-sm text-orange-400 mb-1">Motivo</p>
                   <p className="text-lg font-medium text-orange-300">
                     {selectedUnavailability.metadata?.unavailable_reason || 'Non disponibile'}
