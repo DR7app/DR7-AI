@@ -54,7 +54,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-theme-bg-primaryer flex items-center justify-center">
+      <div className="min-h-screen er flex items-center justify-center">
         <div className="text-dr7-gold text-xl">Loading...</div>
       </div>
     )

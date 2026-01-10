@@ -752,7 +752,7 @@ export default function VehiclesTab() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-theme-bg-primary">
+              <thead className="">
                 <tr>
                   {multiSelectMode && (
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
@@ -787,7 +787,7 @@ export default function VehiclesTab() {
                     <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
@@ -850,7 +850,7 @@ export default function VehiclesTab() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-theme-bg-primary">
+              <thead className="">
                 <tr>
                   {multiSelectMode && (
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
@@ -885,7 +885,7 @@ export default function VehiclesTab() {
                     <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
@@ -948,7 +948,7 @@ export default function VehiclesTab() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-theme-bg-primary">
+              <thead className="">
                 <tr>
                   {multiSelectMode && (
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
@@ -983,7 +983,7 @@ export default function VehiclesTab() {
                     <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :

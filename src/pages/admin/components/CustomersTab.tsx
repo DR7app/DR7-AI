@@ -881,7 +881,7 @@ export default function CustomersTab() {
     <div>
       {/* Customer Details Modal - For Fattura Generation */}
       {viewingCustomerDetails && (
-        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
               <h3 className="text-xl font-bold text-theme-text-primary">
@@ -1267,7 +1267,7 @@ export default function CustomersTab() {
       {/* Documents Modal */}
       {
         viewingDocuments && (
-          <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
             <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-theme-text-primary">
@@ -1650,7 +1650,7 @@ export default function CustomersTab() {
       <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-theme-bg-primary">
+            <thead className="">
               <tr>
                 <th className="px-4 py-3 text-left">
                   <input
@@ -1731,7 +1731,7 @@ export default function CustomersTab() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {customer.tipo_cliente ? (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
                         ? 'bg-blue-500/20 text-blue-400'
                         : customer.tipo_cliente === 'azienda'
                           ? 'bg-purple-500/20 text-purple-400'

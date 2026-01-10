@@ -197,7 +197,7 @@ export default function CarWashTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-theme-bg-primary p-4 sm:p-6 rounded-lg mb-6 border border-theme-border">
+        <form onSubmit={handleSubmit} className=" p-4 sm:p-6 rounded-lg mb-6 border border-theme-border">
           <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
             {editingId ? 'Modifica Servizio' : 'Nuovo Servizio'}
           </h3>
@@ -259,7 +259,7 @@ export default function CarWashTab() {
                 required
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                className="w-full px-4 py-2  border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                 rows={2}
                 placeholder="Rapido e completo..."
               />
@@ -272,7 +272,7 @@ export default function CarWashTab() {
                 required
                 value={formData.description_en}
                 onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                className="w-full px-4 py-2  border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                 rows={2}
                 placeholder="Quick and complete..."
               />
@@ -288,7 +288,7 @@ export default function CarWashTab() {
                 required
                 value={formData.features}
                 onChange={(e) => setFormData({ ...formData, features: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
+                className="w-full px-4 py-2  border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
                 rows={6}
                 placeholder="Esterni + interni completi&#10;Schiuma colorata profumata&#10;Pulizia cerchi, passaruota, vetri"
               />
@@ -301,7 +301,7 @@ export default function CarWashTab() {
                 required
                 value={formData.features_en}
                 onChange={(e) => setFormData({ ...formData, features_en: e.target.value })}
-                className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
+                className="w-full px-4 py-2  border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors font-mono text-sm"
                 rows={6}
                 placeholder="Complete exterior + interior&#10;Scented colored foam&#10;Wheel, wheel arch, glass cleaning"
               />
@@ -342,7 +342,7 @@ export default function CarWashTab() {
         {services.map((service) => (
           <div
             key={service.id}
-            className={`bg-theme-bg-primary rounded-lg border p-6 ${
+            className={` rounded-lg border p-6 ${
               service.is_active ? 'border-theme-border' : 'border-red-800 opacity-60'
             }`}
           >
@@ -410,7 +410,7 @@ export default function CarWashTab() {
       </div>
 
       {services.length === 0 && (
-        <div className="bg-theme-bg-primary rounded-lg border border-theme-border p-8 text-center text-gray-500">
+        <div className=" rounded-lg border border-theme-border p-8 text-center text-gray-500">
           Nessun servizio trovato. Crea il primo servizio!
         </div>
       )}

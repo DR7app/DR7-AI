@@ -120,7 +120,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-theme-bg-primary/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 /80 backdrop-blur-sm">
             <div className="bg-theme-bg-secondary w-full max-w-6xl h-[90vh] rounded-3xl shadow-2xl flex border border-theme-border overflow-hidden">
 
                 {/* Left: Document Viewer */}

@@ -865,7 +865,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       {
         selectedCell && (
           <div
-            className="fixed inset-0 bg-theme-bg-primary/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn"
+            className="fixed inset-0 /60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn"
             onClick={() => setSelectedCell(null)}
           >
             <div
@@ -1018,7 +1018,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
       {
         selectedUnavailability && (
           <div
-            className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 /80 flex items-center justify-center z-50 p-4"
             onClick={() => setSelectedUnavailability(null)}
           >
             <div

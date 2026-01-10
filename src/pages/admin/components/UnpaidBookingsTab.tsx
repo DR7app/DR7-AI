@@ -428,7 +428,7 @@ export default function UnpaidBookingsTab() {
       <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-theme-bg-primary">
+            <thead className="">
               <tr>
                 {multiSelectMode && (
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">

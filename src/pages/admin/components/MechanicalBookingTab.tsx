@@ -254,7 +254,7 @@ export default function MechanicalBookingTab() {
 
       {/* Booking Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <MechanicalBookingForm
               initialData={editingId ? bookings.find(b => b.id === editingId) : undefined}
@@ -333,7 +333,7 @@ export default function MechanicalBookingTab() {
                   €{(booking.price_total / 100).toFixed(2)}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${booking.payment_status === 'paid' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'paid' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
                     }`}>
                     {booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
                   </span>
@@ -352,7 +352,7 @@ export default function MechanicalBookingTab() {
                     <button
                       onClick={() => handleGenerateInvoice(booking)}
                       disabled={generatingInvoice}
-                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded text-xs font-medium transition-colors`}
+                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
                     >
                       {generatingInvoice ? '...' : 'Genera Fattura'}
                     </button>

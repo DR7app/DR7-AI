@@ -425,7 +425,7 @@ export default function DocumentsVerificationTab() {
 
       {/* Rejection Modal */}
       {showDocModal && selectedDoc && selectedDoc.status === 'pending_verification' && (
-        <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-theme-text-primary mb-4">Rifiuta Documento</h3>
             <p className="text-theme-text-muted mb-4">

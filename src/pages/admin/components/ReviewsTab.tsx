@@ -220,7 +220,7 @@ export default function ReviewsTab() {
             <div className="bg-theme-bg-secondary rounded-xl overflow-hidden border border-theme-border shadow-2xl">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="bg-theme-bg-primary text-theme-text-primary uppercase text-xs tracking-wider">
+                        <thead className=" text-theme-text-primary uppercase text-xs tracking-wider">
                             <tr>
                                 {multiSelectMode && (
                                     <th className="p-4 w-10">

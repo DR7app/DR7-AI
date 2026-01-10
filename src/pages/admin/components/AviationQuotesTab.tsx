@@ -244,7 +244,7 @@ export default function AviationQuotesTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-theme-bg-primary p-6 rounded-lg border border-theme-border mb-6 space-y-6">
+        <form onSubmit={handleSubmit} className=" p-6 rounded-lg border border-theme-border mb-6 space-y-6">
           {/* Customer Info */}
           <div className="border-b border-theme-border pb-4">
             <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Informazioni Cliente</h3>
@@ -737,10 +737,10 @@ export default function AviationQuotesTab() {
       )}
 
       {/* Quotes List */}
-      <div className="bg-theme-bg-primary rounded-lg border border-theme-border overflow-hidden">
+      <div className=" rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-theme-bg-primaryer">
+            <thead className="er">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Tratta</th>
@@ -753,7 +753,7 @@ export default function AviationQuotesTab() {
             </thead>
             <tbody>
               {quotes.map((quote) => (
-                <tr key={quote.id} className="border-t border-theme-border hover:bg-theme-bg-primaryer/50">
+                <tr key={quote.id} className="border-t border-theme-border hover:er/50">
                   <td className="px-4 py-3 text-sm">
                     <div className="text-theme-text-primary font-medium">{quote.customer_name}</div>
                     <div className="text-theme-text-muted text-xs">{quote.customer_email}</div>
@@ -769,7 +769,7 @@ export default function AviationQuotesTab() {
                     {quote.quote_amount ? `€${quote.quote_amount.toLocaleString()}` : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       quote.status === 'accepted' ? 'bg-green-900 text-green-300' :
                       quote.status === 'quoted' ? 'bg-blue-900 text-blue-300' :
                       quote.status === 'rejected' ? 'bg-red-900 text-red-300' :

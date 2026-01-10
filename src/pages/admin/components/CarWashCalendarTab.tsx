@@ -434,7 +434,7 @@ export default function CarWashCalendarTab() {
       {/* Booking Details Modal */}
       {selectedCell && (
         <div
-          className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 /80 flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedCell(null)}
         >
           <div

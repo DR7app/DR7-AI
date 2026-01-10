@@ -176,14 +176,14 @@ export default function ClientiTab() {
 
       {/* Customers Table */}
       {filteredCustomers.length === 0 ? (
-        <div className="bg-theme-bg-primary rounded-lg border border-theme-border p-8 text-center text-gray-500">
+        <div className=" rounded-lg border border-theme-border p-8 text-center text-gray-500">
           Nessun cliente trovato
         </div>
       ) : (
         <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-theme-bg-primary">
+              <thead className="">
                 <tr>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome/Denominazione</th>
@@ -227,7 +227,7 @@ export default function ClientiTab() {
                       {new Date(customer.created_at).toLocaleDateString('it-IT')}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         customer.source === 'admin'
                           ? 'bg-blue-900 text-blue-300'
                           : 'bg-green-900 text-green-300'
@@ -238,7 +238,7 @@ export default function ClientiTab() {
                     <td className="px-4 py-3 text-sm">
                       <button
                         onClick={() => setSelectedCustomer(customer)}
-                        className="px-3 py-1.5 bg-dr7-gold hover:bg-yellow-500 text-black rounded text-xs font-medium transition-colors"
+                        className="px-3 py-1.5 bg-dr7-gold hover:bg-yellow-500 text-black rounded-full text-xs font-medium transition-colors"
                       >
                         Documenti
                       </button>

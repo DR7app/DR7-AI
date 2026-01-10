@@ -193,7 +193,7 @@ export default function TicketsTab() {
           <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-theme-bg-primary">
+                <thead className="">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Numero Biglietto</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
@@ -308,7 +308,7 @@ export default function TicketsTab() {
           <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-theme-bg-primary">
+                <thead className="">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Codice</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Destinatario</th>
@@ -329,7 +329,7 @@ export default function TicketsTab() {
                       <td className="px-4 py-3 text-sm text-theme-text-primary">{formatPrice(card.initial_value, card.currency)}</td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary">{formatPrice(card.remaining_value, card.currency)}</td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(card.status)}`}>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(card.status)}`}>
                           {getStatusLabel(card.status)}
                         </span>
                       </td>

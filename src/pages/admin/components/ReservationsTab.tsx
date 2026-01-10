@@ -3421,7 +3421,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     </div>
                     <div className="text-sm text-theme-text-muted">{booking.customer_phone || '-'}</div>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                     booking.payment_status === 'paid' ||
                     (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                     ? 'bg-green-900 text-green-300'
@@ -3532,7 +3532,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden lg:block bg-theme-bg-primary rounded-lg overflow-hidden">
+        <div className="hidden lg:block  rounded-lg overflow-hidden">
           <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
             <table className="w-full min-w-max">
               <thead className="sticky top-0 z-10">
@@ -3596,7 +3596,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         }
                       </td>
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                           booking.payment_status === 'paid' ||
                           (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                           ? 'bg-green-900 text-green-300'
@@ -3682,7 +3682,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
-          <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="fixed inset-0  bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
             <div className="w-full sm:max-w-2xl sm:rounded-lg max-h-[90vh] overflow-y-auto border border-gray-700/30">
               {/* Modal Header */}
               <div className="sticky top-0  p-4 border-b border-theme-border flex justify-between items-center">
@@ -3711,7 +3711,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       {selectedBooking.customer_phone && (
                         <a
                           href={`tel:${selectedBooking.customer_phone}`}
-                          className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary rounded text-xs font-medium transition-colors"
+                          className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                         >
                           Chiama
                         </a>
