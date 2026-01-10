@@ -3522,7 +3522,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                       className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap w-full"
                     >
-                      Elimina
+                      ×
                     </button>
                   </div>
                 </div>
@@ -3654,7 +3654,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                             className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                           >
-                            Elimina
+                            ×
                           </button>
                         </div>
                       </td>
