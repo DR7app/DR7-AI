@@ -1269,8 +1269,8 @@ export default function CustomersTab() {
       {
         viewingDocuments && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-theme-text-primary">
                   Documenti - {viewingDocuments.full_name}
                 </h3>
@@ -1283,7 +1283,7 @@ export default function CustomersTab() {
                   </svg>
                 </button>
               </div>
-              <div className="p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Customer Info */}
                 <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Informazioni Cliente</h4>

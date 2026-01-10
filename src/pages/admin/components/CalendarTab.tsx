@@ -897,10 +897,10 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
             onClick={() => setSelectedCell(null)}
           >
             <div
-              className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10 shadow-2xl"
+              className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-white/10 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-white/10">
+              <div className="flex-shrink-0 p-6 border-b border-white/10">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-2xl font-light text-theme-text-primary mb-2">
@@ -917,7 +917,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                 </div>
               </div>
 
-              <div className="p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {selectedCell.bookings.map(booking => {
                   const alternativeVehicles = getAlternativeVehicles(booking.vehicle_name)
                   const hasAlternatives = alternativeVehicles.length > 1

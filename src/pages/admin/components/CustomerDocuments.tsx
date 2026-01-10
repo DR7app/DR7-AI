@@ -430,9 +430,9 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
+        <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
           <div>
             <h3 className="text-xl font-bold text-theme-text-primary">Documenti Cliente</h3>
             <p className="text-sm text-theme-text-muted mt-1">{customerName}</p>
@@ -445,7 +445,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Customer Details Section */}
           {customerDetails && (
             <div className="bg-gradient-to-r from-dr7-gold/10 to-transparent border border-dr7-gold/30 rounded-full p-6">
@@ -595,7 +595,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-theme-bg-secondary border-t border-theme-border p-4">
+        <div className="flex-shrink-0 bg-theme-bg-secondary border-t border-theme-border p-4">
           <div className="flex justify-end">
             <Button variant="secondary" onClick={onClose}>
               Chiudi

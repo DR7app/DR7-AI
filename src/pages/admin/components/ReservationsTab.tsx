@@ -3679,9 +3679,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
           <div className="fixed inset-0  bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-            <div className="w-full sm:max-w-2xl sm:rounded-lg max-h-[90vh] overflow-y-auto border border-gray-700/30">
+            <div className="w-full sm:max-w-2xl sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-700/30">
               {/* Modal Header */}
-              <div className="sticky top-0  p-4 border-b border-theme-border flex justify-between items-center">
+              <div className="flex-shrink-0  p-4 border-b border-theme-border flex justify-between items-center">
                 <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
                 <button
                   onClick={() => setSelectedBooking(null)}
@@ -3692,7 +3692,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               </div>
 
               {/* Modal Content */}
-              <div className="p-4 sm:p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
                 {/* Customer Info */}
                 <div className=" p-4 rounded-lg">
                   <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
