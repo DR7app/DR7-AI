@@ -364,6 +364,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                     type="number"
                                     value={editedVehicle.current_km || 0}
                                     onChange={(e) => updateField('current_km', parseInt(e.target.value) || 0)}
+                                    onFocus={(e) => e.target.select()}
                                     className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                 />
                             </div>
@@ -378,6 +379,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="number"
                                             value={editedVehicle.last_service_km || 0}
                                             onChange={(e) => updateField('last_service_km', parseInt(e.target.value) || 0)}
+                                            onFocus={(e) => e.target.select()}
                                             className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
@@ -387,6 +389,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="number"
                                             value={editedVehicle.maintenance_service_interval_km || 30000}
                                             onChange={(e) => updateField('maintenance_service_interval_km', parseInt(e.target.value) || 30000)}
+                                            onFocus={(e) => e.target.select()}
                                             className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
@@ -410,6 +413,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.last_tire_change_front_km || 0}
                                                 onChange={(e) => updateField('last_tire_change_front_km', parseInt(e.target.value) || 0)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
@@ -419,6 +423,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.maintenance_tires_interval_km || 30000}
                                                 onChange={(e) => updateField('maintenance_tires_interval_km', parseInt(e.target.value) || 30000)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
@@ -437,6 +442,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.last_tire_change_rear_km || 0}
                                                 onChange={(e) => updateField('last_tire_change_rear_km', parseInt(e.target.value) || 0)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
@@ -446,6 +452,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.maintenance_tires_interval_km || 30000}
                                                 onChange={(e) => updateField('maintenance_tires_interval_km', parseInt(e.target.value) || 30000)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
@@ -470,6 +477,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.last_brake_change_front_km || 0}
                                                 onChange={(e) => updateField('last_brake_change_front_km', parseInt(e.target.value) || 0)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
@@ -479,6 +487,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.maintenance_brake_interval_km || 0}
                                                 onChange={(e) => updateField('maintenance_brake_interval_km', parseInt(e.target.value) || 0)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                                 placeholder="0 = non monitorato"
                                             />
@@ -498,6 +507,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.last_brake_change_rear_km || 0}
                                                 onChange={(e) => updateField('last_brake_change_rear_km', parseInt(e.target.value) || 0)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
@@ -507,6 +517,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 type="number"
                                                 value={editedVehicle.maintenance_brake_interval_km || 0}
                                                 onChange={(e) => updateField('maintenance_brake_interval_km', parseInt(e.target.value) || 0)}
+                                                onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                                 placeholder="0 = non monitorato"
                                             />
