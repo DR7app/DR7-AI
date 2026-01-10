@@ -2663,7 +2663,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Mobile-optimized header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
           {/* Main Title - Italian Translation verified */}
-          <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">Noleggio</h2>
+          <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Noleggio</h2>
           <div className="flex gap-2 sm:gap-3">
             <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
               <span className="hidden sm:inline">+ Nuova Prenotazione</span>
