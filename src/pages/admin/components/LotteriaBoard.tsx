@@ -1437,7 +1437,7 @@ const LotteriaBoard: React.FC = () => {
               </div>
 
               {isHovered && ticket && (
-                <div className="absolute z-10 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-theme-bg-primary text-theme-text-primary p-3 rounded-full shadow-lg text-xs">
+                <div className="absolute z-10 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-theme-bg-primary text-theme-text-primary p-3 rounded-lg shadow-lg text-xs border border-theme-border">
                   <div className="font-bold mb-1">Biglietto #{String(ticketNumber).padStart(4, '0')}</div>
                   <div><strong>Cliente:</strong> {ticket.full_name}</div>
                   <div><strong>Email:</strong> {ticket.email}</div>
@@ -1447,7 +1447,7 @@ const LotteriaBoard: React.FC = () => {
                     <div><strong>Pagamento:</strong> {(ticket as any).payment_method}</div>
                   )}
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                    <div className="border-8 border-transparent border-t-black"></div>
+                    <div className="border-8 border-transparent border-t-theme-bg-primary"></div>
                   </div>
                 </div>
               )}
