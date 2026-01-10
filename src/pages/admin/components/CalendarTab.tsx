@@ -256,28 +256,28 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
               const isToday = i === highlightTodayIndex
 
               return (
-                 <div
-                   key={day}
-                   className={`
+                <div
+                  key={day}
+                  className={`
                      flex flex-col items-center justify-center border-r border-white/[0.03] relative
                      ${isToday ? 'bg-amber-500/10 font-bold' : ''}
                      ${(isHol || isSun) && !isToday ? 'bg-white/[0.02]' : ''}
                    `}
-                   style={{ width: CELL_WIDTH }}
-                 >
-                   <span 
-                     className="text-[10px]" 
-                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)' }}
-                   >
-                     {day}
-                   </span>
-                   <span 
-                     className="text-[8px] uppercase" 
-                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.45)' }}
-                   >
-                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
-                   </span>
-                 </div>
+                  style={{ width: CELL_WIDTH }}
+                >
+                  <span
+                    className="text-[10px]"
+                    style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)' }}
+                  >
+                    {day}
+                  </span>
+                  <span
+                    className="text-[8px] uppercase"
+                    style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.45)' }}
+                  >
+                    {d.toLocaleDateString('it-IT', { weekday: 'short' })}
+                  </span>
+                </div>
               )
             })}
           </div>
@@ -297,23 +297,21 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
-                <div className="sticky left-0 w-[300px] z-[30] bg-theme-bg-secondary/95 group-hover:bg-theme-bg-tertiary/95 border-r border-theme-border/50 flex items-center justify-between px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
-                  <div className="flex flex-col overflow-hidden mr-2">
+                <div className="sticky left-0 w-[300px] z-[30] bg-[#0d0d0e]/95 group-hover:bg-[#111112]/95 border-r border-white/5 flex items-center px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+                  <div className="flex flex-col overflow-hidden">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
                       {row.vehicle.category && (
-                        <span className={`text-[8px] px-1 rounded uppercase font-bold tracking-wide ${row.vehicle.category === 'exotic' ? 'bg-purple-900/50 text-purple-200' :
-                          row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
-                            'bg-orange-900/50 text-orange-200'
-                          }`}>{row.vehicle.category.substring(0, 1)}</span>
+                        <span className={`text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-wider ${row.vehicle.category === 'exotic' ? 'bg-purple-900/50 text-purple-200' :
+                            row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
+                              'bg-orange-900/50 text-orange-200'
+                          }`}>
+                          {row.vehicle.category === 'aziendali' ? 'AZIENDALE' : row.vehicle.category.toUpperCase()}
+                        </span>
                       )}
                     </div>
                     <span className="text-xs text-theme-text-muted font-mono">{row.vehicle.plate || '-'}</span>
                   </div>
-                  <div className={`
-                      w-2 h-2 rounded-full shrink-0
-                      ${row.vehicle.status === 'available' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}
-                    `} />
                 </div>
 
                 {/* The Day Grid & Events Container */}
