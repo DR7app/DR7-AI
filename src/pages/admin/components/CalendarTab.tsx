@@ -257,7 +257,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
           <input
             type="text"
             placeholder="Cerca veicolo o cliente..."
-            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 focus:outline-none focus:border-dr7-gold/50"
+            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-white placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
