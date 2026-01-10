@@ -242,7 +242,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
     <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-white/5 shadow-2xl overflow-hidden">
 
       {/* 1. Control Bar */}
-      <div className="flex justify-between items-center p-4 bg-black/20 backdrop-blur-md border-b border-white/5 z-50 shadow-sm">
+      <div className="flex justify-between items-center p-4 bg-black/20 backdrop-blur-md border-b border-white/5 z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
