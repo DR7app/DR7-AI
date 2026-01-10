@@ -1524,8 +1524,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Set flag to suppress initial availability check
     isInitialEditLoad.current = true
 
-    // Set customer data
-    const customerId = booking.booking_details?.customer?.customerId || booking.user_id || ''
+    // Set customer data - Match the field path used in validateCustomerData
+    const customerId = booking.user_id ||
+      booking.booking_details?.customer?.id ||
+      booking.booking_details?.customer?.customerId ||
+      booking.booking_details?.customer_id ||
+      ''
 
     // Populate rental data
     const pickupDate = booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date) : null
@@ -2378,7 +2382,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             fullName: customerInfo?.full_name || '',
             email: customerInfo?.email || '',
             phone: customerInfo?.phone || '',
-            customerId: customerId
+            id: customerId, // Primary field for customer resolution
+            customerId: customerId // Backward compatibility
           },
           vehicle_id: formData.vehicle_id, // Also store in booking_details for backward compatibility
           pickupLocation: formData.pickup_location,
@@ -3479,17 +3484,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap flex items-center gap-1"
                           title="Visualizza Contratto"
                         >
-                          <span>📄</span> PDF
+                          📄 Contratto
                         </button>
-                        <a
-                          href={`mailto:${booking.customer_email || ''}?subject=${encodeURIComponent(`Contratto Noleggio DR7 - ${booking.vehicle_name}`)}&body=${encodeURIComponent(`Gentile Cliente,\n\nEcco il link al tuo contratto di noleggio:\n${booking.contract_url}\n\nGrazie per aver scelto DR7 Empire.`)}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="px-3 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 rounded-full text-theme-text-primary text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1"
-                          title="Invia Email"
-                        >
-                          <span>✉️</span> Email
-                        </a>
-
                         {/* Fattura Button (Mobile) */}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
