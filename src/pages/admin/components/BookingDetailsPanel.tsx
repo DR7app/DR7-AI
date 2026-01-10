@@ -20,8 +20,9 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const paidEur = centsToEuros(paidCents)
   const remainingEur = Math.max(totalEur - paidEur, 0)
 
-  // Payment status
-  const isPaid = remainingEur === 0 || booking.payment_status === 'paid'
+  // Payment status - MUST be coherent with financial breakdown
+  // If there's remaining amount, it's NOT paid, regardless of database status
+  const isPaid = remainingEur === 0
 
   // DEBUG: Always log monetary values to verify correct conversion
   console.group(`💰 Payment Debug: Booking ${booking.id}`)
@@ -116,8 +117,8 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             {/* Payment Status Badge */}
             <div className="flex items-center gap-2">
               <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${isPaid
-                  ? 'bg-green-900/50 text-green-300 border border-green-700/50'
-                  : 'bg-red-900/50 text-red-300 border border-red-700/50'
+                ? 'bg-green-900/50 text-green-300 border border-green-700/50'
+                : 'bg-red-900/50 text-red-300 border border-red-700/50'
                 }`}>
                 {isPaid ? '✓ Pagato' : '⚠ Da Saldare'}
               </span>
