@@ -1131,13 +1131,13 @@ export default function CarWashBookingsTab() {
               {/* AVAILABLE HOURS THIRD - Only shown after date and service are selected */}
               <div className="md:col-span-2">
                 {!formData.appointment_date || !formData.service_name ? (
-                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-full">
+                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
                     <p className="text-yellow-400 text-sm">
                       ⚠️ Seleziona la data e il tipo di servizio per vedere gli orari disponibili
                     </p>
                   </div>
                 ) : availableTimeSlots.length === 0 ? (
-                  <div className="p-4 bg-red-900/20 border border-red-600/50 rounded-full">
+                  <div className="p-4 bg-red-900/20 border border-red-600/50 rounded-lg">
                     <p className="text-red-400 text-sm font-semibold mb-2">
                       ❌ Nessun orario disponibile per questa data
                     </p>

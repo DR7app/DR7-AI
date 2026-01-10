@@ -295,7 +295,7 @@ export default function MarketingTab() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-full border border-theme-border">
+            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
                 <div>
                     <h2 className="text-xl font-bold text-theme-text-primary">Marketing & Promozioni</h2>
                     <p className="text-theme-text-muted text-sm">Gestisci campagne e invio buoni regalo</p>

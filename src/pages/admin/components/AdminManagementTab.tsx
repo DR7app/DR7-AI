@@ -84,7 +84,7 @@ export default function AdminManagementTab() {
 
     if (error) {
         return (
-            <div className="bg-red-900/20 border border-red-500 text-red-200 p-4 rounded-full">
+            <div className="bg-red-900/20 border border-red-500 text-red-200 p-4 rounded-lg">
                 {error}
             </div>
         )

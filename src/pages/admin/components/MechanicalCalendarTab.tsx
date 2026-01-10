@@ -303,7 +303,7 @@ export default function MechanicalCalendarTab() {
               {matchingBookings.map(booking => (
                 <div
                   key={booking.id}
-                  className="bg-theme-bg-tertiary border border-theme-border rounded-full p-3 hover:border-dr7-gold transition-colors cursor-pointer"
+                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3 hover:border-dr7-gold transition-colors cursor-pointer"
                   onClick={() => {
                     const dateString = booking.appointment_date.split('T')[0]
                     setSelectedCell({

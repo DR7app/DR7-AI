@@ -337,7 +337,7 @@ export default function CarWashCalendarTab() {
               {matchingBookings.map(booking => (
                 <div
                   key={booking.id}
-                  className="bg-theme-bg-tertiary border border-theme-border rounded-full p-3 hover:border-dr7-gold transition-colors cursor-pointer"
+                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3 hover:border-dr7-gold transition-colors cursor-pointer"
                   onClick={() => {
                     setSelectedCell({
                       date: `${new Date(booking.appointment_date).getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,

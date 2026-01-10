@@ -2966,7 +2966,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               {/* VEHICLE SELECTION - Now appears after dates */}
               <div className="md:col-span-2">
                 {!formData.pickup_date || !formData.return_date ? (
-                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-full">
+                  <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
                     <p className="text-yellow-400 text-sm">
                       ⚠️ Seleziona le date per vedere i veicoli disponibili
                     </p>
