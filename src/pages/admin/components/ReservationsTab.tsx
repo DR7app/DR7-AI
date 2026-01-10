@@ -8,6 +8,13 @@ import {
 } from '../../../utils/bookingConflictUtils'
 import { validateRentalBooking } from '../../../utils/schedulingRules'
 import { createRomeDate } from '../../../utils/timezoneUtils'
+import {
+  getAvailableVehicles as filterAvailableVehicles,
+  isVehicleAvailable,
+  getEarliestValidPickupTime,
+  generateValidTimeSlots,
+  matchVehicleByPlate
+} from '../../../utils/vehicleAvailability'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
@@ -244,6 +251,7 @@ function getNext15MinuteTime(): string {
 const normalizePlate = (s: string) => s ? s.replace(/\s+/g, '').toUpperCase() : ''
 
 // Helper to check if a booking belongs to a vehicle
+// CRITICAL: Only matches by vehicle_id or plate - NEVER by name
 const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
   if (bookingVehicleId === vehicle.id) return true
@@ -256,9 +264,10 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
     }
   }
 
-  // Fallback to name matching
-  if (!bookingVehicleId && !booking.vehicle_plate && !(vehicle.plate || vehicle.targa)) {
-    if (booking.vehicle_name === vehicle.display_name) return true
+  // NO FALLBACK TO NAME MATCHING - this is forbidden
+  // Log warning if we can't match
+  if (!bookingVehicleId && !booking.vehicle_plate) {
+    console.warn('[Vehicle Matching] Cannot match booking - no vehicle_id or plate:', booking.id)
   }
 
   return false
@@ -287,6 +296,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Conflict Detection State
   const [rentalEventsPickupDate, setRentalEventsPickupDate] = useState<any[]>([])
   const [rentalEventsReturnDate, setRentalEventsReturnDate] = useState<any[]>([])
+
+  // Valid Time Slots State (for dynamic availability-based time picker)
+  const [validPickupTimes, setValidPickupTimes] = useState<string[]>([])
 
 
 
@@ -596,13 +608,39 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return `${returnHours}:${returnMinutes}`
   }
 
-  // Get available vehicles based on selected dates
+  // Get available vehicles based on selected dates and times
   const getAvailableVehicles = useMemo((): Vehicle[] => {
-    // ALWAYS show all vehicles in the dropdown
-    // The earliest available time will be calculated separately
-    console.log('[Vehicle Availability] Showing all vehicles:', vehicles.length)
-    return vehicles
-  }, [vehicles])
+    // If no dates selected, show all vehicles
+    if (!formData.pickup_date || !formData.return_date) {
+      console.log('[Vehicle Availability] No dates selected - showing all vehicles:', vehicles.length)
+      return vehicles
+    }
+
+    // Use the new availability engine to filter vehicles
+    const pickupTime = formData.pickup_time || '09:00'
+    const returnTime = formData.return_time || '18:00'
+
+    // Combine all bookings for availability checking
+    const allBookingsForCheck = [...bookings, ...carWashBookings]
+
+    const availableVehicles = filterAvailableVehicles(
+      vehicles,
+      formData.pickup_date,
+      formData.return_date,
+      pickupTime,
+      returnTime,
+      allBookingsForCheck,
+      editingId || undefined
+    )
+
+    console.log('[Vehicle Availability] Filtered vehicles:', {
+      total: vehicles.length,
+      available: availableVehicles.length,
+      dates: `${formData.pickup_date} ${pickupTime} → ${formData.return_date} ${returnTime}`
+    })
+
+    return availableVehicles
+  }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
 
   // Calculate earliest available time for each vehicle based on existing bookings and automatic wash
   const vehicleEarliestTimes = useMemo(() => {
@@ -657,57 +695,68 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return times
   }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, editingId])
 
-  // Auto-adjust pickup time when vehicle is selected if it conflicts with service
+  // Generate valid time slots and auto-fill earliest pickup time when vehicle/dates change
   useEffect(() => {
-    // Skip availability check on initial load of edit form
+    // Skip on initial load of edit form
     if (isInitialEditLoad.current) {
       console.log('[Vehicle Availability] Skipping initial edit load check')
       isInitialEditLoad.current = false
       return
     }
 
-    // Skip auto-adjustment if admin has enabled override
-    if (editingId) {
-      console.log('[Vehicle Availability] Editing mode - skipping auto-adjustment to allow manual control')
+    // Only generate time slots if we have vehicle and dates selected
+    if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
+      setValidPickupTimes([])
       return
     }
 
-    if (formData.vehicle_id && formData.pickup_date) {
-      const earliestTime = vehicleEarliestTimes.get(formData.vehicle_id)
+    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+    if (!selectedVehicle) {
+      setValidPickupTimes([])
+      return
+    }
 
-      if (earliestTime) {
-        // Check if selected pickup time is before earliest available
-        const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
+    // Combine all bookings for availability checking
+    const allBookingsForCheck = [...bookings, ...carWashBookings]
 
-        // Give a 1-minute buffer to avoid tight timing issues
-        const bufferTime = new Date(earliestTime.getTime())
+    // Generate valid time slots for this vehicle
+    const validSlots = generateValidTimeSlots(
+      selectedVehicle,
+      formData.pickup_date,
+      formData.return_date,
+      allBookingsForCheck,
+      editingId || undefined
+    )
 
-        if (pickupDateTime < bufferTime) {
-          // Auto-adjust to earliest available time
-          const hours = bufferTime.getHours().toString().padStart(2, '0')
-          const minutes = bufferTime.getMinutes().toString().padStart(2, '0')
-          const newTime = `${hours}:${minutes}`
+    setValidPickupTimes(validSlots)
 
-          console.log(`[Vehicle Availability] Auto-adjusting pickup time for vehicle ${formData.vehicle_id} to ${newTime}`)
+    // Auto-fill earliest valid time if not in edit mode
+    if (!editingId && validSlots.length > 0) {
+      const earliestValidTime = validSlots[0]
 
-          setFormData(prev => ({ ...prev, pickup_time: newTime }))
+      // Only auto-adjust if current time is not in the valid slots
+      if (!validSlots.includes(formData.pickup_time)) {
+        console.log(`[Vehicle Availability] Auto-filling earliest valid time: ${earliestValidTime}`)
 
-          // Show notification only if the change is significant (more than 1 minute diff)
-          if (Math.abs(pickupDateTime.getTime() - bufferTime.getTime()) > 60000) {
-            const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
-            alert(
-              `ℹ️ DISPONIBILITÀ AUTO\n\n` +
-              `${vehicle?.display_name || 'Questo veicolo'} sarà disponibile alle ${newTime}.\n\n` +
-              `Il veicolo è attualmente prenotato e dopo la riconsegna deve completare:\n` +
-              `• 30 minuti di gap obbligatorio\n` +
-              `• 45 minuti di lavaggio automatico\n\n` +
-              `L'orario di ritiro è stato aggiornato automaticamente.`
-            )
-          }
+        setFormData(prev => ({ ...prev, pickup_time: earliestValidTime }))
+
+        // Show notification if there's a significant change
+        const currentTime = formData.pickup_time
+        if (currentTime && currentTime !== earliestValidTime) {
+          alert(
+            `ℹ️ DISPONIBILITÀ AUTO\n\n` +
+            `${selectedVehicle.display_name} è disponibile a partire dalle ${earliestValidTime}.\n\n` +
+            `L'orario di ritiro è stato aggiornato automaticamente per rispettare:\n` +
+            `• Prenotazioni esistenti\n` +
+            `• 30 minuti di gap obbligatorio\n` +
+            `• 45 minuti di lavaggio automatico`
+          )
         }
       }
+    } else if (validSlots.length === 0) {
+      console.warn('[Vehicle Availability] No valid time slots available for selected vehicle and dates')
     }
-  }, [formData.vehicle_id, formData.pickup_date, vehicleEarliestTimes, vehicles, editingId])
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, vehicles, bookings, carWashBookings, editingId])
 
 
   const LOCATIONS = [
@@ -1958,6 +2007,53 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
+      // ===== AVAILABILITY ENGINE VALIDATION =====
+      // Check if the selected vehicle is actually available for the selected dates/times
+      if (formData.vehicle_id) {
+        const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+
+        if (selectedVehicle) {
+          const allBookingsForCheck = [...bookings, ...carWashBookings]
+
+          const availabilityResult = isVehicleAvailable(
+            selectedVehicle,
+            formData.pickup_date,
+            formData.return_date,
+            formData.pickup_time,
+            formData.return_time,
+            allBookingsForCheck,
+            editingId || undefined
+          )
+
+          if (!availabilityResult.available) {
+            console.error('❌ Vehicle availability check failed:', availabilityResult.reason)
+
+            let errorMessage = '🚫 VEICOLO NON DISPONIBILE\\n\\n'
+            errorMessage += `${selectedVehicle.display_name} non è disponibile per le date e gli orari selezionati.\\n\\n`
+            errorMessage += `Motivo: ${availabilityResult.reason}\\n\\n`
+
+            if (availabilityResult.earliestTime) {
+              const earliestTimeStr = availabilityResult.earliestTime.toLocaleTimeString('it-IT', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Europe/Rome'
+              })
+              errorMessage += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n`
+              errorMessage += `✅ PRIMO ORARIO DISPONIBILE:\\n\\n`
+              errorMessage += `${earliestTimeStr}\\n\\n`
+            }
+
+            errorMessage += 'Seleziona un altro veicolo o modifica le date/orari.'
+
+            alert(errorMessage)
+            setIsSubmitting(false)
+            return
+          }
+
+          console.log('✅ Vehicle availability check passed')
+        }
+      }
+
       // ===== SCHEDULING RULES VALIDATION =====
       // Enforce non-negotiable scheduling rules for DEPARTURE (pickup) and RETURN (dropoff)
       const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
@@ -2947,16 +3043,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       setFormData({ ...formData, pickup_time: pickupTime, return_time: returnTime })
                     }}
                     options={(() => {
+                      // If we have valid pickup times from the availability engine, use those
+                      if (validPickupTimes.length > 0) {
+                        return validPickupTimes.map(time => ({ value: time, label: time }))
+                      }
+
+                      // Otherwise, fall back to filtered time options (for when no vehicle/dates selected)
                       const base = getFilteredTimeOptions(formData.pickup_date)
                       const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsPickupDate)
                       return base.filter(o => available.includes(o.value) || o.value === formData.pickup_time)
                     })()}
                   />
-                  {/* Warning if no slots or few slots */}
+                  {/* Warning if no slots available */}
                   {(() => {
+                    if (formData.vehicle_id && formData.pickup_date && formData.return_date && validPickupTimes.length === 0) {
+                      return <p className="text-xs text-red-400 mt-1">⚠️ Nessun orario disponibile per questo veicolo nelle date selezionate!</p>
+                    }
+
                     const base = getFilteredTimeOptions(formData.pickup_date)
                     const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsPickupDate)
-                    if (available.length === 0 && formData.pickup_date) {
+                    if (available.length === 0 && formData.pickup_date && !formData.vehicle_id) {
                       return <p className="text-xs text-red-400 mt-1">⚠️ Nessun orario disponibile!</p>
                     }
                     return null
@@ -3720,8 +3826,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
-          <div className="fixed inset-0  bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-            <div className="w-full sm:max-w-2xl sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-700/30">
+          <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+            <div className="w-full sm:max-w-2xl bg-[#1a1a1a] sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-700/30">
               {/* Modal Header */}
               <div className="flex-shrink-0  p-4 border-b border-theme-border flex justify-between items-center">
                 <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
