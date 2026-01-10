@@ -231,7 +231,7 @@ export default function MechanicalBookingTab() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-theme-text-primary">🔧 Prenotazioni Meccanica</h2>
+        <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Meccanica</h2>
         <button
           onClick={() => setShowForm(true)}
           className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
@@ -286,9 +286,9 @@ export default function MechanicalBookingTab() {
       />
 
       {/* Bookings Table */}
-      <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
+      <div className="rounded-lg overflow-hidden">
         <table className="w-full">
-          <thead className="bg-theme-bg-tertiary">
+          <thead className="">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Veicolo</th>
@@ -352,7 +352,7 @@ export default function MechanicalBookingTab() {
                     <button
                       onClick={() => handleGenerateInvoice(booking)}
                       disabled={generatingInvoice}
-                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
+                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors disabled:opacity-50`}
                     >
                       {generatingInvoice ? '...' : 'Fattura'}
                     </button>
