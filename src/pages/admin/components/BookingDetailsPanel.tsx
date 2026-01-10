@@ -1,169 +1,190 @@
 import { formatRomeDate } from '../../../utils/timezoneUtils'
+import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 
 interface BookingDetailsPanelProps {
-    booking: any
-    onClose: () => void
+  booking: any
+  onClose: () => void
 }
 
 export default function BookingDetailsPanel({ booking, onClose }: BookingDetailsPanelProps) {
-    // Financial calculations
-    const totalAmount = booking.price_total || 0
-    const paidAmount = booking.amount_paid || booking.booking_details?.amount_paid || 0
-    const remainingAmount = Math.max(totalAmount - paidAmount, 0)
-    const isPaid = remainingAmount === 0 || booking.payment_status === 'paid'
+  // MONETARY UNIT CONTRACT: All price fields are stored in CENTS (integer)
+  // Example: price_total = 60000 means €600.00
+  
+  // Raw values (in cents)
+  const totalCents = booking.price_total || 0
+  const paidCents = booking.amount_paid || booking.booking_details?.amount_paid || 0
+  
+  // Convert to euros for calculations
+  const totalEur = centsToEuros(totalCents)
+  const paidEur = centsToEuros(paidCents)
+  const remainingEur = Math.max(totalEur - paidEur, 0)
+  
+  // Payment status
+  const isPaid = remainingEur === 0 || booking.payment_status === 'paid'
+  
+  // DEBUG: Always log monetary values to verify correct conversion
+  console.group(`💰 Payment Debug: Booking ${booking.id}`)
+  console.log('Raw total (cents):', totalCents, '→', formatEUR(totalCents))
+  console.log('Raw paid (cents):', paidCents, '→', formatEUR(paidCents))
+  console.log('Converted total (EUR):', totalEur.toFixed(2))
+  console.log('Converted paid (EUR):', paidEur.toFixed(2))
+  console.log('Remaining (EUR):', remainingEur.toFixed(2))
+  console.log('Payment status:', isPaid ? 'PAID' : 'UNPAID')
+  console.groupEnd()
 
-    // Format dates
-    const pickupDate = new Date(booking.pickup_date)
-    const dropoffDate = new Date(booking.dropoff_date)
+  // Format dates
+  const pickupDate = new Date(booking.pickup_date)
+  const dropoffDate = new Date(booking.dropoff_date)
 
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div
-                className="bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
-                    <h2 className="text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-2 hover:bg-white/5 rounded"
-                    >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 space-y-6">
-
-                    {/* Customer Info */}
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Cliente</h3>
-                        <div className="text-2xl font-bold text-theme-text-primary">{booking.customer_name || 'Cliente Sconosciuto'}</div>
-                        {booking.customer_email && (
-                            <div className="text-sm text-theme-text-muted">{booking.customer_email}</div>
-                        )}
-                        {booking.customer_phone && (
-                            <div className="text-sm text-theme-text-muted">{booking.customer_phone}</div>
-                        )}
-                    </div>
-
-                    {/* Vehicle Info */}
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Veicolo</h3>
-                        <div className="flex items-center gap-3">
-                            <div className="text-lg font-bold text-theme-text-primary">{booking.vehicle_name}</div>
-                            {booking.vehicle_plate && (
-                                <div className="px-2 py-1 bg-white/5 rounded font-mono text-sm text-theme-text-muted border border-white/10">
-                                    {booking.vehicle_plate}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Rental Period */}
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Periodo Noleggio</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <div className="text-xs text-theme-text-muted">Ritiro</div>
-                                <div className="font-mono text-theme-text-primary">
-                                    {formatRomeDate(pickupDate, { dateStyle: 'long' })}
-                                </div>
-                                <div className="font-mono text-sm text-theme-text-muted">
-                                    {formatRomeDate(pickupDate, { timeStyle: 'short' })}
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <div className="text-xs text-theme-text-muted">Rientro</div>
-                                <div className="font-mono text-theme-text-primary">
-                                    {formatRomeDate(dropoffDate, { dateStyle: 'long' })}
-                                </div>
-                                <div className="font-mono text-sm text-theme-text-muted">
-                                    {formatRomeDate(dropoffDate, { timeStyle: 'short' })}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Payment Status */}
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Pagamento</h3>
-
-                        {/* Payment Status Badge */}
-                        <div className="flex items-center gap-2">
-                            <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${isPaid
-                                    ? 'bg-green-900/50 text-green-300 border border-green-700/50'
-                                    : 'bg-red-900/50 text-red-300 border border-red-700/50'
-                                }`}>
-                                {isPaid ? '✓ Pagato' : '⚠ Da Saldare'}
-                            </span>
-                        </div>
-
-                        {/* Financial Breakdown */}
-                        <div className="bg-white/5 rounded-lg p-4 space-y-2 border border-white/10">
-                            <div className="flex justify-between items-center">
-                                <span className="text-theme-text-muted">Totale</span>
-                                <span className="font-mono text-theme-text-primary">€{totalAmount.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-theme-text-muted">Acconto Pagato</span>
-                                <span className="font-mono text-theme-text-primary">€{paidAmount.toFixed(2)}</span>
-                            </div>
-                            <div className="border-t border-white/10 pt-2 mt-2">
-                                <div className="flex justify-between items-center">
-                                    <span className={`font-bold ${remainingAmount > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                        {remainingAmount > 0 ? 'Da Saldare' : 'Saldato'}
-                                    </span>
-                                    <span className={`font-mono text-xl font-bold ${remainingAmount > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                        €{remainingAmount.toFixed(2)}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Booking Status */}
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Stato Prenotazione</h3>
-                        <div className="px-3 py-2 bg-white/5 rounded border border-white/10 inline-block">
-                            <span className="font-mono text-sm uppercase tracking-wider text-theme-text-primary">
-                                {booking.status}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Notes/Extras */}
-                    {booking.booking_details?.notes && (
-                        <div className="space-y-2">
-                            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Note</h3>
-                            <div className="text-sm text-theme-text-primary bg-white/5 p-3 rounded border border-white/10">
-                                {booking.booking_details.notes}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Quick Actions */}
-                    <div className="flex gap-3 pt-4 border-t border-theme-border">
-                        <button
-                            onClick={() => window.dispatchEvent(new CustomEvent('openBookingEdit', { detail: { bookingId: booking.id } }))}
-                            className="flex-1 px-4 py-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold rounded border border-dr7-gold/30 font-medium transition-colors"
-                        >
-                            Modifica Prenotazione
-                        </button>
-                        {booking.contract_url && (
-                            <button
-                                onClick={() => window.open(booking.contract_url, '_blank')}
-                                className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-primary rounded border border-white/10 font-medium transition-colors"
-                            >
-                                Visualizza Contratto
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div 
+        className="bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
+          <button 
+            onClick={onClose}
+            className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-2 hover:bg-white/5 rounded"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-    )
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          
+          {/* Customer Info */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Cliente</h3>
+            <div className="text-2xl font-bold text-theme-text-primary">{booking.customer_name || 'Cliente Sconosciuto'}</div>
+            {booking.customer_email && (
+              <div className="text-sm text-theme-text-muted">{booking.customer_email}</div>
+            )}
+            {booking.customer_phone && (
+              <div className="text-sm text-theme-text-muted">{booking.customer_phone}</div>
+            )}
+          </div>
+
+          {/* Vehicle Info */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Veicolo</h3>
+            <div className="flex items-center gap-3">
+              <div className="text-lg font-bold text-theme-text-primary">{booking.vehicle_name}</div>
+              {booking.vehicle_plate && (
+                <div className="px-2 py-1 bg-white/5 rounded font-mono text-sm text-theme-text-muted border border-white/10">
+                  {booking.vehicle_plate}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Rental Period */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Periodo Noleggio</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <div className="text-xs text-theme-text-muted">Ritiro</div>
+                <div className="font-mono text-theme-text-primary">
+                  {formatRomeDate(pickupDate, { dateStyle: 'long' })}
+                </div>
+                <div className="font-mono text-sm text-theme-text-muted">
+                  {formatRomeDate(pickupDate, { timeStyle: 'short' })}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-theme-text-muted">Rientro</div>
+                <div className="font-mono text-theme-text-primary">
+                  {formatRomeDate(dropoffDate, { dateStyle: 'long' })}
+                </div>
+                <div className="font-mono text-sm text-theme-text-muted">
+                  {formatRomeDate(dropoffDate, { timeStyle: 'short' })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Status */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Pagamento</h3>
+            
+            {/* Payment Status Badge */}
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
+                isPaid 
+                  ? 'bg-green-900/50 text-green-300 border border-green-700/50' 
+                  : 'bg-red-900/50 text-red-300 border border-red-700/50'
+              }`}>
+                {isPaid ? '✓ Pagato' : '⚠ Da Saldare'}
+              </span>
+            </div>
+
+            {/* Financial Breakdown */}
+            <div className="bg-white/5 rounded-lg p-4 space-y-2 border border-white/10">
+              <div className="flex justify-between items-center">
+                <span className="text-theme-text-muted">Totale</span>
+                <span className="font-mono text-theme-text-primary">{formatEUR(totalCents)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-theme-text-muted">Acconto Pagato</span>
+                <span className="font-mono text-theme-text-primary">{formatEUR(paidCents)}</span>
+              </div>
+              <div className="border-t border-white/10 pt-2 mt-2">
+                <div className="flex justify-between items-center">
+                  <span className={`font-bold ${remainingEur > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    {remainingEur > 0 ? 'Da Saldare' : 'Saldato'}
+                  </span>
+                  <span className={`font-mono text-xl font-bold ${remainingEur > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    {formatEUR(Math.round(remainingEur * 100))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Booking Status */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Stato Prenotazione</h3>
+            <div className="px-3 py-2 bg-white/5 rounded border border-white/10 inline-block">
+              <span className="font-mono text-sm uppercase tracking-wider text-theme-text-primary">
+                {booking.status}
+              </span>
+            </div>
+          </div>
+
+          {/* Notes/Extras */}
+          {booking.booking_details?.notes && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Note</h3>
+              <div className="text-sm text-theme-text-primary bg-white/5 p-3 rounded border border-white/10">
+                {booking.booking_details.notes}
+              </div>
+            </div>
+          )}
+
+          {/* Quick Actions */}
+          <div className="flex gap-3 pt-4 border-t border-theme-border">
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('openBookingEdit', { detail: { bookingId: booking.id } }))}
+              className="flex-1 px-4 py-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold rounded border border-dr7-gold/30 font-medium transition-colors"
+            >
+              Modifica Prenotazione
+            </button>
+            {booking.contract_url && (
+              <button 
+                onClick={() => window.open(booking.contract_url, '_blank')}
+                className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-primary rounded border border-white/10 font-medium transition-colors"
+              >
+                Visualizza Contratto
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
