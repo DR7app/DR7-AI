@@ -416,7 +416,7 @@ export default function UnpaidBookingsTab() {
                   onClick={deleteSelectedBookings}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full font-medium transition-colors"
                 >
-                  Elimina ({selectedBookings.size})
+                  × ({selectedBookings.size})
                 </button>
               </>
             )}

@@ -1335,7 +1335,7 @@ export default function CustomersTab() {
                                       onClick={() => viewingDocuments?.id && handleDeleteLicense(doc.fileName, viewingDocuments.id)}
                                       className="text-xs text-red-400 hover:text-red-300"
                                     >
-                                      🗑️ Elimina
+                                      ×
                                     </button>
                                   </div>
                                 </div>
@@ -1412,7 +1412,7 @@ export default function CustomersTab() {
                                       onClick={() => viewingDocuments?.id && handleDeleteId(doc.fileName, viewingDocuments.id)}
                                       className="text-xs text-red-400 hover:text-red-300"
                                     >
-                                      🗑️ Elimina
+                                      ×
                                     </button>
                                   </div>
                                 </div>
@@ -1489,7 +1489,7 @@ export default function CustomersTab() {
                                       onClick={() => viewingDocuments?.id && handleDeleteCodiceFiscale(doc.fileName, viewingDocuments.id)}
                                       className="text-xs text-red-400 hover:text-red-300"
                                     >
-                                      🗑️ Elimina
+                                      ×
                                     </button>
                                   </div>
                                 </div>

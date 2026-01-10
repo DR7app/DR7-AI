@@ -536,7 +536,7 @@ export default function VehiclesTab() {
               onClick={deleteSelectedVehicles}
               className="bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm"
             >
-              Elimina Selezionati
+              × Selezionati
             </Button>
           </div>
         </div>
