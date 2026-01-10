@@ -234,7 +234,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
 
   // --- Render Helpers ---
-  const today = new Date()
 
 
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
