@@ -355,7 +355,7 @@ export default function UnpaidBookingsTab() {
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setFilterService('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'all'
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'all'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
@@ -364,7 +364,7 @@ export default function UnpaidBookingsTab() {
             </button>
             <button
               onClick={() => setFilterService('rental')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'rental'
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'rental'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
@@ -373,7 +373,7 @@ export default function UnpaidBookingsTab() {
             </button>
             <button
               onClick={() => setFilterService('car_wash')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'car_wash'
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'car_wash'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
@@ -382,7 +382,7 @@ export default function UnpaidBookingsTab() {
             </button>
             <button
               onClick={() => setFilterService('mechanical_service')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterService === 'mechanical_service'
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'mechanical_service'
                 ? 'bg-dr7-gold text-black'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
@@ -397,7 +397,7 @@ export default function UnpaidBookingsTab() {
                 setMultiSelectMode(!multiSelectMode)
                 setSelectedBookings(new Set())
               }}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${multiSelectMode
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${multiSelectMode
                 ? 'bg-blue-600 text-theme-text-primary'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
@@ -408,13 +408,13 @@ export default function UnpaidBookingsTab() {
               <>
                 <button
                   onClick={markSelectedAsPaid}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full font-medium transition-colors"
                 >
                   Segna Pagato ({selectedBookings.size})
                 </button>
                 <button
                   onClick={deleteSelectedBookings}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full font-medium transition-colors"
                 >
                   Elimina ({selectedBookings.size})
                 </button>
@@ -514,13 +514,13 @@ export default function UnpaidBookingsTab() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded text-xs font-semibold transition-colors"
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
                       >
                         Segna Pagato
                       </button>
                       <button
                         onClick={() => deleteSingleBooking(booking.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded text-xs font-semibold transition-colors"
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
                       >
                         Elimina
                       </button>
