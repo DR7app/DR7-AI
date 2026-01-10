@@ -235,10 +235,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
   // --- Render Helpers ---
   const today = new Date()
-  const highlightTodayIndex = (
-    today.getFullYear() === currentRomeComponents.year &&
-    today.getMonth() === currentRomeComponents.month
-  ) ? today.getDate() - 1 : -1
 
 
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
@@ -281,19 +277,17 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
           {/* Day Columns Header */}
           <div className="flex">
-            {daysArray.map((day, i) => {
+            {daysArray.map((day) => {
               const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
               const isHol = getHolidayForDate(d)
               const isSun = isSunday(d)
-              const isToday = i === highlightTodayIndex
 
               return (
                 <div
                   key={day}
                   className={`
                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
-                    ${isToday ? 'bg-amber-500/10 font-bold' : ''}
-                    ${(isHol || isSun) && !isToday ? 'bg-white/[0.02]' : ''}
+                    ${(isHol || isSun) ? 'bg-white/[0.02]' : ''}
                   `}
                   style={{ width: CELL_WIDTH }}
                 >
@@ -307,13 +301,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
                   <span
                     className="text-[10px]"
-                    style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)' }}
+                    style={{ color: 'rgba(255, 255, 255, 0.75)' }}
                   >
                     {day}
                   </span>
                   <span
                     className="text-[8px] uppercase"
-                    style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.45)' }}
+                    style={{ color: 'rgba(255, 255, 255, 0.45)' }}
                   >
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
                   </span>
@@ -359,26 +353,18 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
                   {/* 1. Background Grid Cells */}
                   <div className="flex h-full absolute inset-0 z-0 pointer-events-none">
-                    {daysArray.map((day, i) => {
-                      const isToday = i === highlightTodayIndex
+                    {daysArray.map((day) => {
+
                       const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
                       const isRedDay = getHolidayForDate(d) || isSunday(d)
-
-                      // Check if this day is available (no bookings/blocks)
-                      const dayIndex0 = day - 1
-                      const hasBooking = row.events.some(evt =>
-                        dayIndex0 >= evt.startDayIndex0 && dayIndex0 <= evt.endDayIndex0
-                      )
-                      const isAvailable = !hasBooking
 
                       return (
                         <div
                           key={day}
                           className={`
                                 border-r border-white/[0.02] h-full
-                                ${isToday ? 'bg-amber-500/5' : ''}
-                                ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
-                                ${isAvailable && !isToday ? 'bg-green-500/[0.15]' : ''}
+                                bg-green-500/[0.15]
+                                ${isRedDay ? 'bg-white/[0.01]' : ''}
                               `}
                           style={{ width: CELL_WIDTH }}
                         />
