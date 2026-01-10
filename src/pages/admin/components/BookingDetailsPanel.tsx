@@ -43,7 +43,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const dropoffDate = new Date(booking.dropoff_date)
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={onClose}>
       <div
         className="bg-[#1a1a1a] border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
         onClick={(e) => e.stopPropagation()}
