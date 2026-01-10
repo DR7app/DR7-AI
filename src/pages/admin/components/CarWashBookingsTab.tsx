@@ -1324,9 +1324,27 @@ export default function CarWashBookingsTab() {
                   }).map((booking) => (
                     <tr key={booking.id} className="border-t border-theme-border hover:er/50">
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
-                        <div className="font-medium">{booking.customer_name}</div>
-                        <div className="text-xs text-theme-text-muted">{booking.customer_email}</div>
-                        <div className="text-xs text-theme-text-muted">{booking.customer_phone}</div>
+                        {booking.customer_name === 'Lavaggio Rientro' ? (
+                          <>
+                            <div className="font-medium text-blue-400">Lavaggio Rientro</div>
+                            {booking.booking_details?.vehicleName && (
+                              <div className="text-xs text-theme-text-primary mt-1">
+                                🚗 {booking.booking_details.vehicleName}
+                              </div>
+                            )}
+                            {booking.booking_details?.targa && (
+                              <div className="text-xs text-dr7-gold font-mono">
+                                🔖 {booking.booking_details.targa}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-medium">{booking.customer_name}</div>
+                            <div className="text-xs text-theme-text-muted">{booking.customer_email}</div>
+                            <div className="text-xs text-theme-text-muted">{booking.customer_phone}</div>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div className="font-medium">{booking.service_name}</div>
