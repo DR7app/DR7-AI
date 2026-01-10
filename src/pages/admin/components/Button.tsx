@@ -10,7 +10,7 @@ export default function Button({
   children,
   ...props
 }: ButtonProps) {
-  const baseClasses = 'px-4 py-2 rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  const baseClasses = 'px-4 py-2 rounded-full font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
   const variantClasses = {
     primary: 'bg-dr7-gold hover:bg-yellow-600 text-black',
