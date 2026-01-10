@@ -42,7 +42,7 @@ interface Booking {
 export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
   // const { canViewFinancials } = useAdminRole()
   // const [hideFinancials, setHideFinancials] = useState(false) // Removed for now to focus on clean layout
-  const [debugMode, setDebugMode] = useState(false) // MANDATORY DEBUG TOGGLE
+
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -192,9 +192,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
       })
     })
 
-    // CRITICAL: Duplicate booking detection
+    // CRITICAL: Duplicate booking detection (always enabled)
     // Ensure no booking appears on multiple vehicle rows
-    if (debugMode) {
+    {
       const bookingToVehicles = new Map<string, string[]>()
       rows.forEach(row => {
         row.events.forEach(evt => {
@@ -253,17 +253,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm">Prev</button>
-            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm">Next</button>
-            <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold rounded border border-dr7-gold/30 text-sm">Oggi</button>
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Prec</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Succ</button>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-xs text-theme-text-muted cursor-pointer select-none">
-            <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} className="rounded border-gray-600 bg-gray-800" />
-            <span className={debugMode ? 'text-red-400 font-bold' : ''}>DEBUG MODE 🛠</span>
-          </label>
           <input
             type="text"
             placeholder="Cerca veicolo o cliente..."
@@ -383,7 +378,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                                 border-r border-white/[0.02] h-full
                                 ${isToday ? 'bg-amber-500/5' : ''}
                                 ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
-                                ${isAvailable && !isToday ? 'bg-green-500/[0.08]' : ''}
+                                ${isAvailable && !isToday ? 'bg-green-500/[0.15]' : ''}
                               `}
                           style={{ width: CELL_WIDTH }}
                         />
@@ -439,7 +434,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                           className={`
                                 absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-white 
                                 ${bgClass} ${borderClass} 
-                                ${debugMode ? 'ring-2 ring-red-500 z-50' : 'hover:z-50 hover:shadow-xl hover:brightness-110 transition-all'}
+                                hover:z-50 hover:shadow-xl hover:brightness-110 transition-all
                               `}
                           style={{
                             left: evt.leftPx,
@@ -495,25 +490,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                               <span className="text-gray-500">Stato:</span>
                               <span className="uppercase font-bold tracking-wider text-[10px]">{evt.booking.status}</span>
                             </div>
-
-                            {/* DEBUG INFO */}
-                            {debugMode && (
-                              <div className="mt-3 pt-2 border-t border-red-900/50 grid grid-cols-[auto_1fr] gap-x-3 text-[10px] font-mono text-red-400">
-                                <div className="col-span-2 font-bold text-center text-red-500 mb-1">🔍 DEBUG DIAGNOSTICS</div>
-
-                                <span>Range Index:</span>
-                                <span>[{evt.startDayIndex0} → {evt.endDayIndexExclusive})</span>
-
-                                <span>Px Geometry:</span>
-                                <span>x:{evt.leftPx} w:{evt.widthPx}</span>
-
-                                <span>Lane:</span>
-                                <span>{evt.laneIndex}</span>
-
-                                <span>Raw UTC:</span>
-                                <span className="truncate max-w-[150px]">{evt.booking.pickup_date}</span>
-                              </div>
-                            )}
 
                             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-theme-border"></div>
                           </div>
