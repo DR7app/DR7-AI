@@ -403,7 +403,7 @@ export default function MechanicalCalendarTab() {
           onClick={() => setSelectedCell(null)}
         >
           <div
-            className="bg-theme-bg-secondary border-2 border-dr7-gold rounded-full p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-theme-bg-secondary border-2 border-dr7-gold rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-4">
@@ -447,11 +447,11 @@ export default function MechanicalCalendarTab() {
                         {booking.status}
                       </span>
                       <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'paid' ||
-                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                          ? 'bg-green-600 text-theme-text-primary'
-                          : booking.payment_status === 'pending'
-                            ? 'bg-yellow-600 text-black'
-                            : 'bg-red-600 text-theme-text-primary'
+                        (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                        ? 'bg-green-600 text-theme-text-primary'
+                        : booking.payment_status === 'pending'
+                          ? 'bg-yellow-600 text-black'
+                          : 'bg-red-600 text-theme-text-primary'
                         }`}>
                         {booking.payment_status === 'paid' ||
                           (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
@@ -521,7 +521,7 @@ export default function MechanicalCalendarTab() {
 
       {/* Editing Modal */}
       {editingBooking && (
-        <div className="fixed inset-0 /80 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <MechanicalBookingForm
               initialData={editingBooking}

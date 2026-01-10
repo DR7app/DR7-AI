@@ -1,11 +1,12 @@
 -- =====================================================
--- CREATE AUTH USER SYNC TRIGGER
+-- UPDATED AUTH USER SYNC TRIGGER
 -- =====================================================
--- This trigger automatically creates a customers_extended record
--- when a new user registers on the main website via auth.users
+-- This trigger handles BOTH metadata formats:
+-- 1. nome/cognome/telefono (Italian format)
+-- 2. fullName/phone (English format from website)
 -- =====================================================
 
--- Step 1: Create the trigger function
+-- Step 1: Create the updated trigger function
 CREATE OR REPLACE FUNCTION sync_auth_user_to_customers()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -13,15 +14,28 @@ DECLARE
   cognome_value TEXT;
   telefono_value TEXT;
   existing_id UUID;
+  full_name TEXT;
 BEGIN
-  -- Extract metadata from raw_user_meta_data
-  -- The main website registration should store: nome, cognome, telefono
+  -- Extract metadata - try both formats
+  -- Format 1: Italian (nome, cognome, telefono)
   nome_value := NEW.raw_user_meta_data->>'nome';
   cognome_value := NEW.raw_user_meta_data->>'cognome';
   telefono_value := NEW.raw_user_meta_data->>'telefono';
   
+  -- Format 2: English (fullName, phone) - used by website
+  full_name := NEW.raw_user_meta_data->>'fullName';
+  IF full_name IS NOT NULL AND nome_value IS NULL THEN
+    -- Split fullName into nome and cognome
+    nome_value := split_part(full_name, ' ', 1);
+    cognome_value := substring(full_name from position(' ' in full_name) + 1);
+  END IF;
+  
+  -- Get phone from either telefono or phone
+  IF telefono_value IS NULL THEN
+    telefono_value := NEW.raw_user_meta_data->>'phone';
+  END IF;
+  
   -- Only create customer record if we have at least email
-  -- (nome and cognome might be optional on registration)
   IF NEW.email IS NOT NULL THEN
     -- Check if customer already exists
     SELECT id INTO existing_id
@@ -53,7 +67,8 @@ BEGIN
         NEW.created_at
       );
       
-      RAISE NOTICE 'Auto-created customer for user: % (email: %)', NEW.id, NEW.email;
+      RAISE NOTICE 'Auto-created customer for user: % (email: %, name: % %)', 
+        NEW.id, NEW.email, nome_value, cognome_value;
     ELSE
       -- Update existing customer
       UPDATE customers_extended SET
@@ -72,7 +87,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Step 2: Create the trigger
+-- Step 2: Recreate the trigger
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -83,13 +98,12 @@ CREATE TRIGGER on_auth_user_created
 SELECT 
   trigger_name,
   event_manipulation,
-  event_object_table,
-  action_statement
+  event_object_table
 FROM information_schema.triggers
 WHERE trigger_name = 'on_auth_user_created';
 
 -- Success message
 DO $$
 BEGIN
-  RAISE NOTICE '✅ Trigger created successfully! New user registrations will now automatically sync to customers_extended.';
+  RAISE NOTICE '✅ Updated trigger created! Now handles both nome/cognome/telefono AND fullName/phone formats.';
 END $$;

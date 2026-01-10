@@ -881,8 +881,8 @@ export default function CustomersTab() {
     <div>
       {/* Customer Details Modal - For Fattura Generation */}
       {viewingCustomerDetails && (
-        <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
               <h3 className="text-xl font-bold text-theme-text-primary">
                 Dettagli Cliente Completi - {viewingCustomerDetails.full_name}
@@ -1267,8 +1267,8 @@ export default function CustomersTab() {
       {/* Documents Modal */}
       {
         viewingDocuments && (
-          <div className="fixed inset-0 /80 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-full max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-theme-text-primary">
                   Documenti - {viewingDocuments.full_name}
@@ -1680,14 +1680,14 @@ export default function CustomersTab() {
                 <tr
                   key={customer.id}
                   className={`border-t border-gray-700/30 transition-all duration-200 ${customer.status === 'blacklist'
-                      ? 'bg-gradient-to-r from-red-900/30 via-red-800/20 to-transparent hover:from-red-900/40 hover:via-red-800/30'
-                      : customer.status === 'vip'
-                        ? 'bg-gradient-to-r from-yellow-500/15 via-yellow-600/10 to-transparent hover:from-yellow-500/25 hover:via-yellow-600/15'
-                        : customer.status === 'has_rental'
-                          ? 'bg-gradient-to-r from-green-500/15 via-green-600/10 to-transparent hover:from-green-500/25 hover:via-green-600/15'
-                          : index % 2 === 0
-                            ? 'bg-gray-800/20 hover:bg-gray-800/40'
-                            : 'bg-gray-900/20 hover:bg-gray-900/40'
+                    ? 'bg-gradient-to-r from-red-900/30 via-red-800/20 to-transparent hover:from-red-900/40 hover:via-red-800/30'
+                    : customer.status === 'vip'
+                      ? 'bg-gradient-to-r from-yellow-500/15 via-yellow-600/10 to-transparent hover:from-yellow-500/25 hover:via-yellow-600/15'
+                      : customer.status === 'has_rental'
+                        ? 'bg-gradient-to-r from-green-500/15 via-green-600/10 to-transparent hover:from-green-500/25 hover:via-green-600/15'
+                        : index % 2 === 0
+                          ? 'bg-gray-800/20 hover:bg-gray-800/40'
+                          : 'bg-gray-900/20 hover:bg-gray-900/40'
                     } backdrop-blur-sm`}
                 >
                   <td className="px-4 py-3">

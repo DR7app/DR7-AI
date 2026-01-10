@@ -43,9 +43,14 @@ export default function CustomerAutocomplete({
     })
 
     // Update search query when customer is selected
+    // CRITICAL FIX: Always sync search query with selected customer name
+    // This ensures the name displays correctly when editing a booking
     useEffect(() => {
-        if (selectedCustomer && !isOpen) {
+        if (selectedCustomer) {
             setSearchQuery(selectedCustomer.full_name)
+        } else if (!isOpen) {
+            // Only clear when dropdown is closed and no customer is selected
+            setSearchQuery('')
         }
     }, [selectedCustomer, isOpen])
 
@@ -153,8 +158,8 @@ export default function CustomerAutocomplete({
                             onClick={() => selectCustomer(customer)}
                             onMouseEnter={() => setHighlightedIndex(index)}
                             className={`px-4 py-3 cursor-pointer transition-all duration-150 border-b border-gray-700/30 last:border-b-0 ${index === highlightedIndex
-                                    ? 'bg-blue-600/20 border-l-4 border-l-blue-500'
-                                    : 'hover:bg-gray-800/50 border-l-4 border-l-transparent'
+                                ? 'bg-blue-600/20 border-l-4 border-l-blue-500'
+                                : 'hover:bg-gray-800/50 border-l-4 border-l-transparent'
                                 }`}
                         >
                             <div className="font-semibold text-white">{customer.full_name}</div>

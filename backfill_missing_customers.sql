@@ -44,11 +44,12 @@ SELECT
   'backfill_registration',
   au.created_at
 FROM auth.users au
-LEFT JOIN customers_extended ce ON au.id = ce.user_id
-WHERE ce.id IS NULL
-  AND au.email NOT LIKE '%@dr7.app'
+WHERE au.email NOT LIKE '%@dr7.app'
   AND au.email NOT LIKE '%dubai.rent7.0srl%'
-ON CONFLICT (user_id) DO NOTHING;
+  AND NOT EXISTS (
+    SELECT 1 FROM customers_extended ce 
+    WHERE ce.user_id = au.id
+  );
 
 -- Step 3: Verify backfill results
 DO $$

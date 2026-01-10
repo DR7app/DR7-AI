@@ -434,7 +434,7 @@ export default function CarWashCalendarTab() {
       {/* Booking Details Modal */}
       {selectedCell && (
         <div
-          className="fixed inset-0 /80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedCell(null)}
         >
           <div
@@ -496,10 +496,10 @@ export default function CarWashCalendarTab() {
                     <div className="flex justify-between">
                       <span className="text-theme-text-muted">Stato Pagamento:</span>
                       <span className={`font-medium ${booking.payment_status === 'paid' ||
-                          booking.payment_status === 'completed' ||
-                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                          ? 'text-green-400'
-                          : 'text-red-400'
+                        booking.payment_status === 'completed' ||
+                        (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                        ? 'text-green-400'
+                        : 'text-red-400'
                         }`}>
                         {booking.payment_status === 'paid' ||
                           booking.payment_status === 'completed' ||
