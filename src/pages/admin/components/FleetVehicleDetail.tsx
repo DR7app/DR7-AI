@@ -386,82 +386,123 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             {/* Tires (Gomme) */}
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Gomme</h4>
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Anteriori - Ultimo Cambio (km)</label>
-                                        <input
-                                            type="number"
-                                            value={editedVehicle.last_tire_change_front_km || 0}
-                                            onChange={(e) => updateField('last_tire_change_front_km', parseInt(e.target.value) || 0)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
-                                        />
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Front Tires */}
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Anteriori - Ultimo Cambio (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.last_tire_change_front_km || 0}
+                                                onChange={(e) => updateField('last_tire_change_front_km', parseInt(e.target.value) || 0)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.maintenance_tires_interval_km || 30000}
+                                                onChange={(e) => updateField('maintenance_tires_interval_km', parseInt(e.target.value) || 30000)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        {editedVehicle.maintenance_tires_interval_km && (
+                                            <p className="text-theme-text-muted text-sm">
+                                                Prossimo cambio: {((editedVehicle.last_tire_change_front_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km
+                                            </p>
+                                        )}
                                     </div>
-                                    <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Posteriori - Ultimo Cambio (km)</label>
-                                        <input
-                                            type="number"
-                                            value={editedVehicle.last_tire_change_rear_km || 0}
-                                            onChange={(e) => updateField('last_tire_change_rear_km', parseInt(e.target.value) || 0)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
-                                        <input
-                                            type="number"
-                                            value={editedVehicle.maintenance_tires_interval_km || 30000}
-                                            onChange={(e) => updateField('maintenance_tires_interval_km', parseInt(e.target.value) || 30000)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
-                                        />
+
+                                    {/* Rear Tires */}
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Posteriori - Ultimo Cambio (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.last_tire_change_rear_km || 0}
+                                                onChange={(e) => updateField('last_tire_change_rear_km', parseInt(e.target.value) || 0)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.maintenance_tires_interval_km || 30000}
+                                                onChange={(e) => updateField('maintenance_tires_interval_km', parseInt(e.target.value) || 30000)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        {editedVehicle.maintenance_tires_interval_km && (
+                                            <p className="text-theme-text-muted text-sm">
+                                                Prossimo cambio: {((editedVehicle.last_tire_change_rear_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
-                                {editedVehicle.maintenance_tires_interval_km && (
-                                    <div className="text-theme-text-muted text-sm mt-2 space-y-1">
-                                        <p>Prossimo cambio anteriori: {((editedVehicle.last_tire_change_front_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km</p>
-                                        <p>Prossimo cambio posteriori: {((editedVehicle.last_tire_change_rear_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km</p>
-                                    </div>
-                                )}
                             </div>
 
                             {/* Brakes (Pastiglie) */}
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <h4 className="text-lg font-bold text-theme-text-primary mb-3">Pastiglie Freni</h4>
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Anteriori - Ultimo Cambio (km)</label>
-                                        <input
-                                            type="number"
-                                            value={editedVehicle.last_brake_change_front_km || 0}
-                                            onChange={(e) => updateField('last_brake_change_front_km', parseInt(e.target.value) || 0)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
-                                        />
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Front Brakes */}
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Anteriori - Ultimo Cambio (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.last_brake_change_front_km || 0}
+                                                onChange={(e) => updateField('last_brake_change_front_km', parseInt(e.target.value) || 0)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.maintenance_brake_interval_km || 0}
+                                                onChange={(e) => updateField('maintenance_brake_interval_km', parseInt(e.target.value) || 0)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                placeholder="0 = non monitorato"
+                                            />
+                                        </div>
+                                        {editedVehicle.maintenance_brake_interval_km && editedVehicle.maintenance_brake_interval_km > 0 && (
+                                            <p className="text-theme-text-muted text-sm">
+                                                Prossimo cambio: {((editedVehicle.last_brake_change_front_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km
+                                            </p>
+                                        )}
                                     </div>
-                                    <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Posteriori - Ultimo Cambio (km)</label>
-                                        <input
-                                            type="number"
-                                            value={editedVehicle.last_brake_change_rear_km || 0}
-                                            onChange={(e) => updateField('last_brake_change_rear_km', parseInt(e.target.value) || 0)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
-                                        <input
-                                            type="number"
-                                            value={editedVehicle.maintenance_brake_interval_km || 0}
-                                            onChange={(e) => updateField('maintenance_brake_interval_km', parseInt(e.target.value) || 0)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
-                                            placeholder="0 = non monitorato"
-                                        />
+
+                                    {/* Rear Brakes */}
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Posteriori - Ultimo Cambio (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.last_brake_change_rear_km || 0}
+                                                onChange={(e) => updateField('last_brake_change_rear_km', parseInt(e.target.value) || 0)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
+                                            <input
+                                                type="number"
+                                                value={editedVehicle.maintenance_brake_interval_km || 0}
+                                                onChange={(e) => updateField('maintenance_brake_interval_km', parseInt(e.target.value) || 0)}
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                placeholder="0 = non monitorato"
+                                            />
+                                        </div>
+                                        {editedVehicle.maintenance_brake_interval_km && editedVehicle.maintenance_brake_interval_km > 0 && (
+                                            <p className="text-theme-text-muted text-sm">
+                                                Prossimo cambio: {((editedVehicle.last_brake_change_rear_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
-                                {editedVehicle.maintenance_brake_interval_km && editedVehicle.maintenance_brake_interval_km > 0 && (
-                                    <div className="text-theme-text-muted text-sm mt-2 space-y-1">
-                                        <p>Prossimo cambio anteriori: {((editedVehicle.last_brake_change_front_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km</p>
-                                        <p>Prossimo cambio posteriori: {((editedVehicle.last_brake_change_rear_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km</p>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>
