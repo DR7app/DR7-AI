@@ -21,8 +21,13 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const remainingEur = Math.max(totalEur - paidEur, 0)
 
   // Payment status - MUST be coherent with financial breakdown
-  // If there's remaining amount, it's NOT paid, regardless of database status
-  const isPaid = remainingEur === 0
+  // Three states based on actual amounts:
+  // - Pagato: fully paid (remaining = 0)
+  // - Da Saldare: partial payment (0 < paid < total)
+  // - Non Pagato: unpaid (paid = 0)
+  const isPaid = remainingEur === 0 && totalEur > 0
+  const isPartiallyPaid = paidEur > 0 && remainingEur > 0
+  const isUnpaid = paidEur === 0
 
   // DEBUG: Always log monetary values to verify correct conversion
   console.group(`💰 Payment Debug: Booking ${booking.id}`)
@@ -117,10 +122,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             {/* Payment Status Badge */}
             <div className="flex items-center gap-2">
               <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${isPaid
-                ? 'bg-green-900/50 text-green-300 border border-green-700/50'
-                : 'bg-red-900/50 text-red-300 border border-red-700/50'
+                  ? 'bg-green-900/50 text-green-300 border border-green-700/50'
+                  : isPartiallyPaid
+                    ? 'bg-orange-900/50 text-orange-300 border border-orange-700/50'
+                    : 'bg-red-900/50 text-red-300 border border-red-700/50'
                 }`}>
-                {isPaid ? '✓ Pagato' : '⚠ Da Saldare'}
+                {isPaid ? '✓ Pagato' : isPartiallyPaid ? '⚠ Da Saldare' : '✗ Non Pagato'}
               </span>
             </div>
 
