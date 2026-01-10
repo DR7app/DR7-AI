@@ -394,8 +394,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       // RED = Customer booking (clean, modern red)
                       // ORANGE = Unavailable (muted orange)
 
-                      let bgClass = "bg-[#8B3A3A]" // Softer burgundy instead of bright red
-                      let borderClass = "border-[#6B2A2A]/30"
+                      // Color: Same as "Cancella" button in Prenotazioni
+                      let bgClass = "bg-orange-600"
+                      let borderClass = "border-orange-500/30"
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
