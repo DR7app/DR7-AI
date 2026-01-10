@@ -153,12 +153,28 @@ export default function DailyCalendarTab() {
     // Get booking time
     const getBookingTime = (booking: Booking): string => {
         if (booking.type === 'check-in') {
-            return booking.booking_details?.pickupTime ||
-                new Date(booking.pickup_date!).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+            // Try multiple sources for pickup time
+            const time = booking.booking_details?.pickupTime ||
+                booking.booking_details?.pickup_time ||
+                (booking.pickup_date ? new Date(booking.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null)
+
+            if (!time) {
+                console.warn('⚠️ Missing pickup time for booking:', booking.id, booking)
+                return '09:00' // Default fallback
+            }
+            return time
         }
         if (booking.type === 'check-out') {
-            return booking.booking_details?.returnTime ||
-                new Date(booking.dropoff_date!).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+            // Try multiple sources for return time
+            const time = booking.booking_details?.returnTime ||
+                booking.booking_details?.return_time ||
+                (booking.dropoff_date ? new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null)
+
+            if (!time) {
+                console.warn('⚠️ Missing return time for booking:', booking.id, booking)
+                return '18:00' // Default fallback
+            }
+            return time
         }
         return booking.appointment_time || '00:00'
     }
