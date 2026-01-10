@@ -1,9 +1,16 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
-import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
-import { parseUTCToRome, debugTimezone } from '../../../utils/timezoneUtils'
+import { getRomeDateComponents, parseUTCToRome, formatRomeDate } from '../../../utils/timezoneUtils'
+import { normalizeBooking, computeLanes, CalendarEvent } from '../../../utils/calendarLogic'
+
+// --- Configuration ---
+const CELL_WIDTH = 45 // Fixed width for day cells
+const HEADER_HEIGHT = 42
+const MIN_ROW_HEIGHT = 60
+const BAR_HEIGHT = 30
+const BAR_MARGIN_BOTTOM = 4
 
 interface Vehicle {
   id: string
@@ -14,16 +21,13 @@ interface Vehicle {
   metadata?: {
     unavailable_from?: string
     unavailable_until?: string
-    unavailable_from_time?: string
-    unavailable_until_time?: string
-    unavailable_reason?: string
     display_group?: string
   }
 }
 
 interface Booking {
   id: string
-  vehicle_id?: string // Added vehicle_id
+  vehicle_id?: string
   vehicle_name: string
   vehicle_plate?: string
   pickup_date: string
@@ -32,1133 +36,437 @@ interface Booking {
   customer_name: string
   customer_email: string
   price_total: number
-  payment_status?: string
-  amount_paid?: string
+  service_type?: string
   booking_details?: any
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
 
-type CellStatus = 'available' | 'rented' | 'unavailable'
-
-export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
+export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
   const { canViewFinancials } = useAdminRole()
-  const [hideFinancials, setHideFinancials] = useState(false)
+  // const [hideFinancials, setHideFinancials] = useState(false) // Removed for now to focus on clean layout
+  const [debugMode, setDebugMode] = useState(false) // MANDATORY DEBUG TOGGLE
+
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedCell, setSelectedCell] = useState<{
-    vehicle: string
-    date: string
-    bookings: Booking[]
-  } | null>(null)
-  const [selectedUnavailability, setSelectedUnavailability] = useState<Vehicle | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [changingVehicle, setChangingVehicle] = useState<string | null>(null) // booking id being changed
-  const [userEmail, setUserEmail] = useState<string | null>(null)
 
+  // Scroll Sync Refs
+  const headerRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  // --- Data Loading ---
   useEffect(() => {
     loadData()
-    // Fetch current user email
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUserEmail(data.user.email || null)
-      }
-    })
-
-    // Real-time subscription
     const subscription = supabase
       .channel('calendar-updates')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        () => loadData()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadData())
       .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
-    }
+    return () => { subscription.unsubscribe() }
   }, [])
 
   async function loadData() {
     setLoading(true)
     try {
-      // Load vehicles - Custom order: Exotic → Urban → Aziendali
-      const { data: vehiclesData, error: vehiclesError } = await supabase
+      const { data: vehiclesData } = await supabase
         .from('vehicles')
         .select('id, display_name, plate, status, category, metadata')
         .neq('status', 'retired')
 
-      console.log('🚗 RAW VEHICLES QUERY RESULT:', { vehiclesData, vehiclesError })
-
-      if (vehiclesError) {
-        console.error('❌ VEHICLES ERROR:', vehiclesError)
-        throw vehiclesError
-      }
-
-      // Sort vehicles by category: exotic first, then urban, then aziendali
-      const sortedVehicles = vehiclesData?.sort((a, b) => {
-        const categoryOrder: Record<string, number> = {
-          'exotic': 1,
-          'urban': 2,
-          'aziendali': 3
-        }
-        const orderA = categoryOrder[a.category || ''] || 999
-        const orderB = categoryOrder[b.category || ''] || 999
-
-        if (orderA !== orderB) return orderA - orderB
-        return a.display_name.localeCompare(b.display_name)
-      })
-
-      // Load bookings (only car rentals, not car wash) - include ALL statuses except cancelled
-      const { data: allBookingsData, error: bookingsError } = await supabase
+      const { data: allBookings } = await supabase
         .from('bookings')
         .select('*')
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
 
-      if (bookingsError) throw bookingsError
-
-      // Filter out car wash and mechanical bookings client-side
-      const bookingsData = allBookingsData?.filter(b =>
-        b.service_type !== 'car_wash' &&
-        b.service_type !== 'mechanical_service' &&
-        b.service_type !== 'mechanical'
-      ) || []
-
-      console.log('📅 CALENDARIO - Veicoli caricati:', vehiclesData?.length || 0)
-      console.log('📅 CALENDARIO - Prenotazioni caricate:', bookingsData?.length || 0)
-
-      if (bookingsData && bookingsData.length > 0) {
-        console.log('📅 CALENDARIO - Prima prenotazione:', {
-          vehicle: bookingsData[0].vehicle_name,
-          pickup: bookingsData[0].pickup_date,
-          dropoff: bookingsData[0].dropoff_date,
-          status: bookingsData[0].status
+      if (vehiclesData) {
+        // Sort: Exotic -> Urban -> Aziendali
+        const sorted = vehiclesData.sort((a, b) => {
+          const order: Record<string, number> = { 'exotic': 1, 'urban': 2, 'aziendali': 3 }
+          const oa = order[a.category || ''] || 99
+          const ob = order[b.category || ''] || 99
+          return oa - ob || a.display_name.localeCompare(b.display_name)
         })
+        setVehicles(sorted)
       }
 
-      // Log vehicle names for debugging matching
-      const vehicleNames = sortedVehicles?.map(v => v.display_name) || []
-      const bookingNames = [...new Set(bookingsData?.map(b => b.vehicle_name))]
-
-      console.log('📅 CALENDARIO - Nomi veicoli:', vehicleNames)
-      console.log('📅 CALENDARIO - Nomi nelle prenotazioni:', bookingNames)
-
-      // Check for mismatches
-      console.log('📅 CALENDARIO - CONFRONTO NOMI:')
-      bookingNames.forEach(bookingName => {
-        const exactMatch = vehicleNames.some(vName => vName === bookingName)
-        const normalizedMatch = vehicleNames.some(vName =>
-          vName?.trim().toLowerCase() === bookingName?.trim().toLowerCase()
+      if (allBookings) {
+        // Filter out irrelevant service types if needed
+        const validBookings = allBookings.filter(b =>
+          !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
         )
-        const partialMatch = vehicleNames.find(vName =>
-          vName?.toLowerCase().includes(bookingName?.toLowerCase()) ||
-          bookingName?.toLowerCase().includes(vName?.toLowerCase())
-        )
-
-        console.log(`  "${bookingName}" → Exact: ${exactMatch}, Normalized: ${normalizedMatch}, Partial: "${partialMatch || 'NO MATCH'}"`)
-      })
-
-      setVehicles(sortedVehicles || [])
-      setBookings(bookingsData || [])
-    } catch (error) {
-      console.error('Failed to load data:', error)
+        setBookings(validBookings)
+      }
+    } catch (e) {
+      console.error("Data load failed", e)
     } finally {
       setLoading(false)
     }
   }
 
-  // Get alternative vehicles for a booking (grouped vehicles or similar models)
-  function getAlternativeVehicles(currentVehicleName: string): Vehicle[] {
-    const currentVehicle = vehicles.find(v => v.display_name === currentVehicleName)
-
-    if (!currentVehicle) {
-      return []
+  // --- Date Logic ---
+  const currentRomeComponents = useMemo(() => {
+    // Current view context (Rome Time)
+    // We treat 'currentDate' as the state container. 
+    // To match the utils logic, we extract the year/month we want to display.
+    // If currentDate is local browser time, we just take getFullYear/getMonth.
+    return {
+      year: currentDate.getFullYear(),
+      month: currentDate.getMonth() // 0-indexed
     }
-
-    // If vehicle has a display_group, get all vehicles in that group
-    const displayGroup = currentVehicle.metadata?.display_group
-    if (displayGroup) {
-      return vehicles.filter(v => v.metadata?.display_group === displayGroup)
-    }
-
-    // Otherwise, find vehicles with similar names (for manual grouping)
-    const baseName = currentVehicleName.split('(')[0].trim().toLowerCase()
-    return vehicles.filter(v =>
-      v.display_name.toLowerCase().includes(baseName) ||
-      baseName.includes(v.display_name.toLowerCase())
-    )
-  }
-
-  // Update booking vehicle
-  async function changeBookingVehicle(bookingId: string, newVehicleName: string) {
-    setChangingVehicle(bookingId)
-    try {
-      const newVehicle = vehicles.find(v => v.display_name === newVehicleName)
-
-      const { error } = await supabase
-        .from('bookings')
-        .update({
-          vehicle_name: newVehicleName,
-          vehicle_plate: newVehicle?.plate || null
-        })
-        .eq('id', bookingId)
-
-      if (error) throw error
-
-      // Reload data to reflect changes
-      await loadData()
-
-      // Update selectedCell if it's open
-      if (selectedCell) {
-        const updatedBookings = selectedCell.bookings.map(b =>
-          b.id === bookingId
-            ? { ...b, vehicle_name: newVehicleName, vehicle_plate: newVehicle?.plate || undefined }
-            : b
-        )
-        setSelectedCell({ ...selectedCell, bookings: updatedBookings })
-      }
-
-      alert('✅ Veicolo modificato con successo!')
-    } catch (error) {
-      console.error('Error changing vehicle:', error)
-      alert('❌ Errore durante la modifica del veicolo')
-    } finally {
-      setChangingVehicle(null)
-    }
-  }
-
-  const daysInMonth = useMemo(() => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
-    const lastDay = new Date(year, month + 1, 0).getDate()
-    return Array.from({ length: lastDay }, (_, i) => i + 1)
   }, [currentDate])
 
-  interface BookingSegment {
-    bookingId: string
-    vehicleId: string
-    startDay: number
-    endDay: number
-    columnSpan: number
-    booking: Booking
-  }
+  const daysInMonth = useMemo(() => {
+    // 0-indexed month for Date constructor is correct
+    return new Date(currentRomeComponents.year, currentRomeComponents.month + 1, 0).getDate()
+  }, [currentRomeComponents])
 
-  const getCellStatus = (vehicle: Vehicle, day: number): CellStatus => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
+  const daysArray = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth])
 
-    // Check if vehicle is marked as unavailable
-    if (vehicle.status === 'unavailable') {
-      if (!vehicle.metadata?.unavailable_from && !vehicle.metadata?.unavailable_until) {
-        return 'unavailable'
-      }
-
-      if (vehicle.metadata?.unavailable_from && vehicle.metadata?.unavailable_until) {
-        const checkDate = new Date(year, month, day, 0, 0, 0, 0)
-        const unavailableFrom = parseLocalDate(vehicle.metadata.unavailable_from)
-        const unavailableUntil = parseLocalDate(vehicle.metadata.unavailable_until)
-        if (checkDate >= unavailableFrom && checkDate <= unavailableUntil) {
-          return 'unavailable'
-        }
-      }
-    }
-
-    // Find if ANY booking covers this day
-    const isBooked = bookings.some(booking => {
-      if (!isBookingForVehicle(booking, vehicle)) return false
-
-      const range = getBookingRange(booking, year, month)
-      if (!range) return false
-
-      return day >= range.startDay && day <= range.endDay
+  const navigateMonth = (dir: 'prev' | 'next') => {
+    setCurrentDate(p => {
+      const n = new Date(p)
+      n.setMonth(p.getMonth() + (dir === 'prev' ? -1 : 1))
+      return n
     })
-
-    return isBooked ? 'rented' : 'available'
   }
 
+  // --- Processing ---
 
+  // 1. Group Bookings by Vehicle
+  // 2. Normalize to CalendarEvents
+  // 3. Compute Lanes
+  const processedRows = useMemo(() => {
+    const rows: { vehicle: Vehicle, events: CalendarEvent[], laneCount: number }[] = []
 
-  // Helper to normalize plate strings (remove spaces, uppercase)
-  const normalizePlate = (s: string | null | undefined) => {
-    if (!s) return ''
-    return s.replace(/[^A-Z0-9]/gi, '').toUpperCase()
-  }
+    vehicles.forEach(vehicle => {
+      const vehicleBookings = bookings.filter(b => {
+        // Robust Matching
+        const vPlate = vehicle.plate?.replace(/\s/g, '').toUpperCase()
+        const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
+        if (b.vehicle_id === vehicle.id) return true
+        if (vPlate && bPlate && vPlate === bPlate) return true
+        return b.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+      })
 
-  // TIMEZONE FIX: Use centralized utilities for UTC → Europe/Rome conversion
-  // This ensures bookings are always displayed on the correct day in Italy timezone
-  const parseLocalDate = parseUTCToRome
-
-  // Unified helper to calculate startDay and endDay for a booking within the current month
-  // TIMEZONE FIX: Use Rome timezone components for accurate day calculation
-  const getBookingRange = (booking: Booking, year: number, month: number) => {
-    // SIMPLIFIED: Database timestamps already have timezone info (+01:00 or +02:00)
-    // JavaScript Date object handles this correctly
-    const pickupDate = new Date(booking.pickup_date)
-    const dropoffDate = new Date(booking.dropoff_date)
-
-    const lastDayInMonth = new Date(year, month + 1, 0).getDate()
-
-    // Get the actual date components as they appear in Italy
-    // The Date object's getFullYear/getMonth/getDate methods return LOCAL time
-    // But since our timestamps have +01:00, they're already in Rome time!
-    const pickupYear = pickupDate.getFullYear()
-    const pickupMonth = pickupDate.getMonth() // 0-indexed
-    const pickupDay = pickupDate.getDate()
-
-    const dropoffYear = dropoffDate.getFullYear()
-    const dropoffMonth = dropoffDate.getMonth() // 0-indexed  
-    const dropoffDay = dropoffDate.getDate()
-    const dropoffHour = dropoffDate.getHours()
-    const dropoffMinute = dropoffDate.getMinutes()
-
-    // Booking is before this month
-    if (dropoffYear < year || (dropoffYear === year && dropoffMonth < month)) {
-      return null
-    }
-
-    // Booking is after this month
-    if (pickupYear > year || (pickupYear === year && pickupMonth > month)) {
-      return null
-    }
-
-    // Calculate start day in this month
-    let startDay: number
-    if (pickupYear === year && pickupMonth === month) {
-      startDay = pickupDay
-    } else {
-      startDay = 1 // Booking started in a previous month
-    }
-
-    // Calculate end day in this month
-    let endDay: number
-    if (dropoffYear === year && dropoffMonth === month) {
-      endDay = dropoffDay
-
-      // If dropoff is exactly at midnight (00:00), the booking ends at the end of the previous day
-      if (dropoffHour === 0 && dropoffMinute === 0) {
-        endDay = Math.max(startDay, endDay - 1)
-      }
-    } else {
-      endDay = lastDayInMonth // Booking continues into next month
-    }
-
-    return { startDay, endDay }
-  }
-
-  // Unified helper to match a booking to a vehicle
-  const isBookingForVehicle = (booking: Booking, vehicle: Vehicle) => {
-    const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle?.id || booking.booking_details?.vehicle_id
-    const rawBookingPlate = booking.vehicle_plate ||
-      booking.booking_details?.vehicle?.plate ||
-      booking.booking_details?.vehicle?.targa ||
-      booking.booking_details?.targa
-
-    const vehiclePlate = normalizePlate(vehicle.plate)
-    const bookingPlate = normalizePlate(rawBookingPlate)
-
-    if (bookingVehicleId && bookingVehicleId === vehicle.id) return true
-    if (bookingPlate && vehiclePlate) return vehiclePlate === bookingPlate
-
-    // Fallback to name match only if no ID and no plate info on one side
-    return booking.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
-  }
-
-
-
-  // Build booking segments for overlay bars
-  const buildBookingSegments = useMemo(() => {
-    const segments: BookingSegment[] = []
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
-
-    console.log('🔍 CALENDAR DEBUG - Building segments for:', { year, month: month + 1 })
-
-    for (const vehicle of vehicles) {
-      for (const booking of bookings) {
-        if (!isBookingForVehicle(booking, vehicle)) continue
-
-        const range = getBookingRange(booking, year, month)
-        if (!range) continue
-
-        // DEBUG: Log the first few bookings with timezone conversion details
-        if (segments.length < 3) {
-          console.log(`\n📅 Booking #${segments.length + 1}: ${booking.customer_name} / ${vehicle.display_name}`)
-          debugTimezone('Pickup', booking.pickup_date)
-          debugTimezone('Dropoff', booking.dropoff_date)
-          console.log(`   ✅ Calculated Range: Day ${range.startDay} → Day ${range.endDay}`)
-        }
-
-        segments.push({
-          bookingId: booking.id,
-          vehicleId: vehicle.id,
-          startDay: range.startDay,
-          endDay: range.endDay,
-          columnSpan: range.endDay - range.startDay + 1,
-          booking
+      // Normalize
+      const events: CalendarEvent[] = []
+      vehicleBookings.forEach(b => {
+        const evt = normalizeBooking(b, currentRomeComponents.year, currentRomeComponents.month, {
+          cellWidth: CELL_WIDTH,
+          daysInMonth
         })
+        if (evt) events.push(evt)
+      })
+
+      // Compute Lanes
+      const laningResults = computeLanes(events)
+      const maxLane = laningResults.reduce((max, e) => Math.max(max, e.laneIndex), -1)
+
+      // Filter by search query if needed
+      let displayEvents = laningResults
+      if (searchQuery) {
+        // If filtering, we still might want to show the row, 
+        // but maybe dim non-matching? Or just filter the VEHICLES list?
+        // Let's rely on the vehicle filter below ideally, but here we process all.
       }
-    }
 
-    console.log('✅ Total segments built:', segments.length)
-    return segments
-  }, [vehicles, bookings, currentDate])
-
-
-
-
-
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev)
-      if (direction === 'prev') {
-        newDate.setMonth(prev.getMonth() - 1)
-      } else {
-        newDate.setMonth(prev.getMonth() + 1)
-      }
-      return newDate
-    })
-  }
-
-  const monthName = currentDate.toLocaleDateString('it-IT', {
-    month: 'long',
-    year: 'numeric'
-  })
-
-  // Get today's date for highlighting
-  const today = new Date()
-  const isCurrentMonth = today.getMonth() === currentDate.getMonth() &&
-    today.getFullYear() === currentDate.getFullYear()
-  const todayDay = isCurrentMonth ? today.getDate() : null
-
-  // Filter vehicles for display - SHARED LOGIC
-  const filteredVehicles = useMemo(() => {
-    return vehicles.filter(vehicle => {
-      if (!searchQuery) return true
-      const query = searchQuery.toLowerCase()
-      // Use same logic as before
-      return bookings.some(booking => {
-        const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
-        if (!customerName) return false
-
-        const bookingVehicle = booking.vehicle_name?.trim().toLowerCase()
-        const vehicleDisplay = vehicle.display_name?.trim().toLowerCase()
-
-        const vehiclePlate = normalizePlate(vehicle.plate)
-        const bookingPlate = normalizePlate(booking.vehicle_plate || booking.booking_details?.vehicle?.plate)
-
-        if (vehiclePlate && bookingPlate && vehiclePlate === bookingPlate) {
-          return customerName.toLowerCase().includes(query)
-        }
-
-        const vehicleMatches = bookingVehicle === vehicleDisplay ||
-          (bookingVehicle && vehicleDisplay && (
-            bookingVehicle.includes(vehicleDisplay) ||
-            vehicleDisplay.includes(bookingVehicle)
-          ))
-        return vehicleMatches && customerName.toLowerCase().includes(query)
+      rows.push({
+        vehicle,
+        events: displayEvents,
+        laneCount: Math.max(1, maxLane + 1) // At least 1 lane height
       })
     })
-  }, [vehicles, bookings, searchQuery])
 
-  if (loading) {
-    return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento calendario...</p>
-      </div>
-    )
-  }
+    return rows
+  }, [vehicles, bookings, currentRomeComponents, daysInMonth])
+
+  // Filter Rows for Display
+  const visibleRows = useMemo(() => {
+    if (!searchQuery) return processedRows
+    const q = searchQuery.toLowerCase()
+    return processedRows.filter(row => {
+      // Create a simplified flattened string to search
+      const vehicleMatch = row.vehicle.display_name.toLowerCase().includes(q) ||
+        (row.vehicle.plate || '').toLowerCase().includes(q)
+      const bookingMatch = row.events.some(e =>
+        e.booking.customer_name.toLowerCase().includes(q)
+      )
+      return vehicleMatch || bookingMatch
+    })
+  }, [processedRows, searchQuery])
+
+
+  // --- Render Helpers ---
+  const today = new Date()
+  const highlightTodayIndex = (
+    today.getFullYear() === currentRomeComponents.year &&
+    today.getMonth() === currentRomeComponents.month
+  ) ? today.getDate() - 1 : -1
+
+
+  if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
 
   return (
-    <div className="space-y-6">
-      {/* Header with Stats */}
-      <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 p-4 lg:p-6 shadow-2xl">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-wrap">
-            <h2 className="text-xl font-light text-theme-text-primary">Calendario Flotta</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-theme-text-muted">Questo Mese:</span>
-              <span className="text-dr7-gold font-semibold text-sm">
-                {bookings.filter(b => {
-                  const pickupDate = parseLocalDate(b.pickup_date)
-                  return pickupDate.getMonth() === currentDate.getMonth() &&
-                    pickupDate.getFullYear() === currentDate.getFullYear()
-                }).length} noleggi
-              </span>
-            </div>
-            {canViewFinancials && !hideFinancials && userEmail !== 'dubai.rent7.0srl@gmail.com' && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-theme-text-muted">Fatturato:</span>
-                <span className="text-green-400 font-semibold text-sm">
-                  <FinancialData type="total">
-                    €{(bookings
-                      .filter(b => {
-                        const pickupDate = parseLocalDate(b.pickup_date)
-                        return pickupDate.getMonth() === currentDate.getMonth() &&
-                          pickupDate.getFullYear() === currentDate.getFullYear()
-                      })
-                      .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
-                  </FinancialData>
-                </span>
-              </div>
-            )}
-            {/* Legend */}
-            <div className="flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50"></div>
-                <span className="text-theme-text-secondary font-light">Disponibile</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/50"></div>
-                <span className="text-theme-text-secondary font-light">Non Disponibile</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/50"></div>
-                <span className="text-theme-text-secondary font-light">Noleggiato</span>
-              </div>
-            </div>
-            {canViewFinancials && (
-              <button
-                onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 ${hideFinancials
-                  ? 'bg-green-600/20 border border-green-500/30 text-green-400 hover:bg-green-600/30'
-                  : 'bg-yellow-600/20 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-600/30'
-                  }`}
-              >
-                {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
-              </button>
-            )}
+    <div className="flex flex-col h-[calc(100vh-200px)] bg-theme-bg-secondary rounded-xl border border-theme-border shadow-2xl overflow-hidden">
+
+      {/* 1. Control Bar */}
+      <div className="flex justify-between items-center p-4 bg-theme-bg-secondary border-b border-theme-border z-50 shadow-sm">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
+            {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+          </h2>
+          <div className="flex gap-2">
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm">Prev</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm">Next</button>
+            <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold rounded border border-dr7-gold/30 text-sm">Oggi</button>
           </div>
         </div>
-      </div>
 
-      {/* Search and Navigation Bar */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-2xl font-light text-theme-text-primary mb-3 capitalize">{monthName}</h3>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-xs text-theme-text-muted cursor-pointer select-none">
+            <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} className="rounded border-gray-600 bg-gray-800" />
+            <span className={debugMode ? 'text-red-400 font-bold' : ''}>DEBUG MODE 🛠</span>
+          </label>
           <input
             type="text"
-            placeholder="Cerca cliente..."
+            placeholder="Cerca veicolo o cliente..."
+            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-theme-text-primary placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 focus:border-dr7-gold/30 w-64 backdrop-blur-sm transition-all"
+            onChange={e => setSearchQuery(e.target.value)}
           />
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigateMonth('prev')}
-            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
-            aria-label="Mese precedente"
-          >
-            Prec
-          </button>
-          <button
-            onClick={() => navigateMonth('next')}
-            className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
-            aria-label="Mese successivo"
-          >
-            Succ
-          </button>
         </div>
       </div>
 
-      {/* Search Results - Show matching bookings */}
-      {searchQuery && (
-        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
-          <h3 className="text-lg font-bold text-theme-text-primary mb-3">
-            Risultati ricerca: "{searchQuery}"
-          </h3>
-          {(() => {
-            const matchingBookings = bookings.filter(booking => {
-              const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || ''
-              return customerName && customerName.toLowerCase().includes(searchQuery.toLowerCase())
-            })
+      {/* 2. Scrollable Calendar Area */}
+      <div className="flex-1 overflow-auto relative flex flex-col w-full" ref={gridRef}>
 
-            if (matchingBookings.length === 0) {
+        {/* A. Sticky Header Row */}
+        <div className="flex sticky top-0 z-[40] bg-theme-bg-secondary shadow-md min-w-max h-[42px] border-b border-theme-border/50">
+          {/* Header Spacer for Left Column */}
+          <div className="sticky left-0 w-[300px] z-[41] bg-theme-bg-secondary border-r border-theme-border/50 flex items-center px-4 font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+            Veicolo / Targa
+          </div>
+
+          {/* Day Columns Header */}
+          <div className="flex">
+            {daysArray.map((day, i) => {
+              const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
+              const isHol = getHolidayForDate(d)
+              const isSun = isSunday(d)
+              const isToday = i === highlightTodayIndex
+
               return (
-                <p className="text-theme-text-muted text-sm">Nessuna prenotazione trovata con questo nome cliente.</p>
+                <div
+                  key={day}
+                  className={`
+                     flex flex-col items-center justify-center border-r border-theme-border/30 relative
+                     ${isToday ? 'bg-dr7-gold/10 text-dr7-gold font-bold' : ''}
+                     ${(isHol || isSun) && !isToday ? 'bg-red-500/5 text-red-400' : ''}
+                   `}
+                  style={{ width: CELL_WIDTH }}
+                >
+                  <span className="text-[10px]">{day}</span>
+                  <span className="text-[8px] opacity-60 uppercase">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
+                </div>
               )
-            }
+            })}
+          </div>
+        </div>
+
+        {/* B. Vehicle Rows */}
+        <div className="min-w-max pb-32"> {/* Extra padding bottom for tooltips */}
+          {visibleRows.map((row) => {
+            // Calculate dynamic height based on lanes
+            const extraPadding = 12 // Top/Bottom padding
+            const rowHeight = Math.max(MIN_ROW_HEIGHT, (row.laneCount * (BAR_HEIGHT + 4)) + extraPadding)
 
             return (
-              <div className="space-y-2">
-                {matchingBookings.map(booking => (
-                  <div
-                    key={booking.id}
-                    className="bg-theme-bg-tertiary p-3 rounded border border-theme-border hover:border-dr7-gold transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-theme-text-primary font-semibold">
-                          {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
-                        </p>
-                        <p className="text-theme-text-muted text-sm">
-                          {booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}
-                        </p>
-                        <p className="text-dr7-gold text-sm mt-1">
-                          🚗 {booking.vehicle_name}
-                          {booking.vehicle_plate && <span className="text-theme-text-muted"> ({booking.vehicle_plate})</span>}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-theme-text-secondary text-sm">
-                          {booking.dropoff_date ? (() => {
-                            const dropoffDate = parseLocalDate(booking.dropoff_date)
-                            return `Rientro: ${dropoffDate.toLocaleDateString('it-IT')} ${dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
-                          })() : 'Data rientro non valida'}
-                        </p>
-                        <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${booking.status === 'confirmed' ? 'bg-green-900 text-green-200' :
-                          booking.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                            'bg-gray-700 text-theme-text-secondary'
-                          }`}>
-                          {booking.status}
-                        </span>
-                      </div>
+              <div
+                key={row.vehicle.id}
+                className="flex border-b border-theme-border/30 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
+                style={{ height: rowHeight }}
+              >
+                {/* Left Sticky Column */}
+                <div className="sticky left-0 w-[300px] z-[30] bg-theme-bg-secondary/95 group-hover:bg-theme-bg-tertiary/95 border-r border-theme-border/50 flex items-center justify-between px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+                  <div className="flex flex-col overflow-hidden mr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
+                      {row.vehicle.category && (
+                        <span className={`text-[8px] px-1 rounded uppercase font-bold tracking-wide ${row.vehicle.category === 'exotic' ? 'bg-purple-900/50 text-purple-200' :
+                            row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
+                              'bg-orange-900/50 text-orange-200'
+                          }`}>{row.vehicle.category.substring(0, 1)}</span>
+                      )}
                     </div>
+                    <span className="text-xs text-theme-text-muted font-mono">{row.vehicle.plate || '-'}</span>
                   </div>
-                ))}
-              </div>
-            )
-          })()}
-        </div>
-      )}
+                  <div className={`
+                      w-2 h-2 rounded-full shrink-0
+                      ${row.vehicle.status === 'available' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}
+                    `} />
+                </div>
 
-      {/* Month Grid */}
-      {vehicles.length > 0 && (
-        <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
-          <h3 className="text-lg font-bold text-theme-text-primary mb-4 flex items-center gap-2">
-            <span className="text-sm text-theme-text-muted">Tutti i Veicoli ({vehicles.length})</span>
-          </h3>
+                {/* The Day Grid & Events Container */}
+                <div className="relative flex-1">
 
-          <div className="relative min-w-max">
-            {/* Layer 1: Availability Grid (Base) */}
-            {/* Layer 1: Availability Grid (Base) */}
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="h-10">
-                  <th className="sticky left-0 top-0 z-50 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-left text-theme-text-primary font-bold text-xs w-[200px] min-w-[200px] max-w-[200px] shadow-lg box-border">
-                    Veicolo
-                  </th>
-                  <th className="sticky left-[200px] top-0 z-50 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-left text-theme-text-primary font-bold text-xs w-[100px] min-w-[100px] max-w-[100px] shadow-lg box-border">
-                    Targa
-                  </th>
-                  {daysInMonth.map(day => {
-                    const year = currentDate.getFullYear()
-                    const month = currentDate.getMonth()
-                    const dayDate = new Date(year, month, day)
-                    const holiday = getHolidayForDate(dayDate)
-                    const isSundayDay = isSunday(dayDate)
-
-                    return (
-                      <th
-                        key={day}
-                        className={`sticky top-0 z-30 border border-theme-border/40 px-1 py-1 text-center text-[10px] font-semibold w-[40px] min-w-[40px] max-w-[40px] relative group cursor-help box-border ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' :
-                          holiday || isSundayDay ? 'bg-red-900/90 border-red-500/30 text-red-300' : // Solid bg to hide scroll
-                            'text-theme-text-muted bg-theme-bg-secondary' // Solid bg to hide scroll
-                          }`}
-                      >
-                        <div className="flex flex-col items-center justify-between h-full py-0.5">
-                          <span className="text-[10px] leading-none mb-1">{day}</span>
-                          {holiday ? (
-                            <span className="text-[7px] leading-tight font-medium text-theme-text-primary uppercase tracking-tight absolute bottom-0.5 left-0 right-0 overflow-visible whitespace-nowrap z-10 px-0.5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                              {holiday.label}
-                            </span>
-                          ) : isSundayDay && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-white mb-0.5 shadow-sm"></div>
-                          )}
-                        </div>
-
-                        {(holiday || isSundayDay) && (
-                          <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-theme-bg-secondary text-theme-text-primary text-[10px] rounded shadow-lg border border-theme-border whitespace-nowrap z-50 pointer-events-none">
-                            {holiday ? holiday.name : 'Domenica'}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                          </div>
-                        )}
-                      </th>
-                    )
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className="relative group/row hover:bg-white/5 transition-colors h-10">
-                    <td className="sticky left-0 z-40 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-theme-text-primary font-semibold text-sm shadow-lg group-hover/row:bg-theme-bg-tertiary transition-colors w-[200px] min-w-[200px] max-w-[200px] box-border overflow-hidden">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate" title={vehicle.display_name}>{vehicle.display_name}</span>
-                          {vehicle.category && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${vehicle.category === 'exotic'
-                              ? 'bg-purple-600 text-theme-text-primary shadow-purple-500/20 shadow-sm'
-                              : vehicle.category === 'urban'
-                                ? 'bg-cyan-600 text-theme-text-primary shadow-cyan-500/20 shadow-sm'
-                                : 'bg-orange-600 text-theme-text-primary shadow-orange-500/20 shadow-sm'
-                              }`}>
-                              {vehicle.category}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="sticky left-[200px] z-40 bg-theme-bg-secondary border border-theme-border/40 px-3 py-2 text-theme-text-secondary text-xs font-mono shadow-lg group-hover/row:bg-theme-bg-tertiary transition-colors w-[100px] min-w-[100px] max-w-[100px] box-border overflow-hidden">
-                      {vehicle.plate || '-'}
-                    </td>
-                    {daysInMonth.map(day => {
-                      const status = getCellStatus(vehicle, day)
-
-                      return (
-                        <td
-                          key={day}
-                          onClick={() => {
-                            if (status === 'available') {
-                              // Open booking form for available days
-                              const year = currentDate.getFullYear()
-                              const month = currentDate.getMonth()
-                              const selectedDate = new Date(year, month, day)
-                              // Trigger the onNewBooking callback if provided
-                              // This will open the booking form in the parent component
-                              window.dispatchEvent(new CustomEvent('openBookingForm', {
-                                detail: {
-                                  vehicleName: vehicle.display_name,
-                                  date: selectedDate
-                                }
-                              }))
-                            } else if (status === 'unavailable') {
-                              setSelectedUnavailability(vehicle)
-                            }
-                          }}
-                          className={`border border-theme-border/30 h-10 w-[40px] min-w-[40px] max-w-[40px] transition-colors cursor-pointer box-border ${status === 'rented'
-                            ? 'bg-red-500/15' // Red for booked
-                            : status === 'unavailable'
-                              ? 'bg-theme-bg-tertiary/60'
-                              : 'bg-green-500/30 hover:bg-green-500/40' // Green for available
-                            } ${day === todayDay ? 'ring-1 ring-inset ring-dr7-gold/50 bg-dr7-gold/5' : ''}`}
-                        />
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Layer 2: Booking Bars Overlay */}
-            <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ top: '40px' }}>
-              {filteredVehicles.map((vehicle, index) => (
-                <div
-                  key={vehicle.id}
-                  className="absolute h-10" // Matched row height
-                  style={{
-                    left: '300px',
-                    right: 0,
-                    top: `${index * 40}px` // CRITICAL FIX: Position vertically based on filtered index
-                  }}
-                >
-                  {buildBookingSegments
-                    .filter(seg => seg.vehicleId === vehicle.id)
-                    .map(segment => {
-                      // CELL WIDTH: Must match exact CSS width of grid cells (40px)
-                      const cellWidth = 40
-
-                      // POSITIONING FIX: 
-                      // The grid columns are: Veicolo (200px) | Targa (100px) | Day1 | Day2 | ...
-                      // This overlay container starts at left:300px (after Veicolo+Targa)
-                      // Within this container, Day 1 should be at 0px, Day 2 at 40px, etc.
-                      // Formula: (startDay - 1) * cellWidth
-                      const left = (segment.startDay - 1) * cellWidth
-                      const width = segment.columnSpan * cellWidth
-
-                      // Determine color based on booking type (matching DailyCalendarModal)
-                      let colorClass = "border-red-600"
-                      let gradientClass = "from-red-600/90 via-red-800/50 to-transparent"
-                      let glowClass = "hover:shadow-red-600/40"
-                      let textColorClass = "text-red-500"
-
-                      if (segment.booking.type === 'check-out') {
-                        textColorClass = "text-yellow-400"
-                      } else if (segment.booking.type === 'lavaggio') {
-                        colorClass = "border-blue-500"
-                        gradientClass = "from-blue-500/70 via-blue-700/40 to-transparent"
-                        glowClass = "hover:shadow-blue-500/30"
-                        textColorClass = "text-blue-500"
-                      } else if (segment.booking.type === 'meccanica') {
-                        colorClass = "border-orange-500"
-                        gradientClass = "from-orange-500/70 via-orange-700/40 to-transparent"
-                        glowClass = "hover:shadow-orange-500/30"
-                        textColorClass = "text-orange-500"
-                      }
-
-                      const getLabel = () => {
-                        switch (segment.booking.type) {
-                          case 'check-in': return 'USCITE'
-                          case 'check-out': return 'RIENTRI'
-                          case 'lavaggio': return 'LAVAGGIO'
-                          case 'meccanica': return 'MECCANICA'
-                          default: return null // Don't show label for regular rentals
-                        }
-                      }
-
-                      const getTarga = (): string => {
-                        return segment.booking.vehicle_plate ||
-                          segment.booking.booking_details?.vehicle?.targa ||
-                          segment.booking.booking_details?.vehicle?.plate ||
-                          ''
-                      }
-
-                      const dropoffDate = parseLocalDate(segment.booking.dropoff_date)
-                      const dropoffDay = dropoffDate.getDate()
-                      const dropoffTime = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-
-                      // Build detailed tooltip with vehicle linkage info
-                      const buildTooltip = () => {
-                        const parts = [
-                          `👤 ${segment.booking.customer_name}`,
-                          `🚗 ${segment.booking.vehicle_name}`,
-                          `🔖 Targa: ${getTarga() || 'N/A'}`
-                        ]
-
-                        // Add vehicle linkage details for debugging
-                        if (segment.booking.vehicle_id) {
-                          parts.push(`🔗 Vehicle ID: ${segment.booking.vehicle_id.substring(0, 8)}...`)
-                        }
-
-                        // Show how this booking was matched to this vehicle row
-                        const matchMethod = segment.booking.vehicle_id === vehicle.id
-                          ? '✅ Matched by ID'
-                          : normalizePlate(segment.booking.vehicle_plate) === normalizePlate(vehicle.plate)
-                            ? '✅ Matched by Plate'
-                            : '⚠️ Matched by Name'
-                        parts.push(matchMethod)
-
-                        return parts.join('\n')
-                      }
+                  {/* 1. Background Grid Cells */}
+                  <div className="flex h-full absolute inset-0 z-0 pointer-events-none">
+                    {daysArray.map((day, i) => {
+                      const isToday = i === highlightTodayIndex
+                      const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
+                      const isRedDay = getHolidayForDate(d) || isSunday(d)
 
                       return (
                         <div
-                          key={segment.bookingId}
-                          className={`absolute pointer-events-auto bg-gradient-to-r ${gradientClass} border-l-2 ${colorClass} px-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg ${glowClass} cursor-pointer z-20`}
+                          key={day}
+                          className={`
+                                border-r border-theme-border/10 h-full
+                                ${isToday ? 'bg-dr7-gold/5' : ''}
+                                ${isRedDay && !isToday ? 'bg-red-500/5' : ''}
+                              `}
+                          style={{ width: CELL_WIDTH }}
+                        />
+                      )
+                    })}
+                  </div>
+
+                  {/* 2. Interactive Click Layer (Create Booking) */}
+                  <div className="flex h-full absolute inset-0 z-10">
+                    {daysArray.map((day, i) => (
+                      <div
+                        key={day}
+                        className="h-full hover:bg-white/5 cursor-pointer transition-colors"
+                        style={{ width: CELL_WIDTH }}
+                        onClick={() => {
+                          const date = new Date(currentRomeComponents.year, currentRomeComponents.month, day, 10, 0, 0)
+                          if (onNewBooking) onNewBooking(row.vehicle.display_name, date)
+                        }}
+                        title={`Nuova prenotazione: ${day}/${currentRomeComponents.month + 1}`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* 3. Rendered Events Layer */}
+                  <div className="absolute inset-0 z-20 pointer-events-none">
+                    {row.events.map(evt => {
+                      // Styling
+                      const isPending = evt.booking.status === 'pending'
+                      const isConfirmed = evt.booking.status === 'confirmed'
+                      const isCompleted = evt.booking.status === 'completed'
+
+                      let bgClass = "bg-gray-600"
+                      let borderClass = "border-gray-500"
+
+                      if (isPending) { bgClass = "bg-yellow-600/90"; borderClass = "border-yellow-400/50" }
+                      else if (isConfirmed) { bgClass = "bg-green-600/90"; borderClass = "border-green-400/50" }
+
+                      const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
+
+                      // Markers text
+                      const startLabel = formatRomeDate(evt.startLocal, { hour: '2-digit', minute: '2-digit' })
+                      const endLabel = formatRomeDate(evt.endLocal, { hour: '2-digit', minute: '2-digit' })
+
+                      // Visual Width Logic: At least 1 cell, but real width is strictly calc'd
+                      // If strict width is 0 (e.g. same day small hours?), force min width
+                      const finalWidth = Math.max(evt.widthPx, CELL_WIDTH)
+
+                      return (
+                        <div
+                          key={evt.id}
+                          className={`
+                                absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-white 
+                                ${bgClass} ${borderClass} 
+                                ${debugMode ? 'ring-2 ring-red-500 z-50' : 'hover:z-50 hover:shadow-xl hover:brightness-110 transition-all'}
+                              `}
                           style={{
-                            left: `${left}px`,
-                            width: `${width}px`,
-                            top: '2px',
-                            height: '36px' // Fill the cell height
+                            left: evt.leftPx,
+                            width: finalWidth,
+                            top: top,
+                            height: BAR_HEIGHT,
                           }}
-                          onClick={() => {
-                            const pickup = parseLocalDate(segment.booking.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
-                            const dropoff = parseLocalDate(segment.booking.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
-                            setSelectedCell({
-                              vehicle: vehicle.display_name,
-                              date: `${pickup} - ${dropoff}`,
-                              bookings: [segment.booking]
-                            })
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            // TODO: Properly open booking edit modal
+                            // For now we just alert, but in real integration this should open the modal
+                            window.dispatchEvent(new CustomEvent('openBookingEdit', { detail: { bookingId: evt.booking.id } }))
                           }}
-                          title={buildTooltip()}
                         >
-                          {/* Match DailyCalendarModal layout */}
-                          <div className="flex items-center gap-2 h-full">
-                            {/* Label badge - only for special types */}
-                            {getLabel() && (
-                              <div className={`inline-block px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold uppercase tracking-wide ${textColorClass} whitespace-nowrap`}>
-                                {getLabel()}
+                          <div className="px-2 flex flex-col justify-center h-full">
+                            <span className="font-bold text-[10px] truncate leading-tight">
+                              {evt.booking.customer_name || 'Cliente Sconosciuto'}
+                            </span>
+
+                            {/* Time Markers Helper - Show if enough space */}
+                            {finalWidth >= 60 && (
+                              <div className="flex justify-between w-full text-[8px] opacity-80 font-mono mt-0.5 leading-none">
+                                <span>{startLabel}</span>
+                                <span>{endLabel}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Left Edge Marker (Pickup) */}
+                          <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
+                          {/* Right Edge Marker (Dropoff) */}
+                          <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
+
+
+                          {/* TOOLTIP ON HOVER */}
+                          <div className="hidden group-hover/evt:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 border border-theme-border text-white text-xs p-3 rounded shadow-2xl w-max z-[100] pointer-events-none min-w-[200px]">
+                            <div className="font-bold mb-1 text-base">{evt.booking.customer_name}</div>
+                            <div className="text-gray-400 mb-2">{evt.booking.vehicle_name} ({evt.booking.vehicle_plate})</div>
+
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                              <span className="text-gray-500">Ritiro:</span>
+                              <span className="font-mono">{formatRomeDate(evt.startLocal, { dateStyle: 'full', timeStyle: 'short' })}</span>
+
+                              <span className="text-gray-500">Rientro:</span>
+                              <span className="font-mono">{formatRomeDate(evt.endLocal, { dateStyle: 'full', timeStyle: 'short' })}</span>
+
+                              <span className="text-gray-500">Stato:</span>
+                              <span className="uppercase font-bold tracking-wider text-[10px]">{evt.booking.status}</span>
+                            </div>
+
+                            {/* DEBUG INFO */}
+                            {debugMode && (
+                              <div className="mt-3 pt-2 border-t border-red-900/50 grid grid-cols-[auto_1fr] gap-x-3 text-[10px] font-mono text-red-400">
+                                <div className="col-span-2 font-bold text-center text-red-500 mb-1">🔍 DEBUG DIAGNOSTICS</div>
+
+                                <span>Range Index:</span>
+                                <span>[{evt.startDayIndex0} → {evt.endDayIndexExclusive})</span>
+
+                                <span>Px Geometry:</span>
+                                <span>x:{evt.leftPx} w:{evt.widthPx}</span>
+
+                                <span>Lane:</span>
+                                <span>{evt.laneIndex}</span>
+
+                                <span>Raw UTC:</span>
+                                <span className="truncate max-w-[150px]">{evt.booking.pickup_date}</span>
                               </div>
                             )}
 
-                            {/* Customer name */}
-                            <div className="text-theme-text-primary font-semibold text-sm truncate">
-                              {segment.booking.customer_name || 'N/A'}
-                            </div>
-
-                            {/* Return date and time - always show */}
-                            <div className="text-theme-text-primary/80 text-xs whitespace-nowrap">
-                              {dropoffDay} {dropoffTime}
-                            </div>
-
+                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-theme-border"></div>
                           </div>
+
                         </div>
                       )
                     })}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
+
+              </div>
+            )
+          })}
+
+          {visibleRows.length === 0 && !loading && (
+            <div className="p-12 text-center text-theme-text-muted">Nessun veicolo trovato.</div>
+          )}
         </div>
-      )}
 
-      {
-        vehicles.length === 0 && (
-          <div className="bg-theme-bg-secondary rounded-lg p-8 text-center">
-            <p className="text-theme-text-muted">Nessun veicolo trovato</p>
-          </div>
-        )
-      }
-
-      {/* Booking Details Modal */}
-      {
-        selectedCell && (
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn"
-            onClick={() => setSelectedCell(null)}
-          >
-            <div
-              className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-white/10 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex-shrink-0 p-6 border-b border-white/10">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-2xl font-light text-theme-text-primary mb-2">
-                      {selectedCell.vehicle}
-                    </h3>
-                    <p className="text-theme-text-muted text-sm">{selectedCell.date}</p>
-                  </div>
-                  <button
-                    onClick={() => setSelectedCell(null)}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-theme-text-primary text-xl"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {selectedCell.bookings.map(booking => {
-                  const alternativeVehicles = getAlternativeVehicles(booking.vehicle_name)
-                  const hasAlternatives = alternativeVehicles.length > 1
-
-                  return (
-                    <div key={booking.id} className="bg-gradient-to-br from-red-500/20 to-red-600/10 backdrop-blur-sm rounded-lg p-5 border-l-2 border-red-500 border border-white/10 hover:scale-[1.01] transition-all duration-200">
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <div className="text-theme-text-primary font-medium text-lg mb-1">
-                            {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
-                          </div>
-                          <div className="text-theme-text-secondary text-sm">
-                            {booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}
-                          </div>
-                        </div>
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-red-400 border border-red-500/30">
-                          {booking.status}
-                        </span>
-                      </div>
-
-                      {/* Vehicle selection dropdown */}
-                      {hasAlternatives && (
-                        <div className="mb-4 p-3 bg-theme-bg-secondary/50 rounded-lg border border-theme-border">
-                          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                            Veicolo Assegnato (Targa)
-                          </label>
-                          <select
-                            value={booking.vehicle_name}
-                            onChange={(e) => changeBookingVehicle(booking.id, e.target.value)}
-                            disabled={changingVehicle === booking.id}
-                            className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-full text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold disabled:opacity-50"
-                          >
-                            {alternativeVehicles.map(vehicle => (
-                              <option key={vehicle.id} value={vehicle.display_name}>
-                                {vehicle.display_name} {vehicle.plate ? `(${vehicle.plate})` : '(Nessuna targa)'}
-                              </option>
-                            ))}
-                          </select>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Cambia il veicolo assegnato per questa prenotazione
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-theme-text-muted">Ritiro:</span>
-                          <span className="text-theme-text-primary font-medium">
-                            {parseLocalDate(booking.pickup_date).toLocaleString('it-IT', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: false
-                            })}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-theme-text-muted">Riconsegna:</span>
-                          <span className="text-theme-text-primary font-medium">
-                            {parseLocalDate(booking.dropoff_date).toLocaleString('it-IT', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: false
-                            })}
-                          </span>
-                        </div>
-                        <div className="flex justify-between pt-2 border-t border-theme-border">
-                          <span className="text-theme-text-muted">Prezzo Totale:</span>
-                          <span className="text-dr7-gold font-bold text-lg">
-                            {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${(booking.price_total / 100).toFixed(2)}`}
-                          </span>
-                        </div>
-                        {(() => {
-                          const totalAmount = booking.price_total || 0
-                          // Check all possible places for paid amount
-                          const paidAmount = booking.booking_details?.amountPaid ||
-                            booking.booking_details?.amount_paid ||
-                            (booking.amount_paid ? parseFloat(booking.amount_paid) : 0) || 0
-
-                          const remaining = totalAmount - paidAmount
-
-                          // DEFINITIVE FIX: If payment_status is 'paid', it's paid.
-                          const isPaid = (booking.payment_status?.toLowerCase() === 'paid') ||
-                            (booking.status?.toLowerCase() === 'completed') ||
-                            (remaining <= 10)
-
-                          if (!isPaid) {
-                            return (
-                              <div className="flex justify-between pt-2 border-t border-orange-500/30">
-                                <span className="text-orange-400 font-medium">Da Saldare:</span>
-                                <span className="text-orange-400 font-bold text-lg">
-                                  {userEmail === 'dubai.rent7.0srl@gmail.com' ? '***' : `€${(remaining / 100).toFixed(2)}`}
-                                </span>
-                              </div>
-                            )
-                          }
-                          return (
-                            <div className="flex justify-between pt-2 border-t border-green-500/30">
-                              <span className="text-green-400 font-medium">Stato Pagamento:</span>
-                              <span className="text-green-400 font-bold text-lg">
-                                SALDATO
-                              </span>
-                            </div>
-                          )
-                        })()}
-                      </div>
-
-                      <div className="mt-3 text-xs text-gray-500">
-                        ID: DR7-{booking.id.toUpperCase().slice(0, 8)}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Unavailability Details Modal */}
-      {
-        selectedUnavailability && (
-          <div
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setSelectedUnavailability(null)}
-          >
-            <div
-              className="bg-theme-bg-secondary rounded-lg max-w-lg w-full border border-theme-border shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6 border-b border-theme-border">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
-                      Dettagli Indisponibilità
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setSelectedUnavailability(null)}
-                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors text-3xl leading-none"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
-                {/* Vehicle Name */}
-                <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
-                  <p className="text-sm text-theme-text-muted mb-1">Veicolo</p>
-                  <p className="text-lg font-semibold text-theme-text-primary">
-                    {selectedUnavailability.display_name}
-                    {selectedUnavailability.plate && (
-                      <span className="text-theme-text-muted font-normal text-sm ml-2">
-                        ({selectedUnavailability.plate})
-                      </span>
-                    )}
-                  </p>
-                </div>
-
-                {/* Reason */}
-                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
-                  <p className="text-sm text-orange-400 mb-1">Motivo</p>
-                  <p className="text-lg font-medium text-orange-300">
-                    {selectedUnavailability.metadata?.unavailable_reason || 'Non disponibile'}
-                  </p>
-                </div>
-
-                {/* Date Range */}
-                {selectedUnavailability.metadata?.unavailable_from && selectedUnavailability.metadata?.unavailable_until && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
-                      <p className="text-sm text-theme-text-muted mb-1">Dal</p>
-                      <p className="text-theme-text-primary font-medium">
-                        {parseLocalDate(selectedUnavailability.metadata.unavailable_from).toLocaleDateString('it-IT', {
-                          day: '2-digit',
-                          month: 'long',
-                          year: 'numeric'
-                        })}
-                      </p>
-                      {selectedUnavailability.metadata?.unavailable_from_time && (
-                        <p className="text-sm text-theme-text-muted mt-1">
-                          {selectedUnavailability.metadata.unavailable_from_time}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
-                      <p className="text-sm text-theme-text-muted mb-1">Al</p>
-                      <p className="text-theme-text-primary font-medium">
-                        {parseLocalDate(selectedUnavailability.metadata.unavailable_until).toLocaleDateString('it-IT', {
-                          day: '2-digit',
-                          month: 'long',
-                          year: 'numeric'
-                        })}
-                      </p>
-                      {selectedUnavailability.metadata?.unavailable_until_time && (
-                        <p className="text-sm text-theme-text-muted mt-1">
-                          {selectedUnavailability.metadata.unavailable_until_time}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Duration */}
-                {selectedUnavailability.metadata?.unavailable_from && selectedUnavailability.metadata?.unavailable_until && (
-                  <div className="bg-theme-bg-tertiary/50 rounded-lg p-4">
-                    <p className="text-sm text-theme-text-muted mb-1">Durata</p>
-                    <p className="text-theme-text-primary font-medium">
-                      {(() => {
-                        const from = parseLocalDate(selectedUnavailability.metadata.unavailable_from)
-                        const until = parseLocalDate(selectedUnavailability.metadata.unavailable_until)
-                        const days = Math.ceil((until.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1
-                        return `${days} ${days === 1 ? 'giorno' : 'giorni'}`
-                      })()}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-t border-theme-border">
-                <button
-                  onClick={() => setSelectedUnavailability(null)}
-                  className="w-full bg-gray-700 hover:bg-gray-600 text-theme-text-primary px-4 py-3 rounded-full transition-colors font-medium"
-                >
-                  Chiudi
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
+      </div>
     </div>
   )
 }
