@@ -822,7 +822,7 @@ export default function VehiclesTab() {
                           variant="secondary"
                           className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
                         >
-                          Elimina
+                          ×
                         </Button>
                       </div>
                     </td>
@@ -920,7 +920,7 @@ export default function VehiclesTab() {
                           variant="secondary"
                           className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
                         >
-                          Elimina
+                          ×
                         </Button>
                       </div>
                     </td>
@@ -1018,7 +1018,7 @@ export default function VehiclesTab() {
                           variant="secondary"
                           className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
                         >
-                          Elimina
+                          ×
                         </Button>
                       </div>
                     </td>
