@@ -296,20 +296,28 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                 <div
                   key={day}
                   className={`
-                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
-                     ${isToday ? 'bg-amber-500/10 font-bold' : ''}
-                     ${(isHol || isSun) && !isToday ? 'bg-white/[0.02]' : ''}
-                   `}
+                    flex flex-col items-center justify-center border-r border-white/[0.03] relative
+                    ${isToday ? 'bg-amber-500/10 font-bold' : ''}
+                    ${(isHol || isSun) && !isToday ? 'bg-white/[0.02]' : ''}
+                  `}
                   style={{ width: CELL_WIDTH }}
                 >
-                  <span
-                    className="text-[10px]"
+                  {/* Red dot for Sundays and holidays */}
+                  {(isHol || isSun) && (
+                    <div 
+                      className="absolute top-1 right-1 w-1 h-1 rounded-full bg-red-500/70"
+                      title={isHol ? isHol.name : 'Domenica'}
+                    />
+                  )}
+                  
+                  <span 
+                    className="text-[10px]" 
                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)' }}
                   >
                     {day}
                   </span>
-                  <span
-                    className="text-[8px] uppercase"
+                  <span 
+                    className="text-[8px] uppercase" 
                     style={{ color: isToday ? '#fbbf24' : 'rgba(255, 255, 255, 0.45)' }}
                   >
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
