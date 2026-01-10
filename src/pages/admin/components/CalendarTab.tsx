@@ -420,18 +420,12 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
           const pickupParsed = parseLocalDate(pickupRaw)
           const dropoffParsed = parseLocalDate(dropoffRaw)
 
-          console.log('📅 Booking Debug:', {
-            customer: booking.customer_name,
-            vehicle: vehicle.display_name,
-            pickupRaw,
-            dropoffRaw,
-            pickupParsed: pickupParsed.toISOString(),
-            dropoffParsed: dropoffParsed.toISOString(),
-            pickupDay: pickupParsed.getDate(),
-            dropoffDay: dropoffParsed.getDate(),
-            calculatedStartDay: range.startDay,
-            calculatedEndDay: range.endDay
-          })
+          console.log(`📅 Booking #${segments.length + 1}: ${booking.customer_name} / ${vehicle.display_name}`)
+          console.log(`   pickupRaw: "${pickupRaw}"`)
+          console.log(`   pickupParsed: ${pickupParsed.toISOString()} → Day ${pickupParsed.getDate()}`)
+          console.log(`   calculatedStartDay: ${range.startDay}`)
+          console.log(`   dropoffRaw: "${dropoffRaw}"`)
+          console.log(`   calculatedEndDay: ${range.endDay}`)
         }
 
         segments.push({
