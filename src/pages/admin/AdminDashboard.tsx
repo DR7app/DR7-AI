@@ -306,7 +306,7 @@ export default function AdminDashboard() {
                     className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
                       }`}
                   >
-                    Noleggio
+                    Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('calendar')}
