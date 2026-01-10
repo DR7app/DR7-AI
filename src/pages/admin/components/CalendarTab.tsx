@@ -759,9 +759,9 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
                   {buildBookingSegments
                     .filter(seg => seg.vehicleId === vehicle.id)
                     .map(segment => {
-                      // CELL WIDTH FIX: Must match exact CSS width of grid cells (40px)
-                      // Do not add border width here as border-collapse handles it
-                      const cellWidth = 40
+                      // CELL WIDTH FIX: Must match exact visual width including border
+                      // With border-collapse, each cell is 40px + 1px border = 41px visual width
+                      const cellWidth = 41
 
                       // POSITIONING FIX: 
                       // The grid columns are: Veicolo (200px) | Targa (100px) | Day1 | Day2 | ...
