@@ -140,12 +140,27 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
     vehicles.forEach(vehicle => {
       const vehicleBookings = bookings.filter(b => {
-        // Robust Matching
+        // STRICT PLATE-ONLY MATCHING (Non-negotiable)
+        // A booking belongs to ONE physical car identified by license plate
+        
+        // Normalize plates for comparison (remove spaces, uppercase)
         const vPlate = vehicle.plate?.replace(/\s/g, '').toUpperCase()
         const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
-        if (b.vehicle_id === vehicle.id) return true
-        if (vPlate && bPlate && vPlate === bPlate) return true
-        return b.vehicle_name?.trim().toLowerCase() === vehicle.display_name?.trim().toLowerCase()
+        
+        // Data integrity check: flag bookings with missing plate
+        if (!bPlate) {
+          console.warn(`⚠️ MISSING PLATE: Booking ${b.id} for customer "${b.customer_name}" has no license plate. Skipping.`)
+          return false
+        }
+        
+        if (!vPlate) {
+          console.warn(`⚠️ MISSING PLATE: Vehicle "${vehicle.display_name}" has no license plate. Cannot match bookings.`)
+          return false
+        }
+        
+        // STRICT EQUALITY: booking.license_plate === vehicle.license_plate
+        // Forbidden: matching by model name, display name, or any fuzzy matching
+        return vPlate === bPlate
       })
 
       // Normalize
@@ -176,6 +191,28 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
         laneCount: Math.max(1, maxLane + 1) // At least 1 lane height
       })
     })
+
+    // CRITICAL: Duplicate booking detection
+    // Ensure no booking appears on multiple vehicle rows
+    if (debugMode) {
+      const bookingToVehicles = new Map<string, string[]>()
+      rows.forEach(row => {
+        row.events.forEach(evt => {
+          const bookingId = evt.booking.id
+          if (!bookingToVehicles.has(bookingId)) {
+            bookingToVehicles.set(bookingId, [])
+          }
+          bookingToVehicles.get(bookingId)!.push(row.vehicle.display_name)
+        })
+      })
+      
+      // Check for duplicates
+      bookingToVehicles.forEach((vehicleNames, bookingId) => {
+        if (vehicleNames.length > 1) {
+          console.error(`🚨 CRITICAL: Booking ${bookingId} appears on ${vehicleNames.length} vehicles: ${vehicleNames.join(', ')}`)
+        }
+      })
+    }
 
     return rows
   }, [vehicles, bookings, currentRomeComponents, daysInMonth])
