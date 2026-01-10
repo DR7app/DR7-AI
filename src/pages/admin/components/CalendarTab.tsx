@@ -502,6 +502,16 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
         <BookingDetailsPanel
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
+          onEdit={(bookingId) => {
+            // Dispatch event to open booking in edit mode in Prenotazioni tab
+            window.dispatchEvent(new CustomEvent('openBookingForm', {
+              detail: {
+                bookingId,
+                vehicleName: selectedBooking.vehicle_name,
+                date: new Date(selectedBooking.pickup_date)
+              }
+            }))
+          }}
         />
       )}
     </div>

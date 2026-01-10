@@ -31,7 +31,7 @@ export default function AdminDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   // State to pass data from Calendar to Reservations tab
-  const [initialReservationData, setInitialReservationData] = useState<{ vehicleName?: string, pickupDate?: Date } | null>(null)
+  const [initialReservationData, setInitialReservationData] = useState<{ vehicleName?: string, pickupDate?: Date, bookingId?: string } | null>(null)
 
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
@@ -42,15 +42,15 @@ export default function AdminDashboard() {
     navigate('/login')
   }
 
-  function handleCalendarBooking(vehicleName: string, date: Date) {
-    setInitialReservationData({ vehicleName, pickupDate: date })
+  function handleCalendarBooking(vehicleName: string, date: Date, bookingId?: string) {
+    setInitialReservationData({ vehicleName, pickupDate: date, bookingId })
     setActiveTab('reservations')
   }
 
   useEffect(() => {
     const handleOpenBookingForm = (event: CustomEvent) => {
-      const { vehicleName, date } = event.detail
-      handleCalendarBooking(vehicleName, date)
+      const { vehicleName, date, bookingId } = event.detail
+      handleCalendarBooking(vehicleName, date, bookingId)
     }
 
     window.addEventListener('openBookingForm', handleOpenBookingForm as EventListener)
