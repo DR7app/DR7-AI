@@ -285,68 +285,51 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return s.replace(/[^A-Z0-9]/gi, '').toUpperCase()
   }
 
-  // DEFINITIVE FIX FOR SAFARI: Dates from Supabase are in UTC (ISO format with Z)
-  // Safari interprets "2026-01-07T12:00:00Z" differently than Chrome
-  // We MUST extract the Europe/Rome timezone components to get the correct local date
+  // DEFINITIVE FIX: Parse dates correctly regardless of format
   const parseLocalDate = (dateString: string): Date => {
     if (!dateString) return new Date()
 
-    // 1. If it's a simple YYYY-MM-DD string, parse it as local midnight
-    // This is the most common case and should NOT go through timezone conversion
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
-      const [y, m, d] = dateString.trim().split('-').map(Number)
+    const trimmed = dateString.trim()
+
+    // 1. Simple YYYY-MM-DD format - parse as local midnight
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [y, m, d] = trimmed.split('-').map(Number)
       return new Date(y, m - 1, d, 0, 0, 0, 0)
     }
 
-    // 2. If it's a date with time but NO timezone (YYYY-MM-DD HH:MM:SS)
-    // Parse it as local time
-    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(dateString.trim())) {
-      const parts = dateString.trim().match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/)
+    // 2. ISO format with timezone offset (e.g., "2026-01-06T21:00:00+01:00")
+    // Extract the date/time components BEFORE the timezone offset
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})([+-]\d{2}:\d{2}|Z)?$/)
+    if (isoMatch) {
+      return new Date(
+        parseInt(isoMatch[1]),      // year
+        parseInt(isoMatch[2]) - 1,  // month (0-indexed)
+        parseInt(isoMatch[3]),      // day
+        parseInt(isoMatch[4]),      // hour
+        parseInt(isoMatch[5]),      // minute
+        parseInt(isoMatch[6]),      // second
+        0
+      )
+    }
+
+    // 3. Datetime without timezone (YYYY-MM-DD HH:MM:SS)
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+      const parts = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/)
       if (parts) {
         return new Date(
-          parseInt(parts[1]),      // year
-          parseInt(parts[2]) - 1,  // month (0-indexed)
-          parseInt(parts[3]),      // day
-          parseInt(parts[4]),      // hour
-          parseInt(parts[5]),      // minute
-          parseInt(parts[6] || '0'), // second
+          parseInt(parts[1]),
+          parseInt(parts[2]) - 1,
+          parseInt(parts[3]),
+          parseInt(parts[4]),
+          parseInt(parts[5]),
+          parseInt(parts[6] || '0'),
           0
         )
       }
     }
 
-    // 3. For ISO strings with timezone (e.g., "2026-01-07T23:00:00Z")
-    // Convert from UTC to Europe/Rome timezone
-    const d = new Date(dateString)
-    if (isNaN(d.getTime())) return new Date()
-
-    // Extract components specifically in Europe/Rome
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Rome',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: false
-    })
-
-    const parts = formatter.formatToParts(d)
-    const p: Record<string, string> = {}
-    parts.forEach(part => {
-      // Remove any non-numeric characters (like LTR marks \u200E)
-      p[part.type] = part.value.replace(/[^\d]/g, '')
-    })
-
-    // Create a Date object with the Rome timezone components
-    return new Date(
-      parseInt(p.year),
-      parseInt(p.month) - 1,
-      parseInt(p.day),
-      parseInt(p.hour) || 0,
-      parseInt(p.minute) || 0,
-      0, 0
-    )
+    // 4. Fallback: use JavaScript's Date parser
+    return new Date(trimmed)
   }
 
   // Unified helper to calculate startDay and endDay for a booking within the current month
