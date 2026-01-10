@@ -408,6 +408,7 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
           console.log(`   pickupParsed: ${pickupParsed.toISOString()} → Day ${pickupParsed.getDate()}`)
           console.log(`   calculatedStartDay: ${range.startDay}`)
           console.log(`   dropoffRaw: "${dropoffRaw}"`)
+          console.log(`   dropoffParsed: ${dropoffParsed.toISOString()} → Day ${dropoffParsed.getDate()}`)
           console.log(`   calculatedEndDay: ${range.endDay}`)
         }
 
