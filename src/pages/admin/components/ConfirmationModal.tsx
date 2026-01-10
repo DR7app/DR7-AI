@@ -24,7 +24,7 @@ export default function ConfirmationModal({
 
     return (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-primary max-w-md w-full rounded-full shadow-xl">
+            <div className="bg-theme-bg-primary max-w-md w-full rounded-lg shadow-xl">
                 {/* Header */}
                 <div className="bg-theme-bg-primaryer p-4 border-b border-theme-border flex justify-between items-center rounded-t-lg">
                     <h3 className={`text-lg font-bold ${isDangerous ? 'text-red-400' : 'text-dr7-gold'}`}>
@@ -54,8 +54,8 @@ export default function ConfirmationModal({
                     <button
                         onClick={handleConfirm}
                         className={`px-4 py-2 text-theme-text-primary rounded transition-colors ${isDangerous
-                                ? 'bg-red-600 hover:bg-red-700'
-                                : 'bg-dr7-gold hover:bg-yellow-600'
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'bg-dr7-gold hover:bg-yellow-600'
                             }`}
                     >
                         Conferma

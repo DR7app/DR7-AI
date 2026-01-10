@@ -106,7 +106,7 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({ isOpen, onClose
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-full p-6 w-96">
+      <div className="bg-white rounded-lg p-6 w-96">
         <h3 className="text-xl font-bold mb-4">
           Seleziona Metodo di Pagamento
         </h3>
@@ -389,7 +389,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-full p-6 w-[600px] max-h-[80vh] overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 w-[600px] max-h-[80vh] overflow-y-auto">
         <h3 className="text-xl font-bold mb-4">
           {isBulkSale
             ? `Vendita Multipla - ${tickets.length} Biglietti`
@@ -1950,11 +1950,20 @@ const LotteriaBoard: React.FC = () => {
       {showEmailEditorModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-theme-border">
-              <h2 className="text-2xl font-bold text-theme-text-primary">Invia Email a Tutti i Clienti</h2>
-              <p className="text-sm text-theme-text-secondary mt-2">
-                Rivedi e modifica il contenuto dell'email prima di inviarla a tutti i clienti che hanno comprato biglietti
-              </p>
+            <div className="p-6 border-b border-theme-border flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-theme-text-primary">Invia Email a Tutti i Clienti</h2>
+                <p className="text-sm text-theme-text-secondary mt-2">
+                  Rivedi e modifica il contenuto dell'email prima di inviarla a tutti i clienti che hanno comprato biglietti
+                </p>
+              </div>
+              <button
+                onClick={() => setShowEmailEditorModal(false)}
+                disabled={savingTemplate || sendingEmails}
+                className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none disabled:opacity-50 ml-4"
+              >
+                ×
+              </button>
             </div>
 
             <div className="p-6 space-y-6">
@@ -1974,7 +1983,7 @@ const LotteriaBoard: React.FC = () => {
                       type="text"
                       value={emailSubject}
                       onChange={(e) => setEmailSubject(e.target.value)}
-                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                       placeholder="Inserisci l'oggetto dell'email..."
                     />
                   </div>
@@ -1988,7 +1997,7 @@ const LotteriaBoard: React.FC = () => {
                       value={emailTextContent}
                       onChange={(e) => setEmailTextContent(e.target.value)}
                       rows={12}
-                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                      className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors resize-none"
                       placeholder="Inserisci il contenuto dell'email...\n\nEsempio:\nGentile Cliente,\n\nTi informiamo che...\n\nCordiali saluti,\nIl Team DR7 Empire"
                     />
                     <p className="text-xs text-theme-text-muted mt-2">
