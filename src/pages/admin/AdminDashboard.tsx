@@ -104,6 +104,16 @@ export default function AdminDashboard() {
                 </button>
               )}
               <button
+                onClick={() => setIsCalendarModalOpen(true)}
+                className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-full hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-blue-500/50 flex items-center gap-2 text-sm"
+                title="Apri Calendario Giornaliero"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="hidden sm:inline">Calendario Giornaliero</span>
+              </button>
+              <button
                 onClick={toggleTheme}
                 className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
