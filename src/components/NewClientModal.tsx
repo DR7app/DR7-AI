@@ -597,7 +597,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-full max-w-2xl w-full my-8 shadow-2xl">
+      <div className="bg-white rounded-lg max-w-2xl w-full my-8 shadow-2xl">
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">

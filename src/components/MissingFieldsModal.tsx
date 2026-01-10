@@ -311,7 +311,7 @@ export default function MissingFieldsModal({
 
                 {/* Body */}
                 <div className="p-6">
-                    <div className="bg-blue-900/20 border border-blue-700 rounded-full p-4 mb-6">
+                    <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
                         <p className="text-blue-300 text-sm">
                             ℹ️ Sono richiesti {missingFields.length} campi per completare il profilo del cliente
                         </p>
