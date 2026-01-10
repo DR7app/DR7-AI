@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../utils/calendarLogic'
+import BookingDetailsPanel from './BookingDetailsPanel'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
@@ -48,6 +49,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
 
   // Scroll Sync Refs
   const gridRef = useRef<HTMLDivElement>(null)
@@ -291,8 +293,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
                       {row.vehicle.category && (
                         <span className={`text-[8px] px-1 rounded uppercase font-bold tracking-wide ${row.vehicle.category === 'exotic' ? 'bg-purple-900/50 text-purple-200' :
-                            row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
-                              'bg-orange-900/50 text-orange-200'
+                          row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
+                            'bg-orange-900/50 text-orange-200'
                           }`}>{row.vehicle.category.substring(0, 1)}</span>
                       )}
                     </div>
@@ -347,27 +349,19 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   {/* 3. Rendered Events Layer */}
                   <div className="absolute inset-0 z-20 pointer-events-none">
                     {row.events.map(evt => {
-                      // STRICT COLOR CONTRACT (Non-negotiable)
-                      // RED = Customer booking (all statuses)
-                      // ORANGE = Unavailable (mechanic, internal block)
-                      // GREEN = Availability (background only, not bars)
-                      
-                      let bgClass = "bg-red-600/90"
-                      let borderClass = "border-red-400/50"
-                      
-                      // Check if this is an unavailability/mechanic booking
-                      const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
-                      
-                      if (isUnavailability) {
-                        bgClass = "bg-orange-600/90"
-                        borderClass = "border-orange-400/50"
-                      }
+                      // Styling
+                      const isPending = evt.booking.status === 'pending'
+                      const isConfirmed = evt.booking.status === 'confirmed'
+
+                      let bgClass = "bg-gray-600"
+                      let borderClass = "border-gray-500"
+
+                      if (isPending) { bgClass = "bg-yellow-600/90"; borderClass = "border-yellow-400/50" }
+                      else if (isConfirmed) { bgClass = "bg-green-600/90"; borderClass = "border-green-400/50" }
 
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
                       // Markers text
-                      const startLabel = formatRomeDate(evt.startLocal, { hour: '2-digit', minute: '2-digit' })
-                      const endLabel = formatRomeDate(evt.endLocal, { hour: '2-digit', minute: '2-digit' })
 
                       // Visual Width Logic: At least 1 cell, but real width is strictly calc'd
                       // If strict width is 0 (e.g. same day small hours?), force min width
@@ -391,21 +385,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                             e.stopPropagation()
                             // TODO: Properly open booking edit modal
                             // For now we just alert, but in real integration this should open the modal
-                            window.dispatchEvent(new CustomEvent('openBookingEdit', { detail: { bookingId: evt.booking.id } }))
+                            setSelectedBooking(evt.booking)
                           }}
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {evt.booking.customer_name || 'Cliente Sconosciuto'}
+                               {evt.booking.customer_name || 'Cliente Sconosciuto'} u2022 {evt.endDayIndex0 + 1}
                             </span>
 
-                            {/* Time Markers Helper - Show if enough space */}
-                            {finalWidth >= 60 && (
-                              <div className="flex justify-between w-full text-[8px] opacity-80 font-mono mt-0.5 leading-none">
-                                <span>{startLabel}</span>
-                                <span>{endLabel}</span>
-                              </div>
-                            )}
                           </div>
 
                           {/* Left Edge Marker (Pickup) */}
@@ -468,6 +455,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
         </div>
 
       </div>
+
+      {/* Booking Details Panel */}
+      {selectedBooking && (
+        <BookingDetailsPanel
+          booking={selectedBooking}
+          onClose={() => setSelectedBooking(null)}
+        />
+      )}
     </div>
   )
 }
