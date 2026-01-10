@@ -1,16 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
-import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
-import { getRomeDateComponents, parseUTCToRome, formatRomeDate } from '../../../utils/timezoneUtils'
-import { normalizeBooking, computeLanes, CalendarEvent } from '../../../utils/calendarLogic'
+import { formatRomeDate } from '../../../utils/timezoneUtils'
+import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../utils/calendarLogic'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
-const HEADER_HEIGHT = 42
 const MIN_ROW_HEIGHT = 60
 const BAR_HEIGHT = 30
-const BAR_MARGIN_BOTTOM = 4
 
 interface Vehicle {
   id: string
@@ -42,7 +39,7 @@ interface Booking {
 }
 
 export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
-  const { canViewFinancials } = useAdminRole()
+  // const { canViewFinancials } = useAdminRole()
   // const [hideFinancials, setHideFinancials] = useState(false) // Removed for now to focus on clean layout
   const [debugMode, setDebugMode] = useState(false) // MANDATORY DEBUG TOGGLE
 
@@ -53,7 +50,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   const [searchQuery, setSearchQuery] = useState('')
 
   // Scroll Sync Refs
-  const headerRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
   // --- Data Loading ---
@@ -334,7 +330,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
                   {/* 2. Interactive Click Layer (Create Booking) */}
                   <div className="flex h-full absolute inset-0 z-10">
-                    {daysArray.map((day, i) => (
+                    {daysArray.map((day) => (
                       <div
                         key={day}
                         className="h-full hover:bg-white/5 cursor-pointer transition-colors"
@@ -354,7 +350,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       // Styling
                       const isPending = evt.booking.status === 'pending'
                       const isConfirmed = evt.booking.status === 'confirmed'
-                      const isCompleted = evt.booking.status === 'completed'
 
                       let bgClass = "bg-gray-600"
                       let borderClass = "border-gray-500"

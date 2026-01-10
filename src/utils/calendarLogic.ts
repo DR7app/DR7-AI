@@ -1,7 +1,6 @@
 import {
     getRomeDateComponents,
-    parseUTCToRome,
-    formatRomeDate
+    parseUTCToRome
 } from './timezoneUtils'
 
 // Types
@@ -60,41 +59,6 @@ export function normalizeBooking(
 
     // Calculate raw indices (potentially < 0 or > daysInMonth for spanning bookings)
     // We need to handle year/month differences
-
-    // Helper to get global day offset from start of current month
-    const getGlobalDayDiff = (targetDate: Date, baseYear: number, baseMonth0: number) => {
-        // Create a base date for the 1st of the current month at 00:00 Rome time?
-        // Safer: Compare timestamps of the "Rome Date Objects"
-        // Since parseUTCToRome returns a Date object that "looks like" Rome time but is technically UTC-shifted or local-shifted,
-        // we can use standard ms difference if we are careful, OR just compare Y/M/D.
-
-        // Let's use the standard "Rome Date" comparison logic:
-        // Create date objects set to Noon to avoid DST shifts affecting day diff? 
-        // Or just use the Y/M/D difference.
-
-        const target = new Date(targetDate)
-        target.setHours(0, 0, 0, 0)
-
-        const base = new Date(baseYear, baseMonth0, 1, 0, 0, 0, 0)
-
-        // Day difference
-        const diffTime = target.getTime() - base.getTime()
-        return Math.round(diffTime / (1000 * 60 * 60 * 24))
-    }
-
-    // NOTE: This simple diff assumes the "Rome Date" objects are constructed similarly.
-    // parseUTCToRome returns a Date object where .getDate() returns the Rome day.
-    // So `new Date(year, month, 1)` uses local browser time. 
-    // We must ensure we compare apples to apples.
-    // The 'startRome' object is a UTC timestamp that *if printed in Rome* shows the right time? 
-    // NO. `parseUTCToRome` (from readingutils) returns a `new Date(utcString)`.
-    // Wait, `timezoneUtils.ts` says: 
-    // "The Date object internally stores UTC time. We just return it - the display functions will handle Rome timezone"
-    // ACTUALLY: `parseUTCToRome` just returns `new Date(utcString)`. 
-    // So `startRome` is a standard JS Date object representing the moment in time.
-    // To get the Rome Day Index, we MUST use `getRomeDateComponents`.
-
-    // Let's rely on `getRomeDateComponents` for strict correctness.
 
     // Logic: 
     // If booking starts in previous month/year => startDayIndex0 becomes negative (clamped later or used for positioning off-screen).
@@ -208,7 +172,11 @@ export function computeLanes(events: CalendarEvent[]): CalendarEvent[] {
     // Deterministic sort: Start Index asc, then Length desc
     const sorted = [...events].sort((a, b) => {
         if (a.startDayIndex0 !== b.startDayIndex0) return a.startDayIndex0 - b.startDayIndex0
-        return (b.endDayIndexExclusive - b.startDayIndexExclusive) - (a.endDayIndexExclusive - a.startDayIndexExclusive)
+        // Length = end - start. We want longest first.
+        // using endDayIndexExclusive for length calc
+        const lengthA = a.endDayIndexExclusive - a.startDayIndex0
+        const lengthB = b.endDayIndexExclusive - b.startDayIndex0
+        return lengthB - lengthA
     })
 
     const lanes: number[] = [] // stores the endDayIndexExclusive of the last event in each lane
