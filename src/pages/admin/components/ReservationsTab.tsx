@@ -3466,7 +3466,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   <div className="flex flex-col gap-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
-                      className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap"
+                      className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
                     >
                       Modifica
                     </button>
@@ -3476,7 +3476,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <div className="flex gap-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); window.open(booking.contract_url, '_blank') }}
-                          className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                          className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap flex items-center gap-1"
                           title="Visualizza Contratto"
                         >
                           <span>📄</span> PDF
@@ -3484,7 +3484,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <a
                           href={`mailto:${booking.customer_email || ''}?subject=${encodeURIComponent(`Contratto Noleggio DR7 - ${booking.vehicle_name}`)}&body=${encodeURIComponent(`Gentile Cliente,\n\nEcco il link al tuo contratto di noleggio:\n${booking.contract_url}\n\nGrazie per aver scelto DR7 Empire.`)}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
+                          className="px-3 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 rounded-full text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1"
                           title="Invia Email"
                         >
                           <span>✉️</span> Email
@@ -3504,7 +3504,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <button
                         onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
                         disabled={generatingContract}
-                        className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded transition-colors whitespace-nowrap flex items-center gap-1`}
+                        className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                       >
                         {generatingContract ? 'Generazione...' : '📄 Genera Contratto'}
                       </button>
@@ -3513,14 +3513,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {booking.status !== 'cancelled' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap"
+                        className="px-3 py-1 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
                       >
                         Cancella
                       </button>
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
-                      className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm rounded transition-colors whitespace-nowrap w-full"
+                      className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap w-full"
                     >
                       Elimina
                     </button>
@@ -3638,7 +3638,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                                className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
+                                className="px-3 py-1 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap"
                               >
                                 Cancella
                               </button>
