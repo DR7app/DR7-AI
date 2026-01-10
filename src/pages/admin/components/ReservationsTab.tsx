@@ -3490,14 +3490,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <span>✉️</span> Email
                         </a>
 
-                        {/* Genera Fattura Button (Mobile) */}
+                        {/* Fattura Button (Mobile) */}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
                           disabled={generatingInvoice}
                           className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
-                          title="Genera Fattura"
+                          title="Fattura"
                         >
-                          {generatingInvoice ? 'Generazione...' : 'Genera Fattura'}
+                          {generatingInvoice ? 'Generazione...' : 'Fattura'}
                         </button>
                       </div>
                     ) : (
@@ -3506,7 +3506,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         disabled={generatingContract}
                         className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                       >
-                        {generatingContract ? 'Generazione...' : '📄 Genera Contratto'}
+                        {generatingContract ? 'Generazione...' : '📄 Contratto'}
                       </button>
                     )}
 
@@ -3621,14 +3621,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                 disabled={generatingContract}
                                 className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs rounded transition-colors whitespace-nowrap disabled:opacity-50"
                               >
-                                {generatingContract ? '...' : 'Genera Contratto'}
+                                {generatingContract ? '...' : 'Contratto'}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
                                 disabled={generatingInvoice}
                                 className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap disabled:opacity-50"
                               >
-                                {generatingInvoice ? '...' : 'Genera Fattura'}
+                                {generatingInvoice ? '...' : 'Fattura'}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
