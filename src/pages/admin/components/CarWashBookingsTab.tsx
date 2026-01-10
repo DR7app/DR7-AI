@@ -1331,12 +1331,12 @@ export default function CarWashBookingsTab() {
                             <div className="font-medium">Lavaggio Rientro</div>
                             {booking.vehicle_name && (
                               <div className="text-xs text-theme-text-primary mt-1">
-                                🚗 {booking.vehicle_name}
+                                {booking.vehicle_name}
                               </div>
                             )}
                             {booking.vehicle_plate && (
                               <div className="text-xs text-dr7-gold font-mono">
-                                🔖 {booking.vehicle_plate}
+                                {booking.vehicle_plate}
                               </div>
                             )}
                           </>
