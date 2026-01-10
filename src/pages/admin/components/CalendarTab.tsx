@@ -285,16 +285,44 @@ export default function CalendarTab({ onNewBooking: _onNewBooking }: { onNewBook
     return s.replace(/[^A-Z0-9]/gi, '').toUpperCase()
   }
 
-  // DEFINITIVE FIX: Database dates are ALREADY in local time (Europe/Rome)
-  // DO NOT apply timezone conversion - it causes the -1 day shift
+  // DEFINITIVE FIX FOR SAFARI: Dates from Supabase are in UTC (ISO format with Z)
+  // Safari interprets "2026-01-07T12:00:00Z" differently than Chrome
+  // We MUST extract the Europe/Rome timezone components to get the correct local date
   const parseLocalDate = (dateString: string): Date => {
     if (!dateString) return new Date()
 
-    // Parse the date string directly - it's already in local time
     const d = new Date(dateString)
     if (isNaN(d.getTime())) return new Date()
 
-    return d
+    // Extract components in Europe/Rome timezone
+    // This ensures "2026-01-07T23:00:00Z" becomes Jan 8 in Rome (not Jan 7)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    })
+
+    const parts = formatter.formatToParts(d)
+    const p: Record<string, string> = {}
+    parts.forEach(part => {
+      // Remove any non-numeric characters (like LTR marks \u200E)
+      p[part.type] = part.value.replace(/[^\d]/g, '')
+    })
+
+    // Create a Date object with the Rome timezone components
+    // This will return the correct day when we call .getDate()
+    return new Date(
+      parseInt(p.year),
+      parseInt(p.month) - 1,
+      parseInt(p.day),
+      parseInt(p.hour) || 0,
+      parseInt(p.minute) || 0,
+      0, 0
+    )
   }
 
   // Unified helper to calculate startDay and endDay for a booking within the current month
