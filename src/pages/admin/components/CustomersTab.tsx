@@ -1677,7 +1677,7 @@ export default function CustomersTab() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((customer, index) => (
+              {customers.map((customer) => (
                 <tr
                   key={customer.id}
                   className="border-t border-theme-border hover:bg-white/5 transition-all duration-200"
