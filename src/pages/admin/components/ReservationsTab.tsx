@@ -9,7 +9,7 @@ import {
 import { validateRentalBooking } from '../../../utils/schedulingRules'
 import { createRomeDate } from '../../../utils/timezoneUtils'
 import {
-  getAvailableVehicles as filterAvailableVehicles,
+  getAvailableVehicles,
   isVehicleAvailable,
   getEarliestValidPickupTime,
   generateValidTimeSlots,
@@ -623,7 +623,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Combine all bookings for availability checking
     const allBookingsForCheck = [...bookings, ...carWashBookings]
 
-    const availableVehicles = filterAvailableVehicles(
+    const filteredVehicles = getAvailableVehicles(
       vehicles,
       formData.pickup_date,
       formData.return_date,
@@ -635,11 +635,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     console.log('[Vehicle Availability] Filtered vehicles:', {
       total: vehicles.length,
-      available: availableVehicles.length,
+      available: filteredVehicles.length,
       dates: `${formData.pickup_date} ${pickupTime} → ${formData.return_date} ${returnTime}`
     })
 
-    return availableVehicles
+    return filteredVehicles
   }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
 
   // Calculate earliest available time for each vehicle based on existing bookings and automatic wash
