@@ -11,9 +11,7 @@ import { createRomeDate } from '../../../utils/timezoneUtils'
 import {
   getAvailableVehicles,
   isVehicleAvailable,
-  getEarliestValidPickupTime,
-  generateValidTimeSlots,
-  matchVehicleByPlate
+  generateValidTimeSlots
 } from '../../../utils/vehicleAvailability'
 import Input from './Input'
 import Select from './Select'
