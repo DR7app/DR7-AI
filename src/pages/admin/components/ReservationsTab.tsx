@@ -3132,7 +3132,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
                     options={[
                       { value: '', label: 'Seleziona veicolo...' },
-                      ...getAvailableVehicles.map(v => {
+                      ...availableVehicles.map((v: Vehicle) => {
                         let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
                         const earliestTime = vehicleEarliestTimes.get(v.id)
                         if (earliestTime) {
@@ -3145,7 +3145,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     ]}
                   />
                 )}
-                {formData.pickup_date && formData.return_date && getAvailableVehicles.length === 0 && (
+                {formData.pickup_date && formData.return_date && availableVehicles.length === 0 && (
                   <p className="text-red-400 text-sm mt-2">
                     ❌ Nessun veicolo disponibile per le date selezionate
                   </p>

@@ -539,11 +539,88 @@ export default function CustomersTab() {
 
 
 
-  function handleEdit(customer: Customer) {
+  async function handleEdit(customer: Customer) {
     console.log('[handleEdit] Customer object:', customer)
     console.log('[handleEdit] Customer ID:', customer.id)
     console.log('[handleEdit] Customer keys:', Object.keys(customer))
-    setSelectedCustomer(customer)
+
+    // CRITICAL FIX: Fetch fresh data from database before opening edit modal
+    // This ensures ALL fields are populated, not just the cached/merged data
+    if (customer.id && customer.id.length > 10) {
+      try {
+        console.log('[handleEdit] 🔄 Fetching fresh data from customers_extended for ID:', customer.id)
+        const { data: freshCustomerData, error } = await supabase
+          .from('customers_extended')
+          .select('*')
+          .eq('id', customer.id)
+          .single()
+
+        if (error) {
+          console.error('[handleEdit] ❌ Error fetching fresh customer data:', error)
+          // Fallback to cached data if fetch fails
+          setSelectedCustomer(customer)
+        } else if (freshCustomerData) {
+          console.log('[handleEdit] ✅ Fresh data loaded from DB:', freshCustomerData)
+          console.log('[handleEdit] 📊 Fields in fresh data:', Object.keys(freshCustomerData))
+
+          // Apply the same mapping logic as handleViewCustomerDetails to ensure consistent display
+          const raw = freshCustomerData;
+
+          // Reconstruct full name
+          let fullName = 'Cliente'
+          if (raw.tipo_cliente === 'persona_fisica') {
+            fullName = `${raw.nome || ''} ${raw.cognome || ''}`.trim()
+          } else if (raw.tipo_cliente === 'azienda') {
+            fullName = raw.ragione_sociale || raw.denominazione || 'Azienda'
+          } else if (raw.tipo_cliente === 'pubblica_amministrazione') {
+            fullName = raw.ente_ufficio || raw.denominazione || 'Pubblica Amministrazione'
+          }
+
+          if (!fullName || fullName === 'Cliente') {
+            fullName = `${raw.nome || ''} ${raw.cognome || ''}`.trim() ||
+              raw.ragione_sociale ||
+              raw.denominazione ||
+              'Cliente'
+          }
+
+          const freshCustomer: Customer = {
+            // Start with cached customer to preserve any UI-only fields
+            ...customer,
+            // Overwrite with fresh DB data (this is the critical part)
+            ...raw,
+            // Explicit overrides for display fields
+            id: raw.id,
+            full_name: fullName,
+            email: raw.email,
+            phone: raw.telefono,
+            telefono: raw.telefono,
+            driver_license_number: raw.numero_patente,
+            numero_patente: raw.numero_patente,
+            scadenza_patente: raw.scadenza_patente,
+            // Map DB columns to UI expected keys
+            luogo_nascita: raw.citta_nascita || raw.luogo_nascita,
+            indirizzo_azienda: raw.sede_legale || raw.indirizzo_azienda || raw.indirizzo,
+            patente: raw.numero_patente || raw.patente,
+            // Fix address display
+            indirizzo: raw.indirizzo || raw.sede_legale,
+            citta: raw.citta || raw.citta_residenza || raw.comune,
+            cap: raw.cap || raw.codice_postale
+          }
+
+          console.log('[handleEdit] 🎯 Passing fresh customer to modal:', freshCustomer)
+          setSelectedCustomer(freshCustomer)
+        }
+      } catch (err) {
+        console.error('[handleEdit] ❌ Exception fetching fresh data:', err)
+        // Fallback to cached data
+        setSelectedCustomer(customer)
+      }
+    } else {
+      // No valid ID, use cached data (shouldn't happen for real customers)
+      console.warn('[handleEdit] ⚠️ No valid customer ID, using cached data')
+      setSelectedCustomer(customer)
+    }
+
     setShowNewClientModal(true)
   }
 

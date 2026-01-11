@@ -158,7 +158,7 @@ function isVehicleBlocked(
 export function getEarliestValidPickupTime(
     vehicle: Vehicle,
     pickupDate: string,
-    returnDate: string,
+    _returnDate: string,
     existingBookings: Booking[],
     excludeBookingId?: string
 ): Date | null {

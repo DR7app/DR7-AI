@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 
 interface Booking {
     id: string
@@ -93,13 +94,19 @@ export default function DailyCalendarTab() {
 
             const categorized: Booking[] = []
 
-            // Helper to check if a date string falls on the selected local date
+            // Helper to check if a date string falls on the selected local date in Europe/Rome timezone
             const isSameDay = (dateStr?: string) => {
                 if (!dateStr) return false
-                const date = new Date(dateStr)
-                return date.getDate() === selectedDate.getDate() &&
-                    date.getMonth() === selectedDate.getMonth() &&
-                    date.getFullYear() === selectedDate.getFullYear()
+
+                // Extract components in Europe/Rome timezone from the UTC timestamp
+                const romeComponents = getRomeDateComponents(dateStr)
+
+                // Extract components from selectedDate in Europe/Rome timezone
+                const selectedComponents = getRomeDateComponents(selectedDate.toISOString())
+
+                return romeComponents.day === selectedComponents.day &&
+                    romeComponents.month === selectedComponents.month &&
+                    romeComponents.year === selectedComponents.year
             }
 
             data?.forEach((booking: any) => {
