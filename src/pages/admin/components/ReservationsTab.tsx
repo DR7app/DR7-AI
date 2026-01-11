@@ -609,7 +609,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   // Get available vehicles based on selected dates and times
-  const getAvailableVehicles = useMemo((): Vehicle[] => {
+  const availableVehicles = useMemo((): Vehicle[] => {
     // If no dates selected, show all vehicles
     if (!formData.pickup_date || !formData.return_date) {
       console.log('[Vehicle Availability] No dates selected - showing all vehicles:', vehicles.length)
