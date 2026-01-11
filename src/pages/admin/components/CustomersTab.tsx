@@ -566,6 +566,9 @@ export default function CustomersTab() {
           // Apply the same mapping logic as handleViewCustomerDetails to ensure consistent display
           const raw = freshCustomerData;
 
+          // CRITICAL: Extract metadata JSONB field (some data is stored here)
+          const metadata = raw.metadata || {};
+
           // Reconstruct full name
           let fullName = 'Cliente'
           if (raw.tipo_cliente === 'persona_fisica') {
@@ -594,17 +597,65 @@ export default function CustomersTab() {
             email: raw.email,
             phone: raw.telefono,
             telefono: raw.telefono,
-            driver_license_number: raw.numero_patente,
-            numero_patente: raw.numero_patente,
-            scadenza_patente: raw.scadenza_patente,
-            // Map DB columns to UI expected keys
-            luogo_nascita: raw.citta_nascita || raw.luogo_nascita,
-            indirizzo_azienda: raw.sede_legale || raw.indirizzo_azienda || raw.indirizzo,
-            patente: raw.numero_patente || raw.patente,
-            // Fix address display
+
+            // CRITICAL FIX: Map ALL database columns to form field names
+            // Persona Fisica fields
+            nome: raw.nome,
+            cognome: raw.cognome,
+            codice_fiscale: raw.codice_fiscale,
+            sesso: metadata.sesso || raw.sesso,  // Form prefers metadata.sesso (line 153)
+            data_nascita: raw.data_nascita,
+
+            // Birth location - form uses provincia_nascita from metadata (line 156)
+            luogo_nascita: raw.luogo_nascita || raw.citta_nascita || raw.comune_nascita,
+            citta_nascita: raw.citta_nascita || raw.luogo_nascita,
+            provincia_nascita: metadata.provincia_nascita || raw.provincia_nascita,
+
+            // Address fields - map from various possible column names
             indirizzo: raw.indirizzo || raw.sede_legale,
+            numero_civico: raw.numero_civico,
+            codice_postale: raw.codice_postale || raw.cap,
+            cap: raw.cap || raw.codice_postale,
+            citta_residenza: raw.citta_residenza || raw.citta || raw.comune,
             citta: raw.citta || raw.citta_residenza || raw.comune,
-            cap: raw.cap || raw.codice_postale
+            comune: raw.comune || raw.citta || raw.citta_residenza,
+            provincia_residenza: raw.provincia_residenza || raw.provincia,
+            provincia: raw.provincia || raw.provincia_residenza,
+
+            // Driver's license fields - form uses metadata.patente.* (lines 183-187)
+            driver_license_number: metadata.patente?.numero || raw.numero_patente || raw.patente,
+            numero_patente: metadata.patente?.numero || raw.numero_patente || raw.patente,
+            patente: metadata.patente?.numero || raw.numero_patente || raw.patente,
+            tipo_patente: metadata.patente?.tipo || raw.tipo_patente || raw.categoria_patente,
+            categoria_patente: metadata.patente?.tipo || raw.categoria_patente || raw.tipo_patente,
+            emessa_da: metadata.patente?.ente || raw.emessa_da || raw.rilasciata_da,
+            rilasciata_da: metadata.patente?.ente || raw.rilasciata_da || raw.emessa_da,
+            data_rilascio_patente: metadata.patente?.rilascio || raw.data_rilascio_patente || raw.data_rilascio,
+            data_rilascio: metadata.patente?.rilascio || raw.data_rilascio || raw.data_rilascio_patente,
+            scadenza_patente: metadata.patente?.scadenza || raw.scadenza_patente || raw.data_scadenza_patente,
+            data_scadenza_patente: metadata.patente?.scadenza || raw.data_scadenza_patente || raw.scadenza_patente,
+
+            // Company fields
+            ragione_sociale: raw.ragione_sociale,
+            partita_iva: raw.partita_iva,
+            codice_destinatario: raw.codice_destinatario,
+            sede_legale: raw.sede_legale || raw.indirizzo,
+            indirizzo_azienda: raw.sede_legale || raw.indirizzo_azienda || raw.indirizzo,
+
+            // Contact fields
+            pec: raw.pec,
+            nazione: raw.nazione,
+
+            // Other fields
+            note: raw.note || raw.notes,
+            notes: raw.notes || raw.note,
+            tipo_cliente: raw.tipo_cliente,
+            source: raw.source,
+            created_at: raw.created_at,
+            updated_at: raw.updated_at,
+
+            // Metadata (preserve if exists)
+            metadata: raw.metadata || customer.metadata
           }
 
           console.log('[handleEdit] 🎯 Passing fresh customer to modal:', freshCustomer)
