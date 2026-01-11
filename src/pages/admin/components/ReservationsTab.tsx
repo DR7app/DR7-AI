@@ -2503,6 +2503,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
         price_total: Math.round(parseFloat(formData.total_amount) * 100), // Convert to cents
+        amount_paid: Math.round(parseFloat(formData.amount_paid) * 100), // Store amount paid at root level (in cents)
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
