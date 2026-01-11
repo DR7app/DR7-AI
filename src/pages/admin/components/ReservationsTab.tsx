@@ -3124,7 +3124,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   </div>
                 ) : (
                   <Select
-                    label={`Veicolo (${getAvailableVehicles.length} disponibili)`}
+                    label={`Veicolo (${availableVehicles.length} disponibili)`}
                     required
                     value={formData.vehicle_id}
                     onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
