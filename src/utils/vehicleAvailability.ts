@@ -1,150 +1,403 @@
-import { supabase } from '../supabaseClient'
+/**
+ * Vehicle Availability Engine
+ * 
+ * This module provides real-time availability checking for vehicles in the rental system.
+ * All operations are performed in Europe/Rome timezone to ensure consistency.
+ * 
+ * CRITICAL RULES:
+ * 1. All date/time operations use Europe/Rome timezone exclusively
+ * 2. Vehicle matching is done ONLY by license plate (targa), never by model name
+ * 3. Buffer rules (75 minutes = 30min gap + 45min wash) are strictly enforced
+ * 4. Same-day returns are allowed only if valid pickup time exists after buffer
+ * 5. Vehicle blocks (maintenance) are treated as hard unavailability
+ */
+
+import { createRomeDate, getRomeDateComponents } from './timezoneUtils'
+
+// Configuration constants
+const BUFFER_MINUTES = 75 // 30min gap + 45min wash
+const BUSINESS_START_HOUR = 9
+const BUSINESS_END_HOUR = 19
+const TIME_SLOT_INTERVAL_MINUTES = 15
+
+// Types
+export interface Vehicle {
+    id: string
+    display_name: string
+    plate: string | null
+    targa?: string | null
+    status: 'available' | 'rented' | 'maintenance' | 'retired'
+    daily_rate: number
+    category?: 'exotic' | 'urban' | 'aziendali'
+    metadata: Record<string, any> | null
+    created_at: string
+    updated_at: string
+}
+
+export interface Booking {
+    id: string
+    vehicle_id?: string | null
+    vehicle_plate?: string | null
+    vehicle_name?: string
+    pickup_date: string
+    dropoff_date: string
+    status: string
+    service_type?: string
+}
 
 export interface AvailabilityResult {
     available: boolean
     reason?: string
-    conflictType?: 'booking' | 'mechanical' | 'unavailable'
-    conflictDetails?: {
-        startDate?: string
-        endDate?: string
-        customerName?: string
-    }
+    earliestTime?: Date
 }
 
 /**
- * Check if a vehicle is available for a given date range
- * @param vehicleId - The vehicle's ID from the vehicles table
- * @param vehicleName - The vehicle's display name
- * @param fromDate - Start date in YYYY-MM-DD format
- * @param toDate - End date in YYYY-MM-DD format
- * @returns AvailabilityResult with availability status and reason if unavailable
+ * Normalize plate string for comparison (remove spaces, uppercase)
  */
-export async function checkVehicleAvailability(
-    vehicleId: string,
-    vehicleName: string,
-    fromDate: string,
-    toDate: string
-): Promise<AvailabilityResult> {
-    try {
-        // 1. Check for overlapping car rental bookings
-        const { data: rentalBookings, error: rentalError } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('vehicle_name', vehicleName)
-            .or(`and(pickup_date.lte.${toDate},return_date.gte.${fromDate})`)
-            .neq('status', 'cancelled')
-
-        if (rentalError) throw rentalError
-
-        if (rentalBookings && rentalBookings.length > 0) {
-            const booking = rentalBookings[0]
-            return {
-                available: false,
-                reason: `Noleggiato da ${booking.customer_name || 'cliente'}`,
-                conflictType: 'booking',
-                conflictDetails: {
-                    startDate: booking.pickup_date,
-                    endDate: booking.return_date,
-                    customerName: booking.customer_name
-                }
-            }
-        }
-
-        // 2. Check for overlapping reservations
-        const { data: reservations, error: reservationError } = await supabase
-            .from('reservations')
-            .select('*')
-            .eq('vehicle_id', vehicleId)
-            .or(`and(pickup_date.lte.${toDate},return_date.gte.${fromDate})`)
-            .neq('status', 'cancelled')
-
-        if (reservationError) throw reservationError
-
-        if (reservations && reservations.length > 0) {
-            const reservation = reservations[0]
-            return {
-                available: false,
-                reason: 'Prenotato',
-                conflictType: 'booking',
-                conflictDetails: {
-                    startDate: reservation.pickup_date,
-                    endDate: reservation.return_date,
-                    customerName: reservation.customer_name
-                }
-            }
-        }
-
-        // 3. Check vehicle metadata for unavailable periods
-        const { data: vehicle, error: vehicleError } = await supabase
-            .from('vehicles')
-            .select('metadata, status')
-            .eq('id', vehicleId)
-            .single()
-
-        if (vehicleError) throw vehicleError
-
-        if (vehicle && vehicle.metadata) {
-            const metadata = vehicle.metadata as any
-            const unavailableFrom = metadata.unavailable_from
-            const unavailableUntil = metadata.unavailable_until
-
-            if (unavailableFrom && unavailableUntil) {
-                // Check if the requested date range overlaps with the unavailable period
-                if (fromDate <= unavailableUntil && toDate >= unavailableFrom) {
-                    const reason = metadata.unavailable_reason || 'Non disponibile'
-                    return {
-                        available: false,
-                        reason: reason,
-                        conflictType: 'unavailable',
-                        conflictDetails: {
-                            startDate: unavailableFrom,
-                            endDate: unavailableUntil
-                        }
-                    }
-                }
-            }
-        }
-
-        // If no conflicts found, vehicle is available
-        return {
-            available: true
-        }
-    } catch (error) {
-        console.error('Error checking vehicle availability:', error)
-        // On error, return unavailable to be safe
-        return {
-            available: false,
-            reason: 'Errore nel controllo disponibilità'
-        }
-    }
+function normalizePlate(plate: string | null | undefined): string {
+    if (!plate) return ''
+    return plate.replace(/\s+/g, '').toUpperCase()
 }
 
 /**
- * Check availability for multiple vehicles at once
- * @param vehicles - Array of vehicles with id and display_name
- * @param fromDate - Start date in YYYY-MM-DD format
- * @param toDate - End date in YYYY-MM-DD format
- * @returns Map of vehicle IDs to their availability results
+ * Match vehicle by license plate ONLY
+ * Never falls back to model name matching
  */
-export async function checkMultipleVehiclesAvailability(
-    vehicles: Array<{ id: string; display_name: string }>,
-    fromDate: string,
-    toDate: string
-): Promise<Map<string, AvailabilityResult>> {
-    const results = new Map<string, AvailabilityResult>()
+export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean {
+    // First try vehicle_id (most reliable)
+    const bookingVehicleId = booking.vehicle_id
+    if (bookingVehicleId && bookingVehicleId === vehicle.id) {
+        return true
+    }
 
-    // Check all vehicles in parallel
-    await Promise.all(
-        vehicles.map(async (vehicle) => {
-            const result = await checkVehicleAvailability(
-                vehicle.id,
-                vehicle.display_name,
-                fromDate,
-                toDate
-            )
-            results.set(vehicle.id, result)
-        })
+    // Then try plate matching
+    const bookingPlate = normalizePlate(booking.vehicle_plate)
+    const vehiclePlate = normalizePlate(vehicle.plate || vehicle.targa)
+
+    if (bookingPlate && vehiclePlate && bookingPlate === vehiclePlate) {
+        return true
+    }
+
+    // NO fallback to name matching - this is forbidden
+    return false
+}
+
+/**
+ * Check if a vehicle has a maintenance block for the given date range
+ */
+function isVehicleBlocked(
+    vehicle: Vehicle,
+    pickupDate: string,
+    returnDate: string,
+    pickupTime: string,
+    returnTime: string
+): boolean {
+    if (!vehicle.metadata) return false
+
+    const unavailableFrom = vehicle.metadata.unavailable_from
+    const unavailableUntil = vehicle.metadata.unavailable_until
+    const unavailableFromTime = vehicle.metadata.unavailable_from_time || '00:00'
+    const unavailableUntilTime = vehicle.metadata.unavailable_until_time || '23:59'
+
+    if (!unavailableFrom || !unavailableUntil) return false
+
+    // Parse block period in Rome timezone
+    const [fromHour, fromMin] = unavailableFromTime.split(':').map(Number)
+    const [untilHour, untilMin] = unavailableUntilTime.split(':').map(Number)
+
+    const blockFromComponents = getRomeDateComponents(unavailableFrom)
+    const blockUntilComponents = getRomeDateComponents(unavailableUntil)
+
+    const blockStart = createRomeDate(
+        blockFromComponents.year,
+        blockFromComponents.month,
+        blockFromComponents.day,
+        fromHour || 0,
+        fromMin || 0
     )
 
-    return results
+    const blockEnd = createRomeDate(
+        blockUntilComponents.year,
+        blockUntilComponents.month,
+        blockUntilComponents.day,
+        untilHour || 23,
+        untilMin || 59
+    )
+
+    // Parse requested period in Rome timezone
+    const [pickupHour, pickupMin] = pickupTime.split(':').map(Number)
+    const [returnHour, returnMin] = returnTime.split(':').map(Number)
+
+    const pickupComponents = getRomeDateComponents(pickupDate)
+    const returnComponents = getRomeDateComponents(returnDate)
+
+    const requestStart = createRomeDate(
+        pickupComponents.year,
+        pickupComponents.month,
+        pickupComponents.day,
+        pickupHour,
+        pickupMin
+    )
+
+    const requestEnd = createRomeDate(
+        returnComponents.year,
+        returnComponents.month,
+        returnComponents.day,
+        returnHour,
+        returnMin
+    )
+
+    // Check for overlap: (requestStart < blockEnd) && (requestEnd > blockStart)
+    return requestStart < blockEnd && requestEnd > blockStart
+}
+
+/**
+ * Get the earliest valid pickup time for a vehicle on a specific date
+ * considering existing bookings and buffer rules
+ */
+export function getEarliestValidPickupTime(
+    vehicle: Vehicle,
+    pickupDate: string,
+    returnDate: string,
+    existingBookings: Booking[],
+    excludeBookingId?: string
+): Date | null {
+    // Parse pickup date in Rome timezone
+    const pickupComponents = getRomeDateComponents(pickupDate)
+
+    // Start with business opening time
+    let earliestTime = createRomeDate(
+        pickupComponents.year,
+        pickupComponents.month,
+        pickupComponents.day,
+        BUSINESS_START_HOUR,
+        0
+    )
+
+    // Filter bookings for this vehicle
+    const vehicleBookings = existingBookings.filter(booking => {
+        if (excludeBookingId && booking.id === excludeBookingId) return false
+        if (booking.status === 'cancelled') return false
+        return matchVehicleByPlate(booking, vehicle)
+    })
+
+    // Find the latest conflicting booking that ends on or before the pickup date
+    for (const booking of vehicleBookings) {
+        const bookingEnd = new Date(booking.dropoff_date)
+        const bookingEndComponents = getRomeDateComponents(booking.dropoff_date)
+
+        // Check if booking ends on the same day as pickup or before
+        const bookingEndDate = createRomeDate(
+            bookingEndComponents.year,
+            bookingEndComponents.month,
+            bookingEndComponents.day,
+            0,
+            0
+        )
+
+        const pickupDateOnly = createRomeDate(
+            pickupComponents.year,
+            pickupComponents.month,
+            pickupComponents.day,
+            0,
+            0
+        )
+
+        if (bookingEndDate.getTime() === pickupDateOnly.getTime()) {
+            // Booking ends on the same day - add buffer
+            const timeWithBuffer = new Date(bookingEnd.getTime() + BUFFER_MINUTES * 60 * 1000)
+
+            if (timeWithBuffer > earliestTime) {
+                earliestTime = timeWithBuffer
+            }
+        } else if (bookingEnd > earliestTime) {
+            // Booking extends into or past the pickup date
+            const timeWithBuffer = new Date(bookingEnd.getTime() + BUFFER_MINUTES * 60 * 1000)
+
+            if (timeWithBuffer > earliestTime) {
+                earliestTime = timeWithBuffer
+            }
+        }
+    }
+
+    // Check if earliest time is still within business hours
+    const earliestComponents = getRomeDateComponents(earliestTime.toISOString())
+
+    if (earliestComponents.hour >= BUSINESS_END_HOUR) {
+        // Too late in the day - no valid pickup time
+        return null
+    }
+
+    return earliestTime
+}
+
+/**
+ * Check if a vehicle is available for a specific date/time range
+ */
+export function isVehicleAvailable(
+    vehicle: Vehicle,
+    pickupDate: string,
+    returnDate: string,
+    pickupTime: string,
+    returnTime: string,
+    existingBookings: Booking[],
+    excludeBookingId?: string
+): AvailabilityResult {
+    // Check vehicle status
+    if (vehicle.status === 'retired' || vehicle.status === 'maintenance') {
+        return {
+            available: false,
+            reason: `Vehicle is marked as ${vehicle.status}`
+        }
+    }
+
+    // Check for maintenance blocks
+    if (isVehicleBlocked(vehicle, pickupDate, returnDate, pickupTime, returnTime)) {
+        return {
+            available: false,
+            reason: 'Vehicle is blocked for maintenance during this period'
+        }
+    }
+
+    // Parse requested period in Rome timezone
+    const [pickupHour, pickupMin] = pickupTime.split(':').map(Number)
+    const [returnHour, returnMin] = returnTime.split(':').map(Number)
+
+    const pickupComponents = getRomeDateComponents(pickupDate)
+    const returnComponents = getRomeDateComponents(returnDate)
+
+    const requestStart = createRomeDate(
+        pickupComponents.year,
+        pickupComponents.month,
+        pickupComponents.day,
+        pickupHour,
+        pickupMin
+    )
+
+    const requestEnd = createRomeDate(
+        returnComponents.year,
+        returnComponents.month,
+        returnComponents.day,
+        returnHour,
+        returnMin
+    )
+
+    // Check for booking conflicts
+    const vehicleBookings = existingBookings.filter(booking => {
+        if (excludeBookingId && booking.id === excludeBookingId) return false
+        if (booking.status === 'cancelled') return false
+        return matchVehicleByPlate(booking, vehicle)
+    })
+
+    for (const booking of vehicleBookings) {
+        const bookingStart = new Date(booking.pickup_date)
+        const bookingEnd = new Date(booking.dropoff_date)
+
+        // Add buffer to booking end time
+        const bookingEndWithBuffer = new Date(bookingEnd.getTime() + BUFFER_MINUTES * 60 * 1000)
+
+        // Check for overlap: (requestStart < bookingEndWithBuffer) && (requestEnd > bookingStart)
+        if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
+            const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
+
+            return {
+                available: false,
+                reason: `Vehicle is booked until ${bookingEnd.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}. Earliest available: ${earliestTime ? earliestTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'not today'}`,
+                earliestTime: earliestTime || undefined
+            }
+        }
+    }
+
+    return { available: true }
+}
+
+/**
+ * Generate valid time slots for a vehicle on a specific date
+ * Returns array of "HH:MM" strings representing valid pickup times
+ */
+export function generateValidTimeSlots(
+    vehicle: Vehicle,
+    pickupDate: string,
+    returnDate: string,
+    existingBookings: Booking[],
+    excludeBookingId?: string
+): string[] {
+    const validSlots: string[] = []
+
+    // Get earliest valid time
+    const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
+
+    if (!earliestTime) {
+        // No valid time on this day
+        return []
+    }
+
+    const earliestComponents = getRomeDateComponents(earliestTime.toISOString())
+
+    // Round up to next 15-minute interval
+    let startMinute = Math.ceil(earliestComponents.minute / TIME_SLOT_INTERVAL_MINUTES) * TIME_SLOT_INTERVAL_MINUTES
+    let startHour = earliestComponents.hour
+
+    if (startMinute >= 60) {
+        startMinute = 0
+        startHour += 1
+    }
+
+    // Generate slots from earliest time to business end
+    for (let hour = startHour; hour < BUSINESS_END_HOUR; hour++) {
+        const minuteStart = (hour === startHour) ? startMinute : 0
+
+        for (let minute = minuteStart; minute < 60; minute += TIME_SLOT_INTERVAL_MINUTES) {
+            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+            // Validate this specific time slot
+            const result = isVehicleAvailable(
+                vehicle,
+                pickupDate,
+                returnDate,
+                timeStr,
+                '23:59', // Use end of day for validation
+                existingBookings,
+                excludeBookingId
+            )
+
+            if (result.available) {
+                validSlots.push(timeStr)
+            }
+        }
+    }
+
+    return validSlots
+}
+
+/**
+ * Get all available vehicles for a specific date/time range
+ */
+export function getAvailableVehicles(
+    allVehicles: Vehicle[],
+    pickupDate: string,
+    returnDate: string,
+    pickupTime: string,
+    returnTime: string,
+    existingBookings: Booking[],
+    excludeBookingId?: string
+): Vehicle[] {
+    if (!pickupDate || !returnDate) {
+        // No dates selected - show all vehicles
+        return allVehicles
+    }
+
+    return allVehicles.filter(vehicle => {
+        const result = isVehicleAvailable(
+            vehicle,
+            pickupDate,
+            returnDate,
+            pickupTime,
+            returnTime,
+            existingBookings,
+            excludeBookingId
+        )
+
+        return result.available
+    })
 }
