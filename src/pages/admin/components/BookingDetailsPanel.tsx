@@ -13,7 +13,10 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
 
   // Raw values (in cents)
   const totalCents = booking.price_total || 0
-  const paidCents = booking.amount_paid || booking.booking_details?.amount_paid || 0
+  const paidCents = booking.amount_paid ||
+    booking.booking_details?.amount_paid ||
+    booking.booking_details?.amountPaid ||
+    0
 
   // Convert to euros for calculations
   const totalEur = centsToEuros(totalCents)
