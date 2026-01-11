@@ -654,8 +654,18 @@ export default function CustomersTab() {
             created_at: raw.created_at,
             updated_at: raw.updated_at,
 
-            // Metadata (preserve if exists)
-            metadata: raw.metadata || customer.metadata
+            // Metadata (preserve if exists and add patente structure for form)
+            metadata: {
+              ...(raw.metadata || customer.metadata || {}),
+              // Ensure patente object exists with all fields for form pre-filling
+              patente: {
+                numero: metadata.patente?.numero || raw.numero_patente || raw.patente || '',
+                tipo: metadata.patente?.tipo || raw.tipo_patente || raw.categoria_patente || '',
+                ente: metadata.patente?.ente || raw.emessa_da || raw.rilasciata_da || '',
+                rilascio: metadata.patente?.rilascio || raw.data_rilascio_patente || raw.data_rilascio || '',
+                scadenza: metadata.patente?.scadenza || raw.scadenza_patente || raw.data_scadenza_patente || ''
+              }
+            }
           }
 
           console.log('[handleEdit] 🎯 Passing fresh customer to modal:', freshCustomer)
