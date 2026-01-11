@@ -3826,7 +3826,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
-          <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="fixed inset-0 bg-black backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
             <div className="w-full sm:max-w-2xl bg-[#1a1a1a] sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-700/30">
               {/* Modal Header */}
               <div className="flex-shrink-0  p-4 border-b border-theme-border flex justify-between items-center">
