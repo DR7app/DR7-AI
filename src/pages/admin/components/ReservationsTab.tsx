@@ -296,6 +296,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null)
   const [pendingCancelType, setPendingCancelType] = useState<'booking' | 'reservation'>('booking')
 
+  // Delete Confirmation Modal State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [pendingDeleteType, setPendingDeleteType] = useState<'booking' | 'reservation'>('booking')
+
   // Conflict Detection State
   const [rentalEventsPickupDate, setRentalEventsPickupDate] = useState<any[]>([])
   const [rentalEventsReturnDate, setRentalEventsReturnDate] = useState<any[]>([])
@@ -1533,10 +1538,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  async function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
-    if (!confirm('⚠️ ATTENZIONE: Vuoi eliminare definitivamente questa prenotazione dal database?\n\nQuesta azione NON può essere annullata!\n\nSe vuoi solo annullare la prenotazione, usa il pulsante "Cancella" invece.')) {
-      return
-    }
+  function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
+    // Show custom confirmation modal instead of browser confirm
+    setPendingDeleteId(bookingId)
+    setPendingDeleteType(bookingType)
+    setShowDeleteConfirm(true)
+  }
+
+  async function confirmDeleteBooking() {
+    if (!pendingDeleteId) return
+
+    const bookingId = pendingDeleteId
+    const bookingType = pendingDeleteType
+
+    // Close modal and reset state
+    setShowDeleteConfirm(false)
+    setPendingDeleteId(null)
 
     try {
       // Get booking details before deleting
@@ -4224,6 +4241,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   Sì, Cancella
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-xl font-bold mb-4 text-red-600">🗑️ Elimina Definitivamente</h3>
+              <p className="text-gray-700 mb-6">
+                <strong className="text-red-600">⚠️ ATTENZIONE:</strong> Vuoi eliminare definitivamente questa prenotazione dal database?
+                <br /><br />
+                <strong>Questa azione NON può essere annullata!</strong>
+                <br /><br />
+                Se vuoi solo annullare la prenotazione, usa il pulsante "Cancella" invece.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowDeleteConfirm(false)
+                    setPendingDeleteId(null)
+                  }}
+                >
+                  Annulla
+                </Button>
+                <Button
+                  type="button"
+                  onClick={confirmDeleteBooking}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Sì, Elimina Definitivamente
                 </Button>
               </div>
             </div>
