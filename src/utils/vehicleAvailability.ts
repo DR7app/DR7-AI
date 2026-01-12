@@ -291,6 +291,17 @@ export function isVehicleAvailable(
         // Skip cancelled bookings
         if (booking.status === 'cancelled') return false
 
+        // CRITICAL: Skip linked car wash bookings when extending a rental
+        // Car wash bookings are automatically created/updated, so they shouldn't block extensions
+        if (excludeBookingId && booking.service_type === 'Lavaggio Rientro') {
+            // Find the booking being extended to check if this car wash is linked to it
+            const editingBooking = existingBookings.find(b => b.id === excludeBookingId)
+            if (editingBooking && booking.customer_name === editingBooking.customer_name) {
+                // This car wash is likely linked to the booking being extended, skip it
+                return false
+            }
+        }
+
         // CRITICAL: Only include bookings that can be matched to this vehicle by plate
         // This prevents phantom conflicts from old bookings without vehicle_id/plate
         return matchVehicleByPlate(booking, vehicle)
