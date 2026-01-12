@@ -39,6 +39,7 @@ export interface Booking {
     vehicle_id?: string | null
     vehicle_plate?: string | null
     vehicle_name?: string
+    customer_name?: string
     pickup_date: string
     dropoff_date: string
     status: string
