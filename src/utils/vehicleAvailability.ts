@@ -294,17 +294,22 @@ export function isVehicleAvailable(
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions
-        if (excludeBookingId && booking.service_type === 'Lavaggio Rientro') {
+        if (excludeBookingId && booking.service_type === 'car_wash') {
             console.log('[CAR WASH CHECK] Found car wash booking:', booking.id, 'customer:', booking.customer_name)
             // Find the booking being extended to check if this car wash is linked to it
             const editingBooking = existingBookings.find(b => b.id === excludeBookingId)
             console.log('[CAR WASH CHECK] Editing booking:', editingBooking?.id, 'customer:', editingBooking?.customer_name)
-            if (editingBooking && booking.customer_name === editingBooking.customer_name) {
-                console.log('[CAR WASH CHECK] ✅ EXCLUDING car wash booking', booking.id)
-                // This car wash is likely linked to the booking being extended, skip it
+
+            // Check if this car wash is for the same vehicle
+            const sameVehicle = booking.vehicle_plate === editingBooking?.vehicle_plate ||
+                booking.vehicle_name === editingBooking?.vehicle_name
+
+            if (editingBooking && sameVehicle) {
+                console.log('[CAR WASH CHECK] ✅ EXCLUDING car wash booking for same vehicle', booking.id)
+                // This car wash is for the same vehicle being extended, skip it
                 return false
             }
-            console.log('[CAR WASH CHECK] ❌ NOT excluding car wash - customer names don\'t match')
+            console.log('[CAR WASH CHECK] ❌ NOT excluding car wash - different vehicle')
         }
 
         // CRITICAL: Only include bookings that can be matched to this vehicle by plate
