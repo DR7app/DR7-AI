@@ -642,30 +642,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return filteredVehicles
   }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
 
-  // CRITICAL FIX: When editing, ensure the currently selected vehicle is always in the dropdown
-  // even if it's not in availableVehicles (e.g., retired or unavailable)
-  const vehiclesForDropdown = useMemo((): Vehicle[] => {
-    if (!editingId || !formData.vehicle_id) {
-      // Not editing or no vehicle selected - just use availableVehicles
-      return availableVehicles
+  // Base vehicles for dropdown (before adding same-day availability)
+  // This will be enhanced later after vehicleEarliestTimes is calculated
+  const baseVehiclesForDropdown = useMemo((): Vehicle[] => {
+    // Start with available vehicles
+    let result = [...availableVehicles]
+
+    // If editing, ensure selected vehicle is included
+    if (editingId && formData.vehicle_id) {
+      const isSelectedInResult = result.some(v => v.id === formData.vehicle_id)
+      if (!isSelectedInResult) {
+        const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+        if (selectedVehicle) {
+          console.log('[Vehicle Dropdown] Adding currently selected vehicle to dropdown:', selectedVehicle.display_name)
+          result = [selectedVehicle, ...result]
+        }
+      }
     }
 
-    // Check if selected vehicle is already in availableVehicles
-    const isSelectedInAvailable = availableVehicles.some(v => v.id === formData.vehicle_id)
-    if (isSelectedInAvailable) {
-      return availableVehicles
-    }
-
-    // Selected vehicle is NOT in availableVehicles - find it in full vehicles list and add it
-    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-    if (selectedVehicle) {
-      console.log('[Vehicle Dropdown] Adding currently selected vehicle to dropdown:', selectedVehicle.display_name)
-      return [selectedVehicle, ...availableVehicles]
-    }
-
-    // Fallback - vehicle not found at all
-    console.warn('[Vehicle Dropdown] Selected vehicle not found in vehicles list:', formData.vehicle_id)
-    return availableVehicles
+    return result
   }, [availableVehicles, editingId, formData.vehicle_id, vehicles])
 
 
@@ -722,6 +717,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     return times
   }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, editingId])
+
+  // FINAL vehicles for dropdown - includes base vehicles + same-day available vehicles
+  const vehiclesForDropdown = useMemo((): Vehicle[] => {
+    let result = [...baseVehiclesForDropdown]
+
+    // Add vehicles with same-day availability
+    if (formData.pickup_date && vehicleEarliestTimes.size > 0) {
+      const pickupDateStr = formData.pickup_date
+      const sameDayVehicles = Array.from(vehicleEarliestTimes.entries())
+        .filter(([_, earliestTime]) => {
+          const earliestDateStr = earliestTime.toISOString().split('T')[0]
+          return earliestDateStr === pickupDateStr
+        })
+        .map(([vehicleId]) => vehicles.find(v => v.id === vehicleId))
+        .filter((v): v is Vehicle => v !== undefined)
+
+      // Combine and remove duplicates
+      const combined = new Set([...result, ...sameDayVehicles])
+      result = Array.from(combined)
+
+      console.log('[Vehicle Dropdown] Added same-day vehicles:', sameDayVehicles.length)
+    }
+
+    return result
+  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes])
 
   // Generate valid time slots and auto-fill earliest pickup time when vehicle/dates change
   useEffect(() => {
