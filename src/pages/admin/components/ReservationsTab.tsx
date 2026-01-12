@@ -2164,6 +2164,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (selectedVehicle) {
           const allBookingsForCheck = [...bookings, ...carWashBookings]
 
+          console.log('[processBookingSubmission] 🔍 AVAILABILITY CHECK:', {
+            vehicle: selectedVehicle.display_name,
+            editingId: editingId,
+            totalBookings: allBookingsForCheck.length,
+            bookingsForThisVehicle: allBookingsForCheck.filter(b =>
+              b.vehicle_id === selectedVehicle.id ||
+              b.vehicle_plate === selectedVehicle.plate ||
+              b.vehicle_plate === selectedVehicle.targa
+            ).length
+          })
+
           const availabilityResult = isVehicleAvailable(
             selectedVehicle,
             formData.pickup_date,
