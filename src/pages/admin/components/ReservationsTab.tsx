@@ -306,17 +306,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
   // Filter time options based on selected date
-  const getFilteredTimeOptions = (dateStr: string) => {
-    if (!dateStr) return TIME_OPTIONS
-
-    const today = new Date().toISOString().split('T')[0]
-    if (dateStr === today) {
-      const now = new Date()
-      // Current HH:MM
-      const currentHM = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
-      // Filter options that are in the future (or very recent past to be safe)
-      return TIME_OPTIONS.filter(t => t.value >= currentHM)
-    }
+  const getFilteredTimeOptions = (_dateStr: string) => {
+    // Admin users can select any time, including past times
+    // This allows backdating bookings for administrative purposes
     return TIME_OPTIONS
   }
 
