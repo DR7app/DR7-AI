@@ -722,7 +722,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
     let result = [...baseVehiclesForDropdown]
 
-    // Add vehicles with same-day availability
+    // ALWAYS add vehicles with same-day availability (even if no time selected yet)
+    // This ensures users see all potentially available vehicles with their availability times
     if (formData.pickup_date && vehicleEarliestTimes.size > 0) {
       const pickupDateStr = formData.pickup_date
       const sameDayVehicles = Array.from(vehicleEarliestTimes.entries())
@@ -737,7 +738,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const combined = new Set([...result, ...sameDayVehicles])
       result = Array.from(combined)
 
-      console.log('[Vehicle Dropdown] Added same-day vehicles:', sameDayVehicles.length)
+      console.log('[Vehicle Dropdown] Total vehicles shown:', result.length, '(including', sameDayVehicles.length, 'same-day returns)')
     }
 
     return result
