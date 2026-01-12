@@ -291,6 +291,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [currentValidationBooking, setCurrentValidationBooking] = useState<Booking | null>(null)
   const [validationContext, setValidationContext] = useState<'contract' | 'invoice' | 'booking'>('contract')
 
+  // Cancel Confirmation Modal State
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null)
+  const [pendingCancelType, setPendingCancelType] = useState<'booking' | 'reservation'>('booking')
+
   // Conflict Detection State
   const [rentalEventsPickupDate, setRentalEventsPickupDate] = useState<any[]>([])
   const [rentalEventsReturnDate, setRentalEventsReturnDate] = useState<any[]>([])
@@ -1140,14 +1145,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  async function handleCancelBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
-    // Add a delay to ensure the confirmation dialog displays properly
-    // This prevents the browser from dismissing it too quickly
-    await new Promise(resolve => setTimeout(resolve, 500))
+  function handleCancelBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
+    // Show custom confirmation modal instead of browser confirm
+    setPendingCancelId(bookingId)
+    setPendingCancelType(bookingType)
+    setShowCancelConfirm(true)
+  }
 
-    if (!confirm('Sei sicuro di voler cancellare questa prenotazione?')) {
-      return
-    }
+  async function confirmCancelBooking() {
+    if (!pendingCancelId) return
+
+    const bookingId = pendingCancelId
+    const bookingType = pendingCancelType
+
+    // Close modal and reset state
+    setShowCancelConfirm(false)
+    setPendingCancelId(null)
 
     try {
       // Get booking details before cancelling
@@ -4190,6 +4203,42 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               }
             }}
           />
+        )}
+
+        {/* Cancel Confirmation Modal */}
+        {showCancelConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowCancelConfirm(false)}>
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-xl font-bold mb-4 text-gray-900">⚠️ Conferma Cancellazione</h3>
+              <p className="text-gray-700 mb-6">
+                Sei sicuro di voler cancellare questa prenotazione?
+                <br /><br />
+                <strong>Questa azione:</strong>
+                <br />• Cancellerà la prenotazione
+                <br />• Cancellerà il lavaggio auto collegato
+                <br />• Rimuoverà l'evento dal calendario
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCancelConfirm(false)
+                    setPendingCancelId(null)
+                  }}
+                >
+                  Annulla
+                </Button>
+                <Button
+                  type="button"
+                  onClick={confirmCancelBooking}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Sì, Cancella
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
 
       </div >
