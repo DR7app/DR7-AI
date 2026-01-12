@@ -640,28 +640,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // CRITICAL FIX: When editing, ensure the currently selected vehicle is always in the dropdown
   // even if it's not in availableVehicles (e.g., retired or unavailable)
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
+    // Show ALL vehicles in the dropdown, not just available ones
+    // The availability time will be displayed next to each vehicle name
+    // This allows admin to see vehicles that are returning the same day
+
     if (!editingId || !formData.vehicle_id) {
-      // Not editing or no vehicle selected - just use availableVehicles
-      return availableVehicles
+      // Not editing - show all vehicles
+      return vehicles
     }
 
-    // Check if selected vehicle is already in availableVehicles
-    const isSelectedInAvailable = availableVehicles.some(v => v.id === formData.vehicle_id)
-    if (isSelectedInAvailable) {
-      return availableVehicles
+    // Editing mode - ensure selected vehicle is in the list
+    const isSelectedInList = vehicles.some(v => v.id === formData.vehicle_id)
+    if (isSelectedInList) {
+      return vehicles
     }
 
-    // Selected vehicle is NOT in availableVehicles - find it in full vehicles list and add it
-    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-    if (selectedVehicle) {
-      console.log('[Vehicle Dropdown] Adding currently selected vehicle to dropdown:', selectedVehicle.display_name)
-      return [selectedVehicle, ...availableVehicles]
-    }
-
-    // Fallback - vehicle not found at all
+    // Selected vehicle not found - this shouldn't happen, but handle it gracefully
     console.warn('[Vehicle Dropdown] Selected vehicle not found in vehicles list:', formData.vehicle_id)
-    return availableVehicles
-  }, [availableVehicles, editingId, formData.vehicle_id, vehicles])
+    return vehicles
+  }, [vehicles, editingId, formData.vehicle_id])
 
 
   // Calculate earliest available time for each vehicle based on existing bookings and automatic wash
