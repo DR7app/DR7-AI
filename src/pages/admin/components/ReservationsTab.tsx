@@ -1200,11 +1200,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole cancellation if calendar delete fails
       }
 
-      alert('Prenotazione cancellata con successo')
+      // Show success message that stays visible for 3 seconds
+      const successMessage = `✅ Prenotazione cancellata con successo!\n\nCliente: ${customerName}\nVeicolo: ${vehicleName}\n\nLa prenotazione è stata annullata e rimossa dal calendario.`
+
+      // Use a combination of alert and setTimeout to ensure visibility
+      setTimeout(() => {
+        alert(successMessage)
+      }, 100) // Small delay to ensure the cancellation completes first
+
       loadData()
     } catch (error) {
       console.error('Failed to cancel booking:', error)
-      alert('Errore durante la cancellazione: ' + (error as Error).message)
+      alert('❌ Errore durante la cancellazione:\n\n' + (error as Error).message)
     }
   }
 
