@@ -2168,18 +2168,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       // ===== VALIDATION: Check all required date/time fields are populated =====
       if (!formData.pickup_date || !formData.pickup_time || !formData.return_date || !formData.return_time) {
-        const missingFields = []
+        const missingFields: string[] = []
         if (!formData.pickup_date) missingFields.push('Data Ritiro')
         if (!formData.pickup_time) missingFields.push('Ora Ritiro')
         if (!formData.return_date) missingFields.push('Data Riconsegna')
         if (!formData.return_time) missingFields.push('Ora Riconsegna')
 
-        alert(
-          '⚠️ CAMPI MANCANTI\n\n' +
-          'I seguenti campi sono obbligatori:\n\n' +
-          missingFields.map(f => `• ${f}`).join('\n') +
-          '\n\nCompila tutti i campi richiesti prima di salvare la prenotazione.'
-        )
+        setTimeout(() => {
+          alert(
+            '⚠️ CAMPI MANCANTI\n\n' +
+            'I seguenti campi sono obbligatori:\n\n' +
+            missingFields.map(f => `• ${f}`).join('\n') +
+            '\n\nCompila tutti i campi richiesti prima di salvare la prenotazione.'
+          )
+        }, 100)
         setIsSubmitting(false)
         return
       }
@@ -2190,26 +2192,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const testReturnDate = new Date(`${formData.return_date}T${formData.return_time}:00`)
 
       if (isNaN(testPickupDate.getTime()) || isNaN(testReturnDate.getTime())) {
-        alert(
-          '⚠️ DATE NON VALIDE\n\n' +
-          'Le date inserite non sono valide.\n\n' +
-          `Data Ritiro: ${formData.pickup_date} ${formData.pickup_time}\n` +
-          `Data Riconsegna: ${formData.return_date} ${formData.return_time}\n\n` +
-          'Verifica che le date siano nel formato corretto (YYYY-MM-DD) e che gli orari siano validi.'
-        )
+        setTimeout(() => {
+          alert(
+            '⚠️ DATE NON VALIDE\n\n' +
+            'Le date inserite non sono valide.\n\n' +
+            `Data Ritiro: ${formData.pickup_date} ${formData.pickup_time}\n` +
+            `Data Riconsegna: ${formData.return_date} ${formData.return_time}\n\n` +
+            'Verifica che le date siano nel formato corretto (YYYY-MM-DD) e che gli orari siano validi.'
+          )
+        }, 100)
         setIsSubmitting(false)
         return
       }
 
       // ===== VALIDATION: Check return date is after pickup date =====
       if (testReturnDate <= testPickupDate) {
-        alert(
-          '⚠️ DATE NON VALIDE\n\n' +
-          'La data di riconsegna deve essere successiva alla data di ritiro.\n\n' +
-          `Ritiro: ${testPickupDate.toLocaleDateString('it-IT')} ${testPickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n` +
-          `Riconsegna: ${testReturnDate.toLocaleDateString('it-IT')} ${testReturnDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n\n` +
-          'Modifica le date e riprova.'
-        )
+        setTimeout(() => {
+          alert(
+            '⚠️ DATE NON VALIDE\n\n' +
+            'La data di riconsegna deve essere successiva alla data di ritiro.\n\n' +
+            `Ritiro: ${testPickupDate.toLocaleDateString('it-IT')} ${testPickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n` +
+            `Riconsegna: ${testReturnDate.toLocaleDateString('it-IT')} ${testReturnDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n\n` +
+            'Modifica le date e riprova.'
+          )
+        }, 100)
         setIsSubmitting(false)
         return
       }
@@ -2254,7 +2260,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             errorMessage += 'Seleziona un altro veicolo o modifica le date/orari.'
 
-            alert(errorMessage)
+            setTimeout(() => alert(errorMessage), 100)
             setIsSubmitting(false)
             return
           }
