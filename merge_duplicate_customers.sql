@@ -1,283 +1,217 @@
 -- ============================================
--- SMART MERGE DUPLICATE CUSTOMERS IN customers_extended
+-- CUSTOMER DUPLICATE MERGE SCRIPT
 -- ============================================
--- This script will:
--- 1. Identify REAL duplicates (same person with multiple records)
--- 2. EXCLUDE placeholder/invalid emails and phones from merge logic
--- 3. Keep the oldest record (by created_at) as the primary
--- 4. Update all foreign key references to point to the primary
--- 5. Merge data from duplicates into primary (fill in missing fields)
--- 6. Delete duplicate records
+-- This script identifies and merges duplicate customer records
+-- IMPORTANT: Review the DRY RUN output before executing the actual merge
 -- ============================================
 
-BEGIN;
+-- STEP 1: ANALYZE DUPLICATES (DRY RUN)
+-- This shows what will be merged without making changes
 
--- Create a temporary table to store merge mappings
-CREATE TEMP TABLE customer_merge_map (
-  duplicate_id UUID,
-  primary_id UUID,
-  merge_reason TEXT
-);
+DO $$
+DECLARE
+  duplicate_count INTEGER;
+  total_to_merge INTEGER;
+BEGIN
+  RAISE NOTICE '========================================';
+  RAISE NOTICE 'DUPLICATE ANALYSIS - DRY RUN';
+  RAISE NOTICE '========================================';
+  
+  -- Count duplicates by email
+  SELECT COUNT(*) INTO duplicate_count
+  FROM (
+    SELECT email
+    FROM customers_extended
+    WHERE email IS NOT NULL AND email != ''
+    GROUP BY email
+    HAVING COUNT(*) > 1
+  ) AS dups;
+  
+  RAISE NOTICE 'Duplicate emails found: %', duplicate_count;
+  
+  -- Count total duplicate records
+  SELECT SUM(count - 1) INTO total_to_merge
+  FROM (
+    SELECT email, COUNT(*) as count
+    FROM customers_extended
+    WHERE email IS NOT NULL AND email != ''
+    GROUP BY email
+    HAVING COUNT(*) > 1
+  ) AS dups;
+  
+  RAISE NOTICE 'Total duplicate records to merge: %', total_to_merge;
+  RAISE NOTICE '';
+END $$;
 
--- ============================================
--- STEP 1: Identify duplicates by VALID email
--- ============================================
--- Only merge if email is valid and not a placeholder
--- Keep the MOST COMPLETE record as primary (most non-null fields)
-INSERT INTO customer_merge_map (duplicate_id, primary_id, merge_reason)
+-- Show top 20 duplicate groups
 SELECT 
-  ce.id as duplicate_id,
-  (
-    SELECT id 
-    FROM customers_extended ce2 
-    WHERE ce2.email = ce.email
-      AND ce2.email IS NOT NULL 
-      AND ce2.email != '' 
-      AND ce2.email NOT LIKE '%placeholder%'
-      AND ce2.email NOT LIKE '%noemail%'
-      AND ce2.email NOT LIKE '%@example.com%'
-      AND ce2.email != '-@gmail.com'  -- Exclude invalid placeholder
-      AND ce2.email NOT LIKE '-%'      -- Exclude emails starting with -
-      AND LENGTH(ce2.email) > 5        -- Must be a real email
-      AND ce2.email LIKE '%@%.%'       -- Must have @ and domain
-    ORDER BY 
-      -- Count non-null fields to find most complete record
-      (CASE WHEN ce2.nome IS NOT NULL AND ce2.nome != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.cognome IS NOT NULL AND ce2.cognome != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.codice_fiscale IS NOT NULL AND ce2.codice_fiscale != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.patente IS NOT NULL AND ce2.patente != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.telefono IS NOT NULL AND ce2.telefono != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.indirizzo IS NOT NULL AND ce2.indirizzo != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.ragione_sociale IS NOT NULL AND ce2.ragione_sociale != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.partita_iva IS NOT NULL AND ce2.partita_iva != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.user_id IS NOT NULL THEN 1 ELSE 0 END) DESC,
-      ce2.created_at ASC  -- If equal completeness, prefer older record
-    LIMIT 1
-  ) as primary_id,
-  'duplicate_email' as merge_reason
-FROM customers_extended ce
-WHERE ce.email IS NOT NULL 
-  AND ce.email != '' 
-  AND ce.email NOT LIKE '%placeholder%'
-  AND ce.email NOT LIKE '%noemail%'
-  AND ce.email NOT LIKE '%@example.com%'
-  AND ce.email != '-@gmail.com'
-  AND ce.email NOT LIKE '-%'
-  AND LENGTH(ce.email) > 5
-  AND ce.email LIKE '%@%.%'
-  AND EXISTS (
-    SELECT 1 
-    FROM customers_extended ce2 
-    WHERE ce2.email = ce.email 
-      AND ce2.id != ce.id
-      AND ce2.email NOT LIKE '%placeholder%'
-      AND ce2.email != '-@gmail.com'
-  );
+  email,
+  COUNT(*) as duplicate_count,
+  STRING_AGG(
+    COALESCE(nome || ' ' || cognome, ragione_sociale, 'Unknown') || 
+    ' (ID: ' || id::text || ', Source: ' || COALESCE(source, 'unknown') || 
+    ', Has CF: ' || CASE WHEN codice_fiscale IS NOT NULL THEN 'Yes' ELSE 'No' END ||
+    ', Has Addr: ' || CASE WHEN indirizzo IS NOT NULL THEN 'Yes' ELSE 'No' END || ')',
+    E'\n    '
+  ) as records
+FROM customers_extended
+WHERE email IS NOT NULL AND email != ''
+GROUP BY email
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC
+LIMIT 20;
 
 -- ============================================
--- STEP 2: Identify duplicates by VALID phone
--- ============================================
--- Only merge if phone is valid and not a placeholder
--- Keep the MOST COMPLETE record as primary
-INSERT INTO customer_merge_map (duplicate_id, primary_id, merge_reason)
-SELECT 
-  ce.id as duplicate_id,
-  (
-    SELECT id 
-    FROM customers_extended ce2 
-    WHERE ce2.telefono = ce.telefono
-      AND ce2.telefono IS NOT NULL 
-      AND ce2.telefono != '' 
-      AND ce2.telefono NOT LIKE '%placeholder%'
-      AND ce2.telefono NOT LIKE '%000000%'
-      AND ce2.telefono != '-'
-      AND LENGTH(ce2.telefono) >= 8  -- Real phone numbers are at least 8 digits
-    ORDER BY 
-      -- Count non-null fields to find most complete record
-      (CASE WHEN ce2.nome IS NOT NULL AND ce2.nome != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.cognome IS NOT NULL AND ce2.cognome != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.codice_fiscale IS NOT NULL AND ce2.codice_fiscale != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.email IS NOT NULL AND ce2.email != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.indirizzo IS NOT NULL AND ce2.indirizzo != '' THEN 1 ELSE 0 END +
-       CASE WHEN ce2.user_id IS NOT NULL THEN 1 ELSE 0 END) DESC,
-      ce2.created_at ASC
-    LIMIT 1
-  ) as primary_id,
-  'duplicate_phone' as merge_reason
-FROM customers_extended ce
-WHERE ce.telefono IS NOT NULL 
-  AND ce.telefono != '' 
-  AND ce.telefono NOT LIKE '%placeholder%'
-  AND ce.telefono NOT LIKE '%000000%'
-  AND ce.telefono != '-'
-  AND LENGTH(ce.telefono) >= 8
-  AND EXISTS (
-    SELECT 1 
-    FROM customers_extended ce2 
-    WHERE ce2.telefono = ce.telefono 
-      AND ce2.id != ce.id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM customer_merge_map WHERE duplicate_id = ce.id
-  );
-
--- ============================================
--- STEP 3: Identify duplicates by codice_fiscale
--- ============================================
--- Codice Fiscale is unique per person, safe to merge
-INSERT INTO customer_merge_map (duplicate_id, primary_id, merge_reason)
-SELECT 
-  ce.id as duplicate_id,
-  (
-    SELECT id 
-    FROM customers_extended ce2 
-    WHERE ce2.codice_fiscale = ce.codice_fiscale
-      AND ce2.codice_fiscale IS NOT NULL 
-      AND ce2.codice_fiscale != ''
-      AND LENGTH(ce2.codice_fiscale) = 16  -- Italian CF is exactly 16 chars
-    ORDER BY ce2.created_at ASC
-    LIMIT 1
-  ) as primary_id,
-  'duplicate_codice_fiscale' as merge_reason
-FROM customers_extended ce
-WHERE ce.codice_fiscale IS NOT NULL 
-  AND ce.codice_fiscale != ''
-  AND LENGTH(ce.codice_fiscale) = 16
-  AND EXISTS (
-    SELECT 1 
-    FROM customers_extended ce2 
-    WHERE ce2.codice_fiscale = ce.codice_fiscale 
-      AND ce2.id != ce.id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM customer_merge_map WHERE duplicate_id = ce.id
-  );
-
--- ============================================
--- STEP 4: Identify duplicates by partita_iva
--- ============================================
--- Partita IVA is unique per company, safe to merge
-INSERT INTO customer_merge_map (duplicate_id, primary_id, merge_reason)
-SELECT 
-  ce.id as duplicate_id,
-  (
-    SELECT id 
-    FROM customers_extended ce2 
-    WHERE ce2.partita_iva = ce.partita_iva
-      AND ce2.partita_iva IS NOT NULL 
-      AND ce2.partita_iva != ''
-      AND LENGTH(ce2.partita_iva) = 11  -- Italian P.IVA is exactly 11 digits
-    ORDER BY ce2.created_at ASC
-    LIMIT 1
-  ) as primary_id,
-  'duplicate_partita_iva' as merge_reason
-FROM customers_extended ce
-WHERE ce.partita_iva IS NOT NULL 
-  AND ce.partita_iva != ''
-  AND LENGTH(ce.partita_iva) = 11
-  AND EXISTS (
-    SELECT 1 
-    FROM customers_extended ce2 
-    WHERE ce2.partita_iva = ce.partita_iva 
-      AND ce2.id != ce.id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM customer_merge_map WHERE duplicate_id = ce.id
-  );
-
--- Remove self-references (where duplicate_id = primary_id)
-DELETE FROM customer_merge_map WHERE duplicate_id = primary_id;
-
--- Remove NULL primary_ids
-DELETE FROM customer_merge_map WHERE primary_id IS NULL;
-
--- Show what will be merged
-SELECT 
-  cmm.merge_reason,
-  COUNT(*) as duplicates_to_merge,
-  COUNT(DISTINCT cmm.primary_id) as unique_primary_records
-FROM customer_merge_map cmm
-GROUP BY cmm.merge_reason;
-
--- ============================================
--- STEP 5: Merge data from duplicates into primary records
--- ============================================
--- Update primary records with missing data from duplicates
-UPDATE customers_extended ce_primary
-SET 
-  -- Fill in missing fields from duplicates
-  nome = COALESCE(ce_primary.nome, ce_dup.nome),
-  cognome = COALESCE(ce_primary.cognome, ce_dup.cognome),
-  codice_fiscale = COALESCE(ce_primary.codice_fiscale, ce_dup.codice_fiscale),
-  patente = COALESCE(ce_primary.patente, ce_dup.patente),
-  ragione_sociale = COALESCE(ce_primary.ragione_sociale, ce_dup.ragione_sociale),
-  partita_iva = COALESCE(ce_primary.partita_iva, ce_dup.partita_iva),
-  codice_destinatario = COALESCE(ce_primary.codice_destinatario, ce_dup.codice_destinatario),
-  pec = COALESCE(ce_primary.pec, ce_dup.pec),
-  denominazione = COALESCE(ce_primary.denominazione, ce_dup.denominazione),
-  codice_ipa = COALESCE(ce_primary.codice_ipa, ce_dup.codice_ipa),
-  codice_univoco = COALESCE(ce_primary.codice_univoco, ce_dup.codice_univoco),
-  nazione = COALESCE(ce_primary.nazione, ce_dup.nazione),
-  email = COALESCE(ce_primary.email, ce_dup.email),
-  telefono = COALESCE(ce_primary.telefono, ce_dup.telefono),
-  indirizzo = COALESCE(ce_primary.indirizzo, ce_dup.indirizzo),
-  user_id = COALESCE(ce_primary.user_id, ce_dup.user_id),
-  updated_at = NOW()
-FROM customers_extended ce_dup
-INNER JOIN customer_merge_map cmm ON ce_dup.id = cmm.duplicate_id
-WHERE ce_primary.id = cmm.primary_id;
-
--- ============================================
--- STEP 6: Update foreign key references
+-- STEP 2: CREATE MERGE FUNCTION
 -- ============================================
 
--- Update reservations table
-UPDATE reservations
-SET customer_id = cmm.primary_id
-FROM customer_merge_map cmm
-WHERE reservations.customer_id = cmm.duplicate_id;
-
--- Note: fatture table stores customer data directly (customer_name, customer_email, etc.)
--- and doesn't have a customer_id foreign key, so no update needed
-
--- Update bookings table (includes car wash, mechanical, and other booking types)
-UPDATE bookings
-SET customer_id = cmm.primary_id
-FROM customer_merge_map cmm
-WHERE bookings.customer_id = cmm.duplicate_id;
-
--- Update commercial_operation_tickets table
-UPDATE commercial_operation_tickets
-SET customer_id = cmm.primary_id
-FROM customer_merge_map cmm
-WHERE commercial_operation_tickets.customer_id = cmm.duplicate_id;
-
--- Update customer_documents table
-UPDATE customer_documents
-SET customer_id = cmm.primary_id
-FROM customer_merge_map cmm
-WHERE customer_documents.customer_id = cmm.duplicate_id;
+CREATE OR REPLACE FUNCTION merge_duplicate_customers()
+RETURNS TABLE (
+  action TEXT,
+  email TEXT,
+  master_id UUID,
+  merged_ids TEXT,
+  details TEXT
+) AS $$
+DECLARE
+  dup_record RECORD;
+  master_record RECORD;
+  dup_id UUID;
+  merged_count INTEGER := 0;
+  total_merged INTEGER := 0;
+BEGIN
+  -- Loop through each duplicate email group
+  FOR dup_record IN 
+    SELECT e.email, ARRAY_AGG(e.id ORDER BY 
+      -- Scoring: prefer records with more data
+      (CASE WHEN e.codice_fiscale IS NOT NULL THEN 10 ELSE 0 END +
+       CASE WHEN e.indirizzo IS NOT NULL THEN 5 ELSE 0 END +
+       CASE WHEN e.data_nascita IS NOT NULL THEN 3 ELSE 0 END +
+       CASE WHEN e.telefono IS NOT NULL THEN 2 ELSE 0 END +
+       CASE WHEN e.source IN ('website', 'admin') THEN 5 ELSE 0 END) DESC,
+      e.updated_at DESC
+    ) as customer_ids
+    FROM customers_extended e
+    WHERE e.email IS NOT NULL AND e.email != ''
+    GROUP BY e.email
+    HAVING COUNT(*) > 1
+  LOOP
+    -- First ID in array is the master (most complete record)
+    master_record := NULL;
+    SELECT * INTO master_record 
+    FROM customers_extended 
+    WHERE id = dup_record.customer_ids[1];
+    
+    IF master_record.id IS NULL THEN
+      CONTINUE;
+    END IF;
+    
+    merged_count := 0;
+    
+    -- Loop through duplicate IDs (skip first one as it's the master)
+    FOR i IN 2..array_length(dup_record.customer_ids, 1) LOOP
+      dup_id := dup_record.customer_ids[i];
+      
+      -- Update bookings to point to master
+      UPDATE bookings 
+      SET user_id = master_record.id 
+      WHERE user_id = dup_id;
+      
+      -- Update customer_documents if table exists
+      -- Handle unique constraint: (customer_id, document_type)
+      BEGIN
+        -- First, delete duplicate documents that would conflict with master's documents
+        DELETE FROM customer_documents
+        WHERE customer_id = dup_id
+        AND document_type IN (
+          SELECT document_type 
+          FROM customer_documents 
+          WHERE customer_id = master_record.id
+        );
+        
+        -- Now update remaining documents to point to master
+        UPDATE customer_documents 
+        SET customer_id = master_record.id 
+        WHERE customer_id = dup_id;
+      EXCEPTION WHEN undefined_table THEN
+        -- Table doesn't exist, skip
+        NULL;
+      END;
+      
+      -- Update customer_memberships if table exists
+      BEGIN
+        UPDATE customer_memberships 
+        SET client_id = master_record.id 
+        WHERE client_id = dup_id;
+      EXCEPTION WHEN undefined_table THEN
+        -- Table doesn't exist, skip
+        NULL;
+      END;
+      
+      -- Merge any missing data from duplicate to master
+      UPDATE customers_extended
+      SET
+        telefono = COALESCE(customers_extended.telefono, dup.telefono),
+        codice_fiscale = COALESCE(customers_extended.codice_fiscale, dup.codice_fiscale),
+        indirizzo = COALESCE(customers_extended.indirizzo, dup.indirizzo),
+        numero_civico = COALESCE(customers_extended.numero_civico, dup.numero_civico),
+        cap = COALESCE(customers_extended.cap, dup.cap),
+        citta = COALESCE(customers_extended.citta, dup.citta),
+        provincia = COALESCE(customers_extended.provincia, dup.provincia),
+        data_nascita = COALESCE(customers_extended.data_nascita, dup.data_nascita),
+        luogo_nascita = COALESCE(customers_extended.luogo_nascita, dup.luogo_nascita),
+        numero_patente = COALESCE(customers_extended.numero_patente, dup.numero_patente),
+        scadenza_patente = COALESCE(customers_extended.scadenza_patente, dup.scadenza_patente),
+        updated_at = NOW()
+      FROM (SELECT * FROM customers_extended WHERE id = dup_id) AS dup
+      WHERE customers_extended.id = master_record.id;
+      
+      -- Delete the duplicate record
+      DELETE FROM customers_extended WHERE id = dup_id;
+      
+      merged_count := merged_count + 1;
+      total_merged := total_merged + 1;
+    END LOOP;
+    
+    -- Return result for this merge
+    RETURN QUERY SELECT 
+      'MERGED'::TEXT,
+      dup_record.email,
+      master_record.id,
+      array_to_string(dup_record.customer_ids[2:array_length(dup_record.customer_ids, 1)], ', '),
+      format('Merged %s duplicate(s) into master record', merged_count);
+  END LOOP;
+  
+  -- Final summary
+  RETURN QUERY SELECT 
+    'SUMMARY'::TEXT,
+    NULL::TEXT,
+    NULL::UUID,
+    NULL::TEXT,
+    format('Total duplicates merged: %s', total_merged);
+    
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================
--- STEP 7: Delete duplicate records
+-- STEP 3: EXECUTE MERGE (UNCOMMENT TO RUN)
 -- ============================================
-DELETE FROM customers_extended
-WHERE id IN (SELECT duplicate_id FROM customer_merge_map);
+-- WARNING: This will permanently merge duplicate records
+-- Review the dry run output above before uncommenting
+
+SELECT * FROM merge_duplicate_customers();
 
 -- ============================================
--- STEP 8: Show results
+-- STEP 4: VERIFY RESULTS
 -- ============================================
-SELECT 
-  'Total duplicates merged' as result,
-  COUNT(*) as count
-FROM customer_merge_map;
+-- Run this after merge to confirm no duplicates remain
 
--- Clean up
-DROP TABLE customer_merge_map;
+-- SELECT 
+--   email,
+--   COUNT(*) as count
+-- FROM customers_extended
+-- WHERE email IS NOT NULL AND email != ''
+-- GROUP BY email
+-- HAVING COUNT(*) > 1;
 
-COMMIT;
-
--- ============================================
--- ✅ Smart duplicate merge complete!
--- Only merged REAL duplicates, excluded placeholder emails/phones
--- ============================================
+-- Should return 0 rows if merge was successful

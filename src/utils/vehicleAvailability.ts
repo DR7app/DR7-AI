@@ -289,6 +289,11 @@ export function isVehicleAvailable(
         return matchVehicleByPlate(booking, vehicle)
     })
 
+    console.log(`[isVehicleAvailable] Checking ${vehicle.display_name} (${vehicle.plate || vehicle.targa})`)
+    console.log(`[isVehicleAvailable] Request: ${pickupDate} ${pickupTime} → ${returnDate} ${returnTime}`)
+    console.log(`[isVehicleAvailable] ExcludeBookingId: ${excludeBookingId || 'NONE'}`)
+    console.log(`[isVehicleAvailable] Found ${vehicleBookings.length} conflicting bookings for this vehicle`)
+
     for (const booking of vehicleBookings) {
         const bookingStart = new Date(booking.pickup_date)
         const bookingEnd = new Date(booking.dropoff_date)
@@ -296,8 +301,17 @@ export function isVehicleAvailable(
         // Add buffer to booking end time
         const bookingEndWithBuffer = new Date(bookingEnd.getTime() + BUFFER_MINUTES * 60 * 1000)
 
+        console.log(`[isVehicleAvailable] Checking booking ${booking.id}:`)
+        console.log(`  - Booking period: ${bookingStart.toISOString()} → ${bookingEnd.toISOString()}`)
+        console.log(`  - With buffer: → ${bookingEndWithBuffer.toISOString()}`)
+        console.log(`  - Request start: ${requestStart.toISOString()}`)
+        console.log(`  - Request end: ${requestEnd.toISOString()}`)
+        console.log(`  - requestStart < bookingEndWithBuffer: ${requestStart < bookingEndWithBuffer}`)
+        console.log(`  - requestEnd > bookingStart: ${requestEnd > bookingStart}`)
+
         // Check for overlap: (requestStart < bookingEndWithBuffer) && (requestEnd > bookingStart)
         if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
+            console.error(`[isVehicleAvailable] ❌ CONFLICT DETECTED with booking ${booking.id}`)
             const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
 
             return {
@@ -305,9 +319,12 @@ export function isVehicleAvailable(
                 reason: `Vehicle is booked until ${bookingEnd.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}. Earliest available: ${earliestTime ? earliestTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'not today'}`,
                 earliestTime: earliestTime || undefined
             }
+        } else {
+            console.log(`[isVehicleAvailable] ✓ No conflict with booking ${booking.id}`)
         }
     }
 
+    console.log(`[isVehicleAvailable] ✅ Vehicle ${vehicle.display_name} is AVAILABLE`)
     return { available: true }
 }
 

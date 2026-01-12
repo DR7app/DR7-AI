@@ -1651,40 +1651,90 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const pickupDate = booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date) : null
     const dropoffDate = booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date) : null
 
-    // Find vehicle - Priority: ID -> Plate -> Name
-    console.log('[handleEditBooking] 🔍 Searching for vehicle:', {
-      booking_vehicle_id: booking.vehicle_id,
-      booking_vehicle_plate: booking.vehicle_plate,
-      booking_vehicle_name: booking.vehicle_name,
-      total_vehicles: vehicles.length
+    // COMPREHENSIVE VEHICLE MATCHING LOGIC
+    console.log('[handleEditBooking] 🔍 VEHICLE SEARCH INITIATED')
+    console.log('[handleEditBooking] Booking data:', {
+      id: booking.id,
+      vehicle_id: booking.vehicle_id,
+      vehicle_plate: booking.vehicle_plate,
+      vehicle_name: booking.vehicle_name,
+      booking_details_vehicle_id: booking.booking_details?.vehicle_id,
+      booking_details_vehicle_name: booking.booking_details?.vehicle_name,
+      booking_details_vehicle_plate: booking.booking_details?.vehicle_plate
     })
+    console.log('[handleEditBooking] Available vehicles:', vehicles.length)
+    console.log('[handleEditBooking] Vehicles list:', vehicles.map(v => ({
+      id: v.id,
+      name: v.display_name,
+      plate: v.plate || v.targa
+    })))
 
-    let vehicle = vehicles.find(v => v.id === booking.vehicle_id)
-    if (vehicle) {
-      console.log('[handleEditBooking] ✅ Found vehicle by ID:', vehicle.display_name)
+    let vehicle: Vehicle | undefined = undefined
+    let matchMethod = 'NONE'
+
+    // Method 1: Match by vehicle_id (top-level)
+    if (!vehicle && booking.vehicle_id) {
+      vehicle = vehicles.find(v => v.id === booking.vehicle_id)
+      if (vehicle) {
+        matchMethod = 'vehicle_id (top-level)'
+        console.log('[handleEditBooking] ✅ Found by vehicle_id:', vehicle.display_name)
+      }
     }
 
-    // If not found by ID, try matching by plate (if available) - Critical for handling duplicate car names with different plates
+    // Method 2: Match by booking_details.vehicle_id
+    if (!vehicle && booking.booking_details?.vehicle_id) {
+      vehicle = vehicles.find(v => v.id === (booking.booking_details?.vehicle_id || ''))
+      if (vehicle) {
+        matchMethod = 'booking_details.vehicle_id'
+        console.log('[handleEditBooking] ✅ Found by booking_details.vehicle_id:', vehicle.display_name)
+      }
+    }
+
+    // Method 3: Match by plate (top-level)
     if (!vehicle && booking.vehicle_plate) {
+      const bPlate = normalizePlate(booking.vehicle_plate)
       vehicle = vehicles.find(v => {
         const vPlate = normalizePlate(v.plate || v.targa || '')
-        const bPlate = normalizePlate(booking.vehicle_plate || '')
         return vPlate && bPlate && vPlate === bPlate
       })
       if (vehicle) {
-        console.log('[handleEditBooking] ✅ Found vehicle by plate:', vehicle.display_name)
+        matchMethod = 'vehicle_plate (top-level)'
+        console.log('[handleEditBooking] ✅ Found by plate:', vehicle.display_name)
       }
     }
 
-    // Fallback to name match
-    if (!vehicle) {
+    // Method 4: Match by booking_details.vehicle_plate
+    if (!vehicle && booking.booking_details?.vehicle_plate) {
+      const bPlate = normalizePlate(booking.booking_details.vehicle_plate)
+      vehicle = vehicles.find(v => {
+        const vPlate = normalizePlate(v.plate || v.targa || '')
+        return vPlate && bPlate && vPlate === bPlate
+      })
+      if (vehicle) {
+        matchMethod = 'booking_details.vehicle_plate'
+        console.log('[handleEditBooking] ✅ Found by booking_details.vehicle_plate:', vehicle.display_name)
+      }
+    }
+
+    // Method 5: Exact name match (top-level)
+    if (!vehicle && booking.vehicle_name) {
       vehicle = vehicles.find(v => v.display_name === booking.vehicle_name)
       if (vehicle) {
-        console.log('[handleEditBooking] ✅ Found vehicle by name:', vehicle.display_name)
+        matchMethod = 'vehicle_name (exact)'
+        console.log('[handleEditBooking] ✅ Found by exact name:', vehicle.display_name)
       }
     }
 
-    // CRITICAL FIX: If still not found, try partial name matching (case-insensitive)
+    // Method 6: Exact name match (booking_details)
+    if (!vehicle && booking.booking_details?.vehicle_name) {
+      vehicle = vehicles.find(v => v.display_name === (booking.booking_details?.vehicle_name || ''))
+      if (vehicle) {
+        matchMethod = 'booking_details.vehicle_name (exact)'
+        console.log('[handleEditBooking] ✅ Found by booking_details.vehicle_name:', vehicle.display_name)
+      }
+    }
+
+    // Method 7: Partial name match (top-level)
     if (!vehicle && booking.vehicle_name) {
       const bookingNameLower = booking.vehicle_name.toLowerCase().trim()
       vehicle = vehicles.find(v => {
@@ -1692,32 +1742,52 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return vNameLower.includes(bookingNameLower) || bookingNameLower.includes(vNameLower)
       })
       if (vehicle) {
-        console.log('[handleEditBooking] ✅ Found vehicle by partial name match:', vehicle.display_name)
+        matchMethod = 'vehicle_name (partial)'
+        console.log('[handleEditBooking] ✅ Found by partial name match:', vehicle.display_name)
       }
     }
 
-    // CRITICAL FIX: If STILL not found, try matching from booking_details
-    if (!vehicle && booking.booking_details?.vehicle_id) {
-      vehicle = vehicles.find(v => v.id === booking.booking_details?.vehicle_id)
+    // Method 8: Partial name match (booking_details)
+    if (!vehicle && booking.booking_details?.vehicle_name) {
+      const bookingNameLower = (booking.booking_details?.vehicle_name || '').toLowerCase().trim()
+      vehicle = vehicles.find(v => {
+        const vNameLower = v.display_name.toLowerCase().trim()
+        return vNameLower.includes(bookingNameLower) || bookingNameLower.includes(vNameLower)
+      })
       if (vehicle) {
-        console.log('[handleEditBooking] ✅ Found vehicle by booking_details.vehicle_id:', vehicle.display_name)
+        matchMethod = 'booking_details.vehicle_name (partial)'
+        console.log('[handleEditBooking] ✅ Found by booking_details partial name:', vehicle.display_name)
       }
     }
 
+    // FINAL RESULT
     if (!vehicle) {
-      console.error('[handleEditBooking] ❌ VEHICLE NOT FOUND! Booking data:', {
-        id: booking.id,
+      console.error('[handleEditBooking] ❌ WARNING: VEHICLE NOT FOUND AFTER ALL METHODS!')
+      console.error('[handleEditBooking] Booking will open with vehicle_id preserved, but vehicle may not be in dropdown.')
+      console.warn('[handleEditBooking] Vehicle data from booking:', {
         vehicle_id: booking.vehicle_id,
         vehicle_plate: booking.vehicle_plate,
         vehicle_name: booking.vehicle_name,
         booking_details_vehicle_id: booking.booking_details?.vehicle_id
       })
-      console.error('[handleEditBooking] Available vehicles:', vehicles.map(v => ({
-        id: v.id,
-        name: v.display_name,
-        plate: v.plate || v.targa
-      })))
+
+      // Show warning but allow editing
+      alert(
+        '⚠️ ATTENZIONE\n\n' +
+        'Il veicolo associato a questa prenotazione non è stato trovato nella lista veicoli corrente.\n\n' +
+        'Possibili cause:\n' +
+        '• Il veicolo è stato ritirato o rimosso\n' +
+        '• Problema di sincronizzazione dati\n\n' +
+        'Dati veicolo nella prenotazione:\n' +
+        `• ID: ${booking.vehicle_id || 'N/A'}\n` +
+        `• Targa: ${booking.vehicle_plate || 'N/A'}\n` +
+        `• Nome: ${booking.vehicle_name || 'N/A'}\n\n` +
+        'Puoi comunque modificare la prenotazione selezionando un nuovo veicolo.'
+      )
+    } else {
+      console.log(`[handleEditBooking] ✅ VEHICLE MATCHED: ${vehicle.display_name} (via ${matchMethod})`)
     }
+
 
     // Extract location codes from booking_details
     const pickupLoc = booking.booking_details?.pickupLocation || 'dr7_office'

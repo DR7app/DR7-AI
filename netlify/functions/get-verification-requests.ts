@@ -36,22 +36,42 @@ export const handler: Handler = async (event) => {
         const { data: users, error: usersError } = await supabase
             .from('customers_extended')
             .select(`
-                id, 
+                id,
+                user_id,
+                tipo_cliente,
                 nome, 
-                cognome, 
+                cognome,
+                sesso,
                 email, 
                 telefono,
                 codice_fiscale,
                 data_nascita,
                 luogo_nascita,
-                indirizzo_residenza,
+                indirizzo,
+                numero_civico,
                 citta_residenza,
-                cap_residenza,
-                provincia_residenza,
-                tipo_cliente,
-                created_at
+                provincia,
+                cap,
+                nazione,
+                numero_patente,
+                categoria_patente,
+                ente_rilascio,
+                data_rilascio,
+                data_scadenza,
+                ragione_sociale,
+                denominazione,
+                partita_iva,
+                codice_destinatario,
+                pec,
+                codice_ipa,
+                codice_univoco,
+                rappresentante_legale,
+                metadata,
+                source,
+                created_at,
+                updated_at
             `)
-            .in('id', userIds)
+            .in('user_id', userIds)
 
         if (usersError) console.error('Error fetching users:', usersError)
 
@@ -145,16 +165,35 @@ export const handler: Handler = async (event) => {
                     full_name: fullName,
                     email: user?.email || doc.user_email || 'Email non disponibile',
                     telefono: user?.telefono,
+                    sesso: user?.sesso,
                     codice_fiscale: user?.codice_fiscale,
                     data_nascita: user?.data_nascita,
                     luogo_nascita: user?.luogo_nascita,
-                    indirizzo_residenza: user?.indirizzo_residenza,
+                    indirizzo: user?.indirizzo,
+                    numero_civico: user?.numero_civico,
                     citta_residenza: user?.citta_residenza,
-                    cap_residenza: user?.cap_residenza,
-                    provincia_residenza: user?.provincia_residenza,
+                    provincia: user?.provincia,
+                    cap: user?.cap,
+                    nazione: user?.nazione,
+                    numero_patente: user?.numero_patente,
+                    categoria_patente: user?.categoria_patente,
+                    ente_rilascio: user?.ente_rilascio,
+                    data_rilascio: user?.data_rilascio,
+                    data_scadenza: user?.data_scadenza,
+                    ragione_sociale: user?.ragione_sociale,
+                    denominazione: user?.denominazione,
+                    partita_iva: user?.partita_iva,
+                    codice_destinatario: user?.codice_destinatario,
+                    pec: user?.pec,
+                    codice_ipa: user?.codice_ipa,
+                    codice_univoco: user?.codice_univoco,
+                    rappresentante_legale: user?.rappresentante_legale,
+                    metadata: user?.metadata,
                     tipo_cliente: user?.tipo_cliente,
+                    source: user?.source,
                     is_new: user?.created_at ? (new Date().getTime() - new Date(user.created_at).getTime()) < (7 * 24 * 60 * 60 * 1000) : false,
-                    created_at: user?.created_at || doc.upload_date
+                    created_at: user?.created_at || doc.upload_date,
+                    updated_at: user?.updated_at
                 }
             }
         })

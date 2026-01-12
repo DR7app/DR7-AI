@@ -16,14 +16,33 @@ interface UserDocument {
     full_name: string
     email: string
     telefono?: string
+    sesso?: string
     codice_fiscale?: string
     data_nascita?: string
     luogo_nascita?: string
-    indirizzo_residenza?: string
+    indirizzo?: string
+    numero_civico?: string
     citta_residenza?: string
-    cap_residenza?: string
-    provincia_residenza?: string
+    provincia?: string
+    cap?: string
+    nazione?: string
+    numero_patente?: string
+    categoria_patente?: string
+    ente_rilascio?: string
+    data_rilascio?: string
+    data_scadenza?: string
+    ragione_sociale?: string
+    denominazione?: string
+    partita_iva?: string
+    codice_destinatario?: string
+    pec?: string
+    codice_ipa?: string
+    codice_univoco?: string
+    rappresentante_legale?: string
+    metadata?: any
     tipo_cliente?: string
+    source?: string
+    updated_at?: string
   }
 }
 
@@ -57,22 +76,136 @@ export default function DocumentsVerificationTab() {
     try {
       console.log('[DocumentsVerificationTab] Loading documents via Netlify function...')
 
-      const response = await fetch('/.netlify/functions/get-verification-requests')
-      if (!response.ok) throw new Error(`Function failed with status ${response.status}`)
+      let useClientFallback = false
 
-      const result = await response.json()
+      try {
+        const response = await fetch('/.netlify/functions/get-verification-requests')
 
-      if (result.success && result.documents) {
-        console.log('[DocumentsVerificationTab] Documents loaded:', result.documents.length)
-        setDocuments(result.documents)
-      } else {
-        console.error('[DocumentsVerificationTab] Error loading documents:', result.error)
-        throw new Error(result.error || 'Unknown error')
+        if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
+          const result = await response.json()
+
+          if (result.success && result.documents) {
+            console.log('[DocumentsVerificationTab] Documents loaded via Netlify function:', result.documents.length)
+            setDocuments(result.documents)
+            return
+          }
+        }
+
+        // If we get here, Netlify function didn't return valid data
+        useClientFallback = true
+      } catch (fetchError) {
+        // Netlify function not available or returned invalid response
+        console.log('[DocumentsVerificationTab] Netlify function error:', fetchError)
+        useClientFallback = true
       }
+
+      if (!useClientFallback) {
+        setDocuments([])
+        return
+      }
+
+      // Fallback: Netlify function not available (e.g., running with npm run dev)
+      // Fetch data directly from Supabase
+      console.log('[DocumentsVerificationTab] Using client-side fallback...')
+
+      // 1. Fetch all documents
+      const { data: docs, error: docsError } = await supabase
+        .from('user_documents')
+        .select('*')
+        .order('upload_date', { ascending: false })
+
+      if (docsError) throw docsError
+
+      if (!docs || docs.length === 0) {
+        console.log('[DocumentsVerificationTab] No documents found')
+        setDocuments([])
+        return
+      }
+
+      // 2. Fetch user details for all unique user_ids
+      const userIds = Array.from(new Set(docs.map(d => d.user_id)))
+
+      const { data: users, error: usersError } = await supabase
+        .from('customers_extended')
+        .select(`
+          id,
+          user_id,
+          tipo_cliente,
+          nome,
+          cognome,
+          email,
+          telefono,
+          codice_fiscale,
+          patente,
+          indirizzo,
+          nazione,
+          ragione_sociale,
+          partita_iva,
+          codice_destinatario,
+          pec,
+          denominazione,
+          codice_ipa,
+          codice_univoco,
+          source,
+          created_at,
+          updated_at
+        `)
+        .in('user_id', userIds)
+
+      if (usersError) console.error('Error fetching users:', usersError)
+
+      const userMap = new Map()
+      if (users) {
+        users.forEach(u => userMap.set(u.user_id, u))
+      }
+
+      // 3. Merge data
+      const enrichedDocuments = docs.map(doc => {
+        const user = userMap.get(doc.user_id)
+
+        // Determine the best display name
+        let fullName = 'Utente sconosciuto'
+        if (user) {
+          if (user.nome || user.cognome) {
+            fullName = `${user.nome || ''} ${user.cognome || ''}`.trim()
+          } else if (user.email) {
+            fullName = user.email.split('@')[0]
+          }
+        }
+
+        return {
+          ...doc,
+          user: {
+            id: doc.user_id,
+            full_name: fullName,
+            email: user?.email || 'Email non disponibile',
+            telefono: user?.telefono,
+            codice_fiscale: user?.codice_fiscale,
+            patente: user?.patente,
+            indirizzo: user?.indirizzo,
+            nazione: user?.nazione,
+            ragione_sociale: user?.ragione_sociale,
+            denominazione: user?.denominazione,
+            partita_iva: user?.partita_iva,
+            codice_destinatario: user?.codice_destinatario,
+            pec: user?.pec,
+            codice_ipa: user?.codice_ipa,
+            codice_univoco: user?.codice_univoco,
+            tipo_cliente: user?.tipo_cliente,
+            source: user?.source,
+            is_new: user?.created_at ? (new Date().getTime() - new Date(user.created_at).getTime()) < (7 * 24 * 60 * 60 * 1000) : false,
+            created_at: user?.created_at || doc.upload_date,
+            updated_at: user?.updated_at
+          }
+        }
+      })
+
+      console.log('[DocumentsVerificationTab] Documents loaded via client-side fallback:', enrichedDocuments.length)
+      setDocuments(enrichedDocuments)
+
     } catch (error) {
       console.error('Failed to load documents:', error)
-      // Fallback: try client side if function fails (though unlikely)
-      // We skip fallback to avoid confusion if RLS is the issue
+      setDocuments([])
     } finally {
       setLoading(false)
     }
@@ -294,66 +427,217 @@ export default function DocumentsVerificationTab() {
           return (
             <div key={userId} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
               {/* User Header */}
-              <div className="bg-theme-bg-tertiary p-4 border-b border-theme-border">
-                <div className="flex flex-col lg:flex-row lg:justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-xl font-bold text-theme-text-primary">{user?.full_name || 'Nome non disponibile'}</h3>
+              <div className="bg-theme-bg-tertiary p-6 border-b border-theme-border">
+                <div className="flex flex-col lg:flex-row lg:justify-between gap-6">
+                  <div className="flex-1 space-y-4">
+                    {/* Header with Name and Badges */}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h3 className="text-2xl font-bold text-theme-text-primary">{user?.full_name || 'Nome non disponibile'}</h3>
                       {(user as any)?.is_new && (
-                        <span className="px-2 py-1 text-xs font-bold bg-green-600 text-theme-text-primary rounded">
-                          NUOVO CLIENTE
+                        <span className="px-3 py-1 text-xs font-bold bg-green-600 text-white rounded-full shadow-lg">
+                          🆕 NUOVO CLIENTE
+                        </span>
+                      )}
+                      {user?.tipo_cliente && (
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${user.tipo_cliente === 'persona_fisica' ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30' :
+                          user.tipo_cliente === 'azienda' ? 'bg-purple-600/20 text-purple-400 border border-purple-600/30' :
+                            'bg-orange-600/20 text-orange-400 border border-orange-600/30'
+                          }`}>
+                          {user.tipo_cliente === 'persona_fisica' ? '👤 Persona Fisica' :
+                            user.tipo_cliente === 'azienda' ? '🏢 Azienda' :
+                              '🏛️ Pubblica Amministrazione'}
+                        </span>
+                      )}
+                      {user?.source && (
+                        <span className="px-2 py-1 text-xs bg-gray-700/50 text-gray-400 rounded border border-gray-600/30" title={`Fonte: ${user.source}`}>
+                          {user.source === 'website' ? '🌐 Web' :
+                            user.source === 'website_registration' ? '🌐 Web (Auth)' :
+                              user.source === 'booking_auto_created' ? '📅 Auto' :
+                                user.source === 'admin' ? '⚙️ Admin' : user.source}
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+
+                    {/* Personal Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <span className="text-theme-text-muted">Email:</span>
-                        <span className="text-theme-text-primary">{user?.email || 'Non disponibile'}</span>
+                        <span className="text-theme-text-muted">📧 Email:</span>
+                        <span className="text-theme-text-primary font-medium">{user?.email || 'Non disponibile'}</span>
                       </div>
                       {user?.telefono && (
                         <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">Telefono:</span>
-                          <span className="text-theme-text-primary">{user.telefono}</span>
+                          <span className="text-theme-text-muted">📞 Telefono:</span>
+                          <span className="text-theme-text-primary font-medium">{user.telefono}</span>
+                        </div>
+                      )}
+                      {user?.pec && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-text-muted">📨 PEC:</span>
+                          <span className="text-theme-text-primary font-medium">{user.pec}</span>
+                        </div>
+                      )}
+                      {user?.sesso && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-text-muted">Sesso:</span>
+                          <span className="text-theme-text-primary">{user.sesso === 'M' ? 'Maschile' : user.sesso === 'F' ? 'Femminile' : user.sesso}</span>
                         </div>
                       )}
                       {user?.codice_fiscale && (
                         <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">Codice Fiscale:</span>
-                          <span className="text-theme-text-primary font-mono">{user.codice_fiscale}</span>
+                          <span className="text-theme-text-muted">🆔 Codice Fiscale:</span>
+                          <span className="text-theme-text-primary font-mono font-bold">{user.codice_fiscale.toUpperCase()}</span>
                         </div>
                       )}
                       {user?.data_nascita && (
                         <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">Nato il:</span>
+                          <span className="text-theme-text-muted">🎂 Nato il:</span>
                           <span className="text-theme-text-primary">
                             {new Date(user.data_nascita).toLocaleDateString('it-IT')}
                             {user.luogo_nascita && ` a ${user.luogo_nascita}`}
                           </span>
                         </div>
                       )}
-                      {user?.indirizzo_residenza && (
-                        <div className="flex items-center gap-2 md:col-span-2">
-                          <span className="text-theme-text-muted">Residenza:</span>
+                    </div>
+
+                    {/* Address Information */}
+                    {(user?.indirizzo || user?.citta_residenza) && (
+                      <div className="pt-2 border-t border-theme-border/30">
+                        <div className="flex items-start gap-2 text-sm">
+                          <span className="text-theme-text-muted">🏠 Indirizzo:</span>
                           <span className="text-theme-text-primary">
-                            {user.indirizzo_residenza}
-                            {user.citta_residenza && `, ${user.citta_residenza}`}
-                            {user.cap_residenza && ` ${user.cap_residenza}`}
-                            {user.provincia_residenza && ` (${user.provincia_residenza})`}
+                            {user.indirizzo}
+                            {user.numero_civico && `, ${user.numero_civico}`}
+                            {user.citta_residenza && ` - ${user.citta_residenza}`}
+                            {user.cap && ` ${user.cap}`}
+                            {user.provincia && ` (${user.provincia})`}
+                            {user.nazione && user.nazione !== 'Italia' && ` - ${user.nazione}`}
                           </span>
                         </div>
-                      )}
-                      {(user as any)?.created_at && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">Registrato:</span>
-                          <span className="text-theme-text-primary">{new Date((user as any).created_at).toLocaleDateString('it-IT')}</span>
+                      </div>
+                    )}
+
+                    {/* Driver's License Information */}
+                    {user?.numero_patente && (
+                      <div className="pt-2 border-t border-theme-border/30">
+                        <div className="text-sm font-semibold text-dr7-gold mb-2">🪪 Patente di Guida</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="text-theme-text-muted">Numero:</span>
+                            <span className="text-theme-text-primary font-mono font-bold">{user.numero_patente}</span>
+                          </div>
+                          {user.categoria_patente && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Categoria:</span>
+                              <span className="text-theme-text-primary font-bold">{user.categoria_patente}</span>
+                            </div>
+                          )}
+                          {user.ente_rilascio && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Ente Rilascio:</span>
+                              <span className="text-theme-text-primary">{user.ente_rilascio}</span>
+                            </div>
+                          )}
+                          {user.data_rilascio && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Rilasciata il:</span>
+                              <span className="text-theme-text-primary">{new Date(user.data_rilascio).toLocaleDateString('it-IT')}</span>
+                            </div>
+                          )}
+                          {user.data_scadenza && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Scadenza:</span>
+                              <span className={`font-medium ${new Date(user.data_scadenza) < new Date() ? 'text-red-400' :
+                                new Date(user.data_scadenza) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) ? 'text-yellow-400' :
+                                  'text-theme-text-primary'
+                                }`}>
+                                {new Date(user.data_scadenza).toLocaleDateString('it-IT')}
+                                {new Date(user.data_scadenza) < new Date() && ' ⚠️ SCADUTA'}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
+                    )}
+
+                    {/* Company Information (Azienda) */}
+                    {user?.tipo_cliente === 'azienda' && (user?.ragione_sociale || user?.denominazione || user?.partita_iva) && (
+                      <div className="pt-2 border-t border-theme-border/30">
+                        <div className="text-sm font-semibold text-purple-400 mb-2">🏢 Informazioni Azienda</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                          {(user.ragione_sociale || user.denominazione) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Ragione Sociale:</span>
+                              <span className="text-theme-text-primary font-bold">{user.ragione_sociale || user.denominazione}</span>
+                            </div>
+                          )}
+                          {user.partita_iva && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Partita IVA:</span>
+                              <span className="text-theme-text-primary font-mono font-bold">{user.partita_iva}</span>
+                            </div>
+                          )}
+                          {user.rappresentante_legale && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Rappresentante:</span>
+                              <span className="text-theme-text-primary">{user.rappresentante_legale}</span>
+                            </div>
+                          )}
+                          {user.codice_destinatario && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Codice Destinatario:</span>
+                              <span className="text-theme-text-primary font-mono">{user.codice_destinatario}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Public Administration Information */}
+                    {user?.tipo_cliente === 'pubblica_amministrazione' && (user?.denominazione || user?.codice_ipa || user?.codice_univoco) && (
+                      <div className="pt-2 border-t border-theme-border/30">
+                        <div className="text-sm font-semibold text-orange-400 mb-2">🏛️ Pubblica Amministrazione</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                          {user.denominazione && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Denominazione:</span>
+                              <span className="text-theme-text-primary font-bold">{user.denominazione}</span>
+                            </div>
+                          )}
+                          {user.codice_ipa && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Codice IPA:</span>
+                              <span className="text-theme-text-primary font-mono font-bold">{user.codice_ipa}</span>
+                            </div>
+                          )}
+                          {user.codice_univoco && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Codice Univoco:</span>
+                              <span className="text-theme-text-primary font-mono font-bold">{user.codice_univoco}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Registration Metadata */}
+                    <div className="pt-2 border-t border-theme-border/30">
+                      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
+                        {(user as any)?.created_at && (
+                          <span>📅 Registrato: {new Date((user as any).created_at).toLocaleDateString('it-IT')} alle {new Date((user as any).created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
+                        )}
+                        {user?.updated_at && (
+                          <span>🔄 Aggiornato: {new Date(user.updated_at).toLocaleDateString('it-IT')}</span>
+                        )}
+                        <span>🆔 ID: {userId.slice(0, 8)}...</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end justify-between">
-                    <div className="text-right mb-2">
-                      <p className="text-sm text-theme-text-muted">Documenti: {userDocs.length}</p>
-                      <p className="text-xs text-gray-500">ID: {userId.slice(0, 8)}...</p>
+
+                  {/* Right Side - Document Count */}
+                  <div className="flex flex-col items-end justify-start">
+                    <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-4 text-center min-w-[120px]">
+                      <div className="text-3xl font-bold text-dr7-gold">{userDocs.length}</div>
+                      <div className="text-xs text-theme-text-muted mt-1">Documenti</div>
                     </div>
                   </div>
                 </div>
