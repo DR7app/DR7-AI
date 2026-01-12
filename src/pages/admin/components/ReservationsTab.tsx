@@ -1855,25 +1855,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // CRITICAL FIX: Preserve original vehicle_id even if vehicle not found in current vehicles array
       // This handles cases where vehicle might be retired or temporarily unavailable
       vehicle_id: vehicle?.id || booking.vehicle_id || booking.booking_details?.vehicle_id || '',
-      // CRITICAL: Convert UTC times from database to Europe/Rome timezone
-      // Database stores in UTC, we need to add the Rome timezone offset to get local time
-      // Create a date in Rome timezone to get the correct offset
-      pickup_date: pickupDate ? (() => {
-        const romeDate = new Date(pickupDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
-        return romeDate.toISOString().split('T')[0]
-      })() : '',
-      pickup_time: pickupDate ? (() => {
-        const romeDate = new Date(pickupDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
-        return romeDate.toTimeString().substring(0, 5)
-      })() : '',
-      return_date: dropoffDate ? (() => {
-        const romeDate = new Date(dropoffDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
-        return romeDate.toISOString().split('T')[0]
-      })() : '',
-      return_time: dropoffDate ? (() => {
-        const romeDate = new Date(dropoffDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
-        return romeDate.toTimeString().substring(0, 5)
-      })() : '',
+      // CRITICAL: The database stores times in UTC, but we display them as-is without conversion
+      // The times in the database already represent Rome time (stored as UTC timestamps)
+      // We just extract the date/time components directly from the UTC values
+      pickup_date: pickupDate ? pickupDate.toISOString().split('T')[0] : '',
+      pickup_time: pickupDate ? pickupDate.toISOString().split('T')[1].substring(0, 5) : '',
+      return_date: dropoffDate ? dropoffDate.toISOString().split('T')[0] : '',
+      return_time: dropoffDate ? dropoffDate.toISOString().split('T')[1].substring(0, 5) : '',
       pickup_location: pickupLoc,
       dropoff_location: dropoffLoc,
       status: booking.status,
