@@ -1835,12 +1835,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // CRITICAL FIX: Preserve original vehicle_id even if vehicle not found in current vehicles array
       // This handles cases where vehicle might be retired or temporarily unavailable
       vehicle_id: vehicle?.id || booking.vehicle_id || booking.booking_details?.vehicle_id || '',
-      // CRITICAL: Extract date/time in Europe/Rome timezone, not UTC or browser local
-      // The database stores times in UTC, but we need to display them in Rome time
-      pickup_date: pickupDate ? pickupDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) : '',
-      pickup_time: pickupDate ? pickupDate.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }) : '',
-      return_date: dropoffDate ? dropoffDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) : '',
-      return_time: dropoffDate ? dropoffDate.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }) : '',
+      // CRITICAL: Convert UTC times from database to Europe/Rome timezone for display
+      // Use Intl.DateTimeFormat to properly handle timezone conversion
+      pickup_date: pickupDate ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(pickupDate) : '',
+      pickup_time: pickupDate ? new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }).format(pickupDate) : '',
+      return_date: dropoffDate ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(dropoffDate) : '',
+      return_time: dropoffDate ? new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }).format(dropoffDate) : '',
       pickup_location: pickupLoc,
       dropoff_location: dropoffLoc,
       status: booking.status,
