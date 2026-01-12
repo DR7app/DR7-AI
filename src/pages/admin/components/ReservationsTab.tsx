@@ -723,26 +723,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     let result = [...baseVehiclesForDropdown]
 
     // ALWAYS add vehicles with same-day availability (even if no time selected yet)
-    // This ensures users see all potentially available vehicles with their availability times
-    if (formData.pickup_date && vehicleEarliestTimes.size > 0) {
+    // Find vehicles that have bookings ending on the selected pickup date
+    if (formData.pickup_date) {
       const pickupDateStr = formData.pickup_date
-      const sameDayVehicles = Array.from(vehicleEarliestTimes.entries())
-        .filter(([_, earliestTime]) => {
-          const earliestDateStr = earliestTime.toISOString().split('T')[0]
-          return earliestDateStr === pickupDateStr
+
+      // Find all vehicles that have bookings ending on this date
+      const sameDayVehicles = vehicles.filter(vehicle => {
+        // Skip if already in result
+        if (result.some(v => v.id === vehicle.id)) return false
+
+        // Find bookings for this vehicle ending on pickup date
+        const allBookings = [...bookings, ...carWashBookings].filter(booking => {
+          if (editingId && booking.id === editingId) return false
+          if (!isBookingForVehicle(booking, vehicle)) return false
+          if (booking.status === 'cancelled') return false
+
+          const bookingEndDate = new Date(booking.dropoff_date).toISOString().split('T')[0]
+          return bookingEndDate === pickupDateStr
         })
-        .map(([vehicleId]) => vehicles.find(v => v.id === vehicleId))
-        .filter((v): v is Vehicle => v !== undefined)
 
-      // Combine and remove duplicates
-      const combined = new Set([...result, ...sameDayVehicles])
-      result = Array.from(combined)
+        return allBookings.length > 0
+      })
 
+      result = [...result, ...sameDayVehicles]
       console.log('[Vehicle Dropdown] Total vehicles shown:', result.length, '(including', sameDayVehicles.length, 'same-day returns)')
     }
 
     return result
-  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes])
+  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, bookings, carWashBookings, editingId])
 
   // Generate valid time slots and auto-fill earliest pickup time when vehicle/dates change
   useEffect(() => {
