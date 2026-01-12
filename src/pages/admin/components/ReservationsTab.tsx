@@ -1855,13 +1855,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // CRITICAL FIX: Preserve original vehicle_id even if vehicle not found in current vehicles array
       // This handles cases where vehicle might be retired or temporarily unavailable
       vehicle_id: vehicle?.id || booking.vehicle_id || booking.booking_details?.vehicle_id || '',
-      // CRITICAL: The database stores times in UTC, but we display them as-is without conversion
-      // The times in the database already represent Rome time (stored as UTC timestamps)
-      // We just extract the date/time components directly from the UTC values
-      pickup_date: pickupDate ? pickupDate.toISOString().split('T')[0] : '',
-      pickup_time: pickupDate ? pickupDate.toISOString().split('T')[1].substring(0, 5) : '',
-      return_date: dropoffDate ? dropoffDate.toISOString().split('T')[0] : '',
-      return_time: dropoffDate ? dropoffDate.toISOString().split('T')[1].substring(0, 5) : '',
+      // CRITICAL: Convert UTC times from database to Rome local time for display
+      // Database stores UTC, we need to add Rome offset (+1 in winter, +2 in summer)
+      pickup_date: pickupDate ? (() => {
+        // Get Rome time by adding the offset
+        const romeTime = new Date(pickupDate.getTime() + (pickupDate.getTimezoneOffset() * 60000) + (60 * 60000)); // Add 1 hour for Rome winter time
+        return romeTime.toISOString().split('T')[0];
+      })() : '',
+      pickup_time: pickupDate ? (() => {
+        const romeTime = new Date(pickupDate.getTime() + (pickupDate.getTimezoneOffset() * 60000) + (60 * 60000));
+        return romeTime.toISOString().split('T')[1].substring(0, 5);
+      })() : '',
+      return_date: dropoffDate ? (() => {
+        const romeTime = new Date(dropoffDate.getTime() + (dropoffDate.getTimezoneOffset() * 60000) + (60 * 60000));
+        return romeTime.toISOString().split('T')[0];
+      })() : '',
+      return_time: dropoffDate ? (() => {
+        const romeTime = new Date(dropoffDate.getTime() + (dropoffDate.getTimezoneOffset() * 60000) + (60 * 60000));
+        return romeTime.toISOString().split('T')[1].substring(0, 5);
+      })() : '',
       pickup_location: pickupLoc,
       dropoff_location: dropoffLoc,
       status: booking.status,
