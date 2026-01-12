@@ -1141,9 +1141,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   async function handleCancelBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
-    // Add a small delay to ensure the confirmation dialog displays properly
+    // Add a delay to ensure the confirmation dialog displays properly
     // This prevents the browser from dismissing it too quickly
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise(resolve => setTimeout(resolve, 500))
 
     if (!confirm('Sei sicuro di voler cancellare questa prenotazione?')) {
       return
