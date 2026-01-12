@@ -640,6 +640,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return filteredVehicles
   }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
 
+  // CRITICAL FIX: When editing, ensure the currently selected vehicle is always in the dropdown
+  // even if it's not in availableVehicles (e.g., retired or unavailable)
+  const vehiclesForDropdown = useMemo((): Vehicle[] => {
+    if (!editingId || !formData.vehicle_id) {
+      // Not editing or no vehicle selected - just use availableVehicles
+      return availableVehicles
+    }
+
+    // Check if selected vehicle is already in availableVehicles
+    const isSelectedInAvailable = availableVehicles.some(v => v.id === formData.vehicle_id)
+    if (isSelectedInAvailable) {
+      return availableVehicles
+    }
+
+    // Selected vehicle is NOT in availableVehicles - find it in full vehicles list and add it
+    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+    if (selectedVehicle) {
+      console.log('[Vehicle Dropdown] Adding currently selected vehicle to dropdown:', selectedVehicle.display_name)
+      return [selectedVehicle, ...availableVehicles]
+    }
+
+    // Fallback - vehicle not found at all
+    console.warn('[Vehicle Dropdown] Selected vehicle not found in vehicles list:', formData.vehicle_id)
+    return availableVehicles
+  }, [availableVehicles, editingId, formData.vehicle_id, vehicles])
+
+
   // Calculate earliest available time for each vehicle based on existing bookings and automatic wash
   const vehicleEarliestTimes = useMemo(() => {
     // If no dates selected, return empty map
@@ -783,28 +810,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
       return
     }
-  
+   
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
     if (!selectedVehicle) return
-  
+   
     // Calculate number of rental days
     const pickupDate = new Date(formData.pickup_date)
     const returnDate = new Date(formData.return_date)
     const diffTime = Math.abs(returnDate.getTime() - pickupDate.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-  
+   
     if (diffDays <= 0) return
-  
+   
     // Check for special pricing rule (e.g. Massimo Runchina)
     const customerName = customers.find(c => c.id === formData.customer_id)?.full_name
     const specialRule = getSpecialPricing(customerName)
-  
+   
     if (specialRule) {
       console.log('[ReservationsTab] Applying special pricing for:', customerName)
-  
+   
       // Calculate special total
       const specialTotal = calculateSpecialPrice(specialRule, diffDays)
-  
+   
       setFormData(prev => ({
         ...prev,
         total_amount: specialTotal.toFixed(2),
@@ -813,23 +840,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // We can't easily set "unlimited KM" here as it might be a UI text, but we can store it in metadata if needed
         // For now, the price includes it.
       }))
-  
+   
       // Optional: Visual feedback could be added here or in the render
       return
     }
-  
+   
     // Standard Calculation
     // Get vehicle daily rate (convert from cents to euros)
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
-  
+   
     // Get Kasko daily cost
     const kaskoOptions = getInsuranceOptions(selectedVehicle)
     const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
     const kaskoDailyCost = selectedKasko?.pricePerDay || 0
-  
+   
     // Calculate total: (vehicle rate + kasko) * days
     const totalAmount = (vehicleDailyRate + kaskoDailyCost) * diffDays
-  
+   
     // Update form data with calculated total
     setFormData(prev => ({
       ...prev,
@@ -1671,7 +1698,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     // CRITICAL FIX: If STILL not found, try matching from booking_details
     if (!vehicle && booking.booking_details?.vehicle_id) {
-      vehicle = vehicles.find(v => v.id === booking.booking_details.vehicle_id)
+      vehicle = vehicles.find(v => v.id === booking.booking_details?.vehicle_id)
       if (vehicle) {
         console.log('[handleEditBooking] ✅ Found vehicle by booking_details.vehicle_id:', vehicle.display_name)
       }
@@ -1699,7 +1726,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setFormData({
       ...formData,
       customer_id: customerId,
-      vehicle_id: vehicle?.id || '',
+      // CRITICAL FIX: Preserve original vehicle_id even if vehicle not found in current vehicles array
+      // This handles cases where vehicle might be retired or temporarily unavailable
+      vehicle_id: vehicle?.id || booking.vehicle_id || booking.booking_details?.vehicle_id || '',
       pickup_date: pickupDate ? pickupDate.toISOString().split('T')[0] : '',
       pickup_time: pickupDate ? pickupDate.toTimeString().substring(0, 5) : '',
       return_date: dropoffDate ? dropoffDate.toISOString().split('T')[0] : '',
@@ -3182,7 +3211,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
                     options={[
                       { value: '', label: 'Seleziona veicolo...' },
-                      ...availableVehicles.map((v: Vehicle) => {
+                      ...vehiclesForDropdown.map((v: Vehicle) => {
                         let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
                         const earliestTime = vehicleEarliestTimes.get(v.id)
                         if (earliestTime) {
