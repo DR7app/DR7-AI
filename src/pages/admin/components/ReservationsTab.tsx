@@ -667,12 +667,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const bookingEnd = new Date(booking.dropoff_date)
 
         // Check if this booking conflicts with our requested period
+        // This correctly handles:
+        // 1. Same-day returns (bookingEnd on pickup date)
+        // 2. Multi-day bookings that span the pickup date
+        // 3. Bookings that end before pickup date (no overlap = no conflict)
         const hasOverlap = (pickupDateTime < bookingEnd && returnDateTime > bookingStart)
 
-        // Also check if booking ends AFTER our requested pickup (blocks our pickup)
-        const blocksPickup = bookingEnd > pickupDateTime
-
-        if (hasOverlap || blocksPickup) {
+        if (hasOverlap) {
           if (!latestConflictEnd || bookingEnd > latestConflictEnd) {
             latestConflictEnd = bookingEnd
           }
@@ -1624,7 +1625,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const dropoffDate = booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date) : null
 
     // Find vehicle - Priority: ID -> Plate -> Name
+    console.log('[handleEditBooking] 🔍 Searching for vehicle:', {
+      booking_vehicle_id: booking.vehicle_id,
+      booking_vehicle_plate: booking.vehicle_plate,
+      booking_vehicle_name: booking.vehicle_name,
+      total_vehicles: vehicles.length
+    })
+
     let vehicle = vehicles.find(v => v.id === booking.vehicle_id)
+    if (vehicle) {
+      console.log('[handleEditBooking] ✅ Found vehicle by ID:', vehicle.display_name)
+    }
 
     // If not found by ID, try matching by plate (if available) - Critical for handling duplicate car names with different plates
     if (!vehicle && booking.vehicle_plate) {
@@ -1633,11 +1644,52 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const bPlate = normalizePlate(booking.vehicle_plate || '')
         return vPlate && bPlate && vPlate === bPlate
       })
+      if (vehicle) {
+        console.log('[handleEditBooking] ✅ Found vehicle by plate:', vehicle.display_name)
+      }
     }
 
     // Fallback to name match
     if (!vehicle) {
       vehicle = vehicles.find(v => v.display_name === booking.vehicle_name)
+      if (vehicle) {
+        console.log('[handleEditBooking] ✅ Found vehicle by name:', vehicle.display_name)
+      }
+    }
+
+    // CRITICAL FIX: If still not found, try partial name matching (case-insensitive)
+    if (!vehicle && booking.vehicle_name) {
+      const bookingNameLower = booking.vehicle_name.toLowerCase().trim()
+      vehicle = vehicles.find(v => {
+        const vNameLower = v.display_name.toLowerCase().trim()
+        return vNameLower.includes(bookingNameLower) || bookingNameLower.includes(vNameLower)
+      })
+      if (vehicle) {
+        console.log('[handleEditBooking] ✅ Found vehicle by partial name match:', vehicle.display_name)
+      }
+    }
+
+    // CRITICAL FIX: If STILL not found, try matching from booking_details
+    if (!vehicle && booking.booking_details?.vehicle_id) {
+      vehicle = vehicles.find(v => v.id === booking.booking_details.vehicle_id)
+      if (vehicle) {
+        console.log('[handleEditBooking] ✅ Found vehicle by booking_details.vehicle_id:', vehicle.display_name)
+      }
+    }
+
+    if (!vehicle) {
+      console.error('[handleEditBooking] ❌ VEHICLE NOT FOUND! Booking data:', {
+        id: booking.id,
+        vehicle_id: booking.vehicle_id,
+        vehicle_plate: booking.vehicle_plate,
+        vehicle_name: booking.vehicle_name,
+        booking_details_vehicle_id: booking.booking_details?.vehicle_id
+      })
+      console.error('[handleEditBooking] Available vehicles:', vehicles.map(v => ({
+        id: v.id,
+        name: v.display_name,
+        plate: v.plate || v.targa
+      })))
     }
 
     // Extract location codes from booking_details
@@ -2503,7 +2555,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
         price_total: Math.round(parseFloat(formData.total_amount) * 100), // Convert to cents
-        amount_paid: Math.round(parseFloat(formData.amount_paid) * 100), // Store amount paid at root level (in cents)
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
