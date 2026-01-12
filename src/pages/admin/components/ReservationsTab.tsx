@@ -1149,11 +1149,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Get booking details before cancelling
       let customerName = ''
       let vehicleName = ''
+      let vehiclePlate = ''
 
       if (bookingType === 'booking') {
         const booking = bookings.find(b => b.id === bookingId)
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
+        vehiclePlate = booking?.vehicle_plate || ''
 
         // Cancel booking in bookings table
         const { error } = await supabase
@@ -1169,6 +1171,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const reservation = reservations.find(r => r.id === bookingId)
         customerName = reservation?.customers?.full_name || ''
         vehicleName = reservation?.vehicles?.display_name || ''
+        vehiclePlate = reservation?.vehicles?.plate || reservation?.vehicles?.targa || ''
 
         // Cancel reservation via API
         const res = await fetch(`${API_BASE}/reservations`, {
@@ -1201,7 +1204,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Show success message that stays visible for 3 seconds
-      const successMessage = `✅ Prenotazione cancellata con successo!\n\nCliente: ${customerName}\nVeicolo: ${vehicleName}\n\nLa prenotazione è stata annullata e rimossa dal calendario.`
+      const successMessage = `✅ Prenotazione cancellata con successo!\n\nCliente: ${customerName}\nVeicolo: ${vehicleName}\nTarga: ${vehiclePlate}\n\nLa prenotazione è stata annullata e rimossa dal calendario.`
 
       // Use a combination of alert and setTimeout to ensure visibility
       setTimeout(() => {
