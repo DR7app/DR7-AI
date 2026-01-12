@@ -155,8 +155,21 @@ export function createRomeDate(
     minute: number = 0,
     second: number = 0
 ): Date {
-    // Get the offset between UTC and Rome for this date
-    const romeFormatter = new Intl.DateTimeFormat('en-US', {
+    /**
+     * CRITICAL FIX: Previous implementation had a flawed algorithm that applied
+     * the timezone offset in the WRONG direction, causing +2 hour shifts.
+     * 
+     * This corrected version uses an iterative approach to find the exact UTC
+     * time that, when displayed in Europe/Rome timezone, shows the desired
+     * local time components.
+     */
+
+    const ROME_TIMEZONE = 'Europe/Rome'
+
+    // Start with a reasonable UTC guess (subtract typical offset of 1-2 hours)
+    let utcGuess = new Date(Date.UTC(year, month - 1, day, hour - 2, minute, second))
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: ROME_TIMEZONE,
         year: 'numeric',
         month: '2-digit',
@@ -167,35 +180,49 @@ export function createRomeDate(
         hour12: false
     })
 
-    // Create a UTC date and find what it looks like in Rome
-    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
-    const romeParts = romeFormatter.formatToParts(utcDate)
+    // Iterate to find the exact UTC time that displays as our target Rome time
+    // Maximum 24 iterations (should converge much faster, typically 1-2 iterations)
+    for (let attempt = 0; attempt < 24; attempt++) {
+        const parts = formatter.formatToParts(utcGuess)
+        const getValue = (type: string) => {
+            const part = parts.find(p => p.type === type)
+            return part ? parseInt(part.value, 10) : 0
+        }
 
-    // Extract Rome components
-    const getValue = (type: string) => {
-        const part = romeParts.find(p => p.type === type)
-        return part ? parseInt(part.value, 10) : 0
+        const romeYear = getValue('year')
+        const romeMonth = getValue('month')
+        const romeDay = getValue('day')
+        const romeHour = getValue('hour')
+        const romeMinute = getValue('minute')
+        const romeSecond = getValue('second')
+
+        // Check if we've found the right UTC time
+        if (romeYear === year && romeMonth === month && romeDay === day &&
+            romeHour === hour && romeMinute === minute && romeSecond === second) {
+
+            // Debug logging (can be removed after verification)
+            console.log(`[createRomeDate] ✅ Converted Rome time to UTC:`, {
+                input: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`,
+                utc: utcGuess.toISOString(),
+                iterations: attempt + 1
+            })
+
+            return utcGuess
+        }
+
+        // Adjust guess - move UTC time in the direction needed
+        const hourDiff = hour - romeHour
+        const dayDiff = day - romeDay
+
+        // Convert differences to milliseconds and adjust
+        utcGuess = new Date(utcGuess.getTime() + (hourDiff * 3600000) + (dayDiff * 86400000))
     }
 
-    const romeHour = getValue('hour')
-    const romeDay = getValue('day')
-
-    // Calculate the offset
-    const hourDiff = hour - romeHour
-    const dayDiff = day - romeDay
-
-    // Adjust the UTC date by the offset
-    const adjustedDate = new Date(Date.UTC(
-        year,
-        month - 1,
-        day - dayDiff,
-        hour - hourDiff,
-        minute,
-        second
-    ))
-
-    return adjustedDate
+    // Fallback: shouldn't reach here, but return best guess with warning
+    console.warn('[createRomeDate] ⚠️ Failed to converge after 24 iterations, returning best guess')
+    return utcGuess
 }
+
 
 /**
  * Get the day of month in Europe/Rome timezone for a UTC timestamp.
