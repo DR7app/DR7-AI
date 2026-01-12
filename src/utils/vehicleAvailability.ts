@@ -295,6 +295,13 @@ export function isVehicleAvailable(
     console.log(`[isVehicleAvailable] Found ${vehicleBookings.length} conflicting bookings for this vehicle`)
 
     for (const booking of vehicleBookings) {
+        // CRITICAL FIX: Double-check we're not comparing the booking against itself
+        // This handles edge cases where the filter might not catch everything
+        if (excludeBookingId && booking.id === excludeBookingId) {
+            console.log(`[isVehicleAvailable] ⏭️ Skipping self-check for booking ${booking.id}`)
+            continue
+        }
+
         const bookingStart = new Date(booking.pickup_date)
         const bookingEnd = new Date(booking.dropoff_date)
 
