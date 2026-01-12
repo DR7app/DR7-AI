@@ -283,11 +283,18 @@ export function isVehicleAvailable(
         returnMin
     )
 
+
     // Check for booking conflicts
     // CRITICAL: Only check bookings that can be definitively matched to this specific vehicle
+    console.log(`[AVAILABILITY CHECK] Starting filter for vehicle ${vehicle.display_name}, excludeBookingId:`, excludeBookingId)
+    console.log(`[AVAILABILITY CHECK] Total bookings to check:`, existingBookings.length)
+
     const vehicleBookings = existingBookings.filter(booking => {
         // Skip the booking we're editing
-        if (excludeBookingId && booking.id === excludeBookingId) return false
+        if (excludeBookingId && booking.id === excludeBookingId) {
+            console.log('[AVAILABILITY CHECK] ⏭️ Skipping current booking being edited:', booking.id)
+            return false
+        }
 
         // Skip cancelled bookings
         if (booking.status === 'cancelled') return false
@@ -316,6 +323,8 @@ export function isVehicleAvailable(
         // This prevents phantom conflicts from old bookings without vehicle_id/plate
         return matchVehicleByPlate(booking, vehicle)
     })
+
+    console.log(`[AVAILABILITY CHECK] After filtering: ${vehicleBookings.length} bookings to check for conflicts`)
 
     // Check each matched booking for time conflicts
     for (const booking of vehicleBookings) {
