@@ -36,6 +36,7 @@ export interface SchedulingEvent {
     dateTime: Date
     vehicleId?: string
     vehicleName?: string
+    vehiclePlate?: string
     durationMinutes?: number
 }
 
@@ -125,7 +126,7 @@ async function fetchDepartureEvents(
 ): Promise<SchedulingEvent[]> {
     const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('id, pickup_date, vehicle_id, vehicle_name')
+        .select('id, pickup_date, vehicle_id, vehicle_name, vehicle_plate')
         .neq('status', 'cancelled')
         .gte('pickup_date', startDate.toISOString())
         .lte('pickup_date', endDate.toISOString())
@@ -144,7 +145,8 @@ async function fetchDepartureEvents(
             type: 'DEPARTURE' as EventType,
             dateTime: new Date(b.pickup_date),
             vehicleId: b.vehicle_id || undefined,
-            vehicleName: b.vehicle_name
+            vehicleName: b.vehicle_name,
+            vehiclePlate: b.vehicle_plate || undefined
         }))
 }
 
@@ -158,7 +160,7 @@ async function fetchReturnEvents(
 ): Promise<SchedulingEvent[]> {
     const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('id, dropoff_date, vehicle_id, vehicle_name')
+        .select('id, dropoff_date, vehicle_id, vehicle_name, vehicle_plate')
         .neq('status', 'cancelled')
         .gte('dropoff_date', startDate.toISOString())
         .lte('dropoff_date', endDate.toISOString())
@@ -177,7 +179,8 @@ async function fetchReturnEvents(
             type: 'RETURN' as EventType,
             dateTime: new Date(b.dropoff_date),
             vehicleId: b.vehicle_id || undefined,
-            vehicleName: b.vehicle_name
+            vehicleName: b.vehicle_name,
+            vehiclePlate: b.vehicle_plate || undefined
         }))
 }
 
@@ -191,7 +194,7 @@ async function fetchWashEvents(
 ): Promise<SchedulingEvent[]> {
     const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('id, appointment_date, appointment_time, pickup_date, dropoff_date, vehicle_name, service_name')
+        .select('id, appointment_date, appointment_time, pickup_date, dropoff_date, vehicle_name, vehicle_plate, service_name')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
         .gte('appointment_date', startDate.toISOString().split('T')[0])
@@ -224,6 +227,7 @@ async function fetchWashEvents(
                 type: 'WASH' as EventType,
                 dateTime: washDateTime,
                 vehicleName: b.vehicle_name,
+                vehiclePlate: b.vehicle_plate || undefined,
                 durationMinutes
             }
         })
@@ -301,6 +305,43 @@ export async function validateScheduling(
             (isExistingGenericCarWash && event.type !== 'WASH')) {
             continue
         }
+
+
+        // If vehicleId is not available, try matching by license plate (targa)
+        // This is the most reliable way to match vehicles for car wash events
+        if ((!event.vehicleId || !existingEvent.vehicleId) &&
+            event.vehiclePlate && existingEvent.vehiclePlate) {
+            // Normalize plates for comparison (remove spaces, uppercase)
+            const normalizePlate = (plate: string) =>
+                plate.trim().toUpperCase().replace(/\s+/g, '')
+
+            const eventPlate = normalizePlate(event.vehiclePlate)
+            const existingPlate = normalizePlate(existingEvent.vehiclePlate)
+
+            // Skip if different vehicles (by plate)
+            if (eventPlate !== existingPlate) {
+                continue
+            }
+        }
+
+        // If neither vehicleId nor plate available, try matching by vehicle name
+        // This handles edge cases where plate might not be set
+        if ((!event.vehicleId || !existingEvent.vehicleId) &&
+            !event.vehiclePlate && !existingEvent.vehiclePlate &&
+            event.vehicleName && existingEvent.vehicleName) {
+            // Normalize vehicle names for comparison (trim, lowercase, remove extra spaces)
+            const normalizeVehicleName = (name: string) =>
+                name.trim().toLowerCase().replace(/\s+/g, ' ')
+
+            const eventVehicle = normalizeVehicleName(event.vehicleName)
+            const existingVehicle = normalizeVehicleName(existingEvent.vehicleName)
+
+            // Skip if different vehicles (by name)
+            if (eventVehicle !== existingVehicle) {
+                continue
+            }
+        }
+
 
         // Check for same-time violation
         if (isSameTime(event.dateTime, existingEvent.dateTime)) {
