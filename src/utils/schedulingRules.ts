@@ -282,9 +282,23 @@ export async function validateScheduling(
     // Check against each existing event
     for (const existingEvent of existingEvents) {
         // Skip if different vehicle (events on different vehicles don't conflict)
-        // Note: WASH events might not have vehicleId, so we check vehicleName
+        // Check vehicleId first
         if (event.vehicleId && existingEvent.vehicleId &&
             event.vehicleId !== existingEvent.vehicleId) {
+            continue
+        }
+
+        // Special handling for car wash services
+        // Car wash bookings with vehicleName "Car Wash Service" are generic placeholders
+        // and should NOT conflict with rental bookings for actual vehicles
+        const isEventGenericCarWash = event.type === 'WASH' &&
+            event.vehicleName === 'Car Wash Service' && !event.vehicleId
+        const isExistingGenericCarWash = existingEvent.type === 'WASH' &&
+            existingEvent.vehicleName === 'Car Wash Service' && !existingEvent.vehicleId
+
+        // Skip if one is a rental booking and the other is a generic car wash
+        if ((isEventGenericCarWash && existingEvent.type !== 'WASH') ||
+            (isExistingGenericCarWash && event.type !== 'WASH')) {
             continue
         }
 
