@@ -3731,29 +3731,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 required
                 value={formData.amount_paid}
                 onChange={(e) => {
-                  const newPaid = parseFloat(e.target.value) || 0
-                  const total = parseFloat(formData.total_amount) || 0
-                  let newStatus = formData.payment_status
-
-                  // Auto-detect status based on amount entered
-                  if (newPaid >= total && total > 0) {
-                    newStatus = 'paid'
-                  } else if (newPaid > 0 && newPaid < total) {
-                    newStatus = 'pending' // Da Saldare (Partial)
-                  } else if (newPaid === 0) {
-                    // Only set to unpaid if it was pending/paid, but maybe user wants pending?
-                    // Let's default to 'pending' (Da Saldare) if 0, unless explicitly unpaid.
-                    // Actually, if they type 0 manually, it's likely they mean 0 paid.
-                    // But 'unpaid' status hides the payment method.
-                    // Let's keep current status unless it strictly becomes paid.
-                    if (newStatus === 'paid') newStatus = 'pending'
-                  }
-
+                  // Simply update the amount_paid without auto-calculating payment_status
+                  // The user controls payment_status via the dropdown above
                   setFormData({
                     ...formData,
-                    amount_paid: e.target.value,
-                    payment_status: newStatus,
-                    status: newStatus === 'paid' ? 'confirmed' : formData.status // Don't unconfirm if partial
+                    amount_paid: e.target.value
                   })
                 }}
               />
