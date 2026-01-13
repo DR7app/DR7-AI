@@ -439,6 +439,7 @@ export async function findNextAvailableSlots(
  * @param dropoffDate - The dropoff (RETURN) date/time
  * @param vehicleId - The vehicle ID
  * @param vehicleName - The vehicle name
+ * @param vehiclePlate - The vehicle license plate (targa)
  * @param excludeBookingId - Optional booking ID to exclude (for editing)
  * @returns ValidationResult with combined errors from both events
  */
@@ -447,6 +448,7 @@ export async function validateRentalBooking(
     dropoffDate: Date,
     vehicleId: string,
     vehicleName: string,
+    vehiclePlate: string | undefined,
     excludeBookingId?: string
 ): Promise<ValidationResult> {
     // Validate DEPARTURE (pickup)
@@ -454,7 +456,8 @@ export async function validateRentalBooking(
         type: 'DEPARTURE',
         dateTime: pickupDate,
         vehicleId,
-        vehicleName
+        vehicleName,
+        vehiclePlate
     }
 
     const departureResult = await validateScheduling(departureEvent, excludeBookingId)
@@ -464,7 +467,8 @@ export async function validateRentalBooking(
         type: 'RETURN',
         dateTime: dropoffDate,
         vehicleId,
-        vehicleName
+        vehicleName,
+        vehiclePlate
     }
 
     const returnResult = await validateScheduling(returnEvent, excludeBookingId)

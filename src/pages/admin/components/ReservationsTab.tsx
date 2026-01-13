@@ -2306,6 +2306,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           testReturnDate,
           vehicle.id,
           vehicle.display_name,
+          vehicle.plate || vehicle.targa || undefined,
           editingId || undefined
         )
 
