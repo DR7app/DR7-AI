@@ -281,12 +281,19 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
               const isHol = getHolidayForDate(d)
               const isSun = isSunday(d)
 
+              // Check if this is today
+              const today = new Date()
+              const isToday = d.getDate() === today.getDate() &&
+                d.getMonth() === today.getMonth() &&
+                d.getFullYear() === today.getFullYear()
+
               return (
                 <div
                   key={day}
                   className={`
                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
                     ${(isHol || isSun) ? 'bg-white/[0.02]' : ''}
+                    ${isToday ? 'bg-dr7-gold/10' : ''}
                   `}
                   style={{ width: CELL_WIDTH }}
                 >
@@ -326,7 +333,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
             return (
               <div
                 key={row.vehicle.id}
-                className="flex border-b border-theme-border/30 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
+                className="flex border-b border-white/10 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
@@ -357,6 +364,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                       const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
                       const isRedDay = getHolidayForDate(d) || isSunday(d)
 
+                      // Check if this is today
+                      const today = new Date()
+                      const isToday = d.getDate() === today.getDate() &&
+                        d.getMonth() === today.getMonth() &&
+                        d.getFullYear() === today.getFullYear()
+
                       return (
                         <div
                           key={day}
@@ -364,6 +377,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                                 border-r border-white/[0.02] h-full
                                 bg-green-500/[0.15]
                                 ${isRedDay ? 'bg-white/[0.01]' : ''}
+                                ${isToday ? 'bg-dr7-gold/10' : ''}
                               `}
                           style={{ width: CELL_WIDTH }}
                         />
