@@ -293,7 +293,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   className={`
                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
                     ${(isHol || isSun) ? 'bg-white/[0.02]' : ''}
-                    ${isToday ? 'bg-dr7-gold/20 border-l-2 border-r-2 border-dr7-gold/40' : ''}
+                    ${isToday ? 'bg-dr7-gold/30 border-l-2 border-r-2 border-dr7-gold/60' : ''}
                   `}
                   style={{ width: CELL_WIDTH }}
                 >
@@ -377,7 +377,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                                 border-r border-white/[0.02] h-full
                                 bg-green-500/[0.15]
                                 ${isRedDay ? 'bg-white/[0.01]' : ''}
-                                ${isToday ? 'bg-dr7-gold/20' : ''}
+                                ${isToday ? 'bg-dr7-gold/30 border-l-2 border-r-2 border-dr7-gold/60' : ''}
                               `}
                           style={{ width: CELL_WIDTH }}
                         />
