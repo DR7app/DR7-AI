@@ -2,14 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
-import { getRomeDateComponents, formatRomeDate } from '../../../utils/timezoneUtils'
+import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 
 // --- Configuration ---
 const CELL_WIDTH = 58 // Fixed width for day cells (premium spacing)
 const CELL_HEIGHT = 42 // Height for each 15-minute time slot
-const MIN_ROW_HEIGHT = 60
-const BAR_HEIGHT = 60
 
 interface CarWashBooking {
   id: string
@@ -245,15 +243,9 @@ export default function CarWashCalendarTab() {
     })
   }, [filteredEvents, eventsByDay])
 
-  const maxLanes = useMemo(() => {
-    let max = 1
-    eventsByDay.forEach(events => {
-      max = Math.max(max, events.length)
-    })
-    return max
-  }, [eventsByDay])
 
-  const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxLanes * (BAR_HEIGHT + 4)) + 12)
+
+
 
   // Get today
   const today = new Date()
