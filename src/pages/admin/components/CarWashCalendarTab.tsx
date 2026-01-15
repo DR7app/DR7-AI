@@ -2,7 +2,13 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
-import { getRomeDateComponents } from '../../../utils/timezoneUtils'
+import { getRomeDateComponents, formatRomeDate } from '../../../utils/timezoneUtils'
+import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
+
+// --- Configuration ---
+const CELL_WIDTH = 45 // Fixed width for day cells
+const MIN_ROW_HEIGHT = 60
+const BAR_HEIGHT = 30
 
 interface CarWashBooking {
   id: string
@@ -17,6 +23,8 @@ interface CarWashBooking {
   payment_status: string
   booking_details: any
   created_at: string
+  vehicle_name?: string
+  vehicle_plate?: string
 }
 
 // Service durations in minutes
@@ -56,37 +64,10 @@ const getServiceDuration = (serviceName: string): number => {
 const formatDuration = (minutes: number): string => {
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
-  if (hours === 0) return `${mins} minuti`
-  if (mins === 0) return `${hours} ${hours === 1 ? 'ora' : 'ore'}`
-  return `${hours} ${hours === 1 ? 'ora' : 'ore'} e ${mins} minuti`
+  if (hours === 0) return `${mins} min`
+  if (mins === 0) return `${hours}h`
+  return `${hours}h ${mins}min`
 }
-
-// Generate time slots for car wash: 9h-13h and 15h-18h, every 15 minutes
-const generateTimeSlots = () => {
-  const slots: string[] = []
-
-  // Morning slots: 9h-13h
-  for (let hour = 9; hour < 13; hour++) {
-    for (let minute = 0; minute < 60; minute += 15) {
-      const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-      slots.push(time)
-    }
-  }
-
-  // Afternoon slots: 15h-18h (18:00 is the maximum/last slot)
-  for (let hour = 15; hour < 19; hour++) {
-    for (let minute = 0; minute < 60; minute += 15) {
-      const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-      // Stop at 18:00 - no slots after
-      if (hour === 18 && minute > 0) break
-      slots.push(time)
-    }
-  }
-
-  return slots
-}
-
-const TIME_SLOTS = generateTimeSlots()
 
 export default function CarWashCalendarTab() {
   const { canViewFinancials } = useAdminRole()
@@ -94,12 +75,8 @@ export default function CarWashCalendarTab() {
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedCell, setSelectedCell] = useState<{
-    date: string
-    time: string
-    bookings: CarWashBooking[]
-  } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedBooking, setSelectedBooking] = useState<CarWashBooking | null>(null)
 
   useEffect(() => {
     loadData()
@@ -141,103 +118,110 @@ export default function CarWashCalendarTab() {
     }
   }
 
-  const daysInMonth = useMemo(() => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
-    const lastDay = new Date(year, month + 1, 0).getDate()
-    return Array.from({ length: lastDay }, (_, i) => i + 1)
+  const currentRomeComponents = useMemo(() => {
+    return {
+      year: currentDate.getFullYear(),
+      month: currentDate.getMonth() // 0-indexed
+    }
   }, [currentDate])
 
-  const isSlotBooked = (day: number, timeSlot: string): boolean => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
+  const daysInMonth = useMemo(() => {
+    return new Date(currentRomeComponents.year, currentRomeComponents.month + 1, 0).getDate()
+  }, [currentRomeComponents])
 
-    // Convert timeSlot to minutes
-    const [slotHours, slotMinutes] = timeSlot.split(':').map(Number)
-    const slotTimeInMinutes = slotHours * 60 + slotMinutes
+  const daysArray = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth])
 
-    return bookings.some(booking => {
-      // Get booking date in Rome timezone
-      const bookingComponents = getRomeDateComponents(booking.appointment_date)
-
-      // Check if booking is on this day
-      if (bookingComponents.year !== year ||
-        bookingComponents.month !== (month + 1) || // month is 1-indexed in components
-        bookingComponents.day !== day) {
-        return false
-      }
-
-      // Get booking start time and duration
-      const [bookingHours, bookingMinutes] = booking.appointment_time.split(':').map(Number)
-      const bookingStartMinutes = bookingHours * 60 + bookingMinutes
-      const duration = getServiceDuration(booking.service_name)
-      const bookingEndMinutes = bookingStartMinutes + duration
-
-      // Check if this slot falls within the booking's time range
-      return slotTimeInMinutes >= bookingStartMinutes && slotTimeInMinutes < bookingEndMinutes
+  const navigateMonth = (dir: 'prev' | 'next') => {
+    setCurrentDate(p => {
+      const n = new Date(p)
+      n.setMonth(p.getMonth() + (dir === 'prev' ? -1 : 1))
+      return n
     })
   }
 
-  const getSlotBookings = (day: number, timeSlot: string): CarWashBooking[] => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
+  // Process bookings into calendar events
+  const calendarEvents = useMemo(() => {
+    return bookings
+      .filter(booking => {
+        const bookingComponents = getRomeDateComponents(booking.appointment_date)
+        return bookingComponents.year === currentRomeComponents.year &&
+          bookingComponents.month === (currentRomeComponents.month + 1)
+      })
+      .map(booking => {
+        const bookingComponents = getRomeDateComponents(booking.appointment_date)
+        const day = bookingComponents.day
 
-    // Convert timeSlot to minutes
-    const [slotHours, slotMinutes] = timeSlot.split(':').map(Number)
-    const slotTimeInMinutes = slotHours * 60 + slotMinutes
+        // Parse time
+        const [hours, minutes] = booking.appointment_time.split(':').map(Number)
+        const duration = getServiceDuration(booking.service_name)
 
-    return bookings.filter(booking => {
-      // Get booking date in Rome timezone
-      const bookingComponents = getRomeDateComponents(booking.appointment_date)
+        // Calculate position
+        const dayIndex = day - 1
+        const leftPx = dayIndex * CELL_WIDTH
 
-      // Check if booking is on this day
-      if (bookingComponents.year !== year ||
-        bookingComponents.month !== (month + 1) || // month is 1-indexed in components
-        bookingComponents.day !== day) {
-        return false
+        return {
+          booking,
+          day,
+          leftPx,
+          duration,
+          hours,
+          minutes
+        }
+      })
+      .sort((a, b) => {
+        // Sort by day, then by time
+        if (a.day !== b.day) return a.day - b.day
+        if (a.hours !== b.hours) return a.hours - b.hours
+        return a.minutes - b.minutes
+      })
+  }, [bookings, currentRomeComponents, daysInMonth])
+
+  // Filter by search query
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) return calendarEvents
+    const q = searchQuery.toLowerCase()
+    return calendarEvents.filter(evt => {
+      const customerName = evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || ''
+      return customerName.toLowerCase().includes(q) ||
+        evt.booking.service_name.toLowerCase().includes(q)
+    })
+  }, [calendarEvents, searchQuery])
+
+  // Group events by day for lane assignment
+  const eventsByDay = useMemo(() => {
+    const grouped = new Map<number, typeof filteredEvents>()
+    filteredEvents.forEach(evt => {
+      if (!grouped.has(evt.day)) {
+        grouped.set(evt.day, [])
       }
-
-      // Get booking start time and duration
-      const [bookingHours, bookingMinutes] = booking.appointment_time.split(':').map(Number)
-      const bookingStartMinutes = bookingHours * 60 + bookingMinutes
-      const duration = getServiceDuration(booking.service_name)
-      const bookingEndMinutes = bookingStartMinutes + duration
-
-      // Return booking if this slot falls within its time range
-      return slotTimeInMinutes >= bookingStartMinutes && slotTimeInMinutes < bookingEndMinutes
+      grouped.get(evt.day)!.push(evt)
     })
-  }
+    return grouped
+  }, [filteredEvents])
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev)
-      if (direction === 'prev') {
-        newDate.setMonth(prev.getMonth() - 1)
-      } else {
-        newDate.setMonth(prev.getMonth() + 1)
+  // Assign lanes to prevent overlaps within each day
+  const eventsWithLanes = useMemo(() => {
+    return filteredEvents.map(evt => {
+      const dayEvents = eventsByDay.get(evt.day) || []
+      const evtIndex = dayEvents.indexOf(evt)
+      return {
+        ...evt,
+        laneIndex: evtIndex
       }
-      return newDate
     })
-  }
+  }, [filteredEvents, eventsByDay])
 
-  const monthName = currentDate.toLocaleDateString('it-IT', {
-    month: 'long',
-    year: 'numeric'
-  })
-
-  // Filter bookings by customer search
-  const matchingBookings = useMemo(() => {
-    if (!searchQuery.trim()) return []
-
-    const query = searchQuery.toLowerCase()
-    return bookings.filter(booking => {
-      const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
-      if (!customerName) return false
-      return customerName.toLowerCase().includes(query)
+  const maxLanes = useMemo(() => {
+    let max = 1
+    eventsByDay.forEach(events => {
+      max = Math.max(max, events.length)
     })
-  }, [bookings, searchQuery])
+    return max
+  }, [eventsByDay])
 
-  // Get today's date for highlighting
+  const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxLanes * (BAR_HEIGHT + 4)) + 12)
+
+  // Get today
   const today = new Date()
   const isCurrentMonth = today.getMonth() === currentDate.getMonth() &&
     today.getFullYear() === currentDate.getFullYear()
@@ -253,205 +237,240 @@ export default function CarWashCalendarTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header Controls */}
-      <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap flex-1">
-            <h2 className="text-lg font-bold text-theme-text-primary">Calendario Lavaggi</h2>
+    <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-white/5 shadow-2xl overflow-hidden">
 
-            {/* Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Cerca clienti..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-primary rounded-full border border-theme-border focus:border-dr7-gold focus:outline-none text-sm w-48"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-theme-text-muted">Questo Mese:</span>
-              <span className="text-dr7-gold font-bold text-sm">
-                {bookings.filter(b => {
-                  const bookingDate = new Date(b.appointment_date)
-                  return bookingDate.getMonth() === currentDate.getMonth() &&
-                    bookingDate.getFullYear() === currentDate.getFullYear()
-                }).length} lavaggi
-              </span>
-            </div>
-            {canViewFinancials && !hideFinancials && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-theme-text-muted">Fatturato:</span>
-                <span className="text-green-400 font-bold text-sm">
-                  <FinancialData type="total">
-                    €{(bookings
-                      .filter(b => {
-                        const bookingDate = new Date(b.appointment_date)
-                        return bookingDate.getMonth() === currentDate.getMonth() &&
-                          bookingDate.getFullYear() === currentDate.getFullYear()
-                      })
-                      .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
-                  </FinancialData>
-                </span>
-              </div>
-            )}
-            {canViewFinancials && (
-              <button
-                onClick={() => setHideFinancials(!hideFinancials)}
-                className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
-                  ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
-                  }`}
-              >
-                {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigateMonth('prev')}
-              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm font-semibold"
-              aria-label="Mese precedente"
-            >
-              ← Precedente
-            </button>
-            <button
-              onClick={() => navigateMonth('next')}
-              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm font-semibold"
-              aria-label="Mese successivo"
-            >
-              Successivo →
-            </button>
+      {/* 1. Control Bar */}
+      <div className="flex justify-between items-center p-4 bg-black/20 backdrop-blur-md border-b border-white/5 z-10 shadow-sm">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
+            {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+          </h2>
+          <div className="flex gap-2">
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Prec</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Succ</button>
           </div>
         </div>
 
-        <div className="mt-2 text-center">
-          <h3 className="text-base text-theme-text-primary capitalize font-semibold">{monthName}</h3>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-theme-text-muted">Questo Mese:</span>
+            <span className="text-dr7-gold font-bold text-sm">
+              {bookings.filter(b => {
+                const bookingDate = new Date(b.appointment_date)
+                return bookingDate.getMonth() === currentDate.getMonth() &&
+                  bookingDate.getFullYear() === currentDate.getFullYear()
+              }).length} lavaggi
+            </span>
+          </div>
+          {canViewFinancials && !hideFinancials && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-theme-text-muted">Fatturato:</span>
+              <span className="text-green-400 font-bold text-sm">
+                <FinancialData type="total">
+                  €{(bookings
+                    .filter(b => {
+                      const bookingDate = new Date(b.appointment_date)
+                      return bookingDate.getMonth() === currentDate.getMonth() &&
+                        bookingDate.getFullYear() === currentDate.getFullYear()
+                    })
+                    .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
+                </FinancialData>
+              </span>
+            </div>
+          )}
+          {canViewFinancials && (
+            <button
+              onClick={() => setHideFinancials(!hideFinancials)}
+              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
+                ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
+                : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                }`}
+            >
+              {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
+            </button>
+          )}
+          <input
+            type="text"
+            placeholder="Cerca cliente o servizio..."
+            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-white placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
         </div>
       </div>
 
-      {/* Search Results */}
-      {searchQuery && (
-        <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
-          <h3 className="text-lg font-bold text-theme-text-primary mb-3">
-            Risultati ricerca: "{searchQuery}"
-          </h3>
-          {matchingBookings.length === 0 ? (
-            <p className="text-theme-text-muted text-sm">Nessun cliente trovato</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {matchingBookings.map(booking => (
-                <div
-                  key={booking.id}
-                  className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3 hover:border-dr7-gold transition-colors cursor-pointer"
-                  onClick={() => {
-                    setSelectedCell({
-                      date: `${new Date(booking.appointment_date).getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
-                      time: booking.appointment_time,
-                      bookings: [booking]
-                    })
-                    setSearchQuery('')
-                  }}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-theme-text-primary font-bold text-sm">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</h4>
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-theme-text-primary' :
-                      booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                        'bg-gray-600 text-theme-text-primary'
-                      }`}>
-                      {booking.status}
-                    </span>
-                  </div>
-                  <p className="text-theme-text-muted text-xs mb-2">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</p>
-                  <div className="space-y-1 text-xs">
-                    <p className="text-theme-text-primary">
-                      <span className="text-theme-text-muted">Servizio:</span> {booking.service_name}
-                    </p>
-                    {booking.booking_details?.additionalService && (
-                      <p className="text-theme-text-primary">
-                        <span className="text-theme-text-muted">+ Aggiuntivo:</span> {booking.booking_details.additionalService}
-                      </p>
-                    )}
-                    <p className="text-theme-text-primary">
-                      <span className="text-theme-text-muted">Data:</span>{' '}
-                      {new Date(booking.appointment_date).toLocaleDateString('it-IT')} - {booking.appointment_time}
-                    </p>
-                    <p className="text-dr7-gold font-bold">€{(booking.price_total / 100).toFixed(2)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* 2. Scrollable Calendar Area */}
+      <div className="flex-1 overflow-auto relative flex flex-col w-full">
 
-      {/* Battleship-style Calendar Grid */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 lg:p-6 overflow-x-auto">
-        <div className="min-w-max">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-10 bg-theme-bg-secondary border border-theme-border px-2 py-1 text-left text-theme-text-primary font-bold text-xs min-w-[80px]">
-                  Orario
-                </th>
-                {daysInMonth.map(day => (
-                  <th
-                    key={day}
-                    className={`border border-theme-border px-1 py-1 text-center text-[10px] font-semibold min-w-[28px] ${day === todayDay ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-theme-text-muted'
-                      }`}
+        {/* A. Sticky Header Row */}
+        <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-md min-w-max h-[42px] border-b border-white/5">
+          {/* Header Spacer for Left Column */}
+          <div className="sticky left-0 w-[200px] z-[41] bg-[#0d0d0e] border-r border-white/5 flex items-center px-4 font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+            Lavaggi
+          </div>
+
+          {/* Day Columns Header */}
+          <div className="flex">
+            {daysArray.map((day) => {
+              const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
+              const isHol = getHolidayForDate(d)
+              const isSun = isSunday(d)
+              const isToday = day === todayDay
+
+              return (
+                <div
+                  key={day}
+                  className={`
+                    flex flex-col items-center justify-center border-r border-white/[0.03] relative
+                    ${(isHol || isSun) ? 'bg-white/[0.02]' : ''}
+                    ${isToday ? 'bg-dr7-gold/40 border-l-2 border-r-2 border-dr7-gold/70' : ''}
+                  `}
+                  style={{ width: CELL_WIDTH }}
+                >
+                  {/* Red dot for Sundays and holidays */}
+                  {(isHol || isSun) && (
+                    <div
+                      className="absolute top-1 right-1 w-1 h-1 rounded-full bg-red-500/70"
+                      title={isHol ? isHol.name : 'Domenica'}
+                    />
+                  )}
+
+                  <span
+                    className="text-[10px]"
+                    style={{ color: 'rgba(255, 255, 255, 0.75)' }}
                   >
                     {day}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {TIME_SLOTS.map(timeSlot => (
-                <tr key={timeSlot}>
-                  <td className="sticky left-0 z-10 bg-theme-bg-secondary border border-theme-border px-2 py-1 text-theme-text-primary font-semibold text-xs">
-                    {timeSlot}
-                  </td>
-                  {daysInMonth.map(day => {
-                    const isBooked = isSlotBooked(day, timeSlot)
-                    const slotBookings = getSlotBookings(day, timeSlot)
-                    return (
-                      <td
-                        key={day}
-                        onClick={() => slotBookings.length > 0 && setSelectedCell({
-                          date: `${day}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`,
-                          time: timeSlot,
-                          bookings: slotBookings
-                        })}
-                        className={`border border-theme-border p-0.5 min-w-[28px] h-6 transition-all ${isBooked
-                          ? 'bg-red-500 hover:bg-red-600 cursor-pointer'
-                          : 'bg-green-500 hover:bg-green-600'
-                          } ${day === todayDay ? 'ring-1 ring-dr7-gold ring-inset' : ''}`}
-                        title={isBooked ? `${timeSlot} - Occupato` : `${timeSlot} - Libero`}
-                      />
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                  <span
+                    className="text-[8px] uppercase"
+                    style={{ color: 'rgba(255, 255, 255, 0.45)' }}
+                  >
+                    {d.toLocaleDateString('it-IT', { weekday: 'short' })}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
+
+        {/* B. Calendar Row */}
+        <div className="min-w-max pb-32">
+          <div
+            className="flex border-b border-white/50 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
+            style={{ height: rowHeight }}
+          >
+            {/* Left Sticky Column */}
+            <div className="sticky left-0 w-[200px] z-[30] bg-[#0d0d0e]/95 group-hover:bg-[#111112]/95 border-r border-white/5 flex items-center px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+              <div className="flex flex-col overflow-hidden">
+                <span className="font-medium text-sm text-theme-text-primary">Servizi Lavaggio</span>
+                <span className="text-xs text-theme-text-muted">{eventsWithLanes.length} prenotazioni</span>
+              </div>
+            </div>
+
+            {/* The Day Grid & Events Container */}
+            <div className="relative flex-1">
+
+              {/* 1. Background Grid Cells */}
+              <div className="flex h-full absolute inset-0 z-0 pointer-events-none">
+                {daysArray.map((day) => {
+                  const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
+                  const isRedDay = getHolidayForDate(d) || isSunday(d)
+                  const isToday = day === todayDay
+
+                  return (
+                    <div
+                      key={day}
+                      className={`
+                        border-r border-white/[0.02] h-full
+                        ${isToday ? 'bg-dr7-gold/40 border-l-2 border-r-2 border-dr7-gold/70' : 'bg-green-500/[0.15]'}
+                        ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
+                      `}
+                      style={{ width: CELL_WIDTH }}
+                    />
+                  )
+                })}
+              </div>
+
+              {/* 2. Rendered Events Layer */}
+              <div className="absolute inset-0 z-20 pointer-events-none">
+                {eventsWithLanes.map(evt => {
+                  const bgClass = "bg-red-800"
+                  const borderClass = "border-red-700/30"
+
+                  const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
+
+                  return (
+                    <div
+                      key={evt.booking.id}
+                      className={`
+                        absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-white 
+                        ${bgClass} ${borderClass} 
+                        hover:z-50 hover:shadow-xl hover:brightness-110 transition-all cursor-pointer
+                      `}
+                      style={{
+                        left: evt.leftPx,
+                        width: CELL_WIDTH,
+                        top: top,
+                        height: BAR_HEIGHT,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedBooking(evt.booking)
+                      }}
+                    >
+                      <div className="px-2 flex flex-col justify-center h-full">
+                        <span className="font-bold text-[10px] truncate leading-tight">
+                          {evt.booking.customer_name || 'Cliente'} • {evt.booking.appointment_time}
+                        </span>
+                      </div>
+
+                      {/* Left Edge Marker */}
+                      <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
+                      {/* Right Edge Marker */}
+                      <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
+
+                      {/* TOOLTIP ON HOVER */}
+                      <div className="hidden group-hover/evt:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 border border-theme-border text-white text-xs p-3 rounded shadow-2xl w-max z-[100] pointer-events-none min-w-[200px]">
+                        <div className="font-bold mb-1 text-base">{evt.booking.customer_name}</div>
+                        <div className="text-gray-400 mb-2">{evt.booking.service_name}</div>
+
+                        <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                          <span className="text-gray-500">Orario:</span>
+                          <span className="font-mono">{evt.booking.appointment_time}</span>
+
+                          <span className="text-gray-500">Durata:</span>
+                          <span className="font-mono">{formatDuration(evt.duration)}</span>
+
+                          <span className="text-gray-500">Prezzo:</span>
+                          <span className="font-mono">€{(evt.booking.price_total / 100).toFixed(2)}</span>
+
+                          <span className="text-gray-500">Stato:</span>
+                          <span className="uppercase font-bold tracking-wider text-[10px]">{evt.booking.status}</span>
+                        </div>
+
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-theme-border"></div>
+                      </div>
+
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+          </div>
+
+          {eventsWithLanes.length === 0 && !loading && (
+            <div className="p-12 text-center text-theme-text-muted">Nessun lavaggio prenotato questo mese.</div>
+          )}
+        </div>
+
       </div>
 
       {/* Booking Details Modal */}
-      {selectedCell && (
+      {selectedBooking && (
         <div
           className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedCell(null)}
+          onClick={() => setSelectedBooking(null)}
         >
           <div
             className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border shadow-2xl"
@@ -463,10 +482,10 @@ export default function CarWashCalendarTab() {
                   <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
                     Prenotazione Lavaggio
                   </h3>
-                  <p className="text-theme-text-muted">{selectedCell.date} - {selectedCell.time}</p>
+                  <p className="text-theme-text-muted">{new Date(selectedBooking.appointment_date).toLocaleDateString('it-IT')} - {selectedBooking.appointment_time}</p>
                 </div>
                 <button
-                  onClick={() => setSelectedCell(null)}
+                  onClick={() => setSelectedBooking(null)}
                   className="text-theme-text-muted hover:text-theme-text-primary transition-colors text-3xl leading-none"
                 >
                   ×
@@ -475,62 +494,60 @@ export default function CarWashCalendarTab() {
             </div>
 
             <div className="p-6 space-y-4">
-              {selectedCell.bookings.map(booking => (
-                <div key={booking.id} className="bg-theme-bg-tertiary/50 rounded-lg p-5 border border-red-500/30">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <div className="text-theme-text-primary font-bold text-lg mb-1">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
-                      <div className="text-theme-text-muted text-sm">{booking.customer_email || booking.booking_details?.customer?.email || 'N/A'}</div>
-                      <div className="text-theme-text-muted text-sm">{booking.customer_phone || booking.booking_details?.customer?.phone || 'N/A'}</div>
+              <div className="bg-theme-bg-tertiary/50 rounded-lg p-5 border border-red-500/30">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <div className="text-theme-text-primary font-bold text-lg mb-1">{selectedBooking.customer_name || selectedBooking.booking_details?.customer?.fullName || 'N/A'}</div>
+                    <div className="text-theme-text-muted text-sm">{selectedBooking.customer_email || selectedBooking.booking_details?.customer?.email || 'N/A'}</div>
+                    <div className="text-theme-text-muted text-sm">{selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone || 'N/A'}</div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                    {selectedBooking.status}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-theme-text-muted">Servizio:</span>
+                    <span className="text-theme-text-primary font-medium">{selectedBooking.service_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-theme-text-muted">Durata:</span>
+                    <span className="text-theme-text-primary font-medium">{formatDuration(getServiceDuration(selectedBooking.service_name))}</span>
+                  </div>
+                  {selectedBooking.booking_details?.additionalService && (
+                    <div className="flex justify-between">
+                      <span className="text-theme-text-muted">Servizio Aggiuntivo:</span>
+                      <span className="text-theme-text-primary font-medium text-xs">{selectedBooking.booking_details.additionalService}</span>
                     </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
-                      {booking.status}
+                  )}
+                  <div className="flex justify-between pt-2 border-t border-theme-border">
+                    <span className="text-theme-text-muted">Prezzo Totale:</span>
+                    <span className="text-dr7-gold font-bold text-lg">
+                      €{(selectedBooking.price_total / 100).toFixed(2)}
                     </span>
                   </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-theme-text-muted">Servizio:</span>
-                      <span className="text-theme-text-primary font-medium">{booking.service_name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-theme-text-muted">Durata:</span>
-                      <span className="text-theme-text-primary font-medium">{formatDuration(getServiceDuration(booking.service_name))}</span>
-                    </div>
-                    {booking.booking_details?.additionalService && (
-                      <div className="flex justify-between">
-                        <span className="text-theme-text-muted">Servizio Aggiuntivo:</span>
-                        <span className="text-theme-text-primary font-medium text-xs">{booking.booking_details.additionalService}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between pt-2 border-t border-theme-border">
-                      <span className="text-theme-text-muted">Prezzo Totale:</span>
-                      <span className="text-dr7-gold font-bold text-lg">
-                        €{(booking.price_total / 100).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-theme-text-muted">Stato Pagamento:</span>
-                      <span className={`font-medium ${booking.payment_status === 'paid' ||
-                        booking.payment_status === 'completed' ||
-                        (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                        ? 'text-green-400'
-                        : 'text-red-400'
-                        }`}>
-                        {booking.payment_status === 'paid' ||
-                          booking.payment_status === 'completed' ||
-                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                          ? 'Pagato'
-                          : 'Non Pagato'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 text-xs text-gray-500">
-                    ID: DR7-{booking.id.toUpperCase().slice(0, 8)}
+                  <div className="flex justify-between">
+                    <span className="text-theme-text-muted">Stato Pagamento:</span>
+                    <span className={`font-medium ${selectedBooking.payment_status === 'paid' ||
+                      selectedBooking.payment_status === 'completed' ||
+                      (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
+                      ? 'text-green-400'
+                      : 'text-red-400'
+                      }`}>
+                      {selectedBooking.payment_status === 'paid' ||
+                        selectedBooking.payment_status === 'completed' ||
+                        (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
+                        ? 'Pagato'
+                        : 'Non Pagato'}
+                    </span>
                   </div>
                 </div>
-              ))}
+
+                <div className="mt-3 text-xs text-gray-500">
+                  ID: DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
+                </div>
+              </div>
             </div>
           </div>
         </div>
