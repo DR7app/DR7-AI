@@ -24,7 +24,11 @@ const SERVICE_DURATIONS: Record<string, number> = {
   'Lavaggio Completo': 45,
   'Lavaggio Top': 90,
   'Lavaggio VIP': 120,
-  'Lavaggio DR7 Luxury': 150
+  'Lavaggio DR7 Luxury': 150,
+  // New services added Jan 2026
+  'Lavaggio Scooter': 15,
+  'Lavaggio Solo Esterno': 15,
+  'Lavaggio Solo Interno': 30
 }
 
 const getServiceDuration = (serviceName: string): number => {
@@ -41,6 +45,9 @@ const getServiceDuration = (serviceName: string): number => {
   if (lowerServiceName.includes('top')) return 90
   if (lowerServiceName.includes('vip')) return 120
   if (lowerServiceName.includes('dr7') || lowerServiceName.includes('luxury')) return 150
+  if (lowerServiceName.includes('scooter')) return 15
+  if (lowerServiceName.includes('solo esterno') || lowerServiceName.includes('exterior only')) return 15
+  if (lowerServiceName.includes('solo interno') || lowerServiceName.includes('interior only')) return 30
 
   // Default to 60 minutes if no match
   return 60

@@ -242,7 +242,11 @@ function getWashDuration(serviceName: string): number {
         'Lavaggio Esterno': 30,
         'Lavaggio Interno': 30,
         'Lavaggio Premium': 90,
-        'Lavaggio DR7 Luxury': 150
+        'Lavaggio DR7 Luxury': 150,
+        // New services added Jan 2026
+        'Lavaggio Scooter': 15,
+        'Lavaggio Solo Esterno': 15,
+        'Lavaggio Solo Interno': 30
     }
     return durations[serviceName] || 45
 }
