@@ -255,6 +255,21 @@ export default function UnpaidBookingsTab() {
 
   const getRemainingAmount = (booking: UnpaidBooking) => {
     const total = booking.price_total || 0
+
+    // For "pending" (Da Saldare) status, check if this is truly unpaid
+    // If payment_status is "pending" and amountPaid is 0 or equals total (incorrectly set), 
+    // we should show the full amount as remaining
+    if (booking.payment_status === 'pending') {
+      const paid = booking.booking_details?.amountPaid || 0
+      // If nothing paid (0) or if paid equals total (data error), show full amount
+      if (paid === 0 || paid === total) {
+        return total
+      }
+      // Otherwise show actual remaining (partial payment case)
+      return Math.max(0, total - paid)
+    }
+
+    // For "unpaid" status, always show full amount
     const paid = booking.booking_details?.amountPaid || 0
     return Math.max(0, total - paid)
   }
