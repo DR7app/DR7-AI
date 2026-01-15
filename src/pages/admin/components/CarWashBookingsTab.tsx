@@ -170,7 +170,12 @@ const getAvailableTimeSlotsForService = (serviceName: string): string[] => {
   })
 }
 
-export default function CarWashBookingsTab() {
+interface CarWashBookingsTabProps {
+  initialData?: { appointmentDate?: string, appointmentTime?: string } | null
+  onDataConsumed?: () => void
+}
+
+export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarWashBookingsTabProps = {}) {
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -274,6 +279,21 @@ export default function CarWashBookingsTab() {
   useEffect(() => {
     loadData()
   }, [])
+
+  // Handle initial data from calendar
+  useEffect(() => {
+    if (initialData && initialData.appointmentDate && initialData.appointmentTime) {
+      setFormData(prev => ({
+        ...prev,
+        appointment_date: initialData.appointmentDate!,
+        appointment_time: initialData.appointmentTime!
+      }))
+      setShowForm(true)
+      if (onDataConsumed) {
+        onDataConsumed()
+      }
+    }
+  }, [initialData, onDataConsumed])
 
   async function loadData() {
     setLoading(true)

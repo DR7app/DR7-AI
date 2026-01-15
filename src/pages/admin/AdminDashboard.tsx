@@ -32,6 +32,8 @@ export default function AdminDashboard() {
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   // State to pass data from Calendar to Reservations tab
   const [initialReservationData, setInitialReservationData] = useState<{ vehicleName?: string, pickupDate?: Date, bookingId?: string } | null>(null)
+  // State to pass data from Car Wash Calendar to Car Wash Bookings tab
+  const [initialCarWashData, setInitialCarWashData] = useState<{ appointmentDate?: string, appointmentTime?: string } | null>(null)
 
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
@@ -45,6 +47,11 @@ export default function AdminDashboard() {
   function handleCalendarBooking(vehicleName: string, date: Date, bookingId?: string) {
     setInitialReservationData({ vehicleName, pickupDate: date, bookingId })
     setActiveTab('reservations')
+  }
+
+  function handleCarWashCalendarBooking(date: string, time: string) {
+    setInitialCarWashData({ appointmentDate: date, appointmentTime: time })
+    setActiveTab('carwash')
   }
 
   useEffect(() => {
@@ -154,126 +161,126 @@ export default function AdminDashboard() {
             </div>
             <nav className="p-2 space-y-1">
               <button
-                onClick={() => setActiveTab('reservations')}
+                onClick={() => { setActiveTab('reservations'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Noleggio
               </button>
               <button
-                onClick={() => setActiveTab('carwash')}
+                onClick={() => { setActiveTab('carwash'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Prenotazioni Lavaggio
               </button>
               <button
-                onClick={() => setActiveTab('mechanical')}
+                onClick={() => { setActiveTab('mechanical'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Prenotazioni Meccanica
               </button>
               <button
-                onClick={() => setActiveTab('unpaid')}
+                onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'unpaid' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Da Saldare
               </button>
               <button
-                onClick={() => setActiveTab('documents-verification')}
+                onClick={() => { setActiveTab('documents-verification'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'documents-verification' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Verifica Documenti
               </button>
               <button
-                onClick={() => setActiveTab('customers')}
+                onClick={() => { setActiveTab('customers'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'customers' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Clienti
               </button>
               <button
-                onClick={() => setActiveTab('vehicles')}
+                onClick={() => { setActiveTab('vehicles'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Veicoli
               </button>
               <button
-                onClick={() => setActiveTab('fleet')}
+                onClick={() => { setActiveTab('fleet'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Gestione Flotta
               </button>
               <button
-                onClick={() => setActiveTab('calendar')}
+                onClick={() => { setActiveTab('calendar'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Calendario Noleggio
               </button>
               <button
-                onClick={() => setActiveTab('carwash-calendar')}
+                onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Calendario Lavaggi
               </button>
               <button
-                onClick={() => setActiveTab('mechanical-calendar')}
+                onClick={() => { setActiveTab('mechanical-calendar'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Calendario Meccanica
               </button>
               <button
-                onClick={() => setActiveTab('lotteria')}
+                onClick={() => { setActiveTab('lotteria'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'lotteria' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Biglietti Lotteria
               </button>
               <button
-                onClick={() => setActiveTab('fattura')}
+                onClick={() => { setActiveTab('fattura'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fattura' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Fatture
               </button>
               <button
-                onClick={() => setActiveTab('contratto')}
+                onClick={() => { setActiveTab('contratto'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Contratti
               </button>
               <button
-                onClick={() => setActiveTab('cargos')}
+                onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Cargos
               </button>
               <button
-                onClick={() => setActiveTab('marketing')}
+                onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'marketing' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Marketing
               </button>
               <button
-                onClick={() => setActiveTab('reviews')}
+                onClick={() => { setActiveTab('reviews'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reviews' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
                 Recensioni
               </button>
               <button
-                onClick={() => setActiveTab('scanner')}
+                onClick={() => { setActiveTab('scanner'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'scanner' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
               >
@@ -529,8 +536,17 @@ export default function AdminDashboard() {
               onNewBooking={handleCalendarBooking}
             />
           )}
-          {activeTab === 'carwash' && <CarWashBookingsTab />}
-          {activeTab === 'carwash-calendar' && <CarWashCalendarTab />}
+          {activeTab === 'carwash' && (
+            <CarWashBookingsTab
+              initialData={initialCarWashData}
+              onDataConsumed={() => setInitialCarWashData(null)}
+            />
+          )}
+          {activeTab === 'carwash-calendar' && (
+            <CarWashCalendarTab
+              onNewBooking={handleCarWashCalendarBooking}
+            />
+          )}
           {activeTab === 'mechanical' && <MechanicalBookingTab />}
           {activeTab === 'mechanical-calendar' && <MechanicalCalendarTab />}
           {activeTab === 'lotteria' && <LotteriaBoard />}

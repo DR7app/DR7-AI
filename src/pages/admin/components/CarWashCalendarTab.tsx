@@ -68,7 +68,11 @@ const formatDuration = (minutes: number): string => {
   return `${hours}h ${mins}min`
 }
 
-export default function CarWashCalendarTab() {
+interface CarWashCalendarTabProps {
+  onNewBooking?: (date: string, time: string) => void
+}
+
+export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabProps) {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
@@ -425,11 +429,18 @@ export default function CarWashCalendarTab() {
                         className={`
                           relative border-r border-white/[0.05] transition-all
                           ${isToday ? 'bg-[#c9a84a]/20 border-l border-r border-[#c9a84a]/30' : ''}
-                          ${!isToday && !slotBooking && !isRedDay ? 'bg-green-600/15 hover:bg-green-600/25' : ''}
+                          ${!isToday && !slotBooking && !isRedDay ? 'bg-green-600/15 hover:bg-green-600/25 cursor-pointer' : ''}
                           ${!isToday && !slotBooking && isRedDay ? 'bg-red-950/10 hover:bg-red-950/20' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
                         `}
                         style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
+                        onClick={() => {
+                          // Only allow booking on available slots (green cells)
+                          if (!slotBooking && !isRedDay && onNewBooking) {
+                            const dateStr = `${currentRomeComponents.year}-${String(currentRomeComponents.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                            onNewBooking(dateStr, timeString)
+                          }
+                        }}
                       >
                         {/* Render booking block on the first slot */}
                         {isBookingStart && slotBooking && (
