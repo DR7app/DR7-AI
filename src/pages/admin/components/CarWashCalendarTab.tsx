@@ -6,7 +6,8 @@ import { getRomeDateComponents, formatRomeDate } from '../../../utils/timezoneUt
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 
 // --- Configuration ---
-const CELL_WIDTH = 45 // Fixed width for day cells
+const CELL_WIDTH = 58 // Fixed width for day cells (premium spacing)
+const CELL_HEIGHT = 42 // Height for each 15-minute time slot
 const MIN_ROW_HEIGHT = 60
 const BAR_HEIGHT = 60
 
@@ -314,13 +315,13 @@ export default function CarWashCalendarTab() {
       </div>
 
       {/* 2. Scrollable Calendar Area */}
-      <div className="flex-1 overflow-auto relative flex flex-col w-full">
+      <div className="flex-1 overflow-auto relative flex flex-col w-full bg-[#0a0b0d]">
 
-        {/* A. Sticky Header Row */}
-        <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-md min-w-max h-[42px] border-b border-white/5">
-          {/* Header Spacer for Left Column */}
-          <div className="sticky left-0 w-[200px] z-[41] bg-[#0d0d0e] border-r border-white/5 flex items-center px-4 font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
-            Lavaggi
+        {/* A. Sticky Header Row - Days */}
+        <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-lg min-w-max border-b border-white/10">
+          {/* Header Spacer for Time Column */}
+          <div className="sticky left-0 w-[100px] z-[41] bg-[#0d0d0e] border-r border-white/10 flex items-center justify-center font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]" style={{ height: '50px' }}>
+            Orario
           </div>
 
           {/* Day Columns Header */}
@@ -335,29 +336,27 @@ export default function CarWashCalendarTab() {
                 <div
                   key={day}
                   className={`
-                    flex flex-col items-center justify-center border-r border-white/[0.03] relative
-                    ${(isHol || isSun) ? 'bg-white/[0.02]' : ''}
-                    ${isToday ? 'bg-dr7-gold/40 border-l-2 border-r-2 border-dr7-gold/70' : ''}
+                    flex flex-col items-center justify-center border-r border-white/[0.08] relative transition-colors
+                    ${(isHol || isSun) ? 'bg-red-950/20' : ''}
+                    ${isToday ? 'bg-[#c9a84a]/30 border-l-2 border-r-2 border-[#c9a84a]' : ''}
                   `}
-                  style={{ width: CELL_WIDTH }}
+                  style={{ width: CELL_WIDTH, height: '50px' }}
                 >
                   {/* Red dot for Sundays and holidays */}
                   {(isHol || isSun) && (
                     <div
-                      className="absolute top-1 right-1 w-1 h-1 rounded-full bg-red-500/70"
+                      className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500"
                       title={isHol ? isHol.name : 'Domenica'}
                     />
                   )}
 
                   <span
-                    className="text-[10px]"
-                    style={{ color: 'rgba(255, 255, 255, 0.75)' }}
+                    className={`text-sm font-bold ${isToday ? 'text-[#c9a84a]' : 'text-white/90'}`}
                   >
                     {day}
                   </span>
                   <span
-                    className="text-[8px] uppercase"
-                    style={{ color: 'rgba(255, 255, 255, 0.45)' }}
+                    className={`text-[9px] uppercase tracking-wide ${isToday ? 'text-[#c9a84a]/80' : 'text-white/50'}`}
                   >
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
                   </span>
@@ -367,141 +366,161 @@ export default function CarWashCalendarTab() {
           </div>
         </div>
 
-        {/* B. Calendar Row */}
-        <div className="min-w-max pb-32">
-          <div
-            className="flex border-b border-white/50 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
-            style={{ height: rowHeight }}
-          >
-            {/* Left Sticky Column */}
-            <div className="sticky left-0 w-[200px] z-[30] bg-[#0d0d0e]/95 group-hover:bg-[#111112]/95 border-r border-white/5 flex items-center px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
-              <div className="flex flex-col overflow-hidden">
-                <span className="font-medium text-sm text-theme-text-primary">Servizi Lavaggio</span>
-                <span className="text-xs text-theme-text-muted">{eventsWithLanes.length} prenotazioni</span>
-              </div>
-            </div>
+        {/* B. Time Slots Grid */}
+        <div className="min-w-max relative">
+          {/* Generate time slots from 09:00 to 19:00 in 15-minute intervals */}
+          {Array.from({ length: 41 }, (_, i) => {
+            const totalMinutes = 9 * 60 + i * 15 // Start at 09:00
+            const hours = Math.floor(totalMinutes / 60)
+            const minutes = totalMinutes % 60
+            const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+            const isFullHour = minutes === 0
 
-            {/* The Day Grid & Events Container */}
-            <div className="relative flex-1">
+            return (
+              <div
+                key={timeString}
+                className={`flex ${isFullHour ? 'border-t-2 border-white/20' : 'border-t border-white/[0.05]'}`}
+                style={{ height: CELL_HEIGHT }}
+              >
+                {/* Time Label Column (Sticky Left) */}
+                <div
+                  className={`sticky left-0 w-[100px] z-[30] bg-[#0d0d0e]/98 border-r border-white/10 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_rgba(0,0,0,0.4)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
+                >
+                  <span className={`text-xs ${isFullHour ? 'text-white/95 text-sm' : 'text-white/60'}`}>
+                    {timeString}
+                  </span>
+                </div>
 
-              {/* 1. Background Grid Cells */}
-              <div className="flex h-full absolute inset-0 z-0 pointer-events-none">
-                {daysArray.map((day) => {
-                  const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
-                  const isRedDay = getHolidayForDate(d) || isSunday(d)
-                  const isToday = day === todayDay
+                {/* Day Cells */}
+                <div className="flex flex-1">
+                  {daysArray.map((day) => {
+                    const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
+                    const isRedDay = getHolidayForDate(d) || isSunday(d)
+                    const isToday = day === todayDay
 
-                  return (
-                    <div
-                      key={day}
-                      className={`
-                        border-r border-white/[0.02] h-full
-                        ${isToday ? 'bg-dr7-gold/40 border-l-2 border-r-2 border-dr7-gold/70' : 'bg-green-500/[0.15]'}
-                        ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
-                      `}
-                      style={{ width: CELL_WIDTH }}
-                    />
-                  )
-                })}
-              </div>
+                    // Check if this time slot has a booking
+                    const slotBooking = eventsWithLanes.find(evt => {
+                      if (evt.day !== day) return false
 
-              {/* 2. Rendered Events Layer */}
-              <div className="absolute inset-0 z-20 pointer-events-none">
-                {eventsWithLanes.map(evt => {
-                  const bgClass = "bg-red-800"
-                  const borderClass = "border-red-700/30"
+                      // Parse booking time
+                      const [bookingHours, bookingMinutes] = evt.booking.appointment_time.split(':').map(Number)
+                      const bookingStartMinutes = bookingHours * 60 + bookingMinutes
+                      const bookingEndMinutes = bookingStartMinutes + evt.duration
 
-                  const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
+                      // Check if current slot is within booking duration
+                      return totalMinutes >= bookingStartMinutes && totalMinutes < bookingEndMinutes
+                    })
 
-                  return (
-                    <div
-                      key={evt.booking.id}
-                      className={`
-                        absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-white 
-                        ${bgClass} ${borderClass} 
-                        hover:z-50 hover:shadow-xl hover:brightness-110 transition-all cursor-pointer
-                      `}
-                      style={{
-                        left: evt.leftPx,
-                        width: CELL_WIDTH,
-                        top: top,
-                        height: BAR_HEIGHT,
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedBooking(evt.booking)
-                      }}
-                    >
-                      <div className="px-1 flex flex-col justify-center h-full items-center gap-0.5">
-                        <span className="font-bold text-[10px] leading-tight truncate max-w-full">
-                          {(() => {
-                            const name = evt.booking.customer_name || 'Cliente'
-                            // Abbreviate long names
-                            if (name.length > 10) {
-                              const parts = name.split(' ')
-                              if (parts.length > 1) {
-                                return parts[0].substring(0, 8) + '.'
-                              }
-                              return name.substring(0, 8) + '.'
-                            }
-                            return name
-                          })()}
-                        </span>
-                        <span className="font-bold text-[11px] leading-tight">
-                          {evt.booking.appointment_time}
-                        </span>
-                        <span className="text-[9px] leading-tight opacity-80">
-                          {(() => {
-                            const svc = evt.booking.service_name.toLowerCase()
-                            if (svc.includes('scooter')) return 'Scooter'
-                            if (svc.includes('solo esterno') || svc.includes('exterior')) return 'Esterno'
-                            if (svc.includes('solo interno') || svc.includes('interior')) return 'Interno'
-                            if (svc.includes('completo')) return 'Completo'
-                            if (svc.includes('top')) return 'Top'
-                            if (svc.includes('vip')) return 'VIP'
-                            if (svc.includes('luxury') || svc.includes('dr7')) return 'Luxury'
-                            return 'Lavaggio'
-                          })()}
-                        </span>
+                    // Determine if this is the first slot of a booking (to render the booking block)
+                    const isBookingStart = slotBooking && (() => {
+                      const [bookingHours, bookingMinutes] = slotBooking.booking.appointment_time.split(':').map(Number)
+                      const bookingStartMinutes = bookingHours * 60 + bookingMinutes
+                      return totalMinutes === bookingStartMinutes
+                    })()
+
+                    return (
+                      <div
+                        key={`${day}-${timeString}`}
+                        className={`
+                          relative border-r border-white/[0.05] transition-all
+                          ${isToday ? 'bg-[#c9a84a]/20 border-l border-r border-[#c9a84a]/30' : ''}
+                          ${!isToday && !slotBooking && !isRedDay ? 'bg-green-600/15 hover:bg-green-600/25' : ''}
+                          ${!isToday && !slotBooking && isRedDay ? 'bg-red-950/10 hover:bg-red-950/20' : ''}
+                          ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
+                        `}
+                        style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
+                      >
+                        {/* Render booking block on the first slot */}
+                        {isBookingStart && slotBooking && (
+                          <div
+                            className="absolute inset-x-0 bg-gradient-to-br from-red-700 to-red-900 border-2 border-red-600/40 rounded-lg shadow-lg hover:shadow-xl hover:brightness-110 transition-all cursor-pointer z-20 overflow-hidden group/booking"
+                            style={{
+                              height: `${(slotBooking.duration / 15) * CELL_HEIGHT - 2}px`,
+                              top: '1px'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedBooking(slotBooking.booking)
+                            }}
+                          >
+                            {/* Inner glow effect */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+
+                            {/* Content */}
+                            <div className="relative px-2 py-1.5 flex flex-col justify-center h-full items-center gap-0.5 text-center">
+                              <span className="font-bold text-[11px] leading-tight truncate max-w-full text-white drop-shadow-md">
+                                {(() => {
+                                  const name = slotBooking.booking.customer_name || 'Cliente'
+                                  if (name.length > 10) {
+                                    const parts = name.split(' ')
+                                    if (parts.length > 1) {
+                                      return parts[0].substring(0, 8) + '.'
+                                    }
+                                    return name.substring(0, 8) + '.'
+                                  }
+                                  return name
+                                })()}
+                              </span>
+                              <span className="font-bold text-[12px] leading-tight text-white drop-shadow-md">
+                                {slotBooking.booking.appointment_time}
+                              </span>
+                              <span className="text-[9px] leading-tight text-white/90 drop-shadow-sm">
+                                {(() => {
+                                  const svc = slotBooking.booking.service_name.toLowerCase()
+                                  if (svc.includes('scooter')) return 'Scooter'
+                                  if (svc.includes('solo esterno') || svc.includes('exterior')) return 'Esterno'
+                                  if (svc.includes('solo interno') || svc.includes('interior')) return 'Interno'
+                                  if (svc.includes('completo')) return 'Completo'
+                                  if (svc.includes('top')) return 'Top'
+                                  if (svc.includes('vip')) return 'VIP'
+                                  if (svc.includes('luxury') || svc.includes('dr7')) return 'Luxury'
+                                  return 'Lavaggio'
+                                })()}
+                              </span>
+                            </div>
+
+                            {/* Left accent bar */}
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/40" />
+                            {/* Right accent bar */}
+                            <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/40" />
+
+                            {/* Tooltip on hover */}
+                            <div className="hidden group-hover/booking:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 border border-gray-700 text-white text-xs p-3 rounded-lg shadow-2xl w-max z-[100] pointer-events-none min-w-[220px]">
+                              <div className="font-bold mb-1 text-base">{slotBooking.booking.customer_name}</div>
+                              <div className="text-gray-400 mb-2">{slotBooking.booking.service_name}</div>
+
+                              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                                <span className="text-gray-500">Orario:</span>
+                                <span className="font-mono">{slotBooking.booking.appointment_time}</span>
+
+                                <span className="text-gray-500">Durata:</span>
+                                <span className="font-mono">{formatDuration(slotBooking.duration)}</span>
+
+                                <span className="text-gray-500">Prezzo:</span>
+                                <span className="font-mono">€{(slotBooking.booking.price_total / 100).toFixed(2)}</span>
+
+                                <span className="text-gray-500">Stato:</span>
+                                <span className="uppercase font-bold tracking-wider text-[10px]">{slotBooking.booking.status}</span>
+                              </div>
+
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700" />
+                            </div>
+                          </div>
+                        )}
                       </div>
-
-                      {/* Left Edge Marker */}
-                      <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
-                      {/* Right Edge Marker */}
-                      <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
-
-                      {/* TOOLTIP ON HOVER */}
-                      <div className="hidden group-hover/evt:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 border border-theme-border text-white text-xs p-3 rounded shadow-2xl w-max z-[100] pointer-events-none min-w-[200px]">
-                        <div className="font-bold mb-1 text-base">{evt.booking.customer_name}</div>
-                        <div className="text-gray-400 mb-2">{evt.booking.service_name}</div>
-
-                        <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
-                          <span className="text-gray-500">Orario:</span>
-                          <span className="font-mono">{evt.booking.appointment_time}</span>
-
-                          <span className="text-gray-500">Durata:</span>
-                          <span className="font-mono">{formatDuration(evt.duration)}</span>
-
-                          <span className="text-gray-500">Prezzo:</span>
-                          <span className="font-mono">€{(evt.booking.price_total / 100).toFixed(2)}</span>
-
-                          <span className="text-gray-500">Stato:</span>
-                          <span className="uppercase font-bold tracking-wider text-[10px]">{evt.booking.status}</span>
-                        </div>
-
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-theme-border"></div>
-                      </div>
-
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-
-          </div>
+            )
+          })}
 
           {eventsWithLanes.length === 0 && !loading && (
-            <div className="p-12 text-center text-theme-text-muted">Nessun lavaggio prenotato questo mese.</div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center text-theme-text-muted bg-black/40 backdrop-blur-sm px-8 py-6 rounded-lg border border-white/10">
+                <p className="text-lg">Nessun lavaggio prenotato questo mese.</p>
+              </div>
+            </div>
           )}
         </div>
 
