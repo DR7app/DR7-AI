@@ -321,7 +321,7 @@ export default function CarWashCalendarTab() {
         {/* A. Sticky Header Row - Days */}
         <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-lg min-w-max border-b border-white/10">
           {/* Header Spacer for Time Column */}
-          <div className="sticky left-0 w-[100px] z-[41] bg-[#0d0d0e] border-r border-white/10 flex items-center justify-center font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]" style={{ height: '50px' }}>
+          <div className="sticky left-0 w-[70px] z-[41] bg-[#0d0d0e] border-r border-white/10 flex items-center justify-center font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]" style={{ height: '50px' }}>
             Orario
           </div>
 
@@ -385,7 +385,7 @@ export default function CarWashCalendarTab() {
               >
                 {/* Time Label Column (Sticky Left) */}
                 <div
-                  className={`sticky left-0 w-[100px] z-[30] bg-[#0d0d0e]/98 border-r border-white/10 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_rgba(0,0,0,0.4)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
+                  className={`sticky left-0 w-[70px] z-[30] bg-[#0d0d0e]/98 border-r border-white/10 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_rgba(0,0,0,0.4)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
                 >
                   <span className={`text-xs ${isFullHour ? 'text-white/95 text-sm' : 'text-white/60'}`}>
                     {timeString}
