@@ -6,8 +6,8 @@ import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 
 // --- Configuration ---
-const CELL_WIDTH = 58 // Fixed width for day cells (premium spacing)
-const CELL_HEIGHT = 42 // Height for each 15-minute time slot
+const CELL_WIDTH = 85 // Fixed width for day cells (wider for full month view)
+const CELL_HEIGHT = 28 // Height for each 15-minute time slot (compact)
 
 interface CarWashBooking {
   id: string
@@ -142,25 +142,14 @@ export default function CarWashCalendarTab() {
     return new Date(currentRomeComponents.year, currentRomeComponents.month + 1, 0).getDate()
   }, [currentRomeComponents])
 
-  // Show 7 days at a time for performance (instead of entire month)
-  const [weekOffset, setWeekOffset] = useState(0)
-
+  // Generate all days in the month for full monthly view
   const daysArray = useMemo(() => {
-    const today = new Date()
-    const isCurrentMonth = today.getMonth() === currentDate.getMonth() &&
-      today.getFullYear() === currentDate.getFullYear()
-
-    // Start from today if viewing current month, otherwise start from day 1
-    const startDay = isCurrentMonth ? today.getDate() : 1
-    const adjustedStart = Math.max(1, Math.min(startDay + (weekOffset * 7), daysInMonth - 6))
-
-    // Generate 7 days starting from adjustedStart
     const days = []
-    for (let i = 0; i < 7 && (adjustedStart + i) <= daysInMonth; i++) {
-      days.push(adjustedStart + i)
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i)
     }
     return days
-  }, [daysInMonth, weekOffset, currentDate])
+  }, [daysInMonth])
 
   const navigateMonth = (dir: 'prev' | 'next') => {
     setCurrentDate(p => {
@@ -168,7 +157,7 @@ export default function CarWashCalendarTab() {
       n.setMonth(p.getMonth() + (dir === 'prev' ? -1 : 1))
       return n
     })
-    setWeekOffset(0) // Reset to first week when changing months
+    // Month changed
   }
 
   // Process bookings into calendar events
@@ -275,22 +264,7 @@ export default function CarWashCalendarTab() {
             <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">◄ Mese</button>
             <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Mese ►</button>
           </div>
-          <div className="flex gap-2 ml-2">
-            <button
-              onClick={() => setWeekOffset(prev => Math.max(prev - 1, -Math.floor(daysInMonth / 7)))}
-              className="px-3 py-1 bg-[#c9a84a]/20 hover:bg-[#c9a84a]/30 rounded border border-[#c9a84a]/30 text-sm text-[#c9a84a] hover:text-white"
-              disabled={weekOffset <= -Math.floor(daysInMonth / 7)}
-            >
-              ◄ Settimana
-            </button>
-            <button
-              onClick={() => setWeekOffset(prev => Math.min(prev + 1, Math.floor(daysInMonth / 7)))}
-              className="px-3 py-1 bg-[#c9a84a]/20 hover:bg-[#c9a84a]/30 rounded border border-[#c9a84a]/30 text-sm text-[#c9a84a] hover:text-white"
-              disabled={weekOffset >= Math.floor(daysInMonth / 7)}
-            >
-              Settimana ►
-            </button>
-          </div>
+
         </div>
 
         <div className="flex items-center gap-4">
