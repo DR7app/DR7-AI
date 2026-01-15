@@ -144,7 +144,25 @@ export default function CarWashCalendarTab() {
     return new Date(currentRomeComponents.year, currentRomeComponents.month + 1, 0).getDate()
   }, [currentRomeComponents])
 
-  const daysArray = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth])
+  // Show 7 days at a time for performance (instead of entire month)
+  const [weekOffset, setWeekOffset] = useState(0)
+
+  const daysArray = useMemo(() => {
+    const today = new Date()
+    const isCurrentMonth = today.getMonth() === currentDate.getMonth() &&
+      today.getFullYear() === currentDate.getFullYear()
+
+    // Start from today if viewing current month, otherwise start from day 1
+    const startDay = isCurrentMonth ? today.getDate() : 1
+    const adjustedStart = Math.max(1, Math.min(startDay + (weekOffset * 7), daysInMonth - 6))
+
+    // Generate 7 days starting from adjustedStart
+    const days = []
+    for (let i = 0; i < 7 && (adjustedStart + i) <= daysInMonth; i++) {
+      days.push(adjustedStart + i)
+    }
+    return days
+  }, [daysInMonth, weekOffset, currentDate])
 
   const navigateMonth = (dir: 'prev' | 'next') => {
     setCurrentDate(p => {
@@ -152,6 +170,7 @@ export default function CarWashCalendarTab() {
       n.setMonth(p.getMonth() + (dir === 'prev' ? -1 : 1))
       return n
     })
+    setWeekOffset(0) // Reset to first week when changing months
   }
 
   // Process bookings into calendar events
@@ -261,8 +280,24 @@ export default function CarWashCalendarTab() {
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Prec</button>
-            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Succ</button>
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">◄ Mese</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Mese ►</button>
+          </div>
+          <div className="flex gap-2 ml-2">
+            <button
+              onClick={() => setWeekOffset(prev => Math.max(prev - 1, -Math.floor(daysInMonth / 7)))}
+              className="px-3 py-1 bg-[#c9a84a]/20 hover:bg-[#c9a84a]/30 rounded border border-[#c9a84a]/30 text-sm text-[#c9a84a] hover:text-white"
+              disabled={weekOffset <= -Math.floor(daysInMonth / 7)}
+            >
+              ◄ Settimana
+            </button>
+            <button
+              onClick={() => setWeekOffset(prev => Math.min(prev + 1, Math.floor(daysInMonth / 7)))}
+              className="px-3 py-1 bg-[#c9a84a]/20 hover:bg-[#c9a84a]/30 rounded border border-[#c9a84a]/30 text-sm text-[#c9a84a] hover:text-white"
+              disabled={weekOffset >= Math.floor(daysInMonth / 7)}
+            >
+              Settimana ►
+            </button>
           </div>
         </div>
 
@@ -368,8 +403,8 @@ export default function CarWashCalendarTab() {
 
         {/* B. Time Slots Grid */}
         <div className="min-w-max relative">
-          {/* Generate time slots from 09:00 to 19:00 in 15-minute intervals */}
-          {Array.from({ length: 41 }, (_, i) => {
+          {/* Generate time slots from 09:00 to 18:00 in 15-minute intervals (37 slots) */}
+          {Array.from({ length: 37 }, (_, i) => {
             const totalMinutes = 9 * 60 + i * 15 // Start at 09:00
             const hours = Math.floor(totalMinutes / 60)
             const minutes = totalMinutes % 60
