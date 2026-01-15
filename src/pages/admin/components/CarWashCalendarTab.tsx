@@ -8,7 +8,7 @@ import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
-const BAR_HEIGHT = 30
+const BAR_HEIGHT = 60
 
 interface CarWashBooking {
   id: string
@@ -93,22 +93,36 @@ export default function CarWashCalendarTab() {
     return () => {
       subscription.unsubscribe()
     }
-  }, [])
+  }, [currentDate]) // Reload when month changes
 
   async function loadData() {
     setLoading(true)
     try {
-      // Load car wash bookings (exclude cancelled)
+      // Calculate date range for ONLY current month (more performant)
+      const year = currentDate.getFullYear()
+      const month = currentDate.getMonth()
+
+      // Start: first day of current month
+      const startDate = new Date(year, month, 1)
+      const startDateStr = startDate.toISOString().split('T')[0]
+
+      // End: last day of current month
+      const endDate = new Date(year, month + 1, 0)
+      const endDateStr = endDate.toISOString().split('T')[0]
+
+      // Load car wash bookings (exclude cancelled) - OPTIMIZED: only load relevant date range
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
+        .gte('appointment_date', startDateStr)
+        .lte('appointment_date', endDateStr)
         .order('appointment_date', { ascending: true })
 
       if (bookingsError) throw bookingsError
 
-      console.log('🧼 CAR WASH CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0)
+      console.log('🧼 CAR WASH CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0, `(${startDateStr} to ${endDateStr})`)
 
       setBookings(bookingsData || [])
     } catch (error) {
@@ -418,9 +432,36 @@ export default function CarWashCalendarTab() {
                         setSelectedBooking(evt.booking)
                       }}
                     >
-                      <div className="px-2 flex flex-col justify-center h-full">
-                        <span className="font-bold text-[10px] truncate leading-tight">
-                          {evt.booking.customer_name || 'Cliente'} • {evt.booking.appointment_time}
+                      <div className="px-1 flex flex-col justify-center h-full items-center gap-0.5">
+                        <span className="font-bold text-[10px] leading-tight truncate max-w-full">
+                          {(() => {
+                            const name = evt.booking.customer_name || 'Cliente'
+                            // Abbreviate long names
+                            if (name.length > 10) {
+                              const parts = name.split(' ')
+                              if (parts.length > 1) {
+                                return parts[0].substring(0, 8) + '.'
+                              }
+                              return name.substring(0, 8) + '.'
+                            }
+                            return name
+                          })()}
+                        </span>
+                        <span className="font-bold text-[11px] leading-tight">
+                          {evt.booking.appointment_time}
+                        </span>
+                        <span className="text-[9px] leading-tight opacity-80">
+                          {(() => {
+                            const svc = evt.booking.service_name.toLowerCase()
+                            if (svc.includes('scooter')) return 'Scooter'
+                            if (svc.includes('solo esterno') || svc.includes('exterior')) return 'Esterno'
+                            if (svc.includes('solo interno') || svc.includes('interior')) return 'Interno'
+                            if (svc.includes('completo')) return 'Completo'
+                            if (svc.includes('top')) return 'Top'
+                            if (svc.includes('vip')) return 'VIP'
+                            if (svc.includes('luxury') || svc.includes('dr7')) return 'Luxury'
+                            return 'Lavaggio'
+                          })()}
                         </span>
                       </div>
 

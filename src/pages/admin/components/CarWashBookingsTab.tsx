@@ -44,6 +44,39 @@ interface CarWashBooking {
 
 const CAR_WASH_SERVICES = [
   {
+    id: 'scooter-wash',
+    name: 'Lavaggio Scooter',
+    price: 10,
+    duration: '15 minuti',
+    durationMinutes: 15,
+    allowedTimeRanges: [
+      { start: '09:00', end: '12:45' },
+      { start: '15:00', end: '18:45' }
+    ]
+  },
+  {
+    id: 'exterior-only',
+    name: 'Lavaggio Solo Esterno',
+    price: 15,
+    duration: '15 minuti',
+    durationMinutes: 15,
+    allowedTimeRanges: [
+      { start: '09:00', end: '12:45' },
+      { start: '15:00', end: '18:45' }
+    ]
+  },
+  {
+    id: 'interior-only',
+    name: 'Lavaggio Solo Interno',
+    price: 20,
+    duration: '30 minuti',
+    durationMinutes: 30,
+    allowedTimeRanges: [
+      { start: '09:00', end: '12:30' },
+      { start: '15:00', end: '18:30' }
+    ]
+  },
+  {
     id: 'full-clean',
     name: 'Lavaggio Completo',
     price: 25,
@@ -1231,7 +1264,25 @@ export default function CarWashBookingsTab() {
                 <select
                   required
                   value={formData.payment_status}
-                  onChange={(e) => setFormData({ ...formData, payment_status: e.target.value })}
+                  onChange={(e) => {
+                    const newStatus = e.target.value
+                    let newAmountPaid = formData.amount_paid
+
+                    // Auto-set amount_paid based on payment status
+                    if (newStatus === 'paid') {
+                      // Fully paid: amount_paid = total
+                      newAmountPaid = formData.price_total.toString()
+                    } else if (newStatus === 'pending') {
+                      // Da Saldare: keep amount_paid at 0 (nothing paid yet)
+                      // This makes the Da Saldare tab show "€25.00" not "€0.00 su €25.00"
+                      newAmountPaid = '0'
+                    } else if (newStatus === 'unpaid') {
+                      // Not paid: amount_paid = 0
+                      newAmountPaid = '0'
+                    }
+
+                    setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid })
+                  }}
                   className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
                 >
                   <option value="paid">Pagato</option>
