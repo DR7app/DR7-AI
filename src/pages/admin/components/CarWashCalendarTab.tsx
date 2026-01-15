@@ -468,7 +468,7 @@ export default function CarWashCalendarTab() {
                         {/* Render booking block on the first slot */}
                         {isBookingStart && slotBooking && (
                           <div
-                            className="absolute inset-x-0 bg-gradient-to-br from-red-700 to-red-900 border-2 border-red-600/40 rounded-lg shadow-lg hover:shadow-xl hover:brightness-110 transition-all cursor-pointer z-20 overflow-hidden group/booking"
+                            className="absolute inset-x-0 bg-red-800 border border-red-700/30 rounded shadow-md hover:shadow-xl hover:brightness-110 transition-all cursor-pointer z-20 overflow-hidden group/booking"
                             style={{
                               height: `${(slotBooking.duration / 15) * CELL_HEIGHT - 2}px`,
                               top: '1px'
