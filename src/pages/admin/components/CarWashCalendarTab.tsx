@@ -6,7 +6,7 @@ import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 
 // --- Configuration ---
-const CELL_WIDTH = 42 // Fixed width for day cells (optimized to fit full month on screen)
+const CELL_WIDTH = 52 // Balanced width: fits full month on screen while maintaining readability
 const CELL_HEIGHT = 28 // Height for each 15-minute time slot (compact)
 
 interface CarWashBooking {
