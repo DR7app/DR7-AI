@@ -4,6 +4,8 @@ import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../utils/calendarLogic'
 import BookingDetailsPanel from './BookingDetailsPanel'
+import { FinancialData } from '../../../components/FinancialData'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
@@ -40,8 +42,8 @@ interface Booking {
 }
 
 export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
-  // const { canViewFinancials } = useAdminRole()
-  // const [hideFinancials, setHideFinancials] = useState(false) // Removed for now to focus on clean layout
+  const { canViewFinancials } = useAdminRole()
+  const [hideFinancials, setHideFinancials] = useState(false)
 
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -253,7 +255,45 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
           </div>
         </div>
 
+
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-theme-text-muted">Questo Mese:</span>
+            <span className="text-dr7-gold font-bold text-sm">
+              {bookings.filter(b => {
+                const bookingDate = new Date(b.pickup_date)
+                return bookingDate.getMonth() === currentDate.getMonth() &&
+                  bookingDate.getFullYear() === currentDate.getFullYear()
+              }).length} noleggi
+            </span>
+          </div>
+          {canViewFinancials && !hideFinancials && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-theme-text-muted">Fatturato:</span>
+              <span className="text-green-400 font-bold text-sm">
+                <FinancialData type="total">
+                  €{(bookings
+                    .filter(b => {
+                      const bookingDate = new Date(b.pickup_date)
+                      return bookingDate.getMonth() === currentDate.getMonth() &&
+                        bookingDate.getFullYear() === currentDate.getFullYear()
+                    })
+                    .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
+                </FinancialData>
+              </span>
+            </div>
+          )}
+          {canViewFinancials && (
+            <button
+              onClick={() => setHideFinancials(!hideFinancials)}
+              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
+                  ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
+                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                }`}
+            >
+              {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
+            </button>
+          )}
           <input
             type="text"
             placeholder="Cerca veicolo o cliente..."
