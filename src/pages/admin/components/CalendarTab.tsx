@@ -287,8 +287,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
             <button
               onClick={() => setHideFinancials(!hideFinancials)}
               className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
-                  ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
+                : 'bg-yellow-600 text-black hover:bg-yellow-700'
                 }`}
             >
               {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -333,9 +333,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   className={`
                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
                     ${(isHol || isSun) ? 'bg-white/[0.02]' : ''}
-                    ${isToday ? 'bg-dr7-gold/40 border-l-2 border-r-2 border-dr7-gold/70' : ''}
+                    ${isToday ? 'bg-dr7-gold/40' : ''}
                   `}
-                  style={{ width: CELL_WIDTH }}
+                  style={{
+                    width: CELL_WIDTH,
+                    boxShadow: isToday ? 'inset 2px 0 0 0 rgba(212, 175, 55, 0.7), inset -2px 0 0 0 rgba(212, 175, 55, 0.7)' : undefined
+                  }}
                 >
                   {/* Red dot for Sundays and holidays */}
                   {(isHol || isSun) && (
@@ -415,10 +418,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                           key={day}
                           className={`
                                 border-r border-white/[0.02] h-full
-                                ${isToday ? 'bg-dr7-gold/40 border-l-2 border-r-2 border-dr7-gold/70' : 'bg-green-500/[0.15]'}
+                                ${isToday ? 'bg-dr7-gold/40' : 'bg-green-500/[0.15]'}
                                 ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
                               `}
-                          style={{ width: CELL_WIDTH }}
+                          style={{
+                            width: CELL_WIDTH,
+                            boxShadow: isToday ? 'inset 2px 0 0 0 rgba(212, 175, 55, 0.7), inset -2px 0 0 0 rgba(212, 175, 55, 0.7)' : undefined
+                          }}
                         />
                       )
                     })}
