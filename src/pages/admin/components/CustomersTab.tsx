@@ -59,6 +59,7 @@ interface Customer {
   // Common fields
   nazione?: string
   telefono?: string
+  residency_zone?: string
   // Membership fields
   membership_tier?: 'Argento' | 'Oro' | 'Platino' | null
   membership_expires_at?: string | null
@@ -1344,6 +1345,16 @@ export default function CustomersTab() {
                   <div>
                     <span className="text-sm text-theme-text-muted">Nazione:</span>
                     <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.nazione || '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-theme-text-muted">Residenza (Zona):</span>
+                    <p className="text-sm text-theme-text-primary font-medium">
+                      {viewingCustomerDetails.residency_zone === 'RESIDENTE_CAGLIARI_SUD_SARDEGNA'
+                        ? 'RESIDENTE CAGLIARI–SUD SARDEGNA'
+                        : viewingCustomerDetails.residency_zone === 'NON_RESIDENTE'
+                          ? 'NON RESIDENTE'
+                          : '—'}
+                    </p>
                   </div>
                   <div>
                     <span className="text-sm text-theme-text-muted">Fonte:</span>

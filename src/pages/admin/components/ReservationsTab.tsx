@@ -24,13 +24,13 @@ import PenaltyModal from './PenaltyModal'
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
-// SUPERCARS (Exotic) - RCA + existing KASKO options + DR7
+// SUPERCARS (Exotic) - RCA + existing KASKO options + Kasko DR7
 export const INSURANCE_OPTIONS = [
   { id: 'RCA', label: 'RCA', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 100 },
   { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 150 },
   { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 200 },
-  { id: 'DR7', label: 'DR7', pricePerDay: 300 },
+  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 300 },
 ];
 
 // URBAN - RCA + Kasko Base + Kasko DR7
@@ -984,7 +984,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .from('bookings')
         .select('customer_name, customer_email, customer_phone, user_id, booked_at, booking_details')
         .order('booked_at', { ascending: false })
-        .range(0, 9999)
 
       if (bookingsCustomerError) {
         console.error('Failed to load customers from bookings:', bookingsCustomerError)
@@ -1041,7 +1040,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .from('customers_extended')
         .select('*')
         .order('created_at', { ascending: false })
-        .range(0, 9999)
 
       if (customersExtendedError) {
         console.error('Failed to load customers_extended:', customersExtendedError)
@@ -1083,7 +1081,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .from('customers')
         .select('*')
         .order('created_at', { ascending: false })
-        .range(0, 9999)
 
       if (!customersTableError && customersTableData) {
         customersTableData.forEach(c => {
