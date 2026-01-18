@@ -993,6 +993,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // This ensures no duplicates and all customers from customers_extended are loaded
       const customerMap = new Map<string, Customer>()
 
+
       if (bookingsForCustomers) {
         bookingsForCustomers.forEach((booking: any) => {
           const details = booking.booking_details?.customer || {}
@@ -1000,27 +1001,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const customerEmail = booking.customer_email || details.email || null
           const customerPhone = booking.customer_phone || details.phone || null
 
-          // Only create customer entry if we have a valid UUID for user_id
-          // Otherwise, skip it - the customer will be loaded from customers_extended table
+          // CRITICAL FIX: Extract customer ID from multiple sources
+          // 1. booking.user_id (for website bookings)
+          // 2. booking.booking_details.customer.customerId (for admin panel bookings)
+          // 3. booking.booking_details.customer_id (alternative location)
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-          const hasValidUserId = booking.user_id && uuidRegex.test(booking.user_id)
 
-          if (!hasValidUserId) {
+          let customerId = booking.user_id
+
+          // If user_id is null or invalid, check booking_details
+          if (!customerId || !uuidRegex.test(customerId)) {
+            customerId = details.customerId || booking.booking_details?.customer_id
+          }
+
+          // Validate the extracted customer ID
+          const hasValidCustomerId = customerId && uuidRegex.test(customerId)
+
+          if (!hasValidCustomerId) {
             // Skip customers without valid UUID - they'll come from customers_extended
             return
           }
 
-          // ✅ FIX: Always use user_id (UUID) as the Map key
-          const existing = customerMap.get(booking.user_id)
+          // ✅ FIX: Always use customer ID (UUID) as the Map key
+          const existing = customerMap.get(customerId)
           if (existing) {
             // Update existing entry with additional data
             if (!existing.phone && customerPhone) existing.phone = customerPhone
             if (!existing.email && customerEmail) existing.email = customerEmail
             if (existing.full_name === 'Cliente' && customerName) existing.full_name = customerName
           } else {
-            // Create new entry with user_id as key
-            customerMap.set(booking.user_id, {
-              id: booking.user_id, // Always a valid UUID at this point
+            // Create new entry with customer ID as key
+            customerMap.set(customerId, {
+              id: customerId, // Always a valid UUID at this point
               full_name: customerName,
               email: customerEmail,
               phone: customerPhone,
