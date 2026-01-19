@@ -298,13 +298,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   async function loadData() {
     setLoading(true)
     try {
-      // Load bookings (exclude cancelled)
+      // Load bookings (exclude cancelled) - sorted by creation time (newest first)
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
-        .order('appointment_date', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (bookingsError) throw bookingsError
 
