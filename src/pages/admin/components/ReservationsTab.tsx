@@ -7,7 +7,7 @@ import {
   filterRentalTimeSlots
 } from '../../../utils/bookingConflictUtils'
 import { validateRentalBooking } from '../../../utils/schedulingRules'
-import { createRomeDate } from '../../../utils/timezoneUtils'
+
 import {
   getAvailableVehicles,
   isVehicleAvailable,
@@ -2725,17 +2725,50 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const pickupLocationLabel = LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
       const dropoffLocationLabel = LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
 
-      // Combine date and time - CRITICAL: Interpret form inputs as Europe/Rome timezone
-      // Parse the date and time components
-      const [pickupYear, pickupMonth, pickupDay] = formData.pickup_date.split('-').map(Number)
-      const [pickupHour, pickupMinute] = formData.pickup_time.split(':').map(Number)
-      const [returnYear, returnMonth, returnDay] = formData.return_date.split('-').map(Number)
-      const [returnHour, returnMinute] = formData.return_time.split(':').map(Number)
+      // SIMPLIFIED TIMEZONE HANDLING: Construct ISO strings directly
+      // This ensures times entered in the admin panel are stored EXACTLY as entered
+      // No complex timezone conversion needed - admin panel times are already in Europe/Rome
 
-      // Create Date objects as Europe/Rome timezone, then convert to UTC for storage
-      // This ensures "Jan 5, 11:00" entered in the form is stored as "Jan 5, 10:00 UTC" (UTC+1 in winter)
-      const pickupDate = createRomeDate(pickupYear, pickupMonth, pickupDay, pickupHour, pickupMinute, 0)
-      const returnDate = createRomeDate(returnYear, returnMonth, returnDay, returnHour, returnMinute, 0)
+      // Helper function to get correct timezone offset for Europe/Rome (handles DST automatically)
+      const getRomeOffset = (dateString: string): string => {
+        const date = new Date(dateString)
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Europe/Rome',
+          timeZoneName: 'short'
+        })
+        const parts = formatter.formatToParts(date)
+        const tzPart = parts.find(p => p.type === 'timeZoneName')
+        // CET = +01:00 (winter), CEST = +02:00 (summer DST)
+        return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+      }
+
+      // Get the correct timezone offset for the pickup date
+      const pickupOffset = getRomeOffset(formData.pickup_date)
+      const returnOffset = getRomeOffset(formData.return_date)
+
+      // Construct ISO strings with explicit timezone offset
+      const pickupDateTime = `${formData.pickup_date}T${formData.pickup_time}:00${pickupOffset}`
+      const returnDateTime = `${formData.return_date}T${formData.return_time}:00${returnOffset}`
+
+      // Create Date objects from ISO strings
+      const pickupDate = new Date(pickupDateTime)
+      const returnDate = new Date(returnDateTime)
+
+      // Debug logging to verify correct conversion
+      console.log('[Admin Booking] Timezone conversion:', {
+        pickup: {
+          input: `${formData.pickup_date} ${formData.pickup_time}`,
+          offset: pickupOffset,
+          iso: pickupDateTime,
+          utc: pickupDate.toISOString()
+        },
+        return: {
+          input: `${formData.return_date} ${formData.return_time}`,
+          offset: returnOffset,
+          iso: returnDateTime,
+          utc: returnDate.toISOString()
+        }
+      })
 
       const bookingData = {
         user_id: customerId, // Store customer ID to link booking to customer for contract generation
@@ -4120,6 +4153,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_location || '-'}</span></div>
                         <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{selectedBooking.booking_details?.insuranceOption || 'N/A'}</span></div>
                         <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.deposit ? `€${selectedBooking.booking_details.deposit}` : 'N/A'}</span></div>
+                        <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
                       </>
                     )}
                   </div>
