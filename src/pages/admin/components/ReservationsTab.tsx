@@ -3916,14 +3916,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       </button>
                     )}
 
-                    {booking.status !== 'cancelled' && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
-                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                      >
-                        Cancella
-                      </button>
-                    )}
+
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                       className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap w-full"
@@ -4043,7 +4036,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                 Modifica
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, 'booking') }}
+                                <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                                 className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                               >
                                 Cancella
@@ -4217,7 +4211,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   {selectedBooking.status !== 'cancelled' && (
                     <button
                       onClick={() => {
-                        handleCancelBooking(selectedBooking.id, 'booking')
+                        handleDeleteBooking(selectedBooking.id, 'booking')
                         setSelectedBooking(null)
                       }}
                       className="flex-1 px-4 py-3 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary rounded-full transition-colors font-medium"
