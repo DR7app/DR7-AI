@@ -4036,7 +4036,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                 Modifica
                               </button>
                               <button
-                                <button
                                 onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                                 className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                               >
@@ -4049,12 +4048,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                           >
                             Penali
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
-                            className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
-                          >
-                            ×
                           </button>
                         </div>
                       </td>
