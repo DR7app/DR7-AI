@@ -11,7 +11,8 @@ import CarWashBookingsTab from './components/CarWashBookingsTab'
 import CarWashCalendarTab from './components/CarWashCalendarTab'
 import MechanicalBookingTab from './components/MechanicalBookingTab'
 import MechanicalCalendarTab from './components/MechanicalCalendarTab'
-import LotteriaBoard from './components/LotteriaBoard'
+// OFFLINE: Lottery feature temporarily disabled
+// import LotteriaBoard from './components/LotteriaBoard'
 import UnpaidBookingsTab from './components/UnpaidBookingsTab'
 import DocumentsVerificationTab from './components/DocumentsVerificationTab'
 import MarketingTab from './components/MarketingTab'
@@ -24,7 +25,7 @@ import ScannerTab from './components/ScannerTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -237,6 +238,7 @@ export default function AdminDashboard() {
               >
                 Calendario Meccanica
               </button>
+              {/* OFFLINE: Lottery tab temporarily disabled
               <button
                 onClick={() => { setActiveTab('lotteria'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'lotteria' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
@@ -244,6 +246,7 @@ export default function AdminDashboard() {
               >
                 Biglietti Lotteria
               </button>
+              */}
               <button
                 onClick={() => { setActiveTab('fattura'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fattura' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
@@ -429,6 +432,7 @@ export default function AdminDashboard() {
               >
                 Gestione Flotta
               </button>
+              {/* OFFLINE: Lottery tab temporarily disabled
               <button
                 onClick={() => setActiveTab('lotteria')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'lotteria'
@@ -438,6 +442,7 @@ export default function AdminDashboard() {
               >
                 Lotteria
               </button>
+              */}
               <button
                 onClick={() => setActiveTab('fattura')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
@@ -509,7 +514,7 @@ export default function AdminDashboard() {
             {activeTab === 'calendar' && 'Calendario Noleggio'}
             {activeTab === 'carwash-calendar' && 'Calendario Lavaggi'}
             {activeTab === 'mechanical-calendar' && 'Calendario Meccanica'}
-            {activeTab === 'lotteria' && 'Biglietti Lotteria'}
+            {/* OFFLINE: {activeTab === 'lotteria' && 'Biglietti Lotteria'} */}
             {activeTab === 'fattura' && 'Fatture'}
             {activeTab === 'contratto' && 'Contratti'}
             {activeTab === 'cargos' && 'Cargos'}
@@ -549,7 +554,7 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'mechanical' && <MechanicalBookingTab />}
           {activeTab === 'mechanical-calendar' && <MechanicalCalendarTab />}
-          {activeTab === 'lotteria' && <LotteriaBoard />}
+          {/* OFFLINE: {activeTab === 'lotteria' && <LotteriaBoard />} */}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cargos' && <CargosTab />}
