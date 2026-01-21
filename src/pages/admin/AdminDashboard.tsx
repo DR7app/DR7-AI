@@ -21,10 +21,11 @@ import ContrattoTab from './components/ContrattoTab'
 import CargosTab from './components/CargosTab'
 import DailyCalendarModal from './components/DailyCalendarModal'
 import ScannerTab from './components/ScannerTab'
+import CauzioniTab from './components/CauzioniTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -224,6 +225,13 @@ export default function AdminDashboard() {
                 Calendario Noleggio
               </button>
               <button
+                onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Cauzioni
+              </button>
+              <button
                 onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
@@ -266,6 +274,13 @@ export default function AdminDashboard() {
                 Cargos
               </button>
               <button
+                onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Cauzioni
+              </button>
+              <button
                 onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'marketing' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
@@ -299,7 +314,7 @@ export default function AdminDashboard() {
               {/* Noleggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar'
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar' || activeTab === 'cauzioni'
                     ? 'text-theme-text-primary'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                     }`}
@@ -321,6 +336,13 @@ export default function AdminDashboard() {
                       }`}
                   >
                     Calendario
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('cauzioni')}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                      }`}
+                  >
+                    Cauzioni
                   </button>
                 </div>
               </div>
@@ -466,6 +488,15 @@ export default function AdminDashboard() {
                 Cargos
               </button>
               <button
+                onClick={() => setActiveTab('cauzioni')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'cauzioni'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Cauzioni
+              </button>
+              <button
                 onClick={() => setActiveTab('marketing')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
                   ? 'text-theme-text-primary'
@@ -513,6 +544,7 @@ export default function AdminDashboard() {
             {activeTab === 'fattura' && 'Fatture'}
             {activeTab === 'contratto' && 'Contratti'}
             {activeTab === 'cargos' && 'Cargos'}
+            {activeTab === 'cauzioni' && 'Cauzioni'}
             {activeTab === 'marketing' && 'Marketing'}
 
             {activeTab === 'reviews' && 'Recensioni'}
@@ -553,6 +585,7 @@ export default function AdminDashboard() {
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cargos' && <CargosTab />}
+          {activeTab === 'cauzioni' && <CauzioniTab />}
           {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'reviews' && <ReviewsTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
