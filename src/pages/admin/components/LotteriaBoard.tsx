@@ -1093,9 +1093,10 @@ const LotteriaBoard: React.FC = () => {
 
       if (error) throw error;
 
-      // Get unique clients by email
+      // Filter out null/empty emails and get unique clients by email
+      const validData = (data || []).filter(c => c.email && c.email.trim() !== '');
       const uniqueClients = Array.from(
-        new Map(data?.map(c => [c.email.toLowerCase(), c]) || []).values()
+        new Map(validData.map(c => [c.email.toLowerCase(), c])).values()
       );
 
       setAvailableClients(uniqueClients);
