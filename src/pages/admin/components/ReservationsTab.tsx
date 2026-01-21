@@ -2870,6 +2870,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Don't fail the whole booking if WhatsApp fails
         }
 
+        // Sync cauzione (security deposit) record
+        try {
+          console.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
+
+          const depositAmount = parseFloat(formData.deposit) || 0
+          const depositPaid = formData.payment_status === 'paid'
+
+          await fetch('/.netlify/functions/sync-booking-cauzione', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: insertedBooking.id,
+              customerId: formData.customer_id,
+              vehicleId: formData.vehicle_id,
+              returnDate: formData.return_date,
+              depositAmount: depositAmount,
+              paymentMethod: formData.payment_method || 'carta',
+              depositPaid: depositPaid
+            })
+          })
+          console.log('✅ Cauzione synced successfully')
+        } catch (cauzioneError) {
+          console.error('⚠️ Failed to sync cauzione:', cauzioneError)
+          // Don't fail the whole booking if cauzione sync fails
+        }
+
         // Generate Contract PDF automatically
         try {
           console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, new Date().toISOString())

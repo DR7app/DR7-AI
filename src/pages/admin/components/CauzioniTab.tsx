@@ -52,25 +52,40 @@ export default function CauzioniTab() {
     const fetchCauzioni = async () => {
         setLoading(true)
         try {
+            // Fetch from base table with proper joins
             const { data, error } = await supabase
-                .from('cauzioni_with_details')
+                .from('cauzioni')
                 .select(`
           *,
-          customers_extended!cauzioni_cliente_id_fkey(nome, cognome),
-          vehicles!cauzioni_veicolo_id_fkey(model, license_plate)
+          customers_extended!cliente_id(nome, cognome),
+          vehicles!veicolo_id(model, license_plate)
         `)
                 .order('scadenza_cauzione', { ascending: true })
 
             if (error) throw error
 
-            const formattedData = (data || []).map((c: any) => ({
-                ...c,
-                cliente_nome: c.customers_extended
-                    ? `${c.customers_extended.nome} ${c.customers_extended.cognome}`.trim()
-                    : 'Cliente Sconosciuto',
-                veicolo_modello: c.vehicles?.model || 'N/A',
-                veicolo_targa: c.vehicles?.license_plate || 'N/A'
-            }))
+            // Calculate is_overdue and days_until_deadline manually
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+
+            const formattedData = (data || []).map((c: any) => {
+                const scadenzaDate = new Date(c.scadenza_cauzione)
+                scadenzaDate.setHours(0, 0, 0, 0)
+
+                const daysUntilDeadline = Math.floor((scadenzaDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                const isOverdue = daysUntilDeadline < 0 && c.stato !== 'Restituita' && c.stato !== 'Sbloccata'
+
+                return {
+                    ...c,
+                    is_overdue: isOverdue,
+                    days_until_deadline: daysUntilDeadline,
+                    cliente_nome: c.customers_extended
+                        ? `${c.customers_extended.nome} ${c.customers_extended.cognome}`.trim()
+                        : 'Cliente Sconosciuto',
+                    veicolo_modello: c.vehicles?.model || 'N/A',
+                    veicolo_targa: c.vehicles?.license_plate || 'N/A'
+                }
+            })
 
             setCauzioni(formattedData)
         } catch (error: any) {
