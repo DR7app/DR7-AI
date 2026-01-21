@@ -57,21 +57,21 @@ CREATE OR REPLACE FUNCTION calculate_business_days_excluding_holidays(
     days_to_add INTEGER
 ) RETURNS DATE AS $$
 DECLARE
-    current_date DATE;
+    check_date DATE;
     business_days_counted INTEGER := 0;
     day_of_week INTEGER;
     is_holiday BOOLEAN;
 BEGIN
     -- Start from the NEXT day after start_date
-    current_date := start_date + INTERVAL '1 day';
+    check_date := start_date + INTERVAL '1 day';
     
     WHILE business_days_counted < days_to_add LOOP
         -- Get day of week (0=Sunday, 6=Saturday)
-        day_of_week := EXTRACT(DOW FROM current_date);
+        day_of_week := EXTRACT(DOW FROM check_date);
         
-        -- Check if current date is a holiday
+        -- Check if check_date is a holiday
         SELECT EXISTS(
-            SELECT 1 FROM holidays_it WHERE holiday_date = current_date
+            SELECT 1 FROM holidays_it WHERE holiday_date = check_date
         ) INTO is_holiday;
         
         -- Count as business day if not weekend and not holiday
@@ -81,11 +81,11 @@ BEGIN
         
         -- Move to next day if we haven't reached the target
         IF business_days_counted < days_to_add THEN
-            current_date := current_date + INTERVAL '1 day';
+            check_date := check_date + INTERVAL '1 day';
         END IF;
     END LOOP;
     
-    RETURN current_date;
+    RETURN check_date;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
