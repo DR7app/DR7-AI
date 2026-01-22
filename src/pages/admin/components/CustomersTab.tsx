@@ -1834,7 +1834,7 @@ export default function CustomersTab() {
                     : customer.status === 'vip'
                       ? 'border-l-4 border-l-yellow-500 bg-yellow-500/20'
                       : customer.status === 'has_rental'
-                        ? 'border-l-4 border-l-green-500 bg-green-900/30'
+                        ? 'border-l-4 border-l-green-500 bg-green-500/20'
                         : ''
                     }`}
                 >
