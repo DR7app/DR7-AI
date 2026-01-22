@@ -334,11 +334,14 @@ export const handler: Handler = async (event) => {
 
         // 4. Fetch Template from Supabase Storage
         // Based on user URL: .../public/templates/master_contract.pdf -> Bucket: 'templates', File: 'master_contract.pdf'
+        // IMPORTANT: Add timestamp to bust cache and ensure we always get the latest template version
         console.log(`[generate-contract] Fetching template from storage: bucket 'templates', file 'master_contract.pdf'`)
 
+        // Use timestamp-based cache busting by appending it to the file path
+        const templatePath = `master_contract.pdf?t=${Date.now()}`
         const { data: templateData, error: templateError } = await supabase.storage
             .from('templates')
-            .download('master_contract.pdf')
+            .download(templatePath)
 
         if (templateError || !templateData) {
             console.error(`[generate-contract] Template fetch failed:`, templateError)
