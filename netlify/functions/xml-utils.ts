@@ -213,3 +213,22 @@ export function generateFatturaXML(invoice: InvoiceData): string {
 
   return xml
 }
+
+/**
+ * Generate standard FatturaPA filename
+ * Format: IT + VAT (11 chars) + _ + Progressive (5 chars alphanumeric) + .xml
+ * Example: IT04104640927_00001.xml
+ */
+export function generateInvoiceFilename(invoice: InvoiceData): string {
+  const countryCode = 'IT'
+  // Hardcoded company VAT or from invoice if dynamic
+  const transmitterId = '04104640927'
+
+  // Ensure progressive is at least 5 chars, padded with 0
+  // We use the invoice number's numeric part
+  const rawNum = invoice.numero_fattura.replace(/\D/g, '') || '0'
+  const progressive = rawNum.padStart(5, '0').substring(0, 5) // Max 5 chars for the sequence part usually? 
+  // Actually spec allows more, but standard is often IT + 11 digits + _ + 5 chars
+
+  return `${countryCode}${transmitterId}_${progressive}.xml`
+}

@@ -1,13 +1,10 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { checkArubaStatus } from './aruba-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-// Invoicetronic Configuration
-const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || 'ik_live_z7Wzq9ySqSfX5AbNUzlVpRJXJY4AXdGU'
-const INVOICETRONIC_BASE_URL = process.env.INVOICETRONIC_BASE_URL || 'https://api.invoicetronic.com/v1'
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -32,41 +29,37 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Invoice not found' }) }
         }
 
-        if (!invoice.sdi_id) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Invoice has not been sent to Invoicetronic yet' }) }
+        if (!invoice.xml_filename) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Invoice has not been sent to Aruba yet (missing filename)' }) }
         }
 
-        // Check status from Invoicetronic API
-        const response = await fetch(`${INVOICETRONIC_BASE_URL}/invoices/${invoice.sdi_id}`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`
-            }
-        })
-
-        if (!response.ok) {
+        // Check status from Aruba API
+        let remoteInvoice
+        try {
+            remoteInvoice = await checkArubaStatus(invoice.xml_filename)
+        } catch (apiError: any) {
+            console.error('Aruba Status Check Error:', apiError)
             return {
-                statusCode: response.status,
-                body: JSON.stringify({
-                    error: 'Failed to check invoice status from Invoicetronic',
-                    details: await response.text()
-                })
+                statusCode: 502,
+                body: JSON.stringify({ error: 'Failed to check status with Aruba', details: apiError.message })
             }
         }
 
-        const remoteInvoice = await response.json()
+        // Map Aruba status to our internal status
+        // From official docs: status is in invoices[].status field
+        // Possible values: Inviata, Consegnata, Mancata Consegna, Scartata, etc.
+        let sdiStatus = 'sent' // Default
+        const invoiceStatus = remoteInvoice.invoices && remoteInvoice.invoices[0] ? remoteInvoice.invoices[0].status : ''
+        const remoteStatus = invoiceStatus.toLowerCase()
 
-        // Map Invoicetronic status to our internal status
-        // Invoicetronic statuses: Draft, Sent, Rejected, Delivered, etc.
-        let sdiStatus = 'sent'
-        const remoteStatus = (remoteInvoice.status || '').toLowerCase()
-
-        if (remoteStatus.includes('delivered') || remoteStatus.includes('accettat')) {
+        if (remoteStatus === 'consegnata') {
             sdiStatus = 'accepted'
-        } else if (remoteStatus.includes('rejected') || remoteStatus.includes('scartat') || remoteStatus.includes('rifiutat')) {
+        } else if (remoteStatus === 'scartata' || remoteStatus === 'mancata consegna') {
             sdiStatus = 'rejected'
-        } else if (remoteStatus.includes('error') || remoteStatus.includes('failed')) {
+        } else if (remoteStatus === 'errore elaborazione') {
             sdiStatus = 'error'
+        } else if (remoteStatus === 'inviata') {
+            sdiStatus = 'sent'
         }
 
         // Update DB
@@ -78,6 +71,14 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', invoiceId)
 
+        // Log to history
+        await supabase.from('invoice_status_logs').insert({
+            invoice_id: invoiceId,
+            status: sdiStatus,
+            message: `Aruba Status: ${remoteStatus}`,
+            raw_response: remoteInvoice
+        })
+
         return {
             statusCode: 200,
             body: JSON.stringify({
@@ -88,7 +89,7 @@ export const handler: Handler = async (event) => {
         }
 
     } catch (error: any) {
-        console.error('Error checking Invoicetronic status:', error)
+        console.error('Error checking Aruba status:', error)
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message })

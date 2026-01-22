@@ -1,13 +1,11 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { generateInvoicetronicPayload } from './invoicetronic-utils'
+import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
+import { uploadInvoiceToAruba } from './aruba-utils'
+
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-// Invoicetronic SDI Configuration
-const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || 'ik_test_34pBxEz0zsb2qPP1w5I6NBnT7GZi8i5R'
-const INVOICETRONIC_BASE_URL = process.env.INVOICETRONIC_BASE_URL || 'https://api.invoicetronic.com/v1'
 
 export const handler: Handler = async (event) => {
     // Only allow POST requests
@@ -33,89 +31,66 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Invoice not found' }) }
         }
 
-        // Generate XML Content (We assume XML is either stored or we generate it on the fly)
-        // Note: The previous implementation was generating JSON for "Fattura Elettronica API", but Invoicetronic takes XML or JSON.
-        // If we want consistency with the main generator, we should ideally use the XML generator if available.
-        // However, Invoicetronic also builds XML from JSON payload if sent to /send/json endpoint.
-        // Let's stick to the JSON payload since that's what we have logic for here, but send to Invoicetronic.
+        // 1. Generate XML
+        // Ensure invoice object matches InvoiceData interface if needed, or cast it
+        // The DB columns largely match standard naming
+        const xmlContent = generateFatturaXML(invoice as any)
+        const filename = generateInvoiceFilename(invoice as any)
 
-        const invoicePayload = generateInvoicetronicPayload(invoice)
+        console.log('[Aruba] Generated XML:', filename)
 
-        console.log('[SDI] Sending invoice to Invoicetronic:', {
-            invoiceId: invoice.id,
-            numero_fattura: invoice.numero_fattura,
-            customer: invoice.customer_name,
-            endpoint: `${INVOICETRONIC_BASE_URL}/invoices`,
-            apiKey: INVOICETRONIC_API_KEY ? `${INVOICETRONIC_API_KEY.substring(0, 10)}...` : 'MISSING',
-            payload: JSON.stringify(invoicePayload, null, 2)
-        })
+        // 2. Upload to Aruba
+        let arubaResult
+        try {
+            arubaResult = await uploadInvoiceToAruba(xmlContent, filename)
+            console.log('[Aruba] Upload success:', arubaResult)
+        } catch (apiError: any) {
+            console.error('[Aruba] API Error:', apiError)
 
-        // Send to Invoicetronic SDI
-        const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/invoices`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`
-            },
-            body: JSON.stringify(invoicePayload)
-        })
+            // Log error to new status table
+            await supabase.from('invoice_status_logs').insert({
+                invoice_id: invoiceId,
+                status: 'error',
+                message: apiError.message,
+                raw_response: { error: apiError.toString() }
+            })
 
-        const responseText = await sdiResponse.text()
-        let responseData: any = {}
-
-        console.log('[SDI] Response status:', sdiResponse.status, sdiResponse.statusText)
-        console.log('[SDI] Response headers:', Object.fromEntries(sdiResponse.headers.entries()))
-        console.log('[SDI] Response body:', responseText)
-
-        if (responseText && responseText.trim()) {
-            try {
-                responseData = JSON.parse(responseText)
-            } catch (parseError) {
-                console.error('[SDI] Failed to parse response JSON:', parseError)
-                console.error('[SDI] Raw Response:', responseText)
-                responseData = { error: 'Invalid JSON response', raw: responseText }
-            }
-        } else {
-            console.log('[SDI] Received empty response from API')
-        }
-
-        if (!sdiResponse.ok) {
-            // Update status to 'error'
-            await supabase
-                .from('fatture')
-                .update({
-                    sdi_status: 'error',
-                    sdi_response: responseData
-                })
-                .eq('id', invoiceId)
+            // Update main table
+            await supabase.from('fatture').update({ sdi_status: 'error' }).eq('id', invoiceId)
 
             return {
-                statusCode: sdiResponse.status,
-                body: JSON.stringify({
-                    error: 'Failed to send invoice to Invoicetronic',
-                    details: responseData
-                })
+                statusCode: 502,
+                body: JSON.stringify({ error: 'Failed to send to Aruba', details: apiError.message })
             }
         }
 
-        // Success - Update invoice with SDI info
+        // 3. Success - Update Database
         await supabase
             .from('fatture')
             .update({
-                sdi_status: 'sent',
-                sdi_id: responseData.id || responseData.uuid,
-                sdi_sent_at: new Date().toISOString(),
-                sdi_response: responseData
+                sdi_status: 'sending', // Waiting for Aruba to process/SdI to accept
+                aruba_invoice_id: arubaResult.id,
+                xml_filename: filename,
+                aruba_upload_filename: arubaResult.filename,
+                sdi_sent_at: new Date().toISOString()
             })
             .eq('id', invoiceId)
+
+        // 4. Log success
+        await supabase.from('invoice_status_logs').insert({
+            invoice_id: invoiceId,
+            status: 'sending',
+            message: 'Uploaded to Aruba',
+            raw_response: arubaResult
+        })
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
-                message: 'Invoice sent to SDI successfully',
-                sdi_id: responseData.id || responseData.uuid,
-                details: responseData
+                message: 'Invoice sent to Aruba successfully',
+                aruba_id: arubaResult.id,
+                filename: filename
             })
         }
     } catch (error: any) {

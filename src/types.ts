@@ -51,11 +51,15 @@ export interface Vehicle {
   last_tire_change_km?: number // Legacy field - kept for backward compatibility
   last_tire_change_front_km?: number
   last_tire_change_rear_km?: number
-  maintenance_tires_interval_km?: number
+  maintenance_tires_interval_km?: number // Legacy field - kept for backward compatibility
+  maintenance_tires_front_interval_km?: number
+  maintenance_tires_rear_interval_km?: number
   last_brake_change_km?: number // Legacy field - kept for backward compatibility
   last_brake_change_front_km?: number
   last_brake_change_rear_km?: number
-  maintenance_brake_interval_km?: number
+  maintenance_brake_interval_km?: number // Legacy field - kept for backward compatibility
+  maintenance_brake_front_interval_km?: number
+  maintenance_brake_rear_interval_km?: number
   last_service_km?: number
   last_service_date?: string
   maintenance_service_interval_km?: number

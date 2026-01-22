@@ -105,10 +105,10 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
         }
 
         // Tires (Gomme) - Check both front and rear
-        if (editedVehicle.maintenance_tires_interval_km) {
-            // Check front tires
+        // Check front tires
+        if (editedVehicle.maintenance_tires_front_interval_km) {
             const lastTiresFront = editedVehicle.last_tire_change_front_km || editedVehicle.last_tire_change_km || 0
-            const nextTiresFront = lastTiresFront + editedVehicle.maintenance_tires_interval_km
+            const nextTiresFront = lastTiresFront + editedVehicle.maintenance_tires_front_interval_km
             const remainingFront = nextTiresFront - currentKm
 
             if (remainingFront <= ALERT_THRESHOLD) {
@@ -121,10 +121,12 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                     urgent: remainingFront <= 0
                 })
             }
+        }
 
-            // Check rear tires
+        // Check rear tires
+        if (editedVehicle.maintenance_tires_rear_interval_km) {
             const lastTiresRear = editedVehicle.last_tire_change_rear_km || editedVehicle.last_tire_change_km || 0
-            const nextTiresRear = lastTiresRear + editedVehicle.maintenance_tires_interval_km
+            const nextTiresRear = lastTiresRear + editedVehicle.maintenance_tires_rear_interval_km
             const remainingRear = nextTiresRear - currentKm
 
             if (remainingRear <= ALERT_THRESHOLD) {
@@ -140,10 +142,10 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
         }
 
         // Brakes (Freni) - Check both front and rear
-        if (editedVehicle.maintenance_brake_interval_km) {
-            // Check front brakes
+        // Check front brakes
+        if (editedVehicle.maintenance_brake_front_interval_km) {
             const lastBrakesFront = editedVehicle.last_brake_change_front_km || editedVehicle.last_brake_change_km || 0
-            const nextBrakesFront = lastBrakesFront + editedVehicle.maintenance_brake_interval_km
+            const nextBrakesFront = lastBrakesFront + editedVehicle.maintenance_brake_front_interval_km
             const remainingFront = nextBrakesFront - currentKm
 
             if (remainingFront <= ALERT_THRESHOLD) {
@@ -156,10 +158,12 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                     urgent: remainingFront <= 0
                 })
             }
+        }
 
-            // Check rear brakes
+        // Check rear brakes
+        if (editedVehicle.maintenance_brake_rear_interval_km) {
             const lastBrakesRear = editedVehicle.last_brake_change_rear_km || editedVehicle.last_brake_change_km || 0
-            const nextBrakesRear = lastBrakesRear + editedVehicle.maintenance_brake_interval_km
+            const nextBrakesRear = lastBrakesRear + editedVehicle.maintenance_brake_rear_interval_km
             const remainingRear = nextBrakesRear - currentKm
 
             if (remainingRear <= ALERT_THRESHOLD) {
@@ -421,15 +425,15 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
                                             <input
                                                 type="number"
-                                                value={editedVehicle.maintenance_tires_interval_km || 30000}
-                                                onChange={(e) => updateField('maintenance_tires_interval_km', parseInt(e.target.value) || 30000)}
+                                                value={editedVehicle.maintenance_tires_front_interval_km || 30000}
+                                                onChange={(e) => updateField('maintenance_tires_front_interval_km', parseInt(e.target.value) || 30000)}
                                                 onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
-                                        {editedVehicle.maintenance_tires_interval_km && (
+                                        {editedVehicle.maintenance_tires_front_interval_km && (
                                             <p className="text-theme-text-muted text-sm">
-                                                Prossimo cambio: {((editedVehicle.last_tire_change_front_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km
+                                                Prossimo cambio: {((editedVehicle.last_tire_change_front_km || 0) + editedVehicle.maintenance_tires_front_interval_km).toLocaleString()} km
                                             </p>
                                         )}
                                     </div>
@@ -450,15 +454,15 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
                                             <input
                                                 type="number"
-                                                value={editedVehicle.maintenance_tires_interval_km || 30000}
-                                                onChange={(e) => updateField('maintenance_tires_interval_km', parseInt(e.target.value) || 30000)}
+                                                value={editedVehicle.maintenance_tires_rear_interval_km || 30000}
+                                                onChange={(e) => updateField('maintenance_tires_rear_interval_km', parseInt(e.target.value) || 30000)}
                                                 onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
-                                        {editedVehicle.maintenance_tires_interval_km && (
+                                        {editedVehicle.maintenance_tires_rear_interval_km && (
                                             <p className="text-theme-text-muted text-sm">
-                                                Prossimo cambio: {((editedVehicle.last_tire_change_rear_km || 0) + editedVehicle.maintenance_tires_interval_km).toLocaleString()} km
+                                                Prossimo cambio: {((editedVehicle.last_tire_change_rear_km || 0) + editedVehicle.maintenance_tires_rear_interval_km).toLocaleString()} km
                                             </p>
                                         )}
                                     </div>
@@ -485,16 +489,16 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
                                             <input
                                                 type="number"
-                                                value={editedVehicle.maintenance_brake_interval_km || 0}
-                                                onChange={(e) => updateField('maintenance_brake_interval_km', parseInt(e.target.value) || 0)}
+                                                value={editedVehicle.maintenance_brake_front_interval_km || 0}
+                                                onChange={(e) => updateField('maintenance_brake_front_interval_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                                 placeholder="0 = non monitorato"
                                             />
                                         </div>
-                                        {editedVehicle.maintenance_brake_interval_km && editedVehicle.maintenance_brake_interval_km > 0 && (
+                                        {editedVehicle.maintenance_brake_front_interval_km && editedVehicle.maintenance_brake_front_interval_km > 0 && (
                                             <p className="text-theme-text-muted text-sm">
-                                                Prossimo cambio: {((editedVehicle.last_brake_change_front_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km
+                                                Prossimo cambio: {((editedVehicle.last_brake_change_front_km || 0) + editedVehicle.maintenance_brake_front_interval_km).toLocaleString()} km
                                             </p>
                                         )}
                                     </div>
@@ -515,16 +519,16 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             <label className="block text-theme-text-secondary text-sm mb-2">Intervallo (km)</label>
                                             <input
                                                 type="number"
-                                                value={editedVehicle.maintenance_brake_interval_km || 0}
-                                                onChange={(e) => updateField('maintenance_brake_interval_km', parseInt(e.target.value) || 0)}
+                                                value={editedVehicle.maintenance_brake_rear_interval_km || 0}
+                                                onChange={(e) => updateField('maintenance_brake_rear_interval_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
                                                 className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                                 placeholder="0 = non monitorato"
                                             />
                                         </div>
-                                        {editedVehicle.maintenance_brake_interval_km && editedVehicle.maintenance_brake_interval_km > 0 && (
+                                        {editedVehicle.maintenance_brake_rear_interval_km && editedVehicle.maintenance_brake_rear_interval_km > 0 && (
                                             <p className="text-theme-text-muted text-sm">
-                                                Prossimo cambio: {((editedVehicle.last_brake_change_rear_km || 0) + editedVehicle.maintenance_brake_interval_km).toLocaleString()} km
+                                                Prossimo cambio: {((editedVehicle.last_brake_change_rear_km || 0) + editedVehicle.maintenance_brake_rear_interval_km).toLocaleString()} km
                                             </p>
                                         )}
                                     </div>

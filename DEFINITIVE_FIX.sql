@@ -1,9 +1,8 @@
--- ============================================
--- INTEGRATION: Auto-create Cauzione from Booking
--- ============================================
--- This migration adds automatic cauzione creation when a booking with a deposit is made
+-- DEFINITIVE FIX for Da Saldare payment status update
+-- This fixes the trigger function permanently
+-- Run this ENTIRE script in Supabase SQL Editor
 
--- Function to auto-create cauzione record when booking is created/updated with deposit
+-- Step 1: Replace the broken function with the fixed version
 CREATE OR REPLACE FUNCTION auto_create_cauzione_from_booking()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -17,7 +16,7 @@ BEGIN
     
     -- Only proceed if deposit exists and is > 0
     IF deposit_amount IS NOT NULL AND deposit_amount > 0 THEN
-        -- Get vehicle ID
+        -- FIXED: Use 'plate' instead of 'license_plate'
         SELECT id INTO vehicle_uuid
         FROM vehicles
         WHERE plate = NEW.vehicle_plate
@@ -52,7 +51,7 @@ BEGIN
                 NEW.id,
                 return_date,
                 deposit_amount,
-                'bonifico', -- Default method, can be updated manually
+                'bonifico',
                 'Auto-creata da prenotazione #' || NEW.id
             );
         ELSE
@@ -63,7 +62,7 @@ BEGIN
                 importo = deposit_amount,
                 updated_at = NOW()
             WHERE riferimento_contratto_id = NEW.id
-              AND stato NOT IN ('Restituita', 'Sbloccata'); -- Don't update terminal states
+              AND stato NOT IN ('Restituita', 'Sbloccata');
         END IF;
     END IF;
     
@@ -71,29 +70,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger on bookings table
--- Note: This assumes your bookings table is called 'bookings'
--- Adjust the table name if different
+-- Step 2: Recreate the trigger (in case it was dropped)
+DROP TRIGGER IF EXISTS trigger_auto_create_cauzione_from_booking ON bookings;
+
 CREATE TRIGGER trigger_auto_create_cauzione_from_booking
     AFTER INSERT OR UPDATE ON bookings
     FOR EACH ROW
     EXECUTE FUNCTION auto_create_cauzione_from_booking();
 
--- ============================================
--- MIGRATION NOTES
--- ============================================
--- This integration will:
--- 1. Automatically create a cauzione record when a booking with deposit > 0 is created
--- 2. Link the cauzione to the booking via riferimento_contratto_id
--- 3. Auto-update the cauzione when booking return date changes
--- 4. Respect terminal states (Restituita, Sbloccata) - won't update those
-
--- The cauzione will use:
--- - cliente_id: from customer email lookup
--- - veicolo_id: from vehicle plate lookup  
--- - data_restituzione_veicolo: from booking return_date
--- - importo: from booking_details.deposit
--- - metodo: defaults to 'bonifico' (can be changed manually in Cauzioni tab)
-
--- IMPORTANT: If your bookings table has a different name or structure,
--- you'll need to adjust the trigger and function accordingly.
+-- Done! The Da Saldare payment status update should now work without timeout errors.

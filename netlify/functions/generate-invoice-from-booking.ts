@@ -7,7 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 // Invoicetronic SDI Configuration
-const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || 'ik_test_34pBxEz0zsb2qPP1w5I6NBnT7GZi8i5R'
+const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || ''
 const INVOICETRONIC_BASE_URL = process.env.INVOICETRONIC_BASE_URL || 'https://api.invoicetronic.com/v1'
 
 export const handler: Handler = async (event) => {

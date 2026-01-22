@@ -1,9 +1,13 @@
+require('dotenv').config();
 
 const { createClient } = require('@supabase/supabase-js');
 
-// Use hardcoded URL for testing if env not picked up, but try env first
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+let supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseServiceKey || supabaseServiceKey.startsWith('your_')) {
+    supabaseServiceKey = process.env.VITE_SUPABASE_ANON_KEY;
+}
 
 if (!supabaseServiceKey) {
     console.error('Error: Missing Supabase Key. Please provide SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY');
