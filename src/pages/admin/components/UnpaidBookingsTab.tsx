@@ -76,16 +76,20 @@ export default function UnpaidBookingsTab() {
     try {
       const { error } = await supabase
         .from('bookings')
-        .update({ payment_status: newStatus })
+        .update({
+          payment_status: newStatus,
+          status: newStatus === 'paid' ? 'confirmed' : 'pending'
+        })
         .eq('id', bookingId)
 
       if (error) throw error
 
       alert('Stato pagamento aggiornato!')
       loadUnpaidBookings()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update payment status:', error)
-      alert('Errore nell\'aggiornamento dello stato pagamento')
+      const errorMessage = error?.message || error?.details || JSON.stringify(error)
+      alert(`Errore nell'aggiornamento dello stato pagamento:\n\n${errorMessage}\n\nID Prenotazione: ${bookingId.substring(0, 8)}`)
     }
   }
 
