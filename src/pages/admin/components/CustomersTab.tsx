@@ -1830,11 +1830,11 @@ export default function CustomersTab() {
                 <tr
                   key={customer.id}
                   className={`border-t border-theme-border hover:bg-white/5 transition-all duration-200 ${customer.status === 'blacklist'
-                      ? 'border-l-4 border-l-red-500 bg-red-500/5'
+                      ? 'border-l-4 border-l-red-500 bg-red-900/30'
                       : customer.status === 'vip'
-                        ? 'border-l-4 border-l-yellow-500 bg-yellow-500/5'
+                        ? 'border-l-4 border-l-yellow-500 bg-yellow-900/30'
                         : customer.status === 'has_rental'
-                          ? 'border-l-4 border-l-green-500 bg-green-500/5'
+                          ? 'border-l-4 border-l-green-500 bg-green-900/30'
                           : ''
                     }`}
                 >
