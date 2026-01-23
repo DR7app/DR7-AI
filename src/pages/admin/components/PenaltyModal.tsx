@@ -84,6 +84,15 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
         !vehicleName.includes('class v') &&
         !vehicleName.includes('500') &&
         !vehicleName.includes('renegade') &&
+        !vehicleName.includes('citroen') &&
+        !vehicleName.includes('c5') &&
+        !vehicleName.includes('cupra') &&
+        !vehicleName.includes('formentor') &&
+        !vehicleName.includes('vw') &&
+        !vehicleName.includes('t-roc') &&
+        !vehicleName.includes('troc') &&
+        !vehicleName.includes('tiguan') &&
+        !vehicleName.includes('a250') &&
         !vehicleName.includes('utilitaire')
 
     // Select appropriate penalty list
