@@ -94,24 +94,11 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   const companyCity = 'CAGLIARI'
   const companyProvince = 'CA'
 
-  // Determine Transmitter ID from ARUBA_USERNAME (Logged-in User)
-  // This fixes "Errore 0093 Deleghe non valide" by ensuring Transmitter == Authenticated User
-  // Default to company VAT if username is not in VAT format
-  let transmitterId = companyVAT
-  try {
-    const envUsername = process.env.ARUBA_USERNAME || ''
-    // Check if username looks like IT12345678901 or ARUBA12345678901
-    // Strip IT and ARUBA prefixes (case insensitive)
-    const cleanUsername = envUsername.toUpperCase()
-      .replace(/^IT/, '')
-      .replace(/^ARUBA/, '')
-
-    if (/^\d{11}$/.test(cleanUsername)) {
-      transmitterId = cleanUsername
-    }
-  } catch (e) {
-    // Ignore error, fallback to companyVAT
-  }
+  // CRITICAL: IdTrasmittente MUST be Aruba's intermediary code
+  // Per official Aruba API docs (v1.21.1):
+  // "The synchronous check has been introduced for the Sender ID field (tag 1.1.1 <IdTrasmittente>)
+  //  which will have to be filled in with the tax code for the intermediary Aruba PEC S.p.A.: 01879020517"
+  const transmitterId = '01879020517'
 
   // Generate progressive transmission ID
   const progressivoInvio = invoice.numero_fattura.replace(/\D/g, '') || '1'
