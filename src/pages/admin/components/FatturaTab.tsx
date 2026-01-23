@@ -179,7 +179,6 @@ export default function FatturaTab() {
       return
     }
 
-    if (!confirm('Sei sicuro di voler inviare questa fattura allo SDI?')) return
 
     try {
       const updatedInvoices = invoices.map(i =>
