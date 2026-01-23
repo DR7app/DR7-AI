@@ -1466,12 +1466,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.warn('PDF auto-open failed, continuing flow:', err)
       }
 
-      // Now ask for SDI
-      if (confirm(`✅ Fattura ${invoice.numero_fattura} generata (Bozza).\n\nVuoi inviarla subito allo SDI (Aruba)?`)) {
-        await sendInvoiceToAruba(invoice.id, invoice.numero_fattura)
-      } else {
-        alert('Fattura salvata in bozza. Puoi inviarla successivamente dalla tab "Fatture".')
-      }
+      // Automatically send to SDI (no confirmation)
+      await sendInvoiceToAruba(invoice.id, invoice.numero_fattura)
 
       loadData()
     } catch (error: any) {
