@@ -94,7 +94,26 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   const companyCity = 'CAGLIARI'
   const companyProvince = 'CA'
 
-  // Generate progressive transmission ID (use invoice number without prefix)
+  // Determine Transmitter ID from ARUBA_USERNAME (Logged-in User)
+  // This fixes "Errore 0093 Deleghe non valide" by ensuring Transmitter == Authenticated User
+  // Default to company VAT if username is not in VAT format
+  let transmitterId = companyVAT
+  try {
+    const envUsername = process.env.ARUBA_USERNAME || ''
+    // Check if username looks like IT12345678901 or ARUBA12345678901
+    // Strip IT and ARUBA prefixes (case insensitive)
+    const cleanUsername = envUsername.toUpperCase()
+      .replace(/^IT/, '')
+      .replace(/^ARUBA/, '')
+
+    if (/^\d{11}$/.test(cleanUsername)) {
+      transmitterId = cleanUsername
+    }
+  } catch (e) {
+    // Ignore error, fallback to companyVAT
+  }
+
+  // Generate progressive transmission ID
   const progressivoInvio = invoice.numero_fattura.replace(/\D/g, '') || '1'
 
   // Customer details
@@ -150,7 +169,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
     <DatiTrasmissione>
       <IdTrasmittente>
         <IdPaese>IT</IdPaese>
-        <IdCodice>${companyVAT}</IdCodice>
+        <IdCodice>${transmitterId}</IdCodice>
       </IdTrasmittente>
       <ProgressivoInvio>${progressivoInvio}</ProgressivoInvio>
       <FormatoTrasmissione>FPR12</FormatoTrasmissione>
