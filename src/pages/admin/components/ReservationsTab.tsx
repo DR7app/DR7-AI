@@ -1431,10 +1431,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const data = await response.json()
       if (!response.ok) {
         if (data.invoiceNumber) {
-          // Invoice already exists - Ask to send to SDI
-          if (confirm(`⚠️ Fattura esistente (${data.invoiceNumber}).\n\nVuoi inviarla ora allo SDI (Aruba)?`)) {
-            await sendInvoiceToAruba(data.invoice?.id || data.invoiceId, data.invoiceNumber)
-          }
+          // Invoice already exists - Send to SDI automatically
+          await sendInvoiceToAruba(data.invoice?.id || data.invoiceId)
           return
         } else {
           // Show detailed error from backend
