@@ -1488,7 +1488,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Helper to send to Aruba directly from Reservations Tab
   async function sendInvoiceToAruba(invoiceId: string) {
-    if (!invoiceId) return
+    if (!invoiceId) {
+      console.error('❌ No invoice ID provided')
+      return
+    }
+
+    console.log('📤 Sending invoice to Aruba SDI...', invoiceId)
 
     try {
       const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
@@ -1499,11 +1504,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       const result = await response.json()
 
-      if (!response.ok) {
-        console.error('SDI send failed:', result.error, result.details)
+      if (response.ok) {
+        console.log('✅ SDI send successful:', result)
+      } else {
+        console.error('❌ SDI send failed:', result.error, result.details)
       }
     } catch (error) {
-      console.error('Aruba send error:', error)
+      console.error('❌ Aruba send error:', error)
     }
   }
 
