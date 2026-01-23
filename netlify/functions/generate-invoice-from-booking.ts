@@ -396,76 +396,10 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // --- AUTOMATIC SDI SENDING via Invoicetronic ---
-        let sdiResult = null
-        if (INVOICETRONIC_API_KEY && invoice) {
-            try {
-                console.log('[SDI] Generating Invoicetronic JSON Payload...')
-
-                // Generate JSON Payload
-                const invoicePayload = generateInvoicetronicPayload(invoice)
-
-                console.log('[SDI] Sending to Invoicetronic SDI (JSON)...')
-
-                // Send to Invoicetronic SDI
-                const sdiResponse = await fetch(`${INVOICETRONIC_BASE_URL}/invoices`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Basic ${Buffer.from(INVOICETRONIC_API_KEY + ':').toString('base64')}`
-                    },
-                    body: JSON.stringify(invoicePayload)
-                })
-
-                const responseText = await sdiResponse.text()
-                let responseData: any = {}
-
-                if (responseText && responseText.trim()) {
-                    try {
-                        responseData = JSON.parse(responseText)
-                    } catch (parseError) {
-                        console.error('[SDI] Failed to parse response JSON:', parseError)
-                        console.error('[SDI] Raw Response:', responseText)
-                        responseData = { error: 'Invalid JSON response', raw: responseText }
-                    }
-                } else {
-                    console.log('[SDI] Received empty response from API')
-                }
-
-                sdiResult = responseData
-
-                console.log('[SDI] Status:', sdiResponse.status, sdiResponse.statusText)
-                console.log('[SDI] Response Data:', JSON.stringify(responseData))
-
-                // Update Invoice Status
-                await supabase
-                    .from('fatture')
-                    .update({
-                        sdi_status: sdiResponse.ok ? 'sent' : 'error',
-                        sdi_id: responseData.id || responseData.data?.uuid || responseData.uuid, // ID returned by JSON endpoint might be different
-                        sdi_sent_at: new Date().toISOString(),
-                        sdi_response: responseData
-                        // xml_fattura_pa: ... Invoicetronic generates this now
-                    })
-                    .eq('id', invoice.id)
-
-                // Update local object for return
-                invoice.sdi_status = sdiResponse.ok ? 'sent' : 'error'
-
-                if (!sdiResponse.ok) {
-                    console.error('[SDI] Error response:', responseData)
-                }
-            } catch (sdiError: any) {
-                console.error('[SDI] Sending Failed:', sdiError)
-                // Don't fail the whole request, just log
-                await supabase.from('fatture').update({
-                    sdi_status: 'error',
-                    sdi_response: { error: sdiError.message, stack: sdiError.stack }
-                }).eq('id', invoice.id)
-            }
-        } else {
-            console.warn('[SDI] Token not configured, skipping automatic send')
-        }
+        // --- AUTOMATIC SDI SENDING REMOVED ---
+        // We now rely on explicit "Invia SDI" button which uses Aruba API
+        // Status remains 'draft' until user manually sends it
+        console.log('[Invoice] Generated in draft status. Ready for Aruba upload.')
 
         return {
             statusCode: 200,

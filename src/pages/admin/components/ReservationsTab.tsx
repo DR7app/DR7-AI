@@ -1431,7 +1431,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const data = await response.json()
       if (!response.ok) {
         if (data.invoiceNumber) {
-          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          // Invoice already exists - Ask to send to SDI
+          if (confirm(`⚠️ Fattura esistente (${data.invoiceNumber}).\n\nVuoi inviarla ora allo SDI (Aruba)?`)) {
+            await sendInvoiceToAruba(data.invoice?.id || data.invoiceId, data.invoiceNumber)
+          }
+          return
         } else {
           // Show detailed error from backend
           const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
@@ -1439,33 +1443,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const errorHint = data.hint ? `\n\nSuggerimento: ${data.hint}` : ''
           throw new Error(errorMsg + errorDetails + errorHint)
         }
-        return
       }
 
-      // Generate and open the invoice PDF
-      const invoiceId = data.invoice.id
-      const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId })
-      })
+      // Success - Invoice Created via Booking
+      const invoice = data.invoice
 
-      if (pdfResponse.ok) {
-        const html = await pdfResponse.text()
-        // Create a blob URL and open it
-        const blob = new Blob([html], { type: 'text/html' })
-        const url = URL.createObjectURL(blob)
-        const printWindow = window.open(url, '_blank')
-
-        if (printWindow) {
-          // Clean up the blob        if (printWindow) {
-          setTimeout(() => URL.revokeObjectURL(url), 3000)
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
-        } else {
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+      // Open PDF first as courtesy (non-blocking)
+      try {
+        const invoiceId = invoice.id
+        const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoiceId })
+        })
+        if (pdfResponse.ok) {
+          const html = await pdfResponse.text()
+          const blob = new Blob([html], { type: 'text/html' })
+          const url = URL.createObjectURL(blob)
+          window.open(url, '_blank')
         }
+      } catch (err) {
+        console.warn('PDF auto-open failed, continuing flow:', err)
+      }
+
+      // Now ask for SDI
+      if (confirm(`✅ Fattura ${invoice.numero_fattura} generata (Bozza).\n\nVuoi inviarla subito allo SDI (Aruba)?`)) {
+        await sendInvoiceToAruba(invoice.id, invoice.numero_fattura)
       } else {
-        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        alert('Fattura salvata in bozza. Puoi inviarla successivamente dalla tab "Fatture".')
       }
 
       loadData()
@@ -1484,6 +1489,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       alert('Errore nella generazione della fattura:\n\n' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
+    }
+  }
+
+  // Helper to send to Aruba directly from Reservations Tab
+  async function sendInvoiceToAruba(invoiceId: string, invoiceNumber: string) {
+    if (!invoiceId) return
+
+    try {
+      const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: invoiceId })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        alert(`✅ Fattura ${invoiceNumber} inviata con successo allo SDI!`)
+      } else {
+        alert(`❌ Errore invio SDI:\n\n${result.error}\n${result.details ? JSON.stringify(result.details) : ''}`)
+      }
+    } catch (error) {
+      console.error('Aruba send error:', error)
+      alert('Errore di comunicazione con il server Aruba')
     }
   }
 
