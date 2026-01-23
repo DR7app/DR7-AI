@@ -71,31 +71,18 @@ export async function getArubaToken(): Promise<string> {
 export async function uploadInvoiceToAruba(xmlContent: string, filename: string): Promise<{ id: string, filename: string }> {
     const token = await getArubaToken()
 
-    // Extract VAT from username (ARUBA04104640927 -> 04104640927)
-    let senderVAT = ''
-    try {
-        console.log('[Aruba] Raw USERNAME:', USERNAME)
-        const cleanUsername = USERNAME.toUpperCase()
-            .replace(/^IT/, '')
-            .replace(/^ARUBA/, '')
-        console.log('[Aruba] Cleaned USERNAME:', cleanUsername)
-
-        if (/^\d{11}$/.test(cleanUsername)) {
-            senderVAT = cleanUsername
-            console.log('[Aruba] Extracted senderPIVA:', senderVAT)
-        } else {
-            console.warn('[Aruba] ⚠️ Username does not match VAT format (11 digits):', cleanUsername)
-        }
-    } catch (e) {
-        console.error('[Aruba] Error extracting VAT from username:', e)
-    }
+    // senderPIVA is OPTIONAL and only used for TD26 invoices (asset disposal)
+    // Per official docs: "If the invoice to be sent has code TD26... the senderPIVA field can be used"
+    // For normal invoices, leave it empty
+    const senderPIVA = ''
+    console.log('[Aruba] Using empty senderPIVA (not TD26 invoice)')
 
     // Official Aruba format: JSON with base64-encoded XML
     const payload = {
         dataFile: Buffer.from(xmlContent).toString('base64'),
         credential: '',
         domain: '',
-        senderPIVA: senderVAT, // Set the sender VAT for proper authorization
+        senderPIVA: senderPIVA,
         skipExtraSchema: false
     }
 
