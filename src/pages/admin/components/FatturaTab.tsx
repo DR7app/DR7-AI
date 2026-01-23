@@ -194,16 +194,13 @@ export default function FatturaTab() {
 
       const result = await response.json()
 
-      if (response.ok) {
-        alert('Fattura inviata con successo allo SDI')
-      } else {
-        alert(`Errore durante l'invio:\n\n${result.error}\n${result.details ? JSON.stringify(result.details) : ''}`)
+      if (!response.ok) {
+        console.error('SDI send failed:', result.error, result.details)
       }
 
       loadInvoices()
     } catch (error) {
       console.error('Error sending to SDI:', error)
-      alert('Errore di comunicazione con il server')
       loadInvoices()
     }
   }

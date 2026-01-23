@@ -1467,7 +1467,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Automatically send to SDI (no confirmation)
-      await sendInvoiceToAruba(invoice.id, invoice.numero_fattura)
+      await sendInvoiceToAruba(invoice.id)
 
       loadData()
     } catch (error: any) {
@@ -1489,7 +1489,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   // Helper to send to Aruba directly from Reservations Tab
-  async function sendInvoiceToAruba(invoiceId: string, invoiceNumber: string) {
+  async function sendInvoiceToAruba(invoiceId: string) {
     if (!invoiceId) return
 
     try {
@@ -1501,14 +1501,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       const result = await response.json()
 
-      if (response.ok) {
-        alert(`✅ Fattura ${invoiceNumber} inviata con successo allo SDI!`)
-      } else {
-        alert(`❌ Errore invio SDI:\n\n${result.error}\n${result.details ? JSON.stringify(result.details) : ''}`)
+      if (!response.ok) {
+        console.error('SDI send failed:', result.error, result.details)
       }
     } catch (error) {
       console.error('Aruba send error:', error)
-      alert('Errore di comunicazione con il server Aruba')
     }
   }
 
