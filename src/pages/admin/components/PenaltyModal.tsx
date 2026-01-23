@@ -93,6 +93,8 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
         !vehicleName.includes('troc') &&
         !vehicleName.includes('tiguan') &&
         !vehicleName.includes('a250') &&
+        !vehicleName.includes('fiat') &&
+        !vehicleName.includes('renault') &&
         !vehicleName.includes('utilitaire')
 
     // Select appropriate penalty list
