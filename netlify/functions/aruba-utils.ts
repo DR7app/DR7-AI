@@ -74,14 +74,20 @@ export async function uploadInvoiceToAruba(xmlContent: string, filename: string)
     // Extract VAT from username (ARUBA04104640927 -> 04104640927)
     let senderVAT = ''
     try {
+        console.log('[Aruba] Raw USERNAME:', USERNAME)
         const cleanUsername = USERNAME.toUpperCase()
             .replace(/^IT/, '')
             .replace(/^ARUBA/, '')
+        console.log('[Aruba] Cleaned USERNAME:', cleanUsername)
+
         if (/^\d{11}$/.test(cleanUsername)) {
             senderVAT = cleanUsername
+            console.log('[Aruba] Extracted senderPIVA:', senderVAT)
+        } else {
+            console.warn('[Aruba] ⚠️ Username does not match VAT format (11 digits):', cleanUsername)
         }
     } catch (e) {
-        // Ignore, leave empty
+        console.error('[Aruba] Error extracting VAT from username:', e)
     }
 
     // Official Aruba format: JSON with base64-encoded XML
@@ -92,6 +98,8 @@ export async function uploadInvoiceToAruba(xmlContent: string, filename: string)
         senderPIVA: senderVAT, // Set the sender VAT for proper authorization
         skipExtraSchema: false
     }
+
+    console.log('[Aruba] Upload payload (without dataFile):', { ...payload, dataFile: '[BASE64_OMITTED]' })
 
     const response = await fetch(`${ARUBA_API_URL}/services/invoice/upload`, {
         method: 'POST',
