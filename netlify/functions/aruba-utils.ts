@@ -71,12 +71,25 @@ export async function getArubaToken(): Promise<string> {
 export async function uploadInvoiceToAruba(xmlContent: string, filename: string): Promise<{ id: string, filename: string }> {
     const token = await getArubaToken()
 
+    // Extract VAT from username (ARUBA04104640927 -> 04104640927)
+    let senderVAT = ''
+    try {
+        const cleanUsername = USERNAME.toUpperCase()
+            .replace(/^IT/, '')
+            .replace(/^ARUBA/, '')
+        if (/^\d{11}$/.test(cleanUsername)) {
+            senderVAT = cleanUsername
+        }
+    } catch (e) {
+        // Ignore, leave empty
+    }
+
     // Official Aruba format: JSON with base64-encoded XML
     const payload = {
         dataFile: Buffer.from(xmlContent).toString('base64'),
         credential: '',
         domain: '',
-        senderPIVA: '',
+        senderPIVA: senderVAT, // Set the sender VAT for proper authorization
         skipExtraSchema: false
     }
 
