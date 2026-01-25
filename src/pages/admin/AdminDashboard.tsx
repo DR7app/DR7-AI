@@ -95,7 +95,7 @@ export default function AdminDashboard() {
                   )}
                 </svg>
               </button>
-              <img src="/DR7logo1.png" alt="DR7 Empire" className="h-8 sm:h-10" />
+              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-8 sm:h-10" />
               <h1 className="text-lg sm:text-2xl font-bold text-theme-text-primary">DR7 Control Room</h1>
             </div>
             <div className="flex items-center gap-3">

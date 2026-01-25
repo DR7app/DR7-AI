@@ -51,7 +51,7 @@ export default function Login() {
 
           <div className="relative">
             <div className="flex justify-center mb-8">
-              <img src="/DR7logo1.png" alt="DR7 Empire" className="h-24 drop-shadow-2xl" />
+              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-24 drop-shadow-2xl" />
             </div>
 
             <h1 className="text-3xl font-bold text-white text-center mb-2">
