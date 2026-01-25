@@ -4,6 +4,8 @@ import DynamicCustomerForm from './DynamicCustomerForm'
 import CustomerDocuments from './CustomerDocuments'
 import Button from './Button'
 
+type StatusCliente = 'standard' | 'member' | 'elite' | 'blacklist'
+
 interface Customer {
   id: string
   tipo_cliente: 'azienda' | 'persona_fisica' | 'pubblica_amministrazione'
@@ -27,6 +29,8 @@ interface Customer {
   citta?: string
   // Meta
   source?: string
+  // Status
+  status_cliente?: StatusCliente
 }
 
 export default function ClientiTab() {
@@ -78,6 +82,51 @@ export default function ClientiTab() {
         return 'Pubblica Amministrazione'
       default:
         return tipo
+    }
+  }
+
+  const getStatusLabel = (status: StatusCliente | undefined) => {
+    switch (status) {
+      case 'elite':
+        return 'Elite'
+      case 'member':
+        return 'Member'
+      case 'blacklist':
+        return 'Black List'
+      default:
+        return 'Standard'
+    }
+  }
+
+  const getStatusBadgeClass = (status: StatusCliente | undefined) => {
+    switch (status) {
+      case 'elite':
+        return 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+      case 'member':
+        return 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
+      case 'blacklist':
+        return 'bg-red-500/20 text-red-400 border border-red-500/50'
+      default:
+        return 'bg-gray-700 text-gray-400 border border-gray-600'
+    }
+  }
+
+  const handleStatusChange = async (customerId: string, newStatus: StatusCliente) => {
+    try {
+      const { error } = await supabase
+        .from('customers_extended')
+        .update({ status_cliente: newStatus })
+        .eq('id', customerId)
+
+      if (error) throw error
+
+      // Update local state
+      setCustomers(prev => prev.map(c =>
+        c.id === customerId ? { ...c, status_cliente: newStatus } : c
+      ))
+    } catch (error) {
+      console.error('Failed to update status:', error)
+      alert('Errore durante l\'aggiornamento dello status')
     }
   }
 
@@ -187,9 +236,9 @@ export default function ClientiTab() {
                 <tr>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome/Denominazione</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Codice Fiscale</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Contatto</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Indirizzo</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Origine</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
@@ -212,6 +261,18 @@ export default function ClientiTab() {
                         <div className="text-xs text-theme-text-muted mt-1">Cod. Univoco: {customer.codice_univoco}</div>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-sm">
+                      <select
+                        value={customer.status_cliente || 'standard'}
+                        onChange={(e) => handleStatusChange(customer.id, e.target.value as StatusCliente)}
+                        className={`px-2 py-1 rounded-full text-xs font-semibold cursor-pointer border-0 outline-none ${getStatusBadgeClass(customer.status_cliente)}`}
+                      >
+                        <option value="standard">Standard</option>
+                        <option value="member">Member</option>
+                        <option value="elite">Elite</option>
+                        <option value="blacklist">Black List</option>
+                      </select>
+                    </td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">
                       {customer.codice_fiscale || '-'}
                     </td>
@@ -219,9 +280,6 @@ export default function ClientiTab() {
                       {customer.email && <div>{customer.email}</div>}
                       {customer.telefono && <div className="text-xs text-theme-text-muted">{customer.telefono}</div>}
                       {!customer.email && !customer.telefono && '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-muted max-w-xs truncate">
-                      {customer.indirizzo || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                       {new Date(customer.created_at).toLocaleDateString('it-IT')}
