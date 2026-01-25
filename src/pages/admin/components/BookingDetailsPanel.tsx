@@ -119,7 +119,41 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
 
           {/* Payment Status */}
           <div className="space-y-3">
-            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Pagamento</h3>
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Pagamento</h3>
+              {remainingEur > 0 && (
+                <button
+                  onClick={async () => {
+                    try {
+                      // Call backend to get payment link
+                      const res = await fetch('/.netlify/functions/nexi-create-payment', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          bookingId: booking.id,
+                          amount: remainingEur,
+                          email: booking.customer_email,
+                          description: `Saldo Prenotazione ${booking.vehicle_name}`
+                        })
+                      });
+                      const data = await res.json();
+                      if (data.paymentUrl) {
+                        window.open(data.paymentUrl, '_blank');
+                      } else {
+                        alert('Errore generazione link: ' + (data.error || 'Unknown error'));
+                      }
+                    } catch (e) {
+                      alert('Errore di connessione');
+                    }
+                  }}
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                  Paga con Nexi
+                </button>
+              )}
+            </div>
 
             {/* Payment Status Badge */}
             <div className="flex items-center gap-2">

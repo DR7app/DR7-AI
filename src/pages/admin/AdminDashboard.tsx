@@ -22,10 +22,11 @@ import CargosTab from './components/CargosTab'
 import DailyCalendarModal from './components/DailyCalendarModal'
 import ScannerTab from './components/ScannerTab'
 import CauzioniTab from './components/CauzioniTab'
+import NexiTab from './components/NexiTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -523,6 +524,15 @@ export default function AdminDashboard() {
               >
                 Scanner
               </button>
+              <button
+                onClick={() => setActiveTab('nexi')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'nexi'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Nexi
+              </button>
             </nav>
           </div>
         </div>
@@ -549,6 +559,7 @@ export default function AdminDashboard() {
 
             {activeTab === 'reviews' && 'Recensioni'}
             {activeTab === 'scanner' && 'Scanner Documenti'}
+            {activeTab === 'nexi' && 'Nexi'}
           </h2>
         </div>
 
@@ -590,6 +601,7 @@ export default function AdminDashboard() {
           {activeTab === 'reviews' && <ReviewsTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
           {activeTab === 'scanner' && <ScannerTab />}
+          {activeTab === 'nexi' && <NexiTab />}
         </div>
       </main>
 
