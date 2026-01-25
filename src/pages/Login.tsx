@@ -46,8 +46,7 @@ export default function Login() {
       <div className="w-full max-w-xl relative z-10">
         {/* Main Card with Glassmorphism */}
         <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl px-12 pt-12 pb-20 border border-gray-700/50 relative">
-          {/* Subtle glow effect */}
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-dr7-gold/5 via-transparent to-transparent pointer-events-none" />
+
 
           <div className="relative">
             <div className="flex justify-center mb-4">
