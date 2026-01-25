@@ -14,23 +14,23 @@ DECLARE
 BEGIN
     -- Extract deposit from booking_details JSONB
     deposit_amount := (NEW.booking_details->>'deposit')::NUMERIC;
-    
+
     -- Only proceed if deposit exists and is > 0
     IF deposit_amount IS NOT NULL AND deposit_amount > 0 THEN
-        -- Get vehicle ID
+        -- Get vehicle ID from plate (try vehicle_plate first, then booking_details)
         SELECT id INTO vehicle_uuid
         FROM vehicles
-        WHERE plate = NEW.vehicle_plate
+        WHERE UPPER(REPLACE(plate, ' ', '')) = UPPER(REPLACE(COALESCE(NEW.vehicle_plate, NEW.booking_details->>'vehiclePlate', ''), ' ', ''))
         LIMIT 1;
-        
-        -- Get customer ID from email
+
+        -- Get customer ID from email or user_id
         SELECT id INTO customer_uuid
         FROM customers_extended
-        WHERE email = NEW.customer_email
+        WHERE email = NEW.customer_email OR user_id = NEW.user_id
         LIMIT 1;
-        
-        -- Use return_date as data_restituzione_veicolo
-        return_date := NEW.return_date::DATE;
+
+        -- Use dropoff_date as data_restituzione_veicolo
+        return_date := NEW.dropoff_date::DATE;
         
         -- Check if cauzione already exists for this booking
         IF NOT EXISTS (
