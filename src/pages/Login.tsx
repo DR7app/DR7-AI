@@ -43,15 +43,15 @@ export default function Login() {
         backgroundSize: '40px 40px'
       }} />
 
-      <div className="w-full max-w-md relative z-10">
+      <div className="w-full max-w-xl relative z-10">
         {/* Main Card with Glassmorphism */}
-        <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-gray-700/50 relative">
+        <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl p-12 border border-gray-700/50 relative">
           {/* Subtle glow effect */}
           <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-dr7-gold/5 via-transparent to-transparent pointer-events-none" />
 
           <div className="relative">
             <div className="flex justify-center mb-8">
-              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-40 drop-shadow-2xl" />
+              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-64 drop-shadow-2xl" />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
