@@ -17,46 +17,49 @@ interface PenaltyModalProps {
 
 // Supercar Penalties
 const SUPERCAR_PENALTIES = [
-    { id: 'fermo_incidente', label: 'Fermo veicolo per incidente o danni', amount: 350, description: 'Per ogni giorno di inutilizzo del veicolo' },
-    { id: 'fermo_alto_valore', label: 'Fermo veicolo – auto di valore ≥ 200.000 €', amount: 700, description: 'Applicata alle vetture di fascia alta' },
-    { id: 'fumo', label: 'Fumo all\'interno dell\'auto', amount: 50, description: '50 € per solo odore/cenere; fino a 1.500 € se presenti danni. Riparazioni sempre a carico del cliente' },
-    { id: 'fori_bruciature', label: 'Fori / Bruciature', amount: 50, description: '50 € per foro. Se danni estesi valutare perizia.' },
-    { id: 'guidatore_non_indicato', label: 'Guidatore non indicato nel contratto', amount: 200, description: 'Possono guidare esclusivamente le persone indicate nel contratto' },
-    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 25, description: 'In base al livello indicato dal quadro strumenti' },
-    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 50, description: 'In base al livello indicato dal quadro strumenti' },
-    { id: 'gonfia_ripara', label: 'Utilizzo bomboletta "gonfia e ripara"', amount: 100, description: 'Per pneumatico - Salvo maggior danno' },
-    { id: 'sporco', label: 'Veicolo restituito in condizioni pessime (sporco/rifiuti)', amount: 30, description: 'Sporco evidente o immondizia all\'interno' },
+    { id: 'fermo_incidente', label: 'Fermo veicolo per incidente o danni', amount: 350, description: '€350/giorno di inutilizzo del veicolo' },
+    { id: 'fermo_alto_valore', label: 'Fermo veicolo (auto valore > €200.000)', amount: 700, description: '€700/giorno per vetture di valore superiore a €200.000' },
+    { id: 'fumo', label: 'Fumo nell\'auto (odore/cenere)', amount: 50, description: '€50 senza danni, solo odore o residui di cenere' },
+    { id: 'foro_sigaretta', label: 'Foro da sigaretta (per foro)', amount: 50, description: '€50 per ogni foro nella tappezzeria causato da sigaretta' },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non citato nel contratto', amount: 200, description: 'Possono guidare SOLO le persone citate nel contratto' },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 25, description: '€25 se il quadro ha 8 tacche' },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 50, description: '€50 se il quadro ha 4 tacche' },
+    { id: 'gonfia_ripara', label: 'Utilizzo bomboletta "gonfia e ripara"', amount: 100, description: '€100 per pneumatico - Salvo maggior danno' },
+    { id: 'sporco', label: 'Veicolo sporco (interni/rifiuti)', amount: 30, description: 'Sporco interni, tasche portiere, portaoggetti, poggiagomito, sedili, bagagliaio' },
     { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'In aggiunta alla penale per sporco' },
-    { id: 'controlli_elettronici', label: 'Disattivazione controlli elettronici', amount: 100, description: 'ESP, controlli di stabilità o sicurezza' },
+    { id: 'controlli_elettronici', label: 'Disattivazione controlli elettronici', amount: 100, description: 'ESP, controlli di stabilità o sicurezza disattivati' },
     { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico del cliente - Nessuna esclusione' },
-    { id: 'assenza_intestatario', label: 'Assenza intestatario a consegna/ritiro', amount: 150, description: '+ eventuali costi per ritardi o ulteriori fermi' },
-    { id: 'ritardo_checkout', label: 'Ritardo al check-out', amount: 50, description: 'Dopo i primi 30 minuti di ritardo' },
-    { id: 'pista', label: 'Utilizzo del veicolo in pista o competizioni', amount: 5000, description: '+ risarcimento danni totali (kasko non attiva)' },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario a consegna/ritiro', amount: 150, description: 'Intestatario deve essere presente per consegna e ritiro a domicilio' },
+    { id: 'ritardo_checkout_base', label: 'Ritardo al check-out (dopo 30 min)', amount: 50, description: '€50 minimo dopo i primi 30 minuti' },
+    { id: 'ritardo_checkout_minuto', label: 'Ritardo al check-out (per minuto)', amount: 0.5, description: '+€0.50 per ogni minuto di ritardo oltre i 30 min' },
+    { id: 'pista', label: 'Utilizzo in pista o competizioni', amount: 5000, description: '€5.000 + risarcimento danni totali - Kasko non attiva' },
     { id: 'cani', label: 'Presenza di cani o pelo di cane', amount: 100, description: 'Non tollerato' },
     { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave del contratto' },
-    { id: 'neopatentati', label: 'Guida di neopatentati o soggetti non abilitati (art. 117 CdS)', amount: 0, description: 'Responsabilità totale del cliente - Include sanzioni, fermi amministrativi e danni' },
-    { id: 'patente_mancante', label: 'Mancata esibizione patente fisica al ritiro', amount: 0, description: 'Perdita prenotazione e importo versato' },
+    { id: 'neopatentati', label: 'Guida neopatentati/non abilitati (art. 117 CdS)', amount: 0, description: 'Responsabilità TOTALE: sanzioni, fermo amministrativo, danni' },
+    { id: 'patente_mancante', label: 'Mancata esibizione patente fisica', amount: 0, description: 'Perdita prenotazione e importo versato - Patente fisica obbligatoria al ritiro' },
+    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (oltre 22h30)', amount: 0, description: 'Penale max = tariffa giornaliera. Oltre 22h30 = giornata aggiuntiva + risarcimento danni a terzi' },
 ]
 
-// Urban/Utilitaire Penalties
+// Urban/Utilitarie/Furgone/NCC Penalties
 const URBAN_UTILITAIRE_PENALTIES = [
-    { id: 'fermo_utilitarie', label: 'Fermo veicolo per incidente o danni (Utilitarie)', amount: 30, description: 'Addebitata per ogni giorno di inutilizzo' },
-    { id: 'fermo_furgoni', label: 'Fermo veicolo per incidente o danni (Furgoni / NCC)', amount: 100, description: 'Addebitata per ogni giorno di inutilizzo' },
-    { id: 'fumo', label: 'Fumo all\'interno dell\'auto', amount: 50, description: '50 € per solo odore/cenere; fino a 1.500 € se presenti danni (riparazioni sempre a carico del cliente)' },
-    { id: 'fori_bruciature', label: 'Fori / Bruciature', amount: 50, description: '50 € per foro. Se danni estesi valutare perizia.' },
-    { id: 'guidatore_non_indicato', label: 'Guidatore non indicato nel contratto', amount: 200, description: 'Possono guidare solo i soggetti espressamente indicati' },
-    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: 'In base al livello del quadro strumenti' },
-    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: 'In base al livello del quadro strumenti' },
-    { id: 'gonfia_ripara', label: 'Uso bomboletta "gonfia e ripara"', amount: 100, description: 'Per pneumatico - Salvo maggior danno' },
-    { id: 'sporco', label: 'Auto restituita molto sporca', amount: 30, description: 'Sporco evidente su interni o rifiuti lasciati' },
+    { id: 'fermo_utilitarie', label: 'Fermo veicolo (Utilitarie)', amount: 30, description: '€30/giorno di inutilizzo' },
+    { id: 'fermo_furgoni', label: 'Fermo veicolo (Furgoni/NCC)', amount: 100, description: '€100/giorno di inutilizzo' },
+    { id: 'fumo', label: 'Fumo nell\'auto (odore/cenere)', amount: 50, description: '€50 senza danni, solo odore o residui di cenere' },
+    { id: 'foro_sigaretta', label: 'Foro da sigaretta (per foro)', amount: 50, description: '€50 per ogni foro nella tappezzeria causato da sigaretta' },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non citato nel contratto', amount: 200, description: 'Possono guidare SOLO le persone citate nel contratto' },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: '€15 se il quadro ha 8 tacche' },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: '€30 se il quadro ha 4 tacche' },
+    { id: 'gonfia_ripara', label: 'Utilizzo bomboletta "gonfia e ripara"', amount: 100, description: '€100 per pneumatico - Salvo maggior danno' },
+    { id: 'sporco', label: 'Veicolo sporco (interni/rifiuti)', amount: 30, description: 'Sporco interni, tasche portiere, portaoggetti, poggiagomito, sedili, bagagliaio' },
     { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'In aggiunta alla penale per sporco' },
-    { id: 'controlli_elettronici', label: 'Disattivazione controlli elettronici', amount: 100, description: 'ESP, controlli di stabilità o sicurezza' },
     { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico del cliente - Nessuna esclusione' },
-    { id: 'assenza_intestatario', label: 'Assenza intestatario a consegna/ritiro', amount: 150, description: '+ eventuali costi per ritardi o fermi aggiuntivi' },
-    { id: 'ritardo_checkout', label: 'Ritardo al check-out', amount: 20, description: 'Dopo i primi 30 minuti' },
-    { id: 'neopatentati', label: 'Guida di neopatentati / non abilitati (art. 117 CdS)', amount: 0, description: 'Responsabilità totale del cliente - Include sanzioni, fermi e danni' },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario a consegna/ritiro', amount: 150, description: 'Intestatario deve essere presente per consegna e ritiro a domicilio' },
+    { id: 'ritardo_checkout_base', label: 'Ritardo al check-out (dopo 30 min)', amount: 20, description: '€20 minimo dopo i primi 30 minuti' },
+    { id: 'ritardo_checkout_minuto', label: 'Ritardo al check-out (per minuto)', amount: 0.5, description: '+€0.50 per ogni minuto di ritardo oltre i 30 min' },
+    { id: 'neopatentati', label: 'Guida neopatentati/non abilitati (art. 117 CdS)', amount: 0, description: 'Responsabilità TOTALE: sanzioni, fermo amministrativo, danni' },
     { id: 'cani', label: 'Presenza di cani o pelo di cane', amount: 100, description: 'Non tollerato' },
     { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave del contratto' },
+    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (oltre 22h30)', amount: 0, description: 'Penale max = tariffa giornaliera. Oltre 22h30 = giornata aggiuntiva + risarcimento danni a terzi' },
 ]
 
 export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEditCustomer }: PenaltyModalProps) {
@@ -69,37 +72,17 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     if (!isOpen) return null
 
-    // Determine vehicle type from booking
-    const vehicleName = booking.vehicle_name?.toLowerCase() || ''
+    // Get vehicle category from booking_details
+    const vehicleCategory = booking.booking_details?.vehicle?.category ||
+        booking.booking_details?.vehicleCategory ||
+        booking.booking_details?.category || ''
 
-    // Check if it's a supercar (exotic) or urban/utilitaire
-    const isSupercar = !vehicleName.includes('panda') &&
-        !vehicleName.includes('captur') &&
-        !vehicleName.includes('clio') &&
-        !vehicleName.includes('ducato') &&
-        !vehicleName.includes('vito') &&
-        !vehicleName.includes('van') &&
-        !vehicleName.includes('furgone') &&
-        !vehicleName.includes('classe v') &&
-        !vehicleName.includes('class v') &&
-        !vehicleName.includes('500') &&
-        !vehicleName.includes('renegade') &&
-        !vehicleName.includes('citroen') &&
-        !vehicleName.includes('c5') &&
-        !vehicleName.includes('cupra') &&
-        !vehicleName.includes('formentor') &&
-        !vehicleName.includes('vw') &&
-        !vehicleName.includes('t-roc') &&
-        !vehicleName.includes('troc') &&
-        !vehicleName.includes('tiguan') &&
-        !vehicleName.includes('a250') &&
-        !vehicleName.includes('fiat') &&
-        !vehicleName.includes('renault') &&
-        !vehicleName.includes('utilitaire')
-
-    // Select appropriate penalty list
+    // Determine penalty list based on vehicle category:
+    // - 'exotic' = Supercar penalties
+    // - 'urban' or 'aziendali' = Urban/Utilitarie/Furgone/NCC penalties
+    const isSupercar = vehicleCategory === 'exotic'
     const penaltyList = isSupercar ? SUPERCAR_PENALTIES : URBAN_UTILITAIRE_PENALTIES
-    const vehicleTypeLabel = isSupercar ? 'Supercar' : 'Urban/Utilitaire'
+    const vehicleTypeLabel = isSupercar ? 'Supercar' : 'Urban/Utilitarie/Furgone/NCC'
 
     // Handle penalty selection
     const handlePenaltySelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
