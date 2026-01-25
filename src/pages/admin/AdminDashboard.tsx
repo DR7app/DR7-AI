@@ -406,6 +406,35 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/* Flotta Dropdown */}
+              <div className="relative group">
+                <button
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'vehicles' || activeTab === 'fleet'
+                    ? 'text-theme-text-primary'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                    }`}
+                >
+                  Flotta
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button
+                    onClick={() => setActiveTab('vehicles')}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                      }`}
+                  >
+                    Veicoli
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('fleet')}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                      }`}
+                  >
+                    Gestione Flotta
+                  </button>
+                </div>
+              </div>
+
               {/* Other menu items */}
               <button
                 onClick={() => setActiveTab('unpaid')}
@@ -415,6 +444,15 @@ export default function AdminDashboard() {
                   }`}
               >
                 Da Saldare
+              </button>
+              <button
+                onClick={() => setActiveTab('cauzioni')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'cauzioni'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Cauzioni
               </button>
               <button
                 onClick={() => setActiveTab('documents-verification')}
@@ -433,24 +471,6 @@ export default function AdminDashboard() {
                   }`}
               >
                 Clienti
-              </button>
-              <button
-                onClick={() => setActiveTab('vehicles')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'vehicles'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Veicoli
-              </button>
-              <button
-                onClick={() => setActiveTab('fleet')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fleet'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Gestione Flotta
               </button>
               <button
                 onClick={() => setActiveTab('lotteria')}
@@ -487,15 +507,6 @@ export default function AdminDashboard() {
                   }`}
               >
                 Cargos
-              </button>
-              <button
-                onClick={() => setActiveTab('cauzioni')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'cauzioni'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Cauzioni
               </button>
               <button
                 onClick={() => setActiveTab('marketing')}
