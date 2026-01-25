@@ -45,21 +45,14 @@ export default function Login() {
 
       <div className="w-full max-w-md relative z-10">
         {/* Main Card with Glassmorphism */}
-        <div className="bg-gray-900/40 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-gray-700/50 relative">
+        <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-gray-700/50 relative">
           {/* Subtle glow effect */}
           <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-dr7-gold/5 via-transparent to-transparent pointer-events-none" />
 
           <div className="relative">
             <div className="flex justify-center mb-8">
-              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-24 drop-shadow-2xl" />
+              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-40 drop-shadow-2xl" />
             </div>
-
-            <h1 className="text-3xl font-bold text-white text-center mb-2">
-              DR7 Control Room
-            </h1>
-            <p className="text-gray-400 text-center text-sm mb-8">
-              Accedi al pannello di amministrazione
-            </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
