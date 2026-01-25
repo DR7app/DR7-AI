@@ -72,53 +72,17 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     if (!isOpen) return null
 
-    // Determine vehicle type from booking - check category first, then name
-    const vehicleName = booking.vehicle_name?.toLowerCase() || ''
-    const vehicleCategory = booking.booking_details?.vehicle?.category?.toLowerCase() ||
-        booking.booking_details?.vehicleCategory?.toLowerCase() || ''
+    // Get vehicle category from booking_details
+    const vehicleCategory = booking.booking_details?.vehicle?.category ||
+        booking.booking_details?.vehicleCategory ||
+        booking.booking_details?.category || ''
 
-    // Function to check if vehicle is urban/utilitaire/furgone/NCC
-    const isUrbanOrUtilitaire = () => {
-        // First check explicit category
-        if (vehicleCategory === 'urban' || vehicleCategory === 'aziendali' || vehicleCategory === 'ncc') {
-            return true
-        }
-
-        // Urban vehicles
-        const urbanKeywords = ['panda', 'captur', 'clio', '500', 'c3', 'citroen', 'fiat', 'renault']
-        // Furgone/NCC vehicles
-        const furgoneKeywords = ['ducato', 'vito', 'van', 'furgone', 'classe v', 'class v', 'tourer', 'sprinter', 'transit']
-        // Utilitaire vehicles
-        const utilitaireKeywords = ['utilitaire', 'renegade', 'cupra', 'formentor', 't-roc', 'troc', 'tiguan', 'a250', 'a180', 'golf']
-
-        return urbanKeywords.some(k => vehicleName.includes(k)) ||
-            furgoneKeywords.some(k => vehicleName.includes(k)) ||
-            utilitaireKeywords.some(k => vehicleName.includes(k))
-    }
-
-    // Check if it's a supercar (exotic)
-    const isSupercar = () => {
-        // First check explicit category
-        if (vehicleCategory === 'exotic' || vehicleCategory === 'supercar') {
-            return true
-        }
-
-        // Supercar keywords
-        const supercarKeywords = [
-            'lamborghini', 'ferrari', 'porsche', 'mclaren', 'aston', 'bentley', 'rolls',
-            'amg', 'c63', 'm3', 'm4', 'm5', 'm8', 'rs3', 'rs4', 'rs5', 'rs6', 'rs7',
-            'gt3', 'gt4', '911', 'huracan', 'aventador', 'urus', 'sf90', 'f8', '488', '296',
-            'ghibli', 'quattroporte', 'levante', 'macan', 'cayenne', 'panamera',
-            'competition', 'performance', 'svj', 'sian'
-        ]
-
-        return supercarKeywords.some(k => vehicleName.includes(k))
-    }
-
-    // Determine the correct penalty list
-    const vehicleIsSupercar = isSupercar() && !isUrbanOrUtilitaire()
-    const penaltyList = vehicleIsSupercar ? SUPERCAR_PENALTIES : URBAN_UTILITAIRE_PENALTIES
-    const vehicleTypeLabel = vehicleIsSupercar ? 'Supercar' : 'Urban/Utilitarie/Furgone/NCC'
+    // Determine penalty list based on vehicle category:
+    // - 'exotic' = Supercar penalties
+    // - 'urban' or 'aziendali' = Urban/Utilitarie/Furgone/NCC penalties
+    const isSupercar = vehicleCategory === 'exotic'
+    const penaltyList = isSupercar ? SUPERCAR_PENALTIES : URBAN_UTILITAIRE_PENALTIES
+    const vehicleTypeLabel = isSupercar ? 'Supercar' : 'Urban/Utilitarie/Furgone/NCC'
 
     // Handle penalty selection
     const handlePenaltySelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
