@@ -57,8 +57,8 @@ export default function CauzioniTab() {
                 .from('cauzioni')
                 .select(`
           *,
-          customers_extended!cliente_id(nome, cognome),
-          vehicles!veicolo_id(model, license_plate)
+          customers_extended!cliente_id(nome, cognome, denominazione, tipo_cliente),
+          vehicles!veicolo_id(display_name, plate)
         `)
                 .order('scadenza_cauzione', { ascending: true })
 
@@ -75,15 +75,23 @@ export default function CauzioniTab() {
                 const daysUntilDeadline = Math.floor((scadenzaDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
                 const isOverdue = daysUntilDeadline < 0 && c.stato !== 'Restituita' && c.stato !== 'Sbloccata'
 
+                // Get client name based on type (azienda uses denominazione, persona_fisica uses nome/cognome)
+                let clienteName = 'Cliente Sconosciuto';
+                if (c.customers_extended) {
+                    if (c.customers_extended.tipo_cliente === 'azienda' && c.customers_extended.denominazione) {
+                        clienteName = c.customers_extended.denominazione;
+                    } else if (c.customers_extended.nome || c.customers_extended.cognome) {
+                        clienteName = `${c.customers_extended.nome || ''} ${c.customers_extended.cognome || ''}`.trim();
+                    }
+                }
+
                 return {
                     ...c,
                     is_overdue: isOverdue,
                     days_until_deadline: daysUntilDeadline,
-                    cliente_nome: c.customers_extended
-                        ? `${c.customers_extended.nome} ${c.customers_extended.cognome}`.trim()
-                        : 'Cliente Sconosciuto',
-                    veicolo_modello: c.vehicles?.model || 'N/A',
-                    veicolo_targa: c.vehicles?.license_plate || 'N/A'
+                    cliente_nome: clienteName,
+                    veicolo_modello: c.vehicles?.display_name || 'N/A',
+                    veicolo_targa: c.vehicles?.plate || 'N/A'
                 }
             })
 

@@ -9,15 +9,17 @@ interface NuovaCauzioneModalProps {
 
 interface Customer {
     id: string
-    nome: string
-    cognome: string
-    email: string
+    nome: string | null
+    cognome: string | null
+    denominazione: string | null
+    tipo_cliente: string
+    email: string | null
 }
 
 interface Vehicle {
     id: string
-    model: string
-    license_plate: string
+    display_name: string
+    plate: string | null
 }
 
 export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaCauzioneModalProps) {
@@ -45,7 +47,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
             // Load customers
             const { data: customersData, error: customersError } = await supabase
                 .from('customers_extended')
-                .select('id, nome, cognome, email')
+                .select('id, nome, cognome, denominazione, tipo_cliente, email')
                 .order('cognome', { ascending: true })
 
             if (customersError) throw customersError
@@ -53,8 +55,8 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
             // Load vehicles
             const { data: vehiclesData, error: vehiclesError } = await supabase
                 .from('vehicles')
-                .select('id, model, license_plate')
-                .order('model', { ascending: true })
+                .select('id, display_name, plate')
+                .order('display_name', { ascending: true })
 
             if (vehiclesError) throw vehiclesError
 
@@ -159,11 +161,16 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                     className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                                 >
                                     <option value="">Seleziona cliente...</option>
-                                    {customers.map((customer) => (
-                                        <option key={customer.id} value={customer.id}>
-                                            {customer.cognome} {customer.nome} - {customer.email}
-                                        </option>
-                                    ))}
+                                    {customers.map((customer) => {
+                                        const displayName = customer.tipo_cliente === 'azienda'
+                                            ? customer.denominazione
+                                            : `${customer.cognome || ''} ${customer.nome || ''}`.trim();
+                                        return (
+                                            <option key={customer.id} value={customer.id}>
+                                                {displayName || 'N/A'} - {customer.email || 'N/A'}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                             </div>
 
@@ -181,7 +188,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                     <option value="">Seleziona veicolo...</option>
                                     {vehicles.map((vehicle) => (
                                         <option key={vehicle.id} value={vehicle.id}>
-                                            {vehicle.model} - {vehicle.license_plate}
+                                            {vehicle.display_name} - {vehicle.plate || 'N/A'}
                                         </option>
                                     ))}
                                 </select>
