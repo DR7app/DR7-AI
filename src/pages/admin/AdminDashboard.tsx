@@ -78,7 +78,7 @@ export default function AdminDashboard() {
         backgroundSize: '40px 40px'
       }} />
 
-      <header className="bg-black/20 backdrop-blur-md border-b border-gray-700/50">
+      <header className="bg-black backdrop-blur-md border-b border-gray-700/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2 sm:gap-4">
@@ -95,8 +95,8 @@ export default function AdminDashboard() {
                   )}
                 </svg>
               </button>
-              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-8 sm:h-10" />
-              <h1 className="text-lg sm:text-2xl font-bold text-theme-text-primary tracking-[0.2em] uppercase">Management Platform</h1>
+              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-16 sm:h-20" />
+              <h1 className="text-sm sm:text-base font-normal text-theme-text-primary tracking-widest">Management Platform</h1>
             </div>
             <div className="flex items-center gap-3">
               {!alarmState.audioEnabled && (
