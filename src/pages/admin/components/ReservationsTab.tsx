@@ -3315,7 +3315,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   </div>
                 ) : (
                   <Select
-                    label={`Veicolo (${availableVehicles.length} disponibili)`}
+                    label={`Veicolo (${vehiclesForDropdown.length} disponibili)`}
                     required
                     value={formData.vehicle_id}
                     onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
@@ -3334,7 +3334,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     ]}
                   />
                 )}
-                {formData.pickup_date && formData.return_date && availableVehicles.length === 0 && (
+                {formData.pickup_date && formData.return_date && vehiclesForDropdown.length === 0 && (
                   <p className="text-red-400 text-sm mt-2">
                     Nessun veicolo disponibile per le date selezionate
                   </p>
