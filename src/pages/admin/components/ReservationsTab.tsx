@@ -247,20 +247,27 @@ const normalizePlate = (s: string) => s ? s.replace(/\s+/g, '').toUpperCase() : 
 // Helper to check if a booking belongs to a vehicle
 // CRITICAL: Only matches by vehicle_id or plate - NEVER by name
 const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
+  // First try vehicle_id (most reliable) - check both top-level and booking_details
   const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
-  if (bookingVehicleId === vehicle.id) return true
+  if (bookingVehicleId && bookingVehicleId === vehicle.id) {
+    console.log(`[isBookingForVehicle] MATCH by vehicle_id: ${bookingVehicleId}`)
+    return true
+  }
 
-  // Try matching by plate
-  if (!bookingVehicleId && booking.vehicle_plate) {
-    const vPlate = vehicle.plate || vehicle.targa
-    if (vPlate) {
-      if (normalizePlate(booking.vehicle_plate) === normalizePlate(vPlate)) return true
+  // Try matching by plate - check both top-level and booking_details
+  const bookingPlate = booking.vehicle_plate || booking.booking_details?.vehicle_plate
+  const vehiclePlate = vehicle.plate || vehicle.targa
+
+  if (bookingPlate && vehiclePlate) {
+    if (normalizePlate(bookingPlate) === normalizePlate(vehiclePlate)) {
+      console.log(`[isBookingForVehicle] MATCH by plate: ${normalizePlate(bookingPlate)}`)
+      return true
     }
   }
 
   // NO FALLBACK TO NAME MATCHING - this is forbidden
   // Log warning if we can't match
-  if (!bookingVehicleId && !booking.vehicle_plate) {
+  if (!bookingVehicleId && !bookingPlate) {
     console.warn('[Vehicle Matching] Cannot match booking - no vehicle_id or plate:', booking.id)
   }
 
