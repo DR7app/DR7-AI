@@ -14,6 +14,23 @@ interface Customer {
     cognome?: string
 }
 
+interface UserConsent {
+    id: string
+    user_id: string
+    consent_type: string
+    consent_text: string
+    accepted_at: string
+    ip_address: string | null
+    source: string
+    status: string
+    revoked_at: string | null
+    user_agent: string | null
+    created_at: string
+    // Joined from customers_extended
+    user_name?: string
+    user_email?: string
+}
+
 export default function MarketingTab() {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [loading, setLoading] = useState(true)
@@ -31,8 +48,18 @@ export default function MarketingTab() {
     const CUSTOMERS_PER_PAGE = 50
     const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
 
+    // GDPR Consents Section
+    const [activeSection, setActiveSection] = useState<'customers' | 'consents'>('customers')
+    const [consents, setConsents] = useState<UserConsent[]>([])
+    const [consentsLoading, setConsentsLoading] = useState(false)
+    const [consentFilter, setConsentFilter] = useState<'all' | 'active' | 'revoked'>('all')
+    const [consentSearchQuery, setConsentSearchQuery] = useState('')
+    const [consentPage, setConsentPage] = useState(1)
+    const CONSENTS_PER_PAGE = 50
+
     useEffect(() => {
         loadCustomers()
+        loadConsents()
     }, [])
 
     useEffect(() => {
@@ -172,6 +199,77 @@ export default function MarketingTab() {
         }
     }
 
+    async function loadConsents() {
+        setConsentsLoading(true)
+        try {
+            // Fetch all consents
+            const { data: consentsData, error: consentsError } = await supabase
+                .from('user_consents')
+                .select('*')
+                .order('accepted_at', { ascending: false })
+
+            if (consentsError) {
+                console.error('Error loading consents:', consentsError)
+                setConsents([])
+                return
+            }
+
+            // Fetch user details to enrich consent data
+            const userIds = [...new Set(consentsData?.map(c => c.user_id) || [])]
+
+            const { data: usersData } = await supabase
+                .from('customers_extended')
+                .select('id, nome, cognome, email, ragione_sociale, denominazione, tipo_cliente')
+                .in('id', userIds)
+
+            const userMap = new Map<string, { name: string; email: string }>()
+            usersData?.forEach((u: any) => {
+                const name = u.tipo_cliente === 'persona_fisica'
+                    ? `${u.nome || ''} ${u.cognome || ''}`.trim()
+                    : (u.ragione_sociale || u.denominazione || 'N/A')
+                userMap.set(u.id, { name: name || 'N/A', email: u.email || 'N/A' })
+            })
+
+            // Enrich consents with user info
+            const enrichedConsents: UserConsent[] = (consentsData || []).map(consent => ({
+                ...consent,
+                user_name: userMap.get(consent.user_id)?.name || 'Utente non trovato',
+                user_email: userMap.get(consent.user_id)?.email || '-'
+            }))
+
+            setConsents(enrichedConsents)
+        } catch (error) {
+            console.error('Error loading consents:', error)
+            setConsents([])
+        } finally {
+            setConsentsLoading(false)
+        }
+    }
+
+    // Filter and paginate consents
+    const filteredConsents = consents.filter(consent => {
+        // Status filter
+        if (consentFilter === 'active' && consent.status !== 'active') return false
+        if (consentFilter === 'revoked' && consent.status !== 'revoked') return false
+
+        // Search filter
+        if (consentSearchQuery) {
+            const query = consentSearchQuery.toLowerCase()
+            return (
+                consent.user_name?.toLowerCase().includes(query) ||
+                consent.user_email?.toLowerCase().includes(query) ||
+                consent.consent_type?.toLowerCase().includes(query)
+            )
+        }
+        return true
+    })
+
+    const paginatedConsents = filteredConsents.slice(
+        (consentPage - 1) * CONSENTS_PER_PAGE,
+        consentPage * CONSENTS_PER_PAGE
+    )
+    const totalConsentPages = Math.ceil(filteredConsents.length / CONSENTS_PER_PAGE)
+
     // Selection Logic
     const handleSelectAll = () => {
         const allIds = new Set(filteredCustomers.map(c => c.id))
@@ -227,10 +325,10 @@ export default function MarketingTab() {
 
                 const result = await response.json()
                 if (result.success) {
-                    alert(`✅ Messaggi WhatsApp inviati a ${result.sent} clienti!`)
+                    alert(`Messaggi WhatsApp inviati a ${result.sent} clienti!`)
                     if (result.errors) {
                         console.warn('WhatsApp errors:', result.errors)
-                        alert(`⚠️ Alcuni messaggi non inviati: ${result.errors.length}`)
+                        alert(`Alcuni messaggi non inviati: ${result.errors.length}`)
                     }
                     setSelectedCustomerIds(new Set())
                 } else {
@@ -272,7 +370,7 @@ export default function MarketingTab() {
                 const result = await response.json()
 
                 if (result.success) {
-                    alert(`✅ Buoni regalo inviati con successo a ${result.sent} ${result.sent === 1 ? 'cliente' : 'clienti'}!`)
+                    alert(`Buoni regalo inviati con successo a ${result.sent} ${result.sent === 1 ? 'cliente' : 'clienti'}!`)
                     setSelectedCustomerIds(new Set())
                 } else {
                     throw new Error(result.error || 'Errore sconosciuto')
@@ -280,7 +378,7 @@ export default function MarketingTab() {
             }
         } catch (error: any) {
             console.error('Error sending gift vouchers:', error)
-            alert('❌ Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
+            alert('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
         }
     }
 
@@ -295,6 +393,192 @@ export default function MarketingTab() {
 
     return (
         <div className="space-y-6">
+            {/* Section Tabs */}
+            <div className="flex gap-2 border-b border-theme-border pb-2">
+                <button
+                    onClick={() => setActiveSection('customers')}
+                    className={`px-4 py-2 rounded-t font-semibold transition-colors ${
+                        activeSection === 'customers'
+                            ? 'bg-dr7-gold text-black'
+                            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
+                    }`}
+                >
+                    Clienti & Campagne
+                </button>
+                <button
+                    onClick={() => setActiveSection('consents')}
+                    className={`px-4 py-2 rounded-t font-semibold transition-colors ${
+                        activeSection === 'consents'
+                            ? 'bg-dr7-gold text-black'
+                            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
+                    }`}
+                >
+                    Consensi GDPR ({consents.filter(c => c.status === 'active').length} attivi)
+                </button>
+            </div>
+
+            {/* CONSENTS SECTION */}
+            {activeSection === 'consents' && (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
+                        <div>
+                            <h2 className="text-xl font-bold text-theme-text-primary">Consensi Marketing GDPR</h2>
+                            <p className="text-theme-text-muted text-sm">Registro dei consensi raccolti con prova legale</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-center">
+                                <span className="block text-2xl font-bold text-green-500">{consents.filter(c => c.status === 'active').length}</span>
+                                <span className="text-xs text-theme-text-muted">Attivi</span>
+                            </div>
+                            <div className="text-center">
+                                <span className="block text-2xl font-bold text-red-500">{consents.filter(c => c.status === 'revoked').length}</span>
+                                <span className="text-xs text-theme-text-muted">Revocati</span>
+                            </div>
+                            <Button variant="secondary" onClick={loadConsents}>
+                                Aggiorna
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex gap-4 flex-wrap">
+                        <div className="bg-theme-bg-tertiary p-3 rounded-lg border border-theme-border flex-1 min-w-[200px]">
+                            <input
+                                type="text"
+                                placeholder="Cerca per nome o email..."
+                                value={consentSearchQuery}
+                                onChange={(e) => {
+                                    setConsentSearchQuery(e.target.value)
+                                    setConsentPage(1)
+                                }}
+                                className="w-full bg-transparent text-theme-text-primary outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => { setConsentFilter('all'); setConsentPage(1) }}
+                                className={`px-4 py-2 rounded font-medium transition-colors ${
+                                    consentFilter === 'all' ? 'bg-dr7-gold text-black' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
+                                }`}
+                            >
+                                Tutti ({consents.length})
+                            </button>
+                            <button
+                                onClick={() => { setConsentFilter('active'); setConsentPage(1) }}
+                                className={`px-4 py-2 rounded font-medium transition-colors ${
+                                    consentFilter === 'active' ? 'bg-green-600 text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
+                                }`}
+                            >
+                                Attivi ({consents.filter(c => c.status === 'active').length})
+                            </button>
+                            <button
+                                onClick={() => { setConsentFilter('revoked'); setConsentPage(1) }}
+                                className={`px-4 py-2 rounded font-medium transition-colors ${
+                                    consentFilter === 'revoked' ? 'bg-red-600 text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
+                                }`}
+                            >
+                                Revocati ({consents.filter(c => c.status === 'revoked').length})
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Consents Table */}
+                    {consentsLoading ? (
+                        <div className="text-center py-10 text-dr7-gold">Caricamento consensi...</div>
+                    ) : (
+                        <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden border border-theme-border">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm text-theme-text-muted">
+                                    <thead className="bg-theme-bg-secondary/50 text-theme-text-secondary uppercase font-medium">
+                                        <tr>
+                                            <th className="p-4">Utente</th>
+                                            <th className="p-4">Email</th>
+                                            <th className="p-4">Tipo Consenso</th>
+                                            <th className="p-4">Stato</th>
+                                            <th className="p-4">Data Accettazione</th>
+                                            <th className="p-4">IP Address</th>
+                                            <th className="p-4">Source</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-theme-border">
+                                        {paginatedConsents.map((consent) => (
+                                            <tr key={consent.id} className="hover:bg-theme-bg-hover/50 transition-colors">
+                                                <td className="p-4 font-medium text-theme-text-primary">{consent.user_name}</td>
+                                                <td className="p-4">{consent.user_email}</td>
+                                                <td className="p-4">
+                                                    <span className="px-2 py-1 bg-blue-900/50 text-blue-300 rounded text-xs">
+                                                        {consent.consent_type}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                        consent.status === 'active'
+                                                            ? 'bg-green-900/50 text-green-300'
+                                                            : 'bg-red-900/50 text-red-300'
+                                                    }`}>
+                                                        {consent.status === 'active' ? 'ATTIVO' : 'REVOCATO'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    {new Date(consent.accepted_at).toLocaleString('it-IT', {
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </td>
+                                                <td className="p-4 font-mono text-xs">{consent.ip_address || '-'}</td>
+                                                <td className="p-4">
+                                                    <span className="px-2 py-1 bg-theme-bg-tertiary rounded text-xs">
+                                                        {consent.source}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {paginatedConsents.length === 0 && (
+                                            <tr>
+                                                <td colSpan={7} className="p-8 text-center text-theme-text-muted">
+                                                    Nessun consenso trovato
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination */}
+                            {totalConsentPages > 1 && (
+                                <div className="bg-theme-bg-secondary/50 p-4 border-t border-theme-border flex justify-between items-center">
+                                    <span className="text-theme-text-muted text-sm">
+                                        Pagina {consentPage} di {totalConsentPages} ({filteredConsents.length} consensi)
+                                    </span>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => setConsentPage(p => Math.max(1, p - 1))}
+                                            disabled={consentPage === 1}
+                                        >
+                                            Precedente
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => setConsentPage(p => Math.min(totalConsentPages, p + 1))}
+                                            disabled={consentPage === totalConsentPages}
+                                        >
+                                            Successiva
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* CUSTOMERS SECTION */}
+            {activeSection === 'customers' && (
+            <>
             <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
                 <div>
                     <h2 className="text-xl font-bold text-theme-text-primary">Marketing & Promozioni</h2>
@@ -309,7 +593,7 @@ export default function MarketingTab() {
                         onClick={() => setShowGiftVoucherModal(true)}
                         disabled={selectedCustomerIds.size === 0}
                     >
-                        🎁 Invia Buono Regalo
+                        Invia Buono Regalo
                     </Button>
                 </div>
             </div>
@@ -341,7 +625,7 @@ export default function MarketingTab() {
                                 : 'bg-gray-700 text-theme-text-primary hover:bg-gray-600'
                             }`}
                     >
-                        {multiSelectMode ? '✓ Selezione Multipla ON' : 'Selezione Multipla'}
+                        {multiSelectMode ? 'Selezione Multipla ON' : 'Selezione Multipla'}
                     </button>
                     <Button variant="secondary" onClick={handleSelectAll}>Seleziona Tutti ({filteredCustomers.length})</Button>
                     <Button variant="secondary" onClick={handleSelectFirst500}>Seleziona Primi 500</Button>
@@ -442,6 +726,8 @@ export default function MarketingTab() {
                     </div>
                 )}
             </div>
+            </>
+            )}
 
             <GiftVoucherModal
                 isOpen={showGiftVoucherModal}
