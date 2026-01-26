@@ -400,7 +400,7 @@ export default function CauzioniTab() {
             </div>
 
             {/* Table */}
-            <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl overflow-hidden">
+            <div className="border border-theme-border rounded-3xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-theme-bg-hover border-b border-theme-border">
