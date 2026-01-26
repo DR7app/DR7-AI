@@ -308,7 +308,7 @@ export default function AdminDashboard() {
               {/* Noleggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar' || activeTab === 'cauzioni'
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar' || activeTab === 'cauzioni' || activeTab === 'contratto' || activeTab === 'cargos'
                     ? 'text-theme-text-primary'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                     }`}
@@ -337,6 +337,20 @@ export default function AdminDashboard() {
                       }`}
                   >
                     Cauzioni
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('contratto')}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                      }`}
+                  >
+                    Contratti
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('cargos')}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                      }`}
+                  >
+                    Cargos
                   </button>
                 </div>
               </div>
@@ -473,24 +487,6 @@ export default function AdminDashboard() {
                   }`}
               >
                 Fatture
-              </button>
-              <button
-                onClick={() => setActiveTab('contratto')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'contratto'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Contratti
-              </button>
-              <button
-                onClick={() => setActiveTab('cargos')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'cargos'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Cargos
               </button>
               <button
                 onClick={() => setActiveTab('marketing')}
