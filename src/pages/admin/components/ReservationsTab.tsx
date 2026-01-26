@@ -689,18 +689,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return times
   }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, editingId])
 
-  // FINAL vehicles for dropdown - use availableVehicles directly for admin
-  // Admin can always proceed with warnings, but dropdown should show only truly available vehicles
+  // FINAL vehicles for dropdown - includes available vehicles + same-day returns
+  // Same-day returns are shown because after 90min buffer (including car wash), the car becomes available
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
     let result = [...baseVehiclesForDropdown]
 
-    // For same-day returns: only add if the vehicle becomes available BEFORE the end of the requested period
-    // This is a more restrictive check than before
-    if (formData.pickup_date && formData.return_date) {
+    // Add vehicles with same-day returns - they become available after 90min buffer
+    if (formData.pickup_date) {
       const pickupDateStr = formData.pickup_date
-      const requestedReturnDate = new Date(formData.return_date + 'T23:59:59')
 
-      // Find vehicles that have bookings ending on the pickup date AND become available in time
+      // Find vehicles that have bookings ending on the pickup date (same-day returns)
       const sameDayVehicles = vehicles.filter(vehicle => {
         // Skip if already in result
         if (result.some(v => v.id === vehicle.id)) return false
@@ -711,31 +709,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!isBookingForVehicle(booking, vehicle)) return false
           if (booking.status === 'cancelled') return false
 
+          // Check if booking ends on the pickup date
           const bookingEndDate = new Date(booking.dropoff_date).toISOString().split('T')[0]
           return bookingEndDate === pickupDateStr
         })
 
-        // Only include if there's a same-day return AND the booking ends before requested return
-        if (vehicleBookings.length > 0) {
-          // Check that all bookings end before our requested return
-          const allEndBeforeOurReturn = vehicleBookings.every(b => {
-            const bookingEnd = new Date(b.dropoff_date)
-            return bookingEnd < requestedReturnDate
-          })
-          return allEndBeforeOurReturn
-        }
-
-        return false
+        // Include if there's a same-day return (car will be available after buffer)
+        return vehicleBookings.length > 0
       })
 
       result = [...result, ...sameDayVehicles]
-      console.log('[Vehicle Dropdown] Total vehicles shown:', result.length, '(including', sameDayVehicles.length, 'same-day returns)')
+      console.log('[Vehicle Dropdown] Total vehicles shown:', result.length, '(including', sameDayVehicles.length, 'same-day returns with 90min buffer)')
     }
 
     console.log('[Vehicle Dropdown] Final list:', result.map(v => `${v.display_name} (${v.plate})`))
 
     return result
-  }, [baseVehiclesForDropdown, formData.pickup_date, formData.return_date, vehicles, bookings, carWashBookings, editingId])
+  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, bookings, carWashBookings, editingId])
 
   const LOCATIONS = [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
