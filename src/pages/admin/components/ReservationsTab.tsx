@@ -797,12 +797,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const currentTime = formData.pickup_time
         if (currentTime && currentTime !== earliestValidTime) {
           alert(
-            `ℹ️ DISPONIBILITÀ AUTO\n\n` +
+            `DISPONIBILITÀ AUTO\n\n` +
             `${selectedVehicle.display_name} è disponibile a partire dalle ${earliestValidTime}.\n\n` +
             `L'orario di ritiro è stato aggiornato automaticamente per rispettare:\n` +
-            `• Prenotazioni esistenti\n` +
-            `• 30 minuti di gap obbligatorio\n` +
-            `• 45 minuti di lavaggio automatico`
+            `- Prenotazioni esistenti\n` +
+            `- 30 minuti di gap obbligatorio\n` +
+            `- 45 minuti di lavaggio automatico`
           )
         }
       }
@@ -1295,7 +1295,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       missing = await validateCustomerData(booking)
     } catch (error: any) {
       console.error('[handleGenerateContract] Validation error:', error)
-      alert('❌ ' + error.message)
+      alert(error.message)
       return
     }
 
@@ -1355,12 +1355,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Check if popup was blocked
           if (!pdfWindow || pdfWindow.closed || typeof pdfWindow.closed === 'undefined') {
             // Popup was blocked - show alert with manual link
-            if (confirm('✅ Contratto generato con successo!\n\n⚠️ Il browser ha bloccato l\'apertura automatica del PDF.\n\nClicca OK per aprire il contratto in una nuova scheda.')) {
+            if (confirm('Contratto generato con successo!\n\nIl browser ha bloccato l\'apertura automatica del PDF.\n\nClicca OK per aprire il contratto in una nuova scheda.')) {
               window.location.href = data.url
             }
           } else {
             // Popup opened successfully
-            alert('✅ Contratto generato con successo!\n\n📄 Il PDF si è aperto in una nuova scheda per la revisione.\n\n✍️ Dopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
+            alert('Contratto generato con successo!\n\nIl PDF si è aperto in una nuova scheda per la revisione.\n\nDopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
           }
         }
       } else {
@@ -1385,7 +1385,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       missing = await validateCustomerData(booking)
     } catch (error: any) {
       console.error('[handleGenerateInvoice] Validation error:', error)
-      alert('❌ ' + error.message)
+      alert(error.message)
       return
     }
 
@@ -1629,7 +1629,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole deletion if calendar delete fails
       }
 
-      alert('✅ Prenotazione eliminata definitivamente')
+      alert('Prenotazione eliminata definitivamente')
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
@@ -1782,15 +1782,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Show warning but allow editing
       alert(
-        '⚠️ ATTENZIONE\n\n' +
+        'ATTENZIONE\n\n' +
         'Il veicolo associato a questa prenotazione non è stato trovato nella lista veicoli corrente.\n\n' +
         'Possibili cause:\n' +
-        '• Il veicolo è stato ritirato o rimosso\n' +
-        '• Problema di sincronizzazione dati\n\n' +
+        '- Il veicolo è stato ritirato o rimosso\n' +
+        '- Problema di sincronizzazione dati\n\n' +
         'Dati veicolo nella prenotazione:\n' +
-        `• ID: ${booking.vehicle_id || 'N/A'}\n` +
-        `• Targa: ${booking.vehicle_plate || 'N/A'}\n` +
-        `• Nome: ${booking.vehicle_name || 'N/A'}\n\n` +
+        `- ID: ${booking.vehicle_id || 'N/A'}\n` +
+        `- Targa: ${booking.vehicle_plate || 'N/A'}\n` +
+        `- Nome: ${booking.vehicle_name || 'N/A'}\n\n` +
         'Puoi comunque modificare la prenotazione selezionando un nuovo veicolo.'
       )
     } else {
@@ -2084,7 +2084,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           })
 
           alert(
-            '⚠️ ERRORE INTERNO: ID Cliente Mancante\n\n' +
+            'ERRORE INTERNO: ID Cliente Mancante\n\n' +
             'Si è verificato un errore nel recupero dei dati del cliente.\n\n' +
             'Dettagli tecnici:\n' +
             `- Modalità nuovo cliente: ${newCustomerMode ? 'Sì' : 'No'}\n` +
@@ -2142,9 +2142,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         setTimeout(() => {
           alert(
-            '⚠️ CAMPI MANCANTI\n\n' +
+            'CAMPI MANCANTI\n\n' +
             'I seguenti campi sono obbligatori:\n\n' +
-            missingFields.map(f => `• ${f}`).join('\n') +
+            missingFields.map(f => `- ${f}`).join('\n') +
             '\n\nCompila tutti i campi richiesti prima di salvare la prenotazione.'
           )
         }, 100)
@@ -2160,7 +2160,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (isNaN(testPickupDate.getTime()) || isNaN(testReturnDate.getTime())) {
         setTimeout(() => {
           alert(
-            '⚠️ DATE NON VALIDE\n\n' +
+            'DATE NON VALIDE\n\n' +
             'Le date inserite non sono valide.\n\n' +
             `Data Ritiro: ${formData.pickup_date} ${formData.pickup_time}\n` +
             `Data Riconsegna: ${formData.return_date} ${formData.return_time}\n\n` +
@@ -2175,7 +2175,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (testReturnDate <= testPickupDate) {
         setTimeout(() => {
           alert(
-            '⚠️ DATE NON VALIDE\n\n' +
+            'DATE NON VALIDE\n\n' +
             'La data di riconsegna deve essere successiva alla data di ritiro.\n\n' +
             `Ritiro: ${testPickupDate.toLocaleDateString('it-IT')} ${testPickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n` +
             `Riconsegna: ${testReturnDate.toLocaleDateString('it-IT')} ${testReturnDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n\n` +
@@ -2209,7 +2209,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!availabilityResult.available) {
             console.warn('⚠️ Vehicle availability warning:', availabilityResult.reason)
 
-            let warningMessage = '⚠️ ATTENZIONE: CONFLITTO PRENOTAZIONE\n\n'
+            let warningMessage = 'ATTENZIONE: CONFLITTO PRENOTAZIONE\n\n'
             warningMessage += `${selectedVehicle.display_name} risulta già prenotato.\n\n`
             warningMessage += `Motivo: ${availabilityResult.reason}\n\n`
 
@@ -2222,9 +2222,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               warningMessage += `Primo orario disponibile: ${earliestTimeStr}\n\n`
             }
 
-            warningMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
-            warningMessage += '✅ Clicca OK per PROCEDERE COMUNQUE\n'
-            warningMessage += '❌ Clicca ANNULLA per modificare'
+            warningMessage += '---\n\n'
+            warningMessage += 'Clicca OK per PROCEDERE COMUNQUE\n'
+            warningMessage += 'Clicca ANNULLA per modificare'
 
             const confirmed = confirm(warningMessage)
             if (!confirmed) {
@@ -2261,7 +2261,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           console.warn('⚠️ Scheduling validation warning:', schedulingValidation.errors)
 
           // Build warning message
-          let warningMessage = '⚠️ ATTENZIONE: CONFLITTO DI PROGRAMMAZIONE\n\n'
+          let warningMessage = 'ATTENZIONE: CONFLITTO DI PROGRAMMAZIONE\n\n'
           warningMessage += 'La prenotazione presenta conflitti di programmazione:\n\n'
 
           schedulingValidation.errors.forEach((error, index) => {
@@ -2270,7 +2270,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           // Add suggested slots if available
           if (schedulingValidation.suggestedSlots && schedulingValidation.suggestedSlots.length > 0) {
-            warningMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+            warningMessage += '---\n\n'
             warningMessage += 'ORARI SUGGERITI:\n'
             schedulingValidation.suggestedSlots.slice(0, 3).forEach((slot, index) => {
               const slotDate = new Date(slot)
@@ -2279,9 +2279,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             warningMessage += '\n'
           }
 
-          warningMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
-          warningMessage += '✅ Clicca OK per PROCEDERE COMUNQUE\n'
-          warningMessage += '❌ Clicca ANNULLA per modificare'
+          warningMessage += '---\n\n'
+          warningMessage += 'Clicca OK per PROCEDERE COMUNQUE\n'
+          warningMessage += 'Clicca ANNULLA per modificare'
 
           const confirmed = confirm(warningMessage)
           if (!confirmed) {
@@ -2329,13 +2329,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const availableDate = carWashEnd.toLocaleDateString('it-IT')
 
               const confirmed = confirm(
-                `⚠️ ATTENZIONE: VEICOLO IN LAVAGGIO\n\n` +
+                `ATTENZIONE: VEICOLO IN LAVAGGIO\n\n` +
                 `Il veicolo ${vehicle?.display_name} è attualmente in lavaggio.\n\n` +
                 `Sarà disponibile alle ${availableTime} del ${availableDate}\n\n` +
                 `Tempo rimanente: circa ${Math.ceil((carWashEnd.getTime() - new Date().getTime()) / (1000 * 60))} minuti\n\n` +
-                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                `✅ Clicca OK per PROCEDERE COMUNQUE\n` +
-                `❌ Clicca ANNULLA per modificare`
+                `---\n\n` +
+                `Clicca OK per PROCEDERE COMUNQUE\n` +
+                `Clicca ANNULLA per modificare`
               )
 
               if (!confirmed) {
@@ -2393,16 +2393,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               // Complete overlap - show double booking warning
               const vehicleTarga = vehicle?.plate || conflictingBooking.vehicle_name
               const confirmed = confirm(
-                `⚠️ ATTENZIONE: VEICOLO GIÀ PRENOTATO!\n\n` +
+                `ATTENZIONE: VEICOLO GIÀ PRENOTATO!\n\n` +
                 `Veicolo: ${conflictingBooking.vehicle_name}\n` +
                 `Targa: ${vehicleTarga}\n\n` +
                 `PRENOTAZIONE ESISTENTE:\n` +
                 `Cliente: ${conflictingBooking.customer_name}\n` +
                 `Periodo: ${conflictPickup.toLocaleDateString('it-IT')} ${conflictPickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} - ${conflictReturn.toLocaleDateString('it-IT')} ${conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}\n` +
                 `ID: DR7-${bookingId}\n\n` +
-                `⚠️ SEI SICURO DI VOLER CREARE UNA DOPPIA PRENOTAZIONE?\n\n` +
-                `✅ Clicca OK per PROCEDERE COMUNQUE\n` +
-                `❌ Clicca ANNULLA per scegliere altre date/veicolo`
+                `SEI SICURO DI VOLER CREARE UNA DOPPIA PRENOTAZIONE?\n\n` +
+                `Clicca OK per PROCEDERE COMUNQUE\n` +
+                `Clicca ANNULLA per scegliere altre date/veicolo`
               )
 
               if (!confirmed) {
@@ -2416,16 +2416,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const bufferMinutesLeft = Math.round(BUFFER_MINUTES - minutesDiff)
 
               const confirmed = confirm(
-                `⚠️ ATTENZIONE: BUFFER 1H30 NON RISPETTATO!\n\n` +
-                `Are you sure you want to book this vehicle?\n` +
-                `The car is scheduled to return at ${returnTimeStr} (${returnDateStr}).\n\n` +
+                `ATTENZIONE: BUFFER 1H30 NON RISPETTATO!\n\n` +
                 `Il veicolo tornerà alle ${returnTimeStr} del ${returnDateStr}.\n` +
                 `Tempo mancante al buffer di 1h30: ${bufferMinutesLeft} minuti\n\n` +
                 `Cliente precedente: ${conflictingBooking.customer_name}\n` +
                 `ID: DR7-${bookingId}\n\n` +
-                `⚠️ Si consiglia di attendere fino alle ${new Date(conflictReturn.getTime() + BUFFER_MINUTES * 60 * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} per il prossimo ritiro.\n\n` +
-                `✅ Clicca OK per PROCEDERE COMUNQUE\n` +
-                `❌ Clicca ANNULLA per scegliere un orario diverso`
+                `Si consiglia di attendere fino alle ${new Date(conflictReturn.getTime() + BUFFER_MINUTES * 60 * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} per il prossimo ritiro.\n\n` +
+                `Clicca OK per PROCEDERE COMUNQUE\n` +
+                `Clicca ANNULLA per scegliere un orario diverso`
               )
 
               if (!confirmed) {
@@ -2604,14 +2602,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           if (vehicleChanged) {
             const confirmed = confirm(
-              `⚠️ ATTENZIONE: CAMBIO VEICOLO\n\n` +
+              `ATTENZIONE: CAMBIO VEICOLO\n\n` +
               `Stai cambiando il veicolo di questa prenotazione:\n\n` +
               `VECCHIO: ${existingBooking.vehicle_name} (${existingBooking.vehicle_plate || 'N/A'})\n` +
               `NUOVO: ${vehicle.display_name} (${vehicle.plate || 'N/A'})\n\n` +
               `Questo aggiornerà:\n` +
-              `• vehicle_id: ${existingBooking.vehicle_id} → ${vehicle.id}\n` +
-              `• vehicle_plate: ${existingBooking.vehicle_plate || 'N/A'} → ${vehicle.plate || 'N/A'}\n` +
-              `• vehicle_name: ${existingBooking.vehicle_name} → ${vehicle.display_name}\n\n` +
+              `- vehicle_id: ${existingBooking.vehicle_id} -> ${vehicle.id}\n` +
+              `- vehicle_plate: ${existingBooking.vehicle_plate || 'N/A'} -> ${vehicle.plate || 'N/A'}\n` +
+              `- vehicle_name: ${existingBooking.vehicle_name} -> ${vehicle.display_name}\n\n` +
               `Il calendario verrà aggiornato automaticamente.\n\n` +
               `Confermi il cambio di veicolo?`
             )
@@ -2619,11 +2617,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               setIsSubmitting(false)
               return
             }
-            console.log('✅ Vehicle change confirmed by user')
+            console.log('Vehicle change confirmed by user')
           } else if (plateChanged && existingBooking.vehicle_plate) {
             // Same vehicle but plate has changed - this might indicate the vehicle's plate was updated
             const confirmed = confirm(
-              `⚠️ ATTENZIONE: TARGA MODIFICATA\n\n` +
+              `ATTENZIONE: TARGA MODIFICATA\n\n` +
               `La targa del veicolo "${vehicle.display_name}" è cambiata:\n\n` +
               `VECCHIA: ${existingBooking.vehicle_plate}\n` +
               `NUOVA: ${vehicle.plate || 'N/A'}\n\n` +
@@ -2949,8 +2947,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Show success message AFTER reload to ensure it's visible
       const successMessage = editingId
-        ? '✅ Prenotazione aggiornata con successo!\n\nLa prenotazione è stata modificata e salvata nel database.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
-        : '✅ Prenotazione creata con successo!\n\nLa nuova prenotazione è stata salvata nel database.\n\n📧 Il cliente riceverà una conferma via email.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
+        ? 'Prenotazione aggiornata con successo!\n\nLa prenotazione è stata modificata e salvata nel database.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
+        : 'Prenotazione creata con successo!\n\nLa nuova prenotazione è stata salvata nel database.\n\nIl cliente riceverà una conferma via email.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
 
       alert(successMessage)
     } catch (error) {
@@ -3287,17 +3285,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData({ ...formData, pickup_time: pickupTime, return_time: returnTime })
                     }}
-                    options={(() => {
-                      // If we have valid pickup times from the availability engine, use those
-                      if (validPickupTimes.length > 0) {
-                        return validPickupTimes.map(time => ({ value: time, label: time }))
-                      }
-
-                      // Otherwise, fall back to filtered time options (for when no vehicle/dates selected)
-                      const base = getFilteredTimeOptions(formData.pickup_date)
-                      const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsPickupDate)
-                      return base.filter(o => available.includes(o.value) || o.value === formData.pickup_time)
-                    })()}
+                    options={TIME_OPTIONS}
                   />
                   <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile</p>
                 </div>
@@ -3322,11 +3310,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     value={formData.return_time}
                     onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
-                    options={(() => {
-                      const base = getFilteredTimeOptions(formData.return_date)
-                      const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsReturnDate)
-                      return base.filter(o => available.includes(o.value) || o.value === formData.return_time)
-                    })()}
+                    options={TIME_OPTIONS}
                   />
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
                   <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile</p>
@@ -3345,7 +3329,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {!formData.pickup_date || !formData.return_date ? (
                   <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
                     <p className="text-yellow-400 text-sm">
-                      ⚠️ Seleziona le date per vedere i veicoli disponibili
+                      Seleziona le date per vedere i veicoli disponibili
                     </p>
                   </div>
                 ) : (
@@ -3371,7 +3355,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 )}
                 {formData.pickup_date && formData.return_date && availableVehicles.length === 0 && (
                   <p className="text-red-400 text-sm mt-2">
-                    ❌ Nessun veicolo disponibile per le date selezionate
+                    Nessun veicolo disponibile per le date selezionate
                   </p>
                 )}
               </div>
@@ -3708,7 +3692,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   className="w-4 h-4 text-blue-600 bg-gray-700 border-theme-border-light rounded focus:ring-blue-500"
                 />
                 <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
-                  ✅ KM Illimitati
+                  KM Illimitati
                 </label>
               </div>
               <Input
@@ -3838,7 +3822,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap flex items-center gap-1"
                           title="Visualizza Contratto"
                         >
-                          📄 Contratto
+                          Contratto
                         </button>
                         {/* Fattura Button (Mobile) */}
                         <button
@@ -3856,7 +3840,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         disabled={generatingContract}
                         className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                       >
-                        {generatingContract ? 'Generazione...' : '📄 Contratto'}
+                        {generatingContract ? 'Generazione...' : 'Contratto'}
                       </button>
                     )}
 
@@ -4227,9 +4211,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {showDeleteConfirm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
             <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-xl font-bold mb-4 text-red-600">🗑️ Elimina Definitivamente</h3>
+              <h3 className="text-xl font-bold mb-4 text-red-600">Elimina Definitivamente</h3>
               <p className="text-gray-700 mb-6">
-                <strong className="text-red-600">⚠️ ATTENZIONE:</strong> Vuoi eliminare definitivamente questa prenotazione dal database?
+                <strong className="text-red-600">ATTENZIONE:</strong> Vuoi eliminare definitivamente questa prenotazione dal database?
                 <br /><br />
                 <strong>Questa azione NON può essere annullata!</strong>
                 <br /><br />
