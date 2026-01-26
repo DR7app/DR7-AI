@@ -13,15 +13,18 @@ interface Cauzione {
     scadenza_cauzione: string
     importo: number
     metodo: 'bonifico' | 'carta' | 'preautorizzazione'
-    stato: 'Attiva' | 'In scadenza' | 'Restituita' | 'Sbloccata'
+    stato: 'Attiva' | 'In scadenza' | 'Restituita' | 'Sbloccata' | 'Incassata'
     note: string | null
     data_restituzione: string | null
     data_sblocco: string | null
     is_overdue: boolean
     days_until_deadline: number
     cliente_nome?: string
+    cliente_email?: string
     veicolo_modello?: string
     veicolo_targa?: string
+    nexi_transaction_id?: string | null
+    nexi_order_id?: string | null
 }
 
 export default function CauzioniTab() {
@@ -57,7 +60,7 @@ export default function CauzioniTab() {
                 .from('cauzioni')
                 .select(`
           *,
-          customers_extended!cliente_id(nome, cognome, denominazione, tipo_cliente),
+          customers_extended!cliente_id(nome, cognome, denominazione, tipo_cliente, email),
           vehicles!veicolo_id(display_name, plate)
         `)
                 .order('scadenza_cauzione', { ascending: true })
@@ -90,6 +93,7 @@ export default function CauzioniTab() {
                     is_overdue: isOverdue,
                     days_until_deadline: daysUntilDeadline,
                     cliente_nome: clienteName,
+                    cliente_email: c.customers_extended?.email || '',
                     veicolo_modello: c.vehicles?.display_name || 'N/A',
                     veicolo_targa: c.vehicles?.plate || 'N/A'
                 }
@@ -135,22 +139,139 @@ export default function CauzioniTab() {
         }
     }
 
-    const handleMarkSbloccata = async (cauzione: Cauzione) => {
-        const note = prompt('Note opzionali per lo sblocco:')
-        if (note === null) return // User cancelled
+    const handleCreatePreauth = async (cauzione: Cauzione) => {
+        if (!confirm(`Creare preautorizzazione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
 
         try {
-            const { error } = await supabase.rpc('mark_cauzione_sbloccata', {
-                cauzione_id: cauzione.id,
-                release_note: note || null
+            const response = await fetch('/.netlify/functions/nexi-create-preauth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cauzioneId: cauzione.id,
+                    amount: cauzione.importo,
+                    customerEmail: cauzione.cliente_email,
+                    customerName: cauzione.cliente_nome,
+                    description: `Cauzione ${cauzione.veicolo_modello} - ${cauzione.cliente_nome}`
+                })
             })
 
-            if (error) throw error
+            const result = await response.json()
 
-            alert('Cauzione marcata come Sbloccata')
+            if (!response.ok) {
+                throw new Error(result.error || 'Errore creazione preautorizzazione')
+            }
+
+            if (result.paymentUrl) {
+                // Open Nexi payment page in new window
+                window.open(result.paymentUrl, '_blank', 'width=600,height=700')
+                alert('Pagina di pagamento Nexi aperta. Completa il pagamento con il cliente.')
+            }
+
+            fetchCauzioni()
+        } catch (error: any) {
+            console.error('Error creating preauth:', error)
+            alert(`Errore: ${error.message}`)
+        }
+    }
+
+    const handleMarkSbloccata = async (cauzione: Cauzione) => {
+        if (!confirm('Vuoi sbloccare la preautorizzazione? Il cliente riceverà indietro i fondi.')) return
+
+        try {
+            // Check if we have a Nexi transaction ID
+            const nexiTransactionId = (cauzione as any).nexi_transaction_id
+
+            if (nexiTransactionId) {
+                // Call Nexi API to void pre-authorization
+                const response = await fetch('/.netlify/functions/nexi-void-preauth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cauzioneId: cauzione.id,
+                        transactionId: nexiTransactionId,
+                        orderId: (cauzione as any).nexi_order_id
+                    })
+                })
+
+                const result = await response.json()
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Errore Nexi')
+                }
+
+                alert(result.message || 'Preautorizzazione sbloccata con successo')
+            } else {
+                // No Nexi transaction, just update locally
+                const { error } = await supabase.rpc('mark_cauzione_sbloccata', {
+                    cauzione_id: cauzione.id,
+                    release_note: 'Preautorizzazione sbloccata manualmente'
+                })
+
+                if (error) throw error
+                alert('Cauzione marcata come sbloccata')
+            }
+
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error marking sbloccata:', error)
+            alert(`Errore: ${error.message}`)
+        }
+    }
+
+    const handleIncassa = async (cauzione: Cauzione) => {
+        const importo = prompt(`Importo da incassare (max €${cauzione.importo}):`, String(cauzione.importo))
+        if (importo === null) return // User cancelled
+
+        const amount = parseFloat(importo)
+        if (isNaN(amount) || amount <= 0 || amount > cauzione.importo) {
+            alert('Importo non valido')
+            return
+        }
+
+        if (!confirm(`Confermi di voler incassare €${amount.toFixed(2)} dalla preautorizzazione?`)) return
+
+        try {
+            // Check if we have a Nexi transaction ID
+            const nexiTransactionId = (cauzione as any).nexi_transaction_id
+
+            if (nexiTransactionId) {
+                // Call Nexi API to capture pre-authorization
+                const response = await fetch('/.netlify/functions/nexi-capture-preauth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cauzioneId: cauzione.id,
+                        transactionId: nexiTransactionId,
+                        amount: amount,
+                        orderId: (cauzione as any).nexi_order_id
+                    })
+                })
+
+                const result = await response.json()
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Errore Nexi')
+                }
+
+                alert(result.message || `Incassato €${amount.toFixed(2)} con successo`)
+            } else {
+                // No Nexi transaction, just update locally
+                const { error } = await supabase
+                    .from('cauzioni')
+                    .update({
+                        stato: 'Incassata',
+                        note: `Incassato €${amount.toFixed(2)} manualmente`,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', cauzione.id)
+
+                if (error) throw error
+                alert(`Incassato €${amount.toFixed(2)} (registrato manualmente)`)
+            }
+
+            fetchCauzioni()
+        } catch (error: any) {
+            console.error('Error capturing payment:', error)
             alert(`Errore: ${error.message}`)
         }
     }
@@ -177,6 +298,7 @@ export default function CauzioniTab() {
             case 'In scadenza': return 'bg-yellow-600 text-black'
             case 'Restituita': return 'bg-blue-600 text-white'
             case 'Sbloccata': return 'bg-gray-600 text-white'
+            case 'Incassata': return 'bg-purple-600 text-white'
             default: return 'bg-gray-400 text-white'
         }
     }
@@ -262,6 +384,7 @@ export default function CauzioniTab() {
                         <option value="overdue">Scadute</option>
                         <option value="Restituita">Restituita</option>
                         <option value="Sbloccata">Sbloccata</option>
+                        <option value="Incassata">Incassata</option>
                     </select>
                     <select
                         value={filterMetodo}
@@ -337,28 +460,51 @@ export default function CauzioniTab() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-2 flex-wrap">
                                                 <button
                                                     onClick={() => handleEdit(cauzione)}
                                                     className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
                                                 >
                                                     Modifica
                                                 </button>
-                                                {cauzione.stato !== 'Restituita' && cauzione.stato !== 'Sbloccata' && (
+                                                {cauzione.stato !== 'Restituita' && cauzione.stato !== 'Sbloccata' && cauzione.stato !== 'Incassata' && (
                                                     <>
-                                                        <button
-                                                            onClick={() => handleMarkRestituita(cauzione)}
-                                                            className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
-                                                        >
-                                                            Restituita
-                                                        </button>
-                                                        {cauzione.metodo === 'preautorizzazione' && (
+                                                        {/* For bonifico/carta: show Restituita */}
+                                                        {cauzione.metodo !== 'preautorizzazione' && (
                                                             <button
-                                                                onClick={() => handleMarkSbloccata(cauzione)}
-                                                                className="px-3 py-1 bg-gray-600 text-white text-xs rounded-full hover:bg-gray-700 transition-colors"
+                                                                onClick={() => handleMarkRestituita(cauzione)}
+                                                                className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
                                                             >
-                                                                Sblocca
+                                                                Restituita
                                                             </button>
+                                                        )}
+                                                        {/* For preautorizzazione: show CREA PREAUTH, SBLOCCA and INCASSA */}
+                                                        {cauzione.metodo === 'preautorizzazione' && (
+                                                            <>
+                                                                {!cauzione.nexi_transaction_id ? (
+                                                                    <button
+                                                                        onClick={() => handleCreatePreauth(cauzione)}
+                                                                        className="px-3 py-1 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                                    >
+                                                                        CREA PREAUTH
+                                                                    </button>
+                                                                ) : (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => handleMarkSbloccata(cauzione)}
+                                                                            className="px-3 py-1 bg-gray-600 text-white text-xs rounded-full hover:bg-gray-700 transition-colors"
+                                                                        >
+                                                                            SBLOCCA
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleIncassa(cauzione)}
+                                                                            className="px-3 py-1 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors"
+                                                                        >
+                                                                            INCASSA
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </>
                                                 )}

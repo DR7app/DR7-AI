@@ -12,7 +12,7 @@ interface Customer {
   notes: string | null
   created_at: string
   updated_at: string
-  status?: 'blacklist' | 'has_rental' | 'vip' | null
+  status?: 'blacklist' | 'member' | 'elite' | null
   verification?: {
     idStatus: 'unverified' | 'pending' | 'verified'
     stripeVerificationSessionId?: string
@@ -951,7 +951,7 @@ export default function CustomersTab() {
     }
   }
 
-  async function handleUpdateCustomerStatus(customerId: string, newStatus: 'blacklist' | 'has_rental' | 'vip' | null) {
+  async function handleUpdateCustomerStatus(customerId: string, newStatus: 'blacklist' | 'member' | 'elite' | null) {
     try {
       const { error } = await supabase
         .from('customers_extended')
@@ -966,20 +966,20 @@ export default function CustomersTab() {
       ))
 
       const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
-        newStatus === 'vip' ? 'VIP' :
-          newStatus === 'has_rental' ? 'Fidelizzato' : 'Nessuno'
-      alert(`✅ Status aggiornato a: ${statusLabel}`)
+        newStatus === 'elite' ? 'Elite' :
+          newStatus === 'member' ? 'Member' : 'Nessuno'
+      alert(`Status aggiornato a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer status:', error)
-      alert('❌ Errore nell\'aggiornamento dello status')
+      alert('Errore nell\'aggiornamento dello status')
     }
   }
 
-  async function handleBulkStatusUpdate(newStatus: 'blacklist' | 'has_rental' | 'vip' | null) {
+  async function handleBulkStatusUpdate(newStatus: 'blacklist' | 'member' | 'elite' | null) {
     const count = selectedCustomerIds.size
     const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
-      newStatus === 'vip' ? 'VIP' :
-        newStatus === 'has_rental' ? 'Fidelizzato' : 'Nessuno'
+      newStatus === 'elite' ? 'Elite' :
+        newStatus === 'member' ? 'Member' : 'Nessuno'
 
     if (!confirm(`Vuoi cambiare lo status di ${count} clienti a: ${statusLabel}?`)) return
 
@@ -1003,10 +1003,10 @@ export default function CustomersTab() {
       // Clear selection
       setSelectedCustomerIds(new Set())
 
-      alert(`✅ Status aggiornato per ${count} clienti a: ${statusLabel}`)
+      alert(`Status aggiornato per ${count} clienti a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer statuses:', error)
-      alert('❌ Errore nell\'aggiornamento degli status')
+      alert('Errore nell\'aggiornamento degli status')
     }
   }
 
@@ -1733,28 +1733,28 @@ export default function CustomersTab() {
                     className="px-3 py-2 rounded-full text-sm font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 border border-red-400/20 backdrop-blur-sm transition-all"
                     title="Imposta come Blacklist"
                   >
-                    ⛔ Blacklist
+                    Blacklist
                   </button>
                   <button
-                    onClick={() => handleBulkStatusUpdate('vip')}
-                    className="px-3 py-2 rounded-full text-sm font-medium bg-yellow-500/20 text-yellow-200 hover:bg-yellow-500/30 border border-yellow-400/20 backdrop-blur-sm transition-all"
-                    title="Imposta come VIP"
+                    onClick={() => handleBulkStatusUpdate('member')}
+                    className="px-3 py-2 rounded-full text-sm font-medium bg-blue-500/20 text-blue-200 hover:bg-blue-500/30 border border-blue-400/20 backdrop-blur-sm transition-all"
+                    title="Imposta come Member"
                   >
-                    ⭐ VIP
+                    Member
                   </button>
                   <button
-                    onClick={() => handleBulkStatusUpdate('has_rental')}
-                    className="px-3 py-2 rounded-full text-sm font-medium bg-green-500/20 text-green-200 hover:bg-green-500/30 border border-green-400/20 backdrop-blur-sm transition-all"
-                    title="Imposta come Fidelizzato"
+                    onClick={() => handleBulkStatusUpdate('elite')}
+                    className="px-3 py-2 rounded-full text-sm font-medium bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 border border-amber-400/20 backdrop-blur-sm transition-all"
+                    title="Imposta come Elite"
                   >
-                    ✓ Fidelizzato
+                    Elite
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate(null)}
                     className="px-3 py-2 rounded-full text-sm font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 border border-white/10 backdrop-blur-sm transition-all"
                     title="Rimuovi Status"
                   >
-                    ✕ Rimuovi
+                    Rimuovi
                   </button>
                 </div>
               </>
@@ -1831,10 +1831,10 @@ export default function CustomersTab() {
                   key={customer.id}
                   className={`border-t border-theme-border hover:bg-white/5 transition-all duration-200 ${customer.status === 'blacklist'
                     ? 'border-l-4 border-l-red-500 bg-red-900/30'
-                    : customer.status === 'vip'
-                      ? 'border-l-4 border-l-yellow-500 bg-yellow-500/20'
-                      : customer.status === 'has_rental'
-                        ? 'border-l-4 border-l-green-500 bg-green-500/20'
+                    : customer.status === 'elite'
+                      ? 'border-l-4 border-l-amber-500 bg-amber-500/20'
+                      : customer.status === 'member'
+                        ? 'border-l-4 border-l-blue-500 bg-blue-500/20'
                         : ''
                     }`}
                 >
@@ -1927,14 +1927,14 @@ export default function CustomersTab() {
                           Blacklist
                         </span>
                       )}
-                      {customer.status === 'vip' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-500/30 text-yellow-200 border border-yellow-400/30 backdrop-blur-sm">
-                          VIP
+                      {customer.status === 'elite' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/30 text-amber-200 border border-amber-400/30 backdrop-blur-sm">
+                          Elite
                         </span>
                       )}
-                      {customer.status === 'has_rental' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/30 text-green-200 border border-green-400/30 backdrop-blur-sm">
-                          Fidelizzato
+                      {customer.status === 'member' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/30 text-blue-200 border border-blue-400/30 backdrop-blur-sm">
+                          Member
                         </span>
                       )}
                       {!customer.status && (
@@ -1947,18 +1947,18 @@ export default function CustomersTab() {
                             BL
                           </button>
                           <button
-                            onClick={() => handleUpdateCustomerStatus(customer.id, 'vip')}
-                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-200/70 hover:bg-yellow-500/30 hover:text-yellow-200 border border-yellow-400/20 backdrop-blur-sm transition-all"
-                            title="VIP"
+                            onClick={() => handleUpdateCustomerStatus(customer.id, 'member')}
+                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-200/70 hover:bg-blue-500/30 hover:text-blue-200 border border-blue-400/20 backdrop-blur-sm transition-all"
+                            title="Member"
                           >
-                            VIP
+                            MEM
                           </button>
                           <button
-                            onClick={() => handleUpdateCustomerStatus(customer.id, 'has_rental')}
-                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-green-500/20 text-green-200/70 hover:bg-green-500/30 hover:text-green-200 border border-green-400/20 backdrop-blur-sm transition-all"
-                            title="Fidelizzato"
+                            onClick={() => handleUpdateCustomerStatus(customer.id, 'elite')}
+                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-200/70 hover:bg-amber-500/30 hover:text-amber-200 border border-amber-400/20 backdrop-blur-sm transition-all"
+                            title="Elite"
                           >
-                            FID
+                            ELT
                           </button>
                         </div>
                       )}
@@ -1968,7 +1968,7 @@ export default function CustomersTab() {
                           className="px-2 py-1.5 rounded-full text-xs font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
                           title="Rimuovi Status"
                         >
-                          ✕
+                          X
                         </button>
                       )}
                     </div>
