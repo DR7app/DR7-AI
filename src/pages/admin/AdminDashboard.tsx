@@ -275,13 +275,6 @@ export default function AdminDashboard() {
                 Cargos
               </button>
               <button
-                onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Cauzioni
-              </button>
-              <button
                 onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'marketing' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
@@ -444,15 +437,6 @@ export default function AdminDashboard() {
                   }`}
               >
                 Da Saldare
-              </button>
-              <button
-                onClick={() => setActiveTab('cauzioni')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'cauzioni'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Cauzioni
               </button>
               <button
                 onClick={() => setActiveTab('documents-verification')}
