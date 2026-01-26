@@ -2207,11 +2207,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           )
 
           if (!availabilityResult.available) {
-            console.error('❌ Vehicle availability check failed:', availabilityResult.reason)
+            console.warn('⚠️ Vehicle availability warning:', availabilityResult.reason)
 
-            let errorMessage = '🚫 VEICOLO NON DISPONIBILE\\n\\n'
-            errorMessage += `${selectedVehicle.display_name} non è disponibile per le date e gli orari selezionati.\\n\\n`
-            errorMessage += `Motivo: ${availabilityResult.reason}\\n\\n`
+            let warningMessage = '⚠️ ATTENZIONE: CONFLITTO PRENOTAZIONE\n\n'
+            warningMessage += `${selectedVehicle.display_name} risulta già prenotato.\n\n`
+            warningMessage += `Motivo: ${availabilityResult.reason}\n\n`
 
             if (availabilityResult.earliestTime) {
               const earliestTimeStr = availabilityResult.earliestTime.toLocaleTimeString('it-IT', {
@@ -2219,16 +2219,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 minute: '2-digit',
                 timeZone: 'Europe/Rome'
               })
-              errorMessage += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n`
-              errorMessage += `✅ PRIMO ORARIO DISPONIBILE:\\n\\n`
-              errorMessage += `${earliestTimeStr}\\n\\n`
+              warningMessage += `Primo orario disponibile: ${earliestTimeStr}\n\n`
             }
 
-            errorMessage += 'Seleziona un altro veicolo o modifica le date/orari.'
+            warningMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+            warningMessage += '✅ Clicca OK per PROCEDERE COMUNQUE\n'
+            warningMessage += '❌ Clicca ANNULLA per modificare'
 
-            setTimeout(() => alert(errorMessage), 100)
-            setIsSubmitting(false)
-            return
+            const confirmed = confirm(warningMessage)
+            if (!confirmed) {
+              setIsSubmitting(false)
+              return
+            }
+            console.log('⚠️ Admin chose to proceed despite availability conflict')
           }
 
           console.log('✅ Vehicle availability check passed')
@@ -2255,41 +2258,37 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )
 
         if (!schedulingValidation.isValid) {
-          console.error('❌ Scheduling validation failed:', schedulingValidation.errors)
+          console.warn('⚠️ Scheduling validation warning:', schedulingValidation.errors)
 
-          // Build error message
-          let errorMessage = '🚫 CONFLITTO DI PROGRAMMAZIONE\n\n'
-          errorMessage += 'La prenotazione viola le regole di programmazione obbligatorie:\n\n'
+          // Build warning message
+          let warningMessage = '⚠️ ATTENZIONE: CONFLITTO DI PROGRAMMAZIONE\n\n'
+          warningMessage += 'La prenotazione presenta conflitti di programmazione:\n\n'
 
           schedulingValidation.errors.forEach((error, index) => {
-            errorMessage += `${index + 1}. ${error.message}\n\n`
+            warningMessage += `${index + 1}. ${error.message}\n\n`
           })
-
-          errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
-          errorMessage += '📋 REGOLE DI PROGRAMMAZIONE:\n\n'
-          errorMessage += '• RITIRO + RITIRO → Gap minimo 15 minuti\n'
-          errorMessage += '• RICONSEGNA + RICONSEGNA → Gap minimo 15 minuti\n'
-          errorMessage += '• RITIRO + RICONSEGNA → Gap minimo 15 minuti\n'
-          errorMessage += '• RICONSEGNA + LAVAGGIO → Gap minimo 30 minuti\n'
-          errorMessage += '• RITIRO + LAVAGGIO → Gap minimo 15 minuti\n'
-          errorMessage += '• Eventi simultanei → VIETATI\n\n'
 
           // Add suggested slots if available
           if (schedulingValidation.suggestedSlots && schedulingValidation.suggestedSlots.length > 0) {
-            errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
-            errorMessage += '✅ ORARI DISPONIBILI SUGGERITI:\n\n'
+            warningMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+            warningMessage += 'ORARI SUGGERITI:\n'
             schedulingValidation.suggestedSlots.slice(0, 3).forEach((slot, index) => {
               const slotDate = new Date(slot)
-              errorMessage += `${index + 1}. ${slotDate.toLocaleDateString('it-IT')} alle ${slotDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`
+              warningMessage += `${index + 1}. ${slotDate.toLocaleDateString('it-IT')} alle ${slotDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`
             })
-            errorMessage += '\n'
+            warningMessage += '\n'
           }
 
-          errorMessage += 'Modifica gli orari per rispettare le regole di programmazione.'
+          warningMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+          warningMessage += '✅ Clicca OK per PROCEDERE COMUNQUE\n'
+          warningMessage += '❌ Clicca ANNULLA per modificare'
 
-          alert(errorMessage)
-          setIsSubmitting(false)
-          return
+          const confirmed = confirm(warningMessage)
+          if (!confirmed) {
+            setIsSubmitting(false)
+            return
+          }
+          console.log('⚠️ Admin chose to proceed despite scheduling conflict')
         }
 
         console.log('✅ Scheduling validation passed')
@@ -2329,16 +2328,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const availableTime = carWashEnd.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
               const availableDate = carWashEnd.toLocaleDateString('it-IT')
 
-              alert(
-                `VEICOLO IN LAVAGGIO\\n\\n` +
-                `Il veicolo ${vehicle?.display_name} è attualmente in lavaggio.\\n\\n` +
-                `Sarà disponibile alle ${availableTime} del ${availableDate}\\n\\n` +
-                `Tempo rimanente: circa ${Math.ceil((carWashEnd.getTime() - new Date().getTime()) / (1000 * 60))} minuti\\n\\n` +
-                `Si prega di selezionare un orario di ritiro dopo le ${availableTime}.`
+              const confirmed = confirm(
+                `⚠️ ATTENZIONE: VEICOLO IN LAVAGGIO\n\n` +
+                `Il veicolo ${vehicle?.display_name} è attualmente in lavaggio.\n\n` +
+                `Sarà disponibile alle ${availableTime} del ${availableDate}\n\n` +
+                `Tempo rimanente: circa ${Math.ceil((carWashEnd.getTime() - new Date().getTime()) / (1000 * 60))} minuti\n\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                `✅ Clicca OK per PROCEDERE COMUNQUE\n` +
+                `❌ Clicca ANNULLA per modificare`
               )
 
-              setIsSubmitting(false)
-              return // Block the booking
+              if (!confirmed) {
+                setIsSubmitting(false)
+                return
+              }
+              console.log('⚠️ Admin chose to proceed despite car wash conflict')
             }
           }
         }
