@@ -2,10 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
-import {
-  fetchRentalEvents,
-  filterRentalTimeSlots
-} from '../../../utils/bookingConflictUtils'
+// bookingConflictUtils imports removed - admin can select any time
 import { validateRentalBooking } from '../../../utils/schedulingRules'
 
 import {
@@ -297,22 +294,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteType, setPendingDeleteType] = useState<'booking' | 'reservation'>('booking')
 
-  // Conflict Detection State
-  const [rentalEventsPickupDate, setRentalEventsPickupDate] = useState<any[]>([])
-  const [rentalEventsReturnDate, setRentalEventsReturnDate] = useState<any[]>([])
-
-  // Valid Time Slots State (for dynamic availability-based time picker)
-  const [validPickupTimes, setValidPickupTimes] = useState<string[]>([])
-
-
-
-  // Filter time options based on selected date
-  const getFilteredTimeOptions = (_dateStr: string) => {
-    // Admin users can select any time, including past times
-    // This allows backdating bookings for administrative purposes
-    return TIME_OPTIONS
-  }
-
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
 
@@ -385,23 +366,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     unlimited_km: false,
     km_limit: '0', // Default KM limit when not unlimited
   })
-
-  // Conflict Detection Effects
-  useEffect(() => {
-    if (formData.pickup_date) {
-      fetchRentalEvents(formData.pickup_date, editingId || undefined).then(setRentalEventsPickupDate)
-    } else {
-      setRentalEventsPickupDate([])
-    }
-  }, [formData.pickup_date, editingId])
-
-  useEffect(() => {
-    if (formData.return_date) {
-      fetchRentalEvents(formData.return_date, editingId || undefined).then(setRentalEventsReturnDate)
-    } else {
-      setRentalEventsReturnDate([])
-    }
-  }, [formData.return_date, editingId])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
