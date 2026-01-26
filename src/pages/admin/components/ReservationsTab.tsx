@@ -3299,19 +3299,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       return base.filter(o => available.includes(o.value) || o.value === formData.pickup_time)
                     })()}
                   />
-                  {/* Warning if no slots available */}
-                  {(() => {
-                    if (formData.vehicle_id && formData.pickup_date && formData.return_date && validPickupTimes.length === 0) {
-                      return <p className="text-xs text-red-400 mt-1">⚠️ Nessun orario disponibile per questo veicolo nelle date selezionate!</p>
-                    }
-
-                    const base = getFilteredTimeOptions(formData.pickup_date)
-                    const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsPickupDate)
-                    if (available.length === 0 && formData.pickup_date && !formData.vehicle_id) {
-                      return <p className="text-xs text-red-400 mt-1">⚠️ Nessun orario disponibile!</p>
-                    }
-                    return null
-                  })()}
                   <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile</p>
                 </div>
                 <Select
@@ -3341,14 +3328,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       return base.filter(o => available.includes(o.value) || o.value === formData.return_time)
                     })()}
                   />
-                  {(() => {
-                    const base = getFilteredTimeOptions(formData.return_date)
-                    const available = filterRentalTimeSlots(base.map(o => o.value), rentalEventsReturnDate)
-                    if (available.length === 0 && formData.return_date) {
-                      return <p className="text-xs text-red-400 mt-1">⚠️ Nessun orario disponibile!</p>
-                    }
-                    return null
-                  })()}
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
                   <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile</p>
                 </div>
