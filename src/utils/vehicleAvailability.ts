@@ -65,18 +65,25 @@ function normalizePlate(plate: string | null | undefined): string {
  * Never falls back to model name matching
  */
 export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean {
-    // First try vehicle_id (most reliable)
-    const bookingVehicleId = booking.vehicle_id
+    // First try vehicle_id (most reliable) - check both top-level and booking_details
+    const bookingVehicleId = booking.vehicle_id || (booking as any).booking_details?.vehicle_id
     if (bookingVehicleId && bookingVehicleId === vehicle.id) {
+        console.log(`[matchVehicleByPlate] MATCH by vehicle_id: ${bookingVehicleId} === ${vehicle.id}`)
         return true
     }
 
-    // Then try plate matching
-    const bookingPlate = normalizePlate(booking.vehicle_plate)
+    // Then try plate matching - check both top-level and booking_details
+    const bookingPlate = normalizePlate(booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate)
     const vehiclePlate = normalizePlate(vehicle.plate || vehicle.targa)
 
     if (bookingPlate && vehiclePlate && bookingPlate === vehiclePlate) {
+        console.log(`[matchVehicleByPlate] MATCH by plate: ${bookingPlate} === ${vehiclePlate}`)
         return true
+    }
+
+    // Debug: log when no match found
+    if (booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate) {
+        console.log(`[matchVehicleByPlate] NO MATCH: booking plate=${bookingPlate}, vehicle plate=${vehiclePlate}, booking_id=${booking.id?.substring(0,8)}`)
     }
 
     // NO fallback to name matching - this is forbidden
