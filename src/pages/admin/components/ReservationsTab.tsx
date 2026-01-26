@@ -7,8 +7,7 @@ import { validateRentalBooking } from '../../../utils/schedulingRules'
 
 import {
   getAvailableVehicles,
-  isVehicleAvailable,
-  generateValidTimeSlots
+  isVehicleAvailable
 } from '../../../utils/vehicleAvailability'
 import Input from './Input'
 import Select from './Select'
@@ -711,70 +710,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     return result
   }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, bookings, carWashBookings, editingId])
-
-  // Generate valid time slots and auto-fill earliest pickup time when vehicle/dates change
-  useEffect(() => {
-    // Skip on initial load of edit form
-    if (isInitialEditLoad.current) {
-      console.log('[Vehicle Availability] Skipping initial edit load check')
-      isInitialEditLoad.current = false
-      return
-    }
-
-    // Only generate time slots if we have vehicle and dates selected
-    if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
-      setValidPickupTimes([])
-      return
-    }
-
-    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-    if (!selectedVehicle) {
-      setValidPickupTimes([])
-      return
-    }
-
-    // Combine all bookings for availability checking
-    const allBookingsForCheck = [...bookings, ...carWashBookings]
-
-    // Generate valid time slots for this vehicle
-    const validSlots = generateValidTimeSlots(
-      selectedVehicle,
-      formData.pickup_date,
-      formData.return_date,
-      allBookingsForCheck,
-      editingId || undefined
-    )
-
-    setValidPickupTimes(validSlots)
-
-    // Auto-fill earliest valid time if not in edit mode
-    if (!editingId && validSlots.length > 0) {
-      const earliestValidTime = validSlots[0]
-
-      // Only auto-adjust if current time is not in the valid slots
-      if (!validSlots.includes(formData.pickup_time)) {
-        console.log(`[Vehicle Availability] Auto-filling earliest valid time: ${earliestValidTime}`)
-
-        setFormData(prev => ({ ...prev, pickup_time: earliestValidTime }))
-
-        // Show notification if there's a significant change
-        const currentTime = formData.pickup_time
-        if (currentTime && currentTime !== earliestValidTime) {
-          alert(
-            `DISPONIBILITÀ AUTO\n\n` +
-            `${selectedVehicle.display_name} è disponibile a partire dalle ${earliestValidTime}.\n\n` +
-            `L'orario di ritiro è stato aggiornato automaticamente per rispettare:\n` +
-            `- Prenotazioni esistenti\n` +
-            `- 30 minuti di gap obbligatorio\n` +
-            `- 45 minuti di lavaggio automatico`
-          )
-        }
-      }
-    } else if (validSlots.length === 0) {
-      console.warn('[Vehicle Availability] No valid time slots available for selected vehicle and dates')
-    }
-  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, vehicles, bookings, carWashBookings, editingId])
-
 
   const LOCATIONS = [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
