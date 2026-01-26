@@ -582,6 +582,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Combine all bookings for availability checking
     const allBookingsForCheck = [...bookings, ...carWashBookings]
 
+    // Debug: Log all bookings with their vehicle info
+    console.log('[Vehicle Availability] All bookings for check:', allBookingsForCheck.map(b => ({
+      id: b.id?.substring(0, 8),
+      vehicle_id: b.vehicle_id,
+      vehicle_plate: b.vehicle_plate,
+      vehicle_name: b.vehicle_name,
+      pickup: b.pickup_date,
+      dropoff: b.dropoff_date,
+      status: b.status
+    })))
+
     const filteredVehicles = getAvailableVehicles(
       vehicles,
       formData.pickup_date,
@@ -595,6 +606,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     console.log('[Vehicle Availability] Filtered vehicles:', {
       total: vehicles.length,
       available: filteredVehicles.length,
+      filteredOut: vehicles.filter(v => !filteredVehicles.includes(v)).map(v => `${v.display_name} (${v.plate})`),
       dates: `${formData.pickup_date} ${pickupTime} → ${formData.return_date} ${returnTime}`
     })
 
@@ -677,22 +689,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return times
   }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, editingId])
 
-  // FINAL vehicles for dropdown - includes base vehicles + same-day available vehicles
+  // FINAL vehicles for dropdown - use availableVehicles directly for admin
+  // Admin can always proceed with warnings, but dropdown should show only truly available vehicles
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
     let result = [...baseVehiclesForDropdown]
 
-    // ALWAYS add vehicles with same-day availability (even if no time selected yet)
-    // Find vehicles that have bookings ending on the selected pickup date
-    if (formData.pickup_date) {
+    // For same-day returns: only add if the vehicle becomes available BEFORE the end of the requested period
+    // This is a more restrictive check than before
+    if (formData.pickup_date && formData.return_date) {
       const pickupDateStr = formData.pickup_date
+      const requestedReturnDate = new Date(formData.return_date + 'T23:59:59')
 
-      // Find all vehicles that have bookings ending on this date
+      // Find vehicles that have bookings ending on the pickup date AND become available in time
       const sameDayVehicles = vehicles.filter(vehicle => {
         // Skip if already in result
         if (result.some(v => v.id === vehicle.id)) return false
 
         // Find bookings for this vehicle ending on pickup date
-        const allBookings = [...bookings, ...carWashBookings].filter(booking => {
+        const vehicleBookings = [...bookings, ...carWashBookings].filter(booking => {
           if (editingId && booking.id === editingId) return false
           if (!isBookingForVehicle(booking, vehicle)) return false
           if (booking.status === 'cancelled') return false
@@ -701,15 +715,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           return bookingEndDate === pickupDateStr
         })
 
-        return allBookings.length > 0
+        // Only include if there's a same-day return AND the booking ends before requested return
+        if (vehicleBookings.length > 0) {
+          // Check that all bookings end before our requested return
+          const allEndBeforeOurReturn = vehicleBookings.every(b => {
+            const bookingEnd = new Date(b.dropoff_date)
+            return bookingEnd < requestedReturnDate
+          })
+          return allEndBeforeOurReturn
+        }
+
+        return false
       })
 
       result = [...result, ...sameDayVehicles]
       console.log('[Vehicle Dropdown] Total vehicles shown:', result.length, '(including', sameDayVehicles.length, 'same-day returns)')
     }
 
+    console.log('[Vehicle Dropdown] Final list:', result.map(v => `${v.display_name} (${v.plate})`))
+
     return result
-  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, bookings, carWashBookings, editingId])
+  }, [baseVehiclesForDropdown, formData.pickup_date, formData.return_date, vehicles, bookings, carWashBookings, editingId])
 
   const LOCATIONS = [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
