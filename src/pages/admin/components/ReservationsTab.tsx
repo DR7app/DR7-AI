@@ -2250,13 +2250,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // ===== AVAILABILITY ENGINE VALIDATION =====
       // Check if the selected vehicle is actually available for the selected dates/times
-      if (formData.vehicle_id) {
+      // SKIP this check when EDITING an existing booking - admin knows what they're doing
+      if (formData.vehicle_id && !editingId) {
         const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
 
         if (selectedVehicle) {
           const allBookingsForCheck = [...bookings, ...carWashBookings]
 
-          console.log('[EXTEND DEBUG] editingId:', editingId, 'vehicle:', selectedVehicle.display_name)
+          console.log('[AVAILABILITY DEBUG] Checking for new booking, vehicle:', selectedVehicle.display_name)
 
           const availabilityResult = isVehicleAvailable(
             selectedVehicle,
@@ -2265,7 +2266,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             formData.pickup_time,
             formData.return_time,
             allBookingsForCheck,
-            editingId || undefined
+            undefined
           )
 
           if (!availabilityResult.available) {
@@ -2298,14 +2299,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           console.log('✅ Vehicle availability check passed')
         }
+      } else if (editingId) {
+        console.log('✅ Skipping availability check for booking extension (editingId:', editingId, ')')
       }
 
       // ===== SCHEDULING RULES VALIDATION =====
       // Enforce non-negotiable scheduling rules for DEPARTURE (pickup) and RETURN (dropoff)
+      // SKIP this check when EDITING an existing booking - admin is extending/modifying their own booking
       const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
 
-      if (vehicle) {
-        console.log('🔍 Validating scheduling rules for rental booking...')
+      if (vehicle && !editingId) {
+        console.log('🔍 Validating scheduling rules for NEW rental booking...')
         console.log(`  Vehicle: ${vehicle.display_name}`)
         console.log(`  Pickup (DEPARTURE): ${testPickupDate.toISOString()}`)
         console.log(`  Dropoff (RETURN): ${testReturnDate.toISOString()}`)
@@ -2316,7 +2320,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           vehicle.id,
           vehicle.display_name,
           vehicle.plate || vehicle.targa || undefined,
-          editingId || undefined
+          undefined
         )
 
         if (!schedulingValidation.isValid) {
@@ -2354,6 +2358,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
 
         console.log('✅ Scheduling validation passed')
+      } else if (editingId) {
+        console.log('✅ Skipping scheduling validation for booking extension (editingId:', editingId, ')')
       }
 
       // Check for existing bookings on the same vehicle and dates (only for new bookings, not edits)
