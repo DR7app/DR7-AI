@@ -74,8 +74,8 @@ DATI DOCUMENTO (per Carta d'Identità):
 - documento_ente (comune che ha rilasciato)
 
 DATI PATENTE (se è una patente):
-- patente_numero
-- patente_tipo (es: B, AM, A1, A2, A, C, D, BE, etc.)
+- patente_numero (il numero della patente, es: "AB1234567X")
+- patente_tipo (SOLO le categorie effettivamente possedute, visibili sul documento - es: "B" oppure "AM, B" se multiple. NON elencare tutte le categorie possibili, solo quelle che il titolare possiede)
 - patente_rilascio (YYYY-MM-DD)
 - patente_scadenza (YYYY-MM-DD)
 - patente_ente (Motorizzazione o Prefettura)
@@ -88,9 +88,9 @@ METADATI:
 REGOLE IMPORTANTI:
 1. Converti TUTTE le date nel formato YYYY-MM-DD (es: 15/03/1990 → 1990-03-15)
 2. I nomi propri vanno con la prima lettera maiuscola (es: MARIO ROSSI → Mario Rossi)
-3. Il codice fiscale deve essere tutto MAIUSCOLO
+3. CODICE FISCALE: deve essere ESATTAMENTE 16 caratteri alfanumerici, tutto MAIUSCOLO. Formato: 6 lettere + 2 numeri + 1 lettera + 2 numeri + 1 lettera + 3 numeri + 1 lettera (es: RSSMRA85M01H501Z). Leggi ATTENTAMENTE ogni carattere, distinguendo tra lettere simili (O/0, I/1, S/5, B/8). Se non sei sicuro al 100%, metti il campo in "notes" con i caratteri incerti.
 4. Se un campo non è visibile o leggibile, omettilo dal risultato
-5. Per la patente, estrai TUTTI i tipi di patente visibili (es: "AM, B")
+5. PATENTE TIPO: estrai SOLO le categorie che il titolare possiede (indicate sul retro della patente nella tabella delle categorie). NON elencare tutte le categorie possibili.
 6. La provincia è sempre la sigla di 2 lettere (CA, MI, RM, TO, etc.)
 
 Rispondi SOLO con un oggetto JSON valido, senza markdown o altro testo.`;
