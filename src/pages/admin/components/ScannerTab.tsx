@@ -207,9 +207,10 @@ export default function ScannerTab() {
     const openClientModal = () => {
         if (!mergedData) return;
 
-        // Map extracted data to NewClientModal format
+        // Map extracted data to NewClientModal format (matching expected field names)
         const clientData: any = {
             tipo_cliente: 'persona_fisica',
+            // Personal info
             nome: mergedData.nome || '',
             cognome: mergedData.cognome || '',
             codice_fiscale: mergedData.codice_fiscale || '',
@@ -217,21 +218,34 @@ export default function ScannerTab() {
             data_nascita: mergedData.data_nascita || '',
             luogo_nascita: mergedData.luogo_nascita || '',
             provincia_nascita: mergedData.provincia_nascita || '',
+            // Address
             indirizzo: mergedData.indirizzo || '',
             numero_civico: mergedData.numero_civico || '',
             codice_postale: mergedData.codice_postale || '',
             citta_residenza: mergedData.citta_residenza || '',
             provincia_residenza: mergedData.provincia_residenza || '',
             nazione: 'Italia',
-            // Document info
+            // Document info (ID card)
             numero_documento: mergedData.documento_numero || '',
             data_scadenza_documento: mergedData.documento_scadenza || '',
-            // Driver's license
-            patente_numero: mergedData.patente_numero || '',
-            patente_tipo: mergedData.patente_tipo || '',
-            patente_rilascio: mergedData.patente_rilascio || '',
-            patente_scadenza: mergedData.patente_scadenza || '',
-            patente_ente: mergedData.patente_ente || '',
+            // Driver's license - use field names that NewClientModal expects
+            numero_patente: mergedData.patente_numero || '',
+            tipo_patente: mergedData.patente_tipo || '',
+            data_rilascio_patente: mergedData.patente_rilascio || '',
+            scadenza_patente: mergedData.patente_scadenza || '',
+            emessa_da: mergedData.patente_ente || '',
+            // Also put in metadata for safety
+            metadata: {
+                sesso: mergedData.sesso || '',
+                provincia_nascita: mergedData.provincia_nascita || '',
+                patente: {
+                    numero: mergedData.patente_numero || '',
+                    tipo: mergedData.patente_tipo || '',
+                    rilascio: mergedData.patente_rilascio || '',
+                    scadenza: mergedData.patente_scadenza || '',
+                    ente: mergedData.patente_ente || '',
+                }
+            }
         };
 
         setClientModalData(clientData);
