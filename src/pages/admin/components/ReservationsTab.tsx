@@ -617,17 +617,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       editingId || undefined
     )
 
-    // Log which vehicles were filtered out and WHY
+    // Log which vehicles were filtered out and WHY (with actual reason from availability check)
     const filteredOut = vehicles.filter(v => !filteredVehicles.includes(v))
     if (filteredOut.length > 0) {
-      console.log('[Vehicle Availability] Vehicles filtered out:', filteredOut.map(v => {
-        // Check why this vehicle was filtered
-        const reason = v.status === 'retired' ? 'RETIRED' :
-                       v.status === 'maintenance' ? 'MAINTENANCE' :
-                       v.metadata?.unavailable_from ? `BLOCKED: ${v.metadata.unavailable_from} - ${v.metadata.unavailable_until}` :
-                       'BOOKING CONFLICT'
-        return `${v.display_name} (${v.plate}) - ${reason}`
-      }))
+      console.log('[Vehicle Availability] ===== FILTERED OUT VEHICLES =====')
+      filteredOut.forEach(v => {
+        // Get the actual reason from isVehicleAvailable
+        const result = isVehicleAvailable(v, formData.pickup_date, formData.return_date, pickupTime, returnTime, allBookingsForCheck, editingId || undefined)
+        console.log(`[FILTERED OUT] ${v.display_name} (${v.plate || v.targa || 'no plate'}): ${result.reason || 'Unknown reason'}`)
+      })
+      console.log('[Vehicle Availability] ================================')
     }
 
     console.log('[Vehicle Availability] Available:', filteredVehicles.length, 'of', vehicles.length)
@@ -711,102 +710,42 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return times
   }, [vehicles, bookings, carWashBookings, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, editingId])
 
-  // FINAL vehicles for dropdown - includes available vehicles + same-day returns
-  // Same-day returns are shown because after 90min buffer (including car wash), the car becomes available
+  // FINAL vehicles for dropdown - trust the availability engine completely
+  // The availability engine (vehicleAvailability.ts) handles all conflict detection with proper Rome timezone
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
-    // First, filter out any vehicle that has a SPANNING booking (booking covers entire requested period)
-    const requestedPickup = formData.pickup_date ? new Date(`${formData.pickup_date}T${formData.pickup_time || '09:00'}:00`) : null
-    const requestedReturn = formData.return_date ? new Date(`${formData.return_date}T${formData.return_time || '18:00'}:00`) : null
+    // Start with the base vehicles (already filtered by availability engine)
+    let result = [...baseVehiclesForDropdown]
 
-    // Filter baseVehiclesForDropdown to remove any with spanning bookings
-    let result = baseVehiclesForDropdown.filter(vehicle => {
-      if (!requestedPickup || !requestedReturn) return true // No dates = show all
+    // Add vehicles with same-day returns that have an earliest available time
+    // These vehicles are NOT in baseVehiclesForDropdown because they have conflicts,
+    // but we want to show them with their earliest available time hint
+    if (formData.pickup_date) {
+      const sameDayVehicleIds = new Set<string>()
 
-      // Check if this vehicle has ANY booking that overlaps with the requested period
-      const hasSpanningBooking = [...bookings, ...carWashBookings].some(booking => {
-        if (editingId && booking.id === editingId) return false
-        if (!isBookingForVehicle(booking, vehicle)) return false
-        if (booking.status === 'cancelled') return false
+      vehicleEarliestTimes.forEach((earliestTime, vehicleId) => {
+        // If vehicle has an earliest time AND is not already in result, it's a same-day return
+        if (!result.some(v => v.id === vehicleId)) {
+          const vehicle = vehicles.find(v => v.id === vehicleId)
+          if (vehicle) {
+            // Only add if earliest time is within business hours on the pickup date
+            const pickupDateStr = formData.pickup_date
+            const earliestDateStr = earliestTime.toISOString().split('T')[0]
+            const earliestHour = earliestTime.getHours()
 
-        const bookingStart = new Date(booking.pickup_date)
-        const bookingEnd = new Date(booking.dropoff_date)
-        const bookingEndWithBuffer = new Date(bookingEnd.getTime() + 75 * 60 * 1000) // 75 min buffer
-
-        // Check for overlap: requestedPickup < bookingEndWithBuffer AND requestedReturn > bookingStart
-        const hasOverlap = requestedPickup < bookingEndWithBuffer && requestedReturn > bookingStart
-
-        if (hasOverlap) {
-          console.log(`[SPANNING CHECK] Vehicle ${vehicle.display_name} (${vehicle.plate}) has overlapping booking:`, {
-            booking_id: booking.id?.substring(0, 8),
-            booking_period: `${bookingStart.toLocaleDateString()} - ${bookingEnd.toLocaleDateString()}`,
-            requested_period: `${requestedPickup.toLocaleDateString()} - ${requestedReturn.toLocaleDateString()}`
-          })
+            if (earliestDateStr === pickupDateStr && earliestHour < 19) {
+              sameDayVehicleIds.add(vehicleId)
+              result.push(vehicle)
+              console.log(`[Vehicle Dropdown] Adding same-day return: ${vehicle.display_name} (${vehicle.plate}) - available from ${earliestTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`)
+            }
+          }
         }
-
-        return hasOverlap
       })
-
-      return !hasSpanningBooking // Exclude if it has a spanning booking
-    })
-
-    console.log('[Vehicle Dropdown] After spanning filter:', result.length, 'vehicles')
-
-    // Add vehicles with same-day returns - they become available after 90min buffer
-    if (formData.pickup_date && requestedPickup && requestedReturn) {
-      const pickupDateStr = formData.pickup_date
-
-      // Find vehicles that have bookings ending on the pickup date (same-day returns)
-      const sameDayVehicles = vehicles.filter(vehicle => {
-        // Skip if already in result
-        if (result.some(v => v.id === vehicle.id)) return false
-
-        // Check if this vehicle has a SPANNING booking (covering the entire period) - if so, exclude it
-        const hasSpanningBooking = [...bookings, ...carWashBookings].some(booking => {
-          if (editingId && booking.id === editingId) return false
-          if (!isBookingForVehicle(booking, vehicle)) return false
-          if (booking.status === 'cancelled') return false
-
-          const bookingStart = new Date(booking.pickup_date)
-          const bookingEnd = new Date(booking.dropoff_date)
-
-          // Check if booking SPANS the entire requested period (starts before pickup AND ends after return)
-          // This is different from same-day return where booking ends ON the pickup date
-          const bookingEndDate = bookingEnd.toISOString().split('T')[0]
-          const isSpanning = bookingStart < requestedPickup && bookingEnd > requestedReturn
-          const isSameDay = bookingEndDate === pickupDateStr
-
-          // Only allow same-day returns, not spanning bookings
-          return isSpanning && !isSameDay
-        })
-
-        if (hasSpanningBooking) {
-          console.log(`[SAME-DAY CHECK] Excluding ${vehicle.display_name} (${vehicle.plate}) - has spanning booking`)
-          return false
-        }
-
-        // Find bookings for this vehicle ending on pickup date
-        const vehicleBookings = [...bookings, ...carWashBookings].filter(booking => {
-          if (editingId && booking.id === editingId) return false
-          if (!isBookingForVehicle(booking, vehicle)) return false
-          if (booking.status === 'cancelled') return false
-
-          // Check if booking ends on the pickup date
-          const bookingEndDate = new Date(booking.dropoff_date).toISOString().split('T')[0]
-          return bookingEndDate === pickupDateStr
-        })
-
-        // Include if there's a same-day return (car will be available after buffer)
-        return vehicleBookings.length > 0
-      })
-
-      result = [...result, ...sameDayVehicles]
-      console.log('[Vehicle Dropdown] Total vehicles shown:', result.length, '(including', sameDayVehicles.length, 'same-day returns with 90min buffer)')
     }
 
-    console.log('[Vehicle Dropdown] Final list:', result.map(v => `${v.display_name} (${v.plate})`))
+    console.log('[Vehicle Dropdown] Final list:', result.length, 'vehicles:', result.map(v => v.display_name))
 
     return result
-  }, [baseVehiclesForDropdown, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, vehicles, bookings, carWashBookings, editingId])
+  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes])
 
   const LOCATIONS = [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
