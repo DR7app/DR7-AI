@@ -337,6 +337,14 @@ export function isVehicleAvailable(
 
     console.log(`[AVAILABILITY CHECK] After filtering: ${vehicleBookings.length} bookings to check for conflicts`)
 
+    // Log ALL matched bookings for this vehicle to help debug
+    if (vehicleBookings.length > 0) {
+        console.log(`[AVAILABILITY CHECK] Bookings matched to ${vehicle.display_name} (${vehiclePlate}):`)
+        vehicleBookings.forEach((b, i) => {
+            console.log(`  ${i + 1}. ID: ${b.id?.substring(0, 8)} | ${new Date(b.pickup_date).toLocaleDateString('it-IT')} → ${new Date(b.dropoff_date).toLocaleDateString('it-IT')} | Customer: ${b.customer_name} | Status: ${b.status} | Plate: ${b.vehicle_plate || 'N/A'}`)
+        })
+    }
+
     // Check each matched booking for time conflicts
     for (const booking of vehicleBookings) {
         const bookingStart = new Date(booking.pickup_date)
@@ -352,7 +360,11 @@ export function isVehicleAvailable(
             console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - BOOKING CONFLICT with booking ${booking.id?.substring(0,8)}:`, {
                 bookingPeriod: `${bookingStart.toISOString()} → ${bookingEnd.toISOString()}`,
                 requestedPeriod: `${requestStart.toISOString()} → ${requestEnd.toISOString()}`,
-                customer: booking.customer_name
+                customer: booking.customer_name,
+                matchedBy: booking.vehicle_id === vehicle.id ? `vehicle_id: ${booking.vehicle_id}` :
+                           `plate: ${booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate}`,
+                bookingStatus: booking.status,
+                serviceType: booking.service_type || 'rental'
             })
 
             return {
