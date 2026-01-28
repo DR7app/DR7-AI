@@ -2011,34 +2011,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Refresh data to get the updated booking
       await loadData()
 
-      // Ask if they want to regenerate the contract
-      const wantsNewContract = confirm(
+      // Ask if they want to generate an extension addendum contract
+      const wantsExtensionContract = confirm(
         `Prenotazione estesa con successo!\n\n` +
         `Nuova data riconsegna: ${extendData.new_return_date} ${extendData.new_return_time}\n` +
         `Importo aggiuntivo: €${additionalAmount}\n\n` +
         `---\n\n` +
-        `Vuoi generare un NUOVO CONTRATTO con le date aggiornate?\n\n` +
-        `Clicca OK per generare nuovo contratto\n` +
-        `Clicca ANNULLA per continuare senza nuovo contratto`
+        `Vuoi generare un ADDENDUM DI ESTENSIONE?\n` +
+        `(Documento che copre solo il periodo di estensione)\n\n` +
+        `Clicca OK per generare addendum estensione\n` +
+        `Clicca ANNULLA per continuare senza documento`
       )
 
-      if (wantsNewContract) {
-        // Find the updated booking from the refreshed data
-        const updatedBooking = bookings.find(b => b.id === bookingId)
-        if (updatedBooking) {
-          console.log('[handleConfirmExtend] Generating new contract for extended booking...')
-          handleGenerateContract(updatedBooking)
-        } else {
-          // If not found immediately, fetch it
-          const { data: fetchedBooking } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('id', bookingId)
-            .single()
+      if (wantsExtensionContract) {
+        console.log('[handleConfirmExtend] Generating extension addendum contract...')
+        try {
+          const response = await fetch('/.netlify/functions/generate-extension-contract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId,
+              extensionData: {
+                previous_dropoff: extendingBooking.dropoff_date,
+                new_dropoff: utcDropoff.toISOString(),
+                additional_amount: additionalAmount,
+                notes: extendData.notes
+              }
+            })
+          })
 
-          if (fetchedBooking) {
-            handleGenerateContract(fetchedBooking as Booking)
+          const result = await response.json()
+          if (result.success && result.url) {
+            alert(`Addendum estensione generato!\n\nPuoi scaricarlo qui: ${result.url}`)
+            window.open(result.url, '_blank')
+          } else {
+            console.error('[handleConfirmExtend] Extension contract error:', result.error)
+            alert('Errore nella generazione dell\'addendum: ' + (result.error || 'Errore sconosciuto'))
           }
+        } catch (contractError: any) {
+          console.error('[handleConfirmExtend] Contract generation failed:', contractError)
+          alert('Errore nella generazione dell\'addendum: ' + contractError.message)
         }
       }
 
