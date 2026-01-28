@@ -32,6 +32,27 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Booking not found' }) }
         }
 
+        // Fetch customer data (same logic as main contract)
+        const customerId = booking.booking_details?.customer?.customerId || booking.user_id
+        let customer: any = null
+
+        if (customerId) {
+            const { data: cData } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
+            if (cData) customer = cData
+        }
+
+        if (!customer && booking.customer_email) {
+            const { data: cData } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).single()
+            if (cData) customer = cData
+        }
+
+        // Fetch vehicle data
+        let vehicleData: any = null
+        if (booking.vehicle_name) {
+            const { data: vData } = await supabase.from('vehicles').select('*').eq('display_name', booking.vehicle_name).maybeSingle()
+            vehicleData = vData
+        }
+
         // Get the latest extension from history
         const extensionHistory = booking.booking_details?.extension_history || []
         const latestExtension = extensionHistory[extensionHistory.length - 1] || extensionData
@@ -40,7 +61,7 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'No extension data found' }) }
         }
 
-        // Create a simple PDF for the extension
+        // Create PDF
         const pdfDoc = await PDFDocument.create()
         const page = pdfDoc.addPage([595.28, 841.89]) // A4 size
         const { width, height } = page.getSize()
@@ -50,7 +71,7 @@ export const handler: Handler = async (event) => {
 
         const black = rgb(0, 0, 0)
         const gold = rgb(0.85, 0.65, 0.13)
-        const gray = rgb(0.3, 0.3, 0.3)
+        const gray = rgb(0.4, 0.4, 0.4)
 
         let y = height - 50
 
@@ -58,132 +79,209 @@ export const handler: Handler = async (event) => {
         page.drawText('DR7 AUTONOLEGGIO', { x: 50, y, size: 24, font: fontBold, color: gold })
         y -= 30
         page.drawText('ADDENDUM DI ESTENSIONE NOLEGGIO', { x: 50, y, size: 16, font: fontBold, color: black })
-        y -= 40
+        y -= 35
 
         // Contract reference
         const contractNumber = `EXT-${bookingId.substring(0, 8).toUpperCase()}`
-        page.drawText(`Numero Addendum: ${contractNumber}`, { x: 50, y, size: 11, font: fontRegular, color: gray })
-        y -= 20
-        page.drawText(`Data: ${new Date().toLocaleDateString('it-IT')}`, { x: 50, y, size: 11, font: fontRegular, color: gray })
-        y -= 20
-        page.drawText(`Riferimento Prenotazione: DR7-${bookingId.substring(0, 8).toUpperCase()}`, { x: 50, y, size: 11, font: fontRegular, color: gray })
-        y -= 40
+        page.drawText(`Numero Addendum: ${contractNumber}`, { x: 50, y, size: 10, font: fontRegular, color: gray })
+        y -= 15
+        page.drawText(`Data: ${new Date().toLocaleDateString('it-IT')} - Luogo: Cagliari`, { x: 50, y, size: 10, font: fontRegular, color: gray })
+        y -= 15
+        page.drawText(`Rif. Prenotazione Originale: DR7-${bookingId.substring(0, 8).toUpperCase()}`, { x: 50, y, size: 10, font: fontRegular, color: gray })
+        y -= 25
 
         // Divider line
         page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 1, color: gold })
-        y -= 30
-
-        // Customer Info
-        page.drawText('DATI CLIENTE', { x: 50, y, size: 12, font: fontBold, color: black })
         y -= 25
-        const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'
-        page.drawText(`Cliente: ${customerName}`, { x: 50, y, size: 11, font: fontRegular, color: black })
-        y -= 40
 
-        // Vehicle Info
-        page.drawText('VEICOLO', { x: 50, y, size: 12, font: fontBold, color: black })
-        y -= 25
-        page.drawText(`Veicolo: ${booking.vehicle_name || 'N/A'}`, { x: 50, y, size: 11, font: fontRegular, color: black })
+        // ===== CUSTOMER SECTION =====
+        page.drawText('DATI LOCATARIO', { x: 50, y, size: 11, font: fontBold, color: black })
         y -= 18
-        page.drawText(`Targa: ${booking.vehicle_plate || 'N/A'}`, { x: 50, y, size: 11, font: fontRegular, color: black })
-        y -= 40
 
-        // Extension Details Section
-        page.drawText('DETTAGLI ESTENSIONE', { x: 50, y, size: 12, font: fontBold, color: black })
-        y -= 25
+        const customerName = customer?.tipo_cliente === 'azienda'
+            ? customer.denominazione
+            : (customer?.nome && customer?.cognome ? `${customer.nome} ${customer.cognome}` : booking.customer_name || 'N/A')
 
-        // Original dates
-        const originalPickup = new Date(booking.pickup_date).toLocaleDateString('it-IT', {
+        page.drawText(`Nome e Cognome: ${customerName}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+        y -= 14
+
+        const customerCF = customer?.codice_fiscale || booking.booking_details?.customer?.taxCode || ''
+        if (customerCF) {
+            page.drawText(`Codice Fiscale: ${customerCF}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+            y -= 14
+        }
+
+        if (customer?.tipo_cliente === 'azienda' && customer?.partita_iva) {
+            page.drawText(`Partita IVA: ${customer.partita_iva}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+            y -= 14
+        }
+
+        // Birth info
+        if (customer?.data_nascita || customer?.luogo_nascita) {
+            const birthDate = customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''
+            const birthPlace = customer?.luogo_nascita || ''
+            const birthProv = customer?.provincia_nascita || ''
+            page.drawText(`Nato/a il: ${birthDate} a ${birthPlace} (${birthProv})`, { x: 50, y, size: 10, font: fontRegular, color: black })
+            y -= 14
+        }
+
+        // Address
+        const address = customer?.indirizzo || ''
+        const city = customer?.citta_residenza || customer?.citta || ''
+        const prov = customer?.provincia_residenza || customer?.provincia || ''
+        const cap = customer?.codice_postale || customer?.cap || ''
+        if (address || city) {
+            page.drawText(`Residenza: ${address}, ${cap} ${city} (${prov})`, { x: 50, y, size: 10, font: fontRegular, color: black })
+            y -= 14
+        }
+
+        // Contact
+        const phone = customer?.telefono || booking.customer_phone || ''
+        const email = customer?.email || booking.customer_email || ''
+        if (phone || email) {
+            page.drawText(`Tel: ${phone}  -  Email: ${email}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+            y -= 14
+        }
+
+        // License
+        const licenseNum = customer?.numero_patente || ''
+        const licenseType = customer?.tipo_patente || customer?.metadata?.patente?.tipo || ''
+        const licenseExpiry = customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : ''
+        const licenseIssuedBy = customer?.emessa_da || ''
+        if (licenseNum) {
+            page.drawText(`Patente: ${licenseNum} (${licenseType}) - Scadenza: ${licenseExpiry} - Emessa da: ${licenseIssuedBy}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+            y -= 14
+        }
+
+        y -= 15
+
+        // ===== VEHICLE SECTION =====
+        page.drawText('VEICOLO', { x: 50, y, size: 11, font: fontBold, color: black })
+        y -= 18
+
+        const vehicleName = vehicleData?.display_name || booking.vehicle_name || ''
+        const vehiclePlate = vehicleData?.plate || booking.vehicle_plate || ''
+        page.drawText(`Veicolo: ${vehicleName}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+        y -= 14
+        page.drawText(`Targa: ${vehiclePlate}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+        y -= 14
+
+        // Vehicle details
+        const vehicleColor = vehicleData?.metadata?.color || ''
+        const vehicleFuel = vehicleData?.metadata?.fuel || 'Benzina'
+        if (vehicleColor || vehicleFuel) {
+            page.drawText(`Colore: ${vehicleColor}  -  Alimentazione: ${vehicleFuel}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+            y -= 14
+        }
+
+        y -= 15
+
+        // ===== EXTENSION DETAILS =====
+        page.drawText('DETTAGLI ESTENSIONE', { x: 50, y, size: 11, font: fontBold, color: gold })
+        y -= 20
+
+        const originalPickup = new Date(booking.pickup_date).toLocaleString('it-IT', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
         })
         const previousDropoff = latestExtension.previous_dropoff
-            ? new Date(latestExtension.previous_dropoff).toLocaleDateString('it-IT', {
+            ? new Date(latestExtension.previous_dropoff).toLocaleString('it-IT', {
                 day: '2-digit', month: '2-digit', year: 'numeric',
                 hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
             })
             : 'N/A'
-        const newDropoff = new Date(booking.dropoff_date).toLocaleDateString('it-IT', {
+        const newDropoff = new Date(booking.dropoff_date).toLocaleString('it-IT', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
         })
 
-        page.drawText(`Data Ritiro Originale: ${originalPickup}`, { x: 50, y, size: 11, font: fontRegular, color: black })
+        page.drawText(`Data Ritiro Originale: ${originalPickup}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+        y -= 14
+        page.drawText(`Data Riconsegna Precedente: ${previousDropoff}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+        y -= 18
+        page.drawText(`NUOVA DATA RICONSEGNA: ${newDropoff}`, { x: 50, y, size: 12, font: fontBold, color: gold })
         y -= 20
-        page.drawText(`Data Riconsegna Precedente: ${previousDropoff}`, { x: 50, y, size: 11, font: fontRegular, color: black })
-        y -= 20
-        page.drawText(`NUOVA Data Riconsegna: ${newDropoff}`, { x: 50, y, size: 11, font: fontBold, color: gold })
-        y -= 35
 
-        // Calculate extension days
+        // Extension days
         if (latestExtension.previous_dropoff) {
             const prevDate = new Date(latestExtension.previous_dropoff)
             const newDate = new Date(booking.dropoff_date)
             const extensionDays = Math.ceil((newDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-            page.drawText(`Giorni di Estensione: ${extensionDays}`, { x: 50, y, size: 11, font: fontRegular, color: black })
-            y -= 25
+            page.drawText(`Giorni di Estensione: ${extensionDays}`, { x: 50, y, size: 10, font: fontBold, color: black })
+            y -= 20
         }
 
-        // Financial
-        y -= 15
-        page.drawText('IMPORTO ESTENSIONE', { x: 50, y, size: 12, font: fontBold, color: black })
-        y -= 25
+        // Insurance
+        const insuranceOption = booking.booking_details?.insuranceOption || 'RCA'
+        const insuranceLabels: Record<string, string> = {
+            'RCA': 'RCA',
+            'KASKO_BASE': 'Kasko Base',
+            'KASKO_BLACK': 'Kasko Black',
+            'KASKO_SIGNATURE': 'Kasko Signature',
+            'DR7': 'Kasko DR7'
+        }
+        page.drawText(`Copertura Assicurativa: ${insuranceLabels[insuranceOption] || insuranceOption}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+        y -= 20
+
+        // ===== FINANCIAL =====
+        page.drawText('IMPORTI', { x: 50, y, size: 11, font: fontBold, color: black })
+        y -= 18
 
         const additionalAmount = latestExtension.additional_amount || 0
-        page.drawText(`Importo Aggiuntivo: €${additionalAmount.toFixed(2)}`, { x: 50, y, size: 14, font: fontBold, color: gold })
-        y -= 25
+        page.drawText(`Importo Estensione: €${additionalAmount.toFixed(2)}`, { x: 50, y, size: 12, font: fontBold, color: gold })
+        y -= 16
 
         const newTotal = (booking.price_total / 100)
-        page.drawText(`Nuovo Totale Noleggio: €${newTotal.toFixed(2)}`, { x: 50, y, size: 11, font: fontRegular, color: black })
-        y -= 40
+        page.drawText(`Nuovo Totale Noleggio: €${newTotal.toFixed(2)}`, { x: 50, y, size: 10, font: fontRegular, color: black })
+        y -= 20
 
-        // Notes if present
+        // Notes
         if (latestExtension.notes) {
-            page.drawText('NOTE', { x: 50, y, size: 12, font: fontBold, color: black })
-            y -= 25
-            page.drawText(latestExtension.notes, { x: 50, y, size: 10, font: fontRegular, color: gray })
-            y -= 40
+            page.drawText(`Note: ${latestExtension.notes}`, { x: 50, y, size: 9, font: fontRegular, color: gray })
+            y -= 20
         }
 
         // Divider
         page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 1, color: gold })
-        y -= 30
+        y -= 20
 
-        // Terms
-        page.drawText('CONDIZIONI', { x: 50, y, size: 12, font: fontBold, color: black })
-        y -= 25
+        // ===== TERMS =====
+        page.drawText('CONDIZIONI', { x: 50, y, size: 11, font: fontBold, color: black })
+        y -= 18
         const terms = [
-            'Il presente addendum modifica esclusivamente la data di riconsegna del veicolo.',
-            'Tutte le altre condizioni del contratto originale rimangono invariate.',
-            'Le coperture assicurative esistenti sono estese fino alla nuova data di riconsegna.',
-            'Il cliente si impegna a riconsegnare il veicolo entro la nuova data stabilita.',
-            'Eventuali ulteriori estensioni dovranno essere concordate preventivamente.'
+            'Il presente addendum estende il contratto di noleggio originale.',
+            'Tutte le condizioni del contratto originale rimangono invariate.',
+            'La copertura assicurativa è estesa fino alla nuova data di riconsegna.',
+            'Il cliente si impegna a riconsegnare il veicolo entro la nuova data.',
+            'Eventuali ulteriori estensioni dovranno essere concordate preventivamente.',
+            'Il deposito cauzionale originale rimane valido.'
         ]
 
         for (const term of terms) {
-            page.drawText(`• ${term}`, { x: 50, y, size: 9, font: fontRegular, color: gray, maxWidth: width - 100 })
-            y -= 18
+            page.drawText(`• ${term}`, { x: 50, y, size: 9, font: fontRegular, color: gray })
+            y -= 14
         }
 
+        y -= 20
+
+        // ===== SIGNATURES =====
+        page.drawText('FIRME', { x: 50, y, size: 11, font: fontBold, color: black })
         y -= 30
 
-        // Signature section
-        page.drawText('FIRME', { x: 50, y, size: 12, font: fontBold, color: black })
+        page.drawText('Il Locatore (DR7 Autonoleggio)', { x: 50, y, size: 9, font: fontRegular, color: black })
+        page.drawText('Il Locatario', { x: 350, y, size: 9, font: fontRegular, color: black })
         y -= 40
-
-        // Two columns for signatures
-        page.drawText('Il Locatore (DR7)', { x: 50, y, size: 10, font: fontRegular, color: black })
-        page.drawText('Il Locatario', { x: 350, y, size: 10, font: fontRegular, color: black })
-        y -= 50
         page.drawLine({ start: { x: 50, y }, end: { x: 200, y }, thickness: 0.5, color: black })
         page.drawLine({ start: { x: 350, y }, end: { x: 500, y }, thickness: 0.5, color: black })
+        y -= 15
+        page.drawText('Timbro e Firma', { x: 90, y, size: 8, font: fontRegular, color: gray })
+        page.drawText(customerName, { x: 380, y, size: 8, font: fontRegular, color: gray })
 
         // Footer
-        y = 50
         page.drawText('DR7 Autonoleggio - Viale Marconi 229, 09131 Cagliari - P.IVA: 03837550922',
-            { x: 50, y, size: 8, font: fontRegular, color: gray })
+            { x: 50, y: 50, size: 8, font: fontRegular, color: gray })
         page.drawText(`Documento generato il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`,
-            { x: 50, y: y - 12, size: 8, font: fontRegular, color: gray })
+            { x: 50, y: 38, size: 8, font: fontRegular, color: gray })
 
         // Save PDF
         const pdfBytes = await pdfDoc.save()
