@@ -27,6 +27,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.4",
+    "resend": "^6.9.1",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {

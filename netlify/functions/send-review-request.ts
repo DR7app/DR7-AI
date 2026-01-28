@@ -1,20 +1,7 @@
 import type { Handler } from "@netlify/functions";
-import nodemailer from "nodemailer";
-
-// SMTP configuration - uses info@dr7.app
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.secureserver.net',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+import { Resend } from 'resend';
 
 const GOOGLE_REVIEW_LINK = "https://g.page/r/CQwgJt7OYpsfEBM/review";
-// Placeholder for now: 
-// const GOOGLE_REVIEW_LINK = "https://search.google.com/local/writereview?placeid=YOUR_PLACE_ID";
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -31,11 +18,18 @@ export const handler: Handler = async (event) => {
       };
     }
 
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "RESEND_API_KEY not configured" }),
+      };
+    }
+
+    const resend = new Resend(apiKey);
     let sentCount = 0;
     const errors: string[] = [];
 
-    // Allow user to pass a custom link if they want, otherwise use default
-    // For now hardcoded or env var
     const reviewLink = process.env.GOOGLE_REVIEW_LINK || GOOGLE_REVIEW_LINK;
 
     for (const booking of bookings) {
@@ -44,49 +38,47 @@ export const handler: Handler = async (event) => {
         continue;
       }
 
-      const mailOptions = {
-        from: '"DR7 Empire" <info@dr7.app>',
-        to: booking.email,
-        subject: "Come è stata la tua esperienza con DR7?",
-        html: `
-          <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #111; color: #fff; padding: 0;">
-            <!-- Header removed as per user request -->
-
-
-            <!-- Content -->
-            <div style="padding: 40px 20px; text-align: center;">
-              
-              <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-                La tua esperienza con noi è importante.
-              </p>
-
-              <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-                Se ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto, è il modo migliore per crescere insieme.
-              </p>
-
-              <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-                In segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un buono sconto da 100€ sul tuo prossimo noleggio e uno da 10€ sul tuo prossimo lavaggio.
-              </p>
-
-              <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                Clicca qui per lasciarla!👇🏻
-              </p>
-
-              <!-- CTA Button -->
-              <a href="${reviewLink}" 
-                 style="display: inline-block; background-color: #D4AF37; color: #000; padding: 15px 30px; text-decoration: none; font-weight: bold; border-radius: 5px; font-size: 16px; margin: 10px 0;">
-                LASCIA UNA RECENSIONE
-              </a>
-              
-            </div>
-
-          </div>
-        `,
-      };
-
       try {
-        await transporter.sendMail(mailOptions);
-        sentCount++;
+        const { error } = await resend.emails.send({
+          from: 'DR7 Empire <info@dr7.app>',
+          to: booking.email,
+          subject: "Come è stata la tua esperienza con DR7?",
+          html: `
+            <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #111; color: #fff; padding: 0;">
+              <div style="padding: 40px 20px; text-align: center;">
+
+                <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
+                  La tua esperienza con noi è importante.
+                </p>
+
+                <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
+                  Se ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto, è il modo migliore per crescere insieme.
+                </p>
+
+                <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
+                  In segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un buono sconto da 100€ sul tuo prossimo noleggio e uno da 10€ sul tuo prossimo lavaggio.
+                </p>
+
+                <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                  Clicca qui per lasciarla!👇🏻
+                </p>
+
+                <a href="${reviewLink}"
+                   style="display: inline-block; background-color: #D4AF37; color: #000; padding: 15px 30px; text-decoration: none; font-weight: bold; border-radius: 5px; font-size: 16px; margin: 10px 0;">
+                  LASCIA UNA RECENSIONE
+                </a>
+
+              </div>
+            </div>
+          `,
+        });
+
+        if (error) {
+          console.error(`Error sending review email to ${booking.email}:`, error);
+          errors.push(`${booking.name}: ${error.message}`);
+        } else {
+          sentCount++;
+        }
       } catch (err: any) {
         console.error(`Error sending review email to ${booking.email}:`, err);
         errors.push(`${booking.name}: ${err.message}`);
