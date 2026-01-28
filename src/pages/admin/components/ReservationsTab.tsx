@@ -2011,17 +2011,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Refresh data to get the updated booking
       await loadData()
 
-      // Ask if they want to generate an extension addendum contract
-      const wantsExtensionContract = confirm(
-        `Prenotazione estesa con successo!\n\n` +
-        `Nuova data riconsegna: ${extendData.new_return_date} ${extendData.new_return_time}\n` +
-        `Importo aggiuntivo: €${additionalAmount}\n\n` +
-        `---\n\n` +
-        `Vuoi generare un ADDENDUM DI ESTENSIONE?\n` +
-        `(Documento che copre solo il periodo di estensione)\n\n` +
-        `Clicca OK per generare addendum estensione\n` +
-        `Clicca ANNULLA per continuare senza documento`
-      )
+      // Ask if they want to generate an extension contract
+      const wantsExtensionContract = confirm('Estensione salvata. Generare nuovo contratto?')
 
       if (wantsExtensionContract) {
         console.log('[handleConfirmExtend] Generating extension addendum contract...')
@@ -2042,15 +2033,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           const result = await response.json()
           if (result.success && result.url) {
-            alert(`Addendum estensione generato!\n\nPuoi scaricarlo qui: ${result.url}`)
+            alert('Contratto generato!')
             window.open(result.url, '_blank')
           } else {
             console.error('[handleConfirmExtend] Extension contract error:', result.error)
-            alert('Errore nella generazione dell\'addendum: ' + (result.error || 'Errore sconosciuto'))
+            alert('Errore: ' + (result.error || 'Errore sconosciuto'))
           }
         } catch (contractError: any) {
           console.error('[handleConfirmExtend] Contract generation failed:', contractError)
-          alert('Errore nella generazione dell\'addendum: ' + contractError.message)
+          alert('Errore: ' + contractError.message)
         }
       }
 
