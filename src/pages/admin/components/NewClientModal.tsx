@@ -549,7 +549,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         // Also insert into basic 'customers' table for backward compatibility
         try {
           const basicData = {
-            id: newClient.id, // Use the same ID
+            id: createdClientId, // Use the same ID
             full_name: customerData.tipo_cliente === 'persona_fisica'
               ? `${customerData.nome} ${customerData.cognome}`
               : (customerData.ragione_sociale || customerData.denominazione),

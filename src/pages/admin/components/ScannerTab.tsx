@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { supabase } from '../../../supabaseClient';
+import NewClientModal from './NewClientModal';
 
 interface ExtractedData {
     // Personal Info
@@ -18,7 +18,7 @@ interface ExtractedData {
     citta_residenza?: string;
     provincia_residenza?: string;
 
-    // Document Info
+    // Document Info (ID Card)
     documento_tipo?: string;
     documento_numero?: string;
     documento_rilascio?: string;
@@ -38,80 +38,96 @@ interface ExtractedData {
     notes?: string;
 }
 
+interface DocumentSlot {
+    label: string;
+    key: 'id_front' | 'id_back' | 'license_front' | 'license_back';
+    icon: string;
+    preview: string | null;
+    base64: string | null;
+    extracted: ExtractedData | null;
+    extracting: boolean;
+}
+
 export default function ScannerTab() {
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [imageBase64, setImageBase64] = useState<string | null>(null);
-    const [extracting, setExtracting] = useState(false);
-    const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
-    const [editableData, setEditableData] = useState<ExtractedData>({});
-    const [creatingCustomer, setCreatingCustomer] = useState(false);
+    const [documents, setDocuments] = useState<Record<string, DocumentSlot>>({
+        id_front: { label: 'Carta Identità (Fronte)', key: 'id_front', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
+        id_back: { label: 'Carta Identità (Retro)', key: 'id_back', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
+        license_front: { label: 'Patente (Fronte)', key: 'license_front', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
+        license_back: { label: 'Patente (Retro)', key: 'license_back', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
+    });
+
+    const [mergedData, setMergedData] = useState<ExtractedData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const [showNewClientModal, setShowNewClientModal] = useState(false);
+    const [clientModalData, setClientModalData] = useState<any>(null);
+    const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-    // Reset states
+    // Reset all
     const resetAll = () => {
-        setImagePreview(null);
-        setImageBase64(null);
-        setExtractedData(null);
-        setEditableData({});
+        setDocuments({
+            id_front: { label: 'Carta Identità (Fronte)', key: 'id_front', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
+            id_back: { label: 'Carta Identità (Retro)', key: 'id_back', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
+            license_front: { label: 'Patente (Fronte)', key: 'license_front', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
+            license_back: { label: 'Patente (Retro)', key: 'license_back', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
+        });
+        setMergedData(null);
         setError(null);
         setSuccess(null);
     };
 
-    // Handle file selection
-    const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Handle file selection for a specific slot
+    const handleFileSelect = (slotKey: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
-        // Validate file type
         const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
         if (!validTypes.includes(file.type)) {
             setError('Formato non supportato. Usa JPG, PNG o WEBP.');
             return;
         }
 
-        // Validate file size (max 10MB)
         if (file.size > 10 * 1024 * 1024) {
             setError('File troppo grande. Massimo 10MB.');
             return;
         }
 
         setError(null);
-        setSuccess(null);
-        setExtractedData(null);
 
-        // Read file as base64
         const reader = new FileReader();
         reader.onload = (e) => {
             const result = e.target?.result as string;
-            setImagePreview(result);
-            // Extract base64 data (remove data:image/...;base64, prefix)
             const base64 = result.split(',')[1];
-            setImageBase64(base64);
+
+            setDocuments(prev => ({
+                ...prev,
+                [slotKey]: {
+                    ...prev[slotKey],
+                    preview: result,
+                    base64: base64,
+                    extracted: null
+                }
+            }));
         };
         reader.readAsDataURL(file);
-
-        // Reset file input
         event.target.value = '';
     };
 
-    // Extract data from image using Claude
-    const handleExtract = async () => {
-        if (!imageBase64) {
-            setError('Nessuna immagine caricata');
-            return;
-        }
+    // Extract data from a single document
+    const extractDocument = async (slotKey: string) => {
+        const slot = documents[slotKey];
+        if (!slot.base64) return;
 
-        setExtracting(true);
-        setError(null);
+        setDocuments(prev => ({
+            ...prev,
+            [slotKey]: { ...prev[slotKey], extracting: true }
+        }));
 
         try {
             const response = await fetch('/.netlify/functions/extract-document-data', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageBase64 })
+                body: JSON.stringify({ imageBase64: slot.base64 })
             });
 
             const result = await response.json();
@@ -120,133 +136,112 @@ export default function ScannerTab() {
                 throw new Error(result.error || 'Estrazione fallita');
             }
 
-            if (result.success && result.data) {
-                setExtractedData(result.data);
-                setEditableData(result.data);
-                setSuccess('Dati estratti con successo!');
-            } else {
-                throw new Error('Nessun dato estratto');
-            }
+            setDocuments(prev => ({
+                ...prev,
+                [slotKey]: {
+                    ...prev[slotKey],
+                    extracted: result.data,
+                    extracting: false
+                }
+            }));
+
+            return result.data;
         } catch (err: any) {
             console.error('Extraction error:', err);
-            setError(err.message || 'Errore durante l\'estrazione');
-        } finally {
-            setExtracting(false);
+            setError(`Errore estrazione ${slot.label}: ${err.message}`);
+            setDocuments(prev => ({
+                ...prev,
+                [slotKey]: { ...prev[slotKey], extracting: false }
+            }));
+            return null;
         }
     };
 
-    // Handle field edit
-    const handleFieldChange = (field: keyof ExtractedData, value: string) => {
-        setEditableData(prev => ({ ...prev, [field]: value }));
-    };
+    // Extract all uploaded documents
+    const extractAll = async () => {
+        setError(null);
+        setSuccess(null);
 
-    // Create customer from extracted data
-    const handleCreateCustomer = async () => {
-        if (!editableData.nome || !editableData.cognome) {
-            setError('Nome e cognome sono obbligatori');
+        const slotsWithImages = Object.entries(documents).filter(([_, slot]) => slot.base64);
+
+        if (slotsWithImages.length === 0) {
+            setError('Carica almeno un documento');
             return;
         }
 
-        setCreatingCustomer(true);
-        setError(null);
-
-        try {
-            // Check if customer already exists by codice_fiscale
-            if (editableData.codice_fiscale) {
-                const { data: existing } = await supabase
-                    .from('customers_extended')
-                    .select('id, nome, cognome')
-                    .eq('codice_fiscale', editableData.codice_fiscale)
-                    .single();
-
-                if (existing) {
-                    setError(`Cliente già esistente: ${existing.nome} ${existing.cognome}`);
-                    setCreatingCustomer(false);
-                    return;
-                }
-            }
-
-            // Prepare customer data
-            const customerData: any = {
-                tipo_cliente: 'persona_fisica',
-                nome: editableData.nome,
-                cognome: editableData.cognome,
-                codice_fiscale: editableData.codice_fiscale || null,
-                sesso: editableData.sesso || null,
-                data_nascita: editableData.data_nascita || null,
-                luogo_nascita: editableData.luogo_nascita || null,
-                provincia_nascita: editableData.provincia_nascita || null,
-                indirizzo: editableData.indirizzo || null,
-                numero_civico: editableData.numero_civico || null,
-                codice_postale: editableData.codice_postale || null,
-                citta_residenza: editableData.citta_residenza || null,
-                provincia_residenza: editableData.provincia_residenza || null,
-                nazione: 'Italia',
-            };
-
-            // Add document info if present
-            if (editableData.documento_numero) {
-                customerData.numero_documento = editableData.documento_numero;
-                customerData.data_scadenza_documento = editableData.documento_scadenza || null;
-            }
-
-            // Add driver's license if present
-            if (editableData.patente_numero) {
-                customerData.patente_numero = editableData.patente_numero;
-                customerData.patente_tipo = editableData.patente_tipo || null;
-                customerData.patente_rilascio = editableData.patente_rilascio || null;
-                customerData.patente_scadenza = editableData.patente_scadenza || null;
-                customerData.patente_ente = editableData.patente_ente || null;
-            }
-
-            // Create customer
-            const { data: newCustomer, error: createError } = await supabase
-                .from('customers_extended')
-                .insert([customerData])
-                .select()
-                .single();
-
-            if (createError) throw createError;
-
-            setSuccess(`Cliente creato: ${newCustomer.nome} ${newCustomer.cognome}`);
-
-            // Reset after success
-            setTimeout(() => {
-                resetAll();
-            }, 2000);
-
-        } catch (err: any) {
-            console.error('Customer creation error:', err);
-            setError(err.message || 'Errore nella creazione del cliente');
-        } finally {
-            setCreatingCustomer(false);
+        // Extract each document
+        const results: ExtractedData[] = [];
+        for (const [key, _] of slotsWithImages) {
+            const data = await extractDocument(key);
+            if (data) results.push(data);
         }
+
+        // Merge all extracted data (later values override earlier ones)
+        const merged: ExtractedData = {};
+        for (const data of results) {
+            Object.entries(data).forEach(([key, value]) => {
+                if (value && value !== '') {
+                    (merged as any)[key] = value;
+                }
+            });
+        }
+
+        setMergedData(merged);
+        setSuccess(`Estratti dati da ${results.length} documento/i`);
     };
 
-    // Render field input
-    const renderField = (label: string, field: keyof ExtractedData, type: string = 'text', placeholder?: string) => {
-        const value = editableData[field] || '';
-        const originalValue = extractedData?.[field];
-        const isModified = originalValue && value !== originalValue;
-
-        return (
-            <div className="relative">
-                <label className="block text-xs text-theme-text-muted mb-1">{label}</label>
-                <input
-                    type={type}
-                    value={value}
-                    onChange={(e) => handleFieldChange(field, e.target.value)}
-                    placeholder={placeholder}
-                    className={`w-full bg-gray-800 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-dr7-gold ${
-                        isModified ? 'border-yellow-500' : 'border-gray-700'
-                    }`}
-                />
-                {isModified && (
-                    <span className="absolute right-2 top-7 text-yellow-500 text-xs">modificato</span>
-                )}
-            </div>
-        );
+    // Remove a document from a slot
+    const removeDocument = (slotKey: string) => {
+        setDocuments(prev => ({
+            ...prev,
+            [slotKey]: {
+                ...prev[slotKey],
+                preview: null,
+                base64: null,
+                extracted: null
+            }
+        }));
     };
+
+    // Open NewClientModal with merged data
+    const openClientModal = () => {
+        if (!mergedData) return;
+
+        // Map extracted data to NewClientModal format
+        const clientData: any = {
+            tipo_cliente: 'persona_fisica',
+            nome: mergedData.nome || '',
+            cognome: mergedData.cognome || '',
+            codice_fiscale: mergedData.codice_fiscale || '',
+            sesso: mergedData.sesso || '',
+            data_nascita: mergedData.data_nascita || '',
+            luogo_nascita: mergedData.luogo_nascita || '',
+            provincia_nascita: mergedData.provincia_nascita || '',
+            indirizzo: mergedData.indirizzo || '',
+            numero_civico: mergedData.numero_civico || '',
+            codice_postale: mergedData.codice_postale || '',
+            citta_residenza: mergedData.citta_residenza || '',
+            provincia_residenza: mergedData.provincia_residenza || '',
+            nazione: 'Italia',
+            // Document info
+            numero_documento: mergedData.documento_numero || '',
+            data_scadenza_documento: mergedData.documento_scadenza || '',
+            // Driver's license
+            patente_numero: mergedData.patente_numero || '',
+            patente_tipo: mergedData.patente_tipo || '',
+            patente_rilascio: mergedData.patente_rilascio || '',
+            patente_scadenza: mergedData.patente_scadenza || '',
+            patente_ente: mergedData.patente_ente || '',
+        };
+
+        setClientModalData(clientData);
+        setShowNewClientModal(true);
+    };
+
+    // Count uploaded and extracted documents
+    const uploadedCount = Object.values(documents).filter(d => d.base64).length;
+    const extractedCount = Object.values(documents).filter(d => d.extracted).length;
+    const isExtracting = Object.values(documents).some(d => d.extracting);
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -256,10 +251,10 @@ export default function ScannerTab() {
                     <div>
                         <h2 className="text-2xl font-bold text-theme-text-primary">Scanner Documenti</h2>
                         <p className="text-theme-text-muted text-sm mt-1">
-                            Carica una foto del documento per estrarre automaticamente i dati
+                            Carica fronte e retro di Carta d'Identità e Patente per estrarre tutti i dati
                         </p>
                     </div>
-                    {(imagePreview || extractedData) && (
+                    {uploadedCount > 0 && (
                         <button
                             onClick={resetAll}
                             className="px-4 py-2 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors text-sm"
@@ -269,83 +264,83 @@ export default function ScannerTab() {
                     )}
                 </div>
 
-                {/* Upload Section */}
-                {!imagePreview && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* File Upload */}
-                        <label className="cursor-pointer">
+                {/* Document Upload Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    {Object.entries(documents).map(([key, slot]) => (
+                        <div key={key} className="relative">
                             <input
-                                ref={fileInputRef}
+                                ref={el => fileInputRefs.current[key] = el}
                                 type="file"
                                 accept="image/jpeg,image/png,image/webp"
-                                onChange={handleFileSelect}
+                                onChange={handleFileSelect(key)}
                                 className="hidden"
                             />
-                            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-600 rounded-2xl hover:border-dr7-gold hover:bg-gray-800/30 transition-all">
-                                <div className="text-5xl mb-4">📁</div>
-                                <p className="text-white font-semibold mb-1">Carica Immagine</p>
-                                <p className="text-theme-text-muted text-sm">JPG, PNG o WEBP</p>
-                            </div>
-                        </label>
 
-                        {/* Camera Capture */}
-                        <label className="cursor-pointer">
-                            <input
-                                ref={cameraInputRef}
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                onChange={handleFileSelect}
-                                className="hidden"
-                            />
-                            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-600 rounded-2xl hover:border-dr7-gold hover:bg-gray-800/30 transition-all">
-                                <div className="text-5xl mb-4">📷</div>
-                                <p className="text-white font-semibold mb-1">Scatta Foto</p>
-                                <p className="text-theme-text-muted text-sm">Usa la fotocamera</p>
-                            </div>
-                        </label>
-                    </div>
-                )}
-
-                {/* Image Preview */}
-                {imagePreview && !extractedData && (
-                    <div className="space-y-4">
-                        <div className="relative rounded-2xl overflow-hidden bg-black/50 max-w-2xl mx-auto">
-                            <img
-                                src={imagePreview}
-                                alt="Documento"
-                                className="w-full h-auto max-h-[400px] object-contain"
-                            />
+                            {slot.preview ? (
+                                // Document uploaded
+                                <div className="relative aspect-[3/2] rounded-xl overflow-hidden border-2 border-green-500 bg-black">
+                                    <img
+                                        src={slot.preview}
+                                        alt={slot.label}
+                                        className="w-full h-full object-cover"
+                                    />
+                                    {slot.extracting && (
+                                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                                            <div className="text-center">
+                                                <div className="animate-spin text-3xl mb-2">⏳</div>
+                                                <p className="text-white text-xs">Estrazione...</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {slot.extracted && !slot.extracting && (
+                                        <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                                            ✓ Estratto
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => removeDocument(key)}
+                                        className="absolute top-2 left-2 bg-red-500 text-white w-6 h-6 rounded-full text-sm hover:bg-red-600"
+                                    >
+                                        ×
+                                    </button>
+                                    <div className="absolute bottom-0 inset-x-0 bg-black/70 p-2">
+                                        <p className="text-white text-xs text-center truncate">{slot.label}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                // Upload placeholder
+                                <div
+                                    onClick={() => fileInputRefs.current[key]?.click()}
+                                    className="aspect-[3/2] border-2 border-dashed border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-dr7-gold hover:bg-gray-800/30 transition-all"
+                                >
+                                    <div className="text-3xl mb-2">{slot.icon}</div>
+                                    <p className="text-white text-xs font-medium text-center px-2">{slot.label}</p>
+                                </div>
+                            )}
                         </div>
+                    ))}
+                </div>
 
-                        <div className="flex justify-center gap-4">
-                            <button
-                                onClick={() => {
-                                    setImagePreview(null);
-                                    setImageBase64(null);
-                                }}
-                                className="px-6 py-3 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors"
-                            >
-                                Cambia Immagine
-                            </button>
-                            <button
-                                onClick={handleExtract}
-                                disabled={extracting}
-                                className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                            >
-                                {extracting ? (
-                                    <>
-                                        <span className="animate-spin">⏳</span>
-                                        Estrazione in corso...
-                                    </>
-                                ) : (
-                                    <>
-                                        <span>🔍</span>
-                                        Estrai Dati
-                                    </>
-                                )}
-                            </button>
-                        </div>
+                {/* Action Buttons */}
+                {uploadedCount > 0 && (
+                    <div className="flex justify-center gap-4">
+                        <button
+                            onClick={extractAll}
+                            disabled={isExtracting || uploadedCount === 0}
+                            className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {isExtracting ? (
+                                <>
+                                    <span className="animate-spin">⏳</span>
+                                    Estrazione in corso...
+                                </>
+                            ) : (
+                                <>
+                                    <span>🔍</span>
+                                    Estrai Dati ({uploadedCount} doc)
+                                </>
+                            )}
+                        </button>
                     </div>
                 )}
 
@@ -362,103 +357,95 @@ export default function ScannerTab() {
                 )}
             </div>
 
-            {/* Extracted Data Form */}
-            {extractedData && (
+            {/* Merged Data Preview */}
+            {mergedData && (
                 <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-theme-border">
                     <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 className="text-xl font-bold text-theme-text-primary">Dati Estratti</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                    extractedData.confidence === 'high' ? 'bg-green-900/50 text-green-300' :
-                                    extractedData.confidence === 'medium' ? 'bg-yellow-900/50 text-yellow-300' :
-                                    'bg-red-900/50 text-red-300'
-                                }`}>
-                                    Confidenza: {extractedData.confidence || 'N/A'}
-                                </span>
-                                {extractedData.document_type && (
-                                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">
-                                        {extractedData.document_type === 'carta_identita' ? 'Carta d\'Identità' :
-                                         extractedData.document_type === 'patente' ? 'Patente di Guida' :
-                                         extractedData.document_type === 'passaporto' ? 'Passaporto' :
-                                         extractedData.document_type}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
+                        <h3 className="text-xl font-bold text-theme-text-primary">Dati Estratti</h3>
                         <div className="flex items-center gap-2">
-                            <img
-                                src={imagePreview!}
-                                alt="Documento"
-                                className="w-16 h-16 object-cover rounded-lg border border-gray-700"
-                            />
+                            <span className="text-theme-text-muted text-sm">
+                                {extractedCount} documento/i elaborati
+                            </span>
                         </div>
                     </div>
 
-                    {extractedData.notes && (
-                        <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
-                            <p className="text-yellow-300 text-sm">{extractedData.notes}</p>
-                        </div>
-                    )}
-
-                    {/* Personal Info */}
-                    <div className="mb-6">
-                        <h4 className="text-sm font-semibold text-dr7-gold mb-3 uppercase tracking-wide">Dati Personali</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {renderField('Nome', 'nome', 'text', 'Mario')}
-                            {renderField('Cognome', 'cognome', 'text', 'Rossi')}
-                            {renderField('Sesso', 'sesso', 'text', 'M o F')}
-                            {renderField('Data di Nascita', 'data_nascita', 'date')}
-                            {renderField('Luogo di Nascita', 'luogo_nascita', 'text', 'Roma')}
-                            {renderField('Provincia', 'provincia_nascita', 'text', 'RM')}
-                            <div className="md:col-span-2">
-                                {renderField('Codice Fiscale', 'codice_fiscale', 'text', 'RSSMRA85M01H501Z')}
+                    {/* Data Preview Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        {mergedData.nome && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Nome</p>
+                                <p className="text-white font-medium">{mergedData.nome}</p>
                             </div>
-                        </div>
+                        )}
+                        {mergedData.cognome && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Cognome</p>
+                                <p className="text-white font-medium">{mergedData.cognome}</p>
+                            </div>
+                        )}
+                        {mergedData.codice_fiscale && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg md:col-span-2">
+                                <p className="text-xs text-theme-text-muted">Codice Fiscale</p>
+                                <p className="text-white font-mono text-sm">{mergedData.codice_fiscale}</p>
+                            </div>
+                        )}
+                        {mergedData.data_nascita && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Data Nascita</p>
+                                <p className="text-white font-medium">{mergedData.data_nascita}</p>
+                            </div>
+                        )}
+                        {mergedData.luogo_nascita && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Luogo Nascita</p>
+                                <p className="text-white font-medium">{mergedData.luogo_nascita}</p>
+                            </div>
+                        )}
+                        {mergedData.documento_numero && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">N. Documento</p>
+                                <p className="text-white font-mono text-sm">{mergedData.documento_numero}</p>
+                            </div>
+                        )}
+                        {mergedData.documento_scadenza && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Scadenza Doc.</p>
+                                <p className="text-white font-medium">{mergedData.documento_scadenza}</p>
+                            </div>
+                        )}
+                        {mergedData.patente_numero && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">N. Patente</p>
+                                <p className="text-white font-mono text-sm">{mergedData.patente_numero}</p>
+                            </div>
+                        )}
+                        {mergedData.patente_tipo && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Tipo Patente</p>
+                                <p className="text-white font-medium">{mergedData.patente_tipo}</p>
+                            </div>
+                        )}
+                        {mergedData.patente_scadenza && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Scadenza Patente</p>
+                                <p className="text-white font-medium">{mergedData.patente_scadenza}</p>
+                            </div>
+                        )}
+                        {mergedData.indirizzo && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg md:col-span-2">
+                                <p className="text-xs text-theme-text-muted">Indirizzo</p>
+                                <p className="text-white font-medium">{mergedData.indirizzo} {mergedData.numero_civico}</p>
+                            </div>
+                        )}
+                        {mergedData.citta_residenza && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Città</p>
+                                <p className="text-white font-medium">{mergedData.citta_residenza} ({mergedData.provincia_residenza})</p>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Address */}
-                    <div className="mb-6">
-                        <h4 className="text-sm font-semibold text-dr7-gold mb-3 uppercase tracking-wide">Indirizzo</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="md:col-span-2">
-                                {renderField('Via/Piazza', 'indirizzo', 'text', 'Via Roma')}
-                            </div>
-                            {renderField('N. Civico', 'numero_civico', 'text', '123')}
-                            {renderField('CAP', 'codice_postale', 'text', '00100')}
-                            {renderField('Città', 'citta_residenza', 'text', 'Roma')}
-                            {renderField('Provincia', 'provincia_residenza', 'text', 'RM')}
-                        </div>
-                    </div>
-
-                    {/* Document Info */}
-                    {(extractedData.documento_numero || extractedData.document_type === 'carta_identita') && (
-                        <div className="mb-6">
-                            <h4 className="text-sm font-semibold text-dr7-gold mb-3 uppercase tracking-wide">Documento d'Identità</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {renderField('Numero', 'documento_numero', 'text', 'CA00000AA')}
-                                {renderField('Rilasciato il', 'documento_rilascio', 'date')}
-                                {renderField('Scadenza', 'documento_scadenza', 'date')}
-                                {renderField('Ente', 'documento_ente', 'text', 'Comune di Roma')}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Driver's License */}
-                    {(extractedData.patente_numero || extractedData.document_type === 'patente') && (
-                        <div className="mb-6">
-                            <h4 className="text-sm font-semibold text-dr7-gold mb-3 uppercase tracking-wide">Patente di Guida</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {renderField('Numero', 'patente_numero', 'text', 'AB1234567')}
-                                {renderField('Categoria', 'patente_tipo', 'text', 'B')}
-                                {renderField('Rilasciata il', 'patente_rilascio', 'date')}
-                                {renderField('Scadenza', 'patente_scadenza', 'date')}
-                                {renderField('Ente', 'patente_ente', 'text', 'MCTC')}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Action Buttons */}
+                    {/* Open NewClientModal Button */}
                     <div className="flex justify-end gap-4 pt-4 border-t border-gray-700">
                         <button
                             onClick={resetAll}
@@ -467,60 +454,68 @@ export default function ScannerTab() {
                             Annulla
                         </button>
                         <button
-                            onClick={handleCreateCustomer}
-                            disabled={creatingCustomer || !editableData.nome || !editableData.cognome}
-                            className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            onClick={openClientModal}
+                            className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all flex items-center gap-2"
                         >
-                            {creatingCustomer ? (
-                                <>
-                                    <span className="animate-spin">⏳</span>
-                                    Creazione...
-                                </>
-                            ) : (
-                                <>
-                                    <span>✅</span>
-                                    Crea Cliente
-                                </>
-                            )}
+                            <span>✅</span>
+                            Apri Form Nuovo Cliente
                         </button>
                     </div>
                 </div>
             )}
 
             {/* Instructions */}
-            {!imagePreview && !extractedData && (
+            {uploadedCount === 0 && (
                 <div className="bg-theme-bg-secondary p-6 rounded-3xl border border-theme-border">
-                    <h3 className="text-lg font-bold text-theme-text-primary mb-4">Documenti Supportati</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <h3 className="text-lg font-bold text-theme-text-primary mb-4">Come funziona</h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">🪪</div>
-                            <p className="text-white font-medium text-sm">Carta d'Identità</p>
+                            <div className="text-3xl mb-2">1️⃣</div>
+                            <p className="text-white font-medium text-sm">Carica i documenti</p>
+                            <p className="text-theme-text-muted text-xs mt-1">Fronte e retro di CI e Patente</p>
                         </div>
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">🚗</div>
-                            <p className="text-white font-medium text-sm">Patente di Guida</p>
+                            <div className="text-3xl mb-2">2️⃣</div>
+                            <p className="text-white font-medium text-sm">Estrai i dati</p>
+                            <p className="text-theme-text-muted text-xs mt-1">L'AI legge tutti i documenti</p>
                         </div>
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">✈️</div>
-                            <p className="text-white font-medium text-sm">Passaporto</p>
+                            <div className="text-3xl mb-2">3️⃣</div>
+                            <p className="text-white font-medium text-sm">Verifica</p>
+                            <p className="text-theme-text-muted text-xs mt-1">Controlla i dati estratti</p>
                         </div>
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">💳</div>
-                            <p className="text-white font-medium text-sm">Tessera Sanitaria</p>
+                            <div className="text-3xl mb-2">4️⃣</div>
+                            <p className="text-white font-medium text-sm">Crea Cliente</p>
+                            <p className="text-theme-text-muted text-xs mt-1">Apri il form precompilato</p>
                         </div>
                     </div>
 
-                    <div className="mt-6 p-4 bg-blue-900/20 border border-blue-600/30 rounded-xl">
-                        <h4 className="text-blue-300 font-semibold mb-2">Come funziona:</h4>
-                        <ol className="text-sm text-theme-text-muted space-y-2 list-decimal list-inside">
-                            <li>Carica una foto del documento (fronte) o scatta una foto</li>
-                            <li>L'AI analizza l'immagine ed estrae automaticamente tutti i dati</li>
-                            <li>Verifica e modifica i dati estratti se necessario</li>
-                            <li>Clicca "Crea Cliente" per salvare nel database</li>
-                        </ol>
+                    <div className="p-4 bg-blue-900/20 border border-blue-600/30 rounded-xl">
+                        <p className="text-blue-300 text-sm">
+                            <strong>Suggerimento:</strong> Per i migliori risultati, usa foto ben illuminate e nitide.
+                            Puoi caricare anche solo alcuni documenti - i dati verranno estratti da quelli disponibili.
+                        </p>
                     </div>
                 </div>
             )}
+
+            {/* NewClientModal */}
+            <NewClientModal
+                isOpen={showNewClientModal}
+                onClose={() => {
+                    setShowNewClientModal(false);
+                    resetAll();
+                }}
+                onClientCreated={(clientId) => {
+                    console.log('Client created:', clientId);
+                    setShowNewClientModal(false);
+                    resetAll();
+                    setSuccess('Cliente creato con successo!');
+                }}
+                initialData={clientModalData}
+            />
         </div>
     );
 }
