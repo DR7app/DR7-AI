@@ -588,11 +588,52 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Get available vehicles based on selected dates and times
   const availableVehicles = useMemo((): Vehicle[] => {
-    // ADMIN: Show ALL vehicles - admin can book any vehicle
-    // Availability checks are done at submission time, not dropdown filtering
-    console.log('[Vehicle Availability] ADMIN MODE - showing all vehicles:', vehicles.length)
-    return vehicles
-  }, [vehicles])
+    // If no dates selected, show all vehicles
+    if (!formData.pickup_date || !formData.return_date) {
+      console.log('[Vehicle Availability] No dates selected - showing all vehicles:', vehicles.length)
+      return vehicles
+    }
+
+    // Use the availability engine to filter vehicles
+    const pickupTime = formData.pickup_time || '09:00'
+    const returnTime = formData.return_time || '18:00'
+
+    // Combine all bookings for availability checking - ONLY non-cancelled bookings
+    const allBookingsForCheck = [...bookings, ...carWashBookings].filter(b => b.status !== 'cancelled')
+
+    console.log('[Vehicle Availability] Checking availability for:', {
+      dates: `${formData.pickup_date} ${pickupTime} → ${formData.return_date} ${returnTime}`,
+      totalVehicles: vehicles.length,
+      totalBookings: allBookingsForCheck.length
+    })
+
+    const filteredVehicles = getAvailableVehicles(
+      vehicles,
+      formData.pickup_date,
+      formData.return_date,
+      pickupTime,
+      returnTime,
+      allBookingsForCheck,
+      editingId || undefined
+    )
+
+    // Log which vehicles were filtered out and WHY
+    const filteredOut = vehicles.filter(v => !filteredVehicles.includes(v))
+    if (filteredOut.length > 0) {
+      console.log('[Vehicle Availability] Vehicles filtered out:', filteredOut.map(v => {
+        // Check why this vehicle was filtered
+        const reason = v.status === 'retired' ? 'RETIRED' :
+                       v.status === 'maintenance' ? 'MAINTENANCE' :
+                       v.metadata?.unavailable_from ? `BLOCKED: ${v.metadata.unavailable_from} - ${v.metadata.unavailable_until}` :
+                       'BOOKING CONFLICT'
+        return `${v.display_name} (${v.plate}) - ${reason}`
+      }))
+    }
+
+    console.log('[Vehicle Availability] Available:', filteredVehicles.length, 'of', vehicles.length)
+
+    return filteredVehicles
+  }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
 
   // Base vehicles for dropdown (before adding same-day availability)
   // This will be enhanced later after vehicleEarliestTimes is calculated

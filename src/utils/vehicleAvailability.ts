@@ -251,8 +251,11 @@ export function isVehicleAvailable(
     existingBookings: Booking[],
     excludeBookingId?: string
 ): AvailabilityResult {
+    const vehiclePlate = vehicle.plate || vehicle.targa || ''
+
     // Check vehicle status
     if (vehicle.status === 'retired' || vehicle.status === 'maintenance') {
+        console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - STATUS: ${vehicle.status}`)
         return {
             available: false,
             reason: `Vehicle is marked as ${vehicle.status}`
@@ -261,6 +264,7 @@ export function isVehicleAvailable(
 
     // Check for maintenance blocks
     if (isVehicleBlocked(vehicle, pickupDate, returnDate, pickupTime, returnTime)) {
+        console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - MAINTENANCE BLOCK: ${vehicle.metadata?.unavailable_from} to ${vehicle.metadata?.unavailable_until}`)
         return {
             available: false,
             reason: 'Vehicle is blocked for maintenance during this period'
@@ -345,6 +349,12 @@ export function isVehicleAvailable(
         if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
             const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
 
+            console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - BOOKING CONFLICT with booking ${booking.id?.substring(0,8)}:`, {
+                bookingPeriod: `${bookingStart.toISOString()} → ${bookingEnd.toISOString()}`,
+                requestedPeriod: `${requestStart.toISOString()} → ${requestEnd.toISOString()}`,
+                customer: booking.customer_name
+            })
+
             return {
                 available: false,
                 reason: `Vehicle is booked until ${bookingEnd.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}. Earliest available: ${earliestTime ? earliestTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'not today'}`,
@@ -353,6 +363,7 @@ export function isVehicleAvailable(
         }
     }
 
+    console.log(`[isVehicleAvailable] ✅ ${vehicle.display_name} (${vehiclePlate}) - AVAILABLE`)
     return { available: true }
 }
 
