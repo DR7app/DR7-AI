@@ -75,10 +75,20 @@ DATI DOCUMENTO (per Carta d'Identità):
 
 DATI PATENTE (se è una patente):
 - patente_numero (il numero della patente, es: "AB1234567X")
-- patente_tipo (SOLO le categorie effettivamente possedute, visibili sul documento - es: "B" oppure "AM, B" se multiple. NON elencare tutte le categorie possibili, solo quelle che il titolare possiede)
+- patente_tipo (vedi REGOLA SPECIALE sotto per come identificare le categorie possedute)
 - patente_rilascio (YYYY-MM-DD)
 - patente_scadenza (YYYY-MM-DD)
 - patente_ente (Motorizzazione o Prefettura)
+
+REGOLA SPECIALE - CATEGORIE PATENTE (MOLTO IMPORTANTE):
+Sul RETRO della patente italiana c'è una tabella con TUTTE le categorie possibili (AM, A1, A2, A, B, B1, C1, C, D1, D, BE, C1E, CE, D1E, DE).
+MA il titolare possiede SOLO le categorie che hanno DATE compilate nelle colonne 10, 11, 12.
+- Colonna 10 = data rilascio categoria
+- Colonna 11 = data scadenza categoria
+- Colonna 12 = restrizioni/codici
+Le righe VUOTE (senza date) sono categorie che il titolare NON possiede.
+Esempio: se solo la riga "B" ha date (es: 10: 15.03.2015, 11: 15.03.2025), allora patente_tipo = "B"
+Se le righe "AM" e "B" hanno date, allora patente_tipo = "AM, B"
 
 METADATI:
 - document_type: uno tra "carta_identita", "patente", "passaporto", "tessera_sanitaria", "unknown"
@@ -88,9 +98,23 @@ METADATI:
 REGOLE IMPORTANTI:
 1. Converti TUTTE le date nel formato YYYY-MM-DD (es: 15/03/1990 → 1990-03-15)
 2. I nomi propri vanno con la prima lettera maiuscola (es: MARIO ROSSI → Mario Rossi)
-3. CODICE FISCALE: deve essere ESATTAMENTE 16 caratteri alfanumerici, tutto MAIUSCOLO. Formato: 6 lettere + 2 numeri + 1 lettera + 2 numeri + 1 lettera + 3 numeri + 1 lettera (es: RSSMRA85M01H501Z). Leggi ATTENTAMENTE ogni carattere, distinguendo tra lettere simili (O/0, I/1, S/5, B/8). Se non sei sicuro al 100%, metti il campo in "notes" con i caratteri incerti.
+3. CODICE FISCALE - VALIDAZIONE RIGOROSA:
+   - Esattamente 16 caratteri, tutto MAIUSCOLO
+   - Posizioni 1-6: SEMPRE LETTERE (cognome + nome)
+   - Posizioni 7-8: SEMPRE NUMERI (anno nascita)
+   - Posizione 9: SEMPRE LETTERA (mese: A=Gen, B=Feb, C=Mar, D=Apr, E=Mag, H=Giu, L=Lug, M=Ago, P=Set, R=Ott, S=Nov, T=Dic)
+   - Posizioni 10-11: SEMPRE NUMERI (giorno nascita: 01-31 maschi, 41-71 femmine)
+   - Posizione 12: SEMPRE LETTERA (codice comune)
+   - Posizioni 13-15: SEMPRE NUMERI (codice comune)
+   - Posizione 16: SEMPRE LETTERA (carattere di controllo)
+   ATTENZIONE ai caratteri simili:
+   - O (lettera) vs 0 (zero): nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera O, mai zero
+   - I (lettera) vs 1 (uno): nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera I, mai uno
+   - S vs 5: nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera S, mai cinque
+   - B vs 8: nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera B, mai otto
+   Se un carattere sembra ambiguo, usa la REGOLA POSIZIONALE sopra per decidere.
 4. Se un campo non è visibile o leggibile, omettilo dal risultato
-5. PATENTE TIPO: estrai SOLO le categorie che il titolare possiede (indicate sul retro della patente nella tabella delle categorie). NON elencare tutte le categorie possibili.
+5. PATENTE TIPO: vedi REGOLA SPECIALE sopra - estrai SOLO categorie con date compilate
 6. La provincia è sempre la sigla di 2 lettere (CA, MI, RM, TO, etc.)
 
 Rispondi SOLO con un oggetto JSON valido, senza markdown o altro testo.`;
