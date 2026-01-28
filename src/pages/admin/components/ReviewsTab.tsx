@@ -167,14 +167,11 @@ export default function ReviewsTab() {
 
     const handleSendReviews = async () => {
         if (selectedIds.size === 0) return
-        if (!confirm(`Inviare richiesta di recensione a ${selectedIds.size} clienti?`)) return
-
         const selectedBookings = bookings.filter(b => selectedIds.has(b.id))
         await executeSend(selectedBookings)
     }
 
     const handleSendSingle = async (booking: CompletedBooking) => {
-        if (!confirm(`Inviare richiesta di recensione a ${booking.customer_name}?`)) return
         await executeSend([booking])
     }
 
