@@ -7,6 +7,32 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Helper function to sanitize text for WinAnsi encoding
+function sanitizeForPDF(text: string): string {
+    if (!text) return ''
+
+    const cyrillicToLatin: Record<string, string> = {
+        'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O',
+        'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
+        'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x',
+        'Б': 'B', 'Г': 'G', 'Д': 'D', 'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y',
+        'Л': 'L', 'П': 'P', 'Ф': 'F', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
+        'Ы': 'Y', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+        'б': 'b', 'г': 'g', 'д': 'd', 'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y',
+        'л': 'l', 'п': 'p', 'ф': 'f', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+        'ы': 'y', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+        'Ё': 'Yo', 'ё': 'yo', 'Ъ': '', 'ъ': '', 'Ь': '', 'ь': ''
+    }
+
+    let result = text
+    for (const [cyrillic, latin] of Object.entries(cyrillicToLatin)) {
+        result = result.replace(new RegExp(cyrillic, 'g'), latin)
+    }
+
+    result = result.replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
+    return result.replace(/\s+/g, ' ').trim()
+}
+
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' }
@@ -21,10 +47,10 @@ export const handler: Handler = async (event) => {
 
         console.log(`[generate-extension-contract] Starting for booking ${bookingId}`)
 
-        // Fetch the booking
+        // 1. Fetch Booking Data
         const { data: booking, error: bookingError } = await supabase
             .from('bookings')
-            .select('*')
+            .select('*, booking_details')
             .eq('id', bookingId)
             .single()
 
@@ -32,7 +58,15 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Booking not found' }) }
         }
 
-        // Fetch customer data (same logic as main contract)
+        // Get extension info
+        const extensionHistory = booking.booking_details?.extension_history || []
+        const latestExtension = extensionHistory[extensionHistory.length - 1] || extensionData
+
+        if (!latestExtension) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'No extension data found' }) }
+        }
+
+        // 2. Fetch Customer Data (same logic as main contract)
         const customerId = booking.booking_details?.customer?.customerId || booking.user_id
         let customer: any = null
 
@@ -46,173 +80,80 @@ export const handler: Handler = async (event) => {
             if (cData) customer = cData
         }
 
-        // Fetch vehicle data
+        if (!customer) {
+            customer = {
+                tipo_cliente: 'persona_fisica',
+                nome: booking.customer_name || '',
+                cognome: '',
+                email: booking.customer_email || '',
+                telefono: booking.customer_phone || '',
+                indirizzo: booking.booking_details?.customer?.address || '',
+                codice_fiscale: booking.booking_details?.customer?.taxCode || '',
+            }
+        }
+
+        // 3. Fetch Vehicle Data
         let vehicleData: any = null
         if (booking.vehicle_name) {
             const { data: vData } = await supabase.from('vehicles').select('*').eq('display_name', booking.vehicle_name).maybeSingle()
             vehicleData = vData
         }
 
-        // Get the latest extension from history
-        const extensionHistory = booking.booking_details?.extension_history || []
-        const latestExtension = extensionHistory[extensionHistory.length - 1] || extensionData
-
-        if (!latestExtension) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'No extension data found' }) }
-        }
-
-        // Create PDF
-        const pdfDoc = await PDFDocument.create()
-        const page = pdfDoc.addPage([595.28, 841.89]) // A4 size
-        const { width, height } = page.getSize()
-
-        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-        const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica)
-
-        const black = rgb(0, 0, 0)
-        const gold = rgb(0.85, 0.65, 0.13)
-        const gray = rgb(0.4, 0.4, 0.4)
-
-        let y = height - 50
-
-        // Header
-        page.drawText('DR7 AUTONOLEGGIO', { x: 50, y, size: 24, font: fontBold, color: gold })
-        y -= 30
-        page.drawText('ADDENDUM DI ESTENSIONE NOLEGGIO', { x: 50, y, size: 16, font: fontBold, color: black })
-        y -= 35
-
-        // Contract reference
-        const contractNumber = `EXT-${bookingId.substring(0, 8).toUpperCase()}`
-        page.drawText(`Numero Addendum: ${contractNumber}`, { x: 50, y, size: 10, font: fontRegular, color: gray })
-        y -= 15
-        page.drawText(`Data: ${new Date().toLocaleDateString('it-IT')} - Luogo: Cagliari`, { x: 50, y, size: 10, font: fontRegular, color: gray })
-        y -= 15
-        page.drawText(`Rif. Prenotazione Originale: DR7-${bookingId.substring(0, 8).toUpperCase()}`, { x: 50, y, size: 10, font: fontRegular, color: gray })
-        y -= 25
-
-        // Divider line
-        page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 1, color: gold })
-        y -= 25
-
-        // ===== CUSTOMER SECTION =====
-        page.drawText('DATI LOCATARIO', { x: 50, y, size: 11, font: fontBold, color: black })
-        y -= 18
-
-        const customerName = customer?.tipo_cliente === 'azienda'
-            ? customer.denominazione
-            : (customer?.nome && customer?.cognome ? `${customer.nome} ${customer.cognome}` : booking.customer_name || 'N/A')
-
-        page.drawText(`Nome e Cognome: ${customerName}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-        y -= 14
-
-        const customerCF = customer?.codice_fiscale || booking.booking_details?.customer?.taxCode || ''
-        if (customerCF) {
-            page.drawText(`Codice Fiscale: ${customerCF}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-            y -= 14
-        }
-
-        if (customer?.tipo_cliente === 'azienda' && customer?.partita_iva) {
-            page.drawText(`Partita IVA: ${customer.partita_iva}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-            y -= 14
-        }
-
-        // Birth info
-        if (customer?.data_nascita || customer?.luogo_nascita) {
-            const birthDate = customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''
-            const birthPlace = customer?.luogo_nascita || ''
-            const birthProv = customer?.provincia_nascita || ''
-            page.drawText(`Nato/a il: ${birthDate} a ${birthPlace} (${birthProv})`, { x: 50, y, size: 10, font: fontRegular, color: black })
-            y -= 14
-        }
-
-        // Address
-        const address = customer?.indirizzo || ''
-        const city = customer?.citta_residenza || customer?.citta || ''
-        const prov = customer?.provincia_residenza || customer?.provincia || ''
-        const cap = customer?.codice_postale || customer?.cap || ''
-        if (address || city) {
-            page.drawText(`Residenza: ${address}, ${cap} ${city} (${prov})`, { x: 50, y, size: 10, font: fontRegular, color: black })
-            y -= 14
-        }
-
-        // Contact
-        const phone = customer?.telefono || booking.customer_phone || ''
-        const email = customer?.email || booking.customer_email || ''
-        if (phone || email) {
-            page.drawText(`Tel: ${phone}  -  Email: ${email}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-            y -= 14
-        }
-
-        // License
-        const licenseNum = customer?.numero_patente || ''
-        const licenseType = customer?.tipo_patente || customer?.metadata?.patente?.tipo || ''
-        const licenseExpiry = customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : ''
-        const licenseIssuedBy = customer?.emessa_da || ''
-        if (licenseNum) {
-            page.drawText(`Patente: ${licenseNum} (${licenseType}) - Scadenza: ${licenseExpiry} - Emessa da: ${licenseIssuedBy}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-            y -= 14
-        }
-
-        y -= 15
-
-        // ===== VEHICLE SECTION =====
-        page.drawText('VEICOLO', { x: 50, y, size: 11, font: fontBold, color: black })
-        y -= 18
+        // 4. Prepare Data
+        const clientName = customer?.tipo_cliente === 'azienda' ? customer.denominazione :
+            (customer?.nome ? `${customer.nome} ${customer.cognome}` : booking.customer_name)
+        const clientAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
+        const clientVat = customer?.tipo_cliente === 'azienda' ? customer.partita_iva : customer?.codice_fiscale
+        const driverLicense = customer?.numero_patente || customer?.patente || ''
 
         const vehicleName = vehicleData?.display_name || booking.vehicle_name || ''
         const vehiclePlate = vehicleData?.plate || booking.vehicle_plate || ''
-        page.drawText(`Veicolo: ${vehicleName}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-        y -= 14
-        page.drawText(`Targa: ${vehiclePlate}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-        y -= 14
 
-        // Vehicle details
-        const vehicleColor = vehicleData?.metadata?.color || ''
-        const vehicleFuel = vehicleData?.metadata?.fuel || 'Benzina'
-        if (vehicleColor || vehicleFuel) {
-            page.drawText(`Colore: ${vehicleColor}  -  Alimentazione: ${vehicleFuel}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-            y -= 14
+        // Parse vehicle details
+        let parsedColor = vehicleData?.metadata?.color || ''
+        let parsedFuel = vehicleData?.metadata?.fuel || 'Benzina'
+        let parsedSeats = vehicleData?.metadata?.seats || '5'
+        let parsedBrand = vehicleData?.make || vehicleName.split(' ')[0] || ''
+        let parsedModel = vehicleData?.model || vehicleName.replace(parsedBrand, '').trim() || ''
+
+        // EXTENSION DATES - Use the extension period dates
+        const previousDropoffDate = new Date(latestExtension.previous_dropoff)
+        const newDropoffDate = new Date(booking.dropoff_date)
+        const contractNumber = `EXT-${bookingId.substring(0, 8).toUpperCase()}-${extensionHistory.length}`
+
+        // Calculate extension days
+        const extensionDays = Math.ceil((newDropoffDate.getTime() - previousDropoffDate.getTime()) / (1000 * 60 * 60 * 24))
+
+        // 5. Fetch Template from Supabase Storage (same template as main contract)
+        console.log(`[generate-extension-contract] Fetching template from storage`)
+
+        const templatePath = `master_contract.pdf?t=${Date.now()}`
+        const { data: templateData, error: templateError } = await supabase.storage
+            .from('templates')
+            .download(templatePath)
+
+        if (templateError || !templateData) {
+            console.error(`[generate-extension-contract] Template fetch failed:`, templateError)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: `Failed to load contract template: ${templateError?.message}` })
+            }
         }
 
-        y -= 15
-
-        // ===== EXTENSION DETAILS =====
-        page.drawText('DETTAGLI ESTENSIONE', { x: 50, y, size: 11, font: fontBold, color: gold })
-        y -= 20
-
-        const originalPickup = new Date(booking.pickup_date).toLocaleString('it-IT', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
-        })
-        const previousDropoff = latestExtension.previous_dropoff
-            ? new Date(latestExtension.previous_dropoff).toLocaleString('it-IT', {
-                day: '2-digit', month: '2-digit', year: 'numeric',
-                hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
-            })
-            : 'N/A'
-        const newDropoff = new Date(booking.dropoff_date).toLocaleString('it-IT', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
-        })
-
-        page.drawText(`Data Ritiro Originale: ${originalPickup}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-        y -= 14
-        page.drawText(`Data Riconsegna Precedente: ${previousDropoff}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-        y -= 18
-        page.drawText(`NUOVA DATA RICONSEGNA: ${newDropoff}`, { x: 50, y, size: 12, font: fontBold, color: gold })
-        y -= 20
-
-        // Extension days
-        if (latestExtension.previous_dropoff) {
-            const prevDate = new Date(latestExtension.previous_dropoff)
-            const newDate = new Date(booking.dropoff_date)
-            const extensionDays = Math.ceil((newDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-            page.drawText(`Giorni di Estensione: ${extensionDays}`, { x: 50, y, size: 10, font: fontBold, color: black })
-            y -= 20
+        let pdfDoc: PDFDocument
+        try {
+            const templateBytes = await templateData.arrayBuffer()
+            pdfDoc = await PDFDocument.load(templateBytes)
+        } catch (loadError) {
+            console.error(`[generate-extension-contract] PDF Load failed:`, loadError)
+            return { statusCode: 500, body: JSON.stringify({ error: 'Invalid PDF template file.' }) }
         }
 
-        // Insurance
-        const insuranceOption = booking.booking_details?.insuranceOption || 'RCA'
+        // 6. Fill Form Fields
+        const form = pdfDoc.getForm()
+
+        // Insurance mapping
+        const insuranceOptionId = booking.booking_details?.insuranceOption || 'RCA'
         const insuranceLabels: Record<string, string> = {
             'RCA': 'RCA',
             'KASKO_BASE': 'Kasko Base',
@@ -220,72 +161,147 @@ export const handler: Handler = async (event) => {
             'KASKO_SIGNATURE': 'Kasko Signature',
             'DR7': 'Kasko DR7'
         }
-        page.drawText(`Copertura Assicurativa: ${insuranceLabels[insuranceOption] || insuranceOption}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-        y -= 20
+        const insuranceLabel = insuranceLabels[insuranceOptionId] || insuranceOptionId
 
-        // ===== FINANCIAL =====
-        page.drawText('IMPORTI', { x: 50, y, size: 11, font: fontBold, color: black })
-        y -= 18
-
+        // Additional amount for extension
         const additionalAmount = latestExtension.additional_amount || 0
-        page.drawText(`Importo Estensione: €${additionalAmount.toFixed(2)}`, { x: 50, y, size: 12, font: fontBold, color: gold })
-        y -= 16
 
-        const newTotal = (booking.price_total / 100)
-        page.drawText(`Nuovo Totale Noleggio: €${newTotal.toFixed(2)}`, { x: 50, y, size: 10, font: fontRegular, color: black })
-        y -= 20
+        // Data map - SAME as main contract but with EXTENSION dates
+        const dataMap: Record<string, string> = {
+            // Contract Info - Mark as EXTENSION
+            'ContractNumber': contractNumber,
+            'NumeroContratto': contractNumber,
+            'Date': new Date().toLocaleDateString('it-IT'),
+            'Data': new Date().toLocaleDateString('it-IT'),
+            'PlaceOfIssue': 'Cagliari',
+            'LuogoStipula': 'Cagliari',
+            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
 
-        // Notes
-        if (latestExtension.notes) {
-            page.drawText(`Note: ${latestExtension.notes}`, { x: 50, y, size: 9, font: fontRegular, color: gray })
-            y -= 20
+            // Customer Info
+            'CustomerName': clientName || '',
+            'NomeCognome': clientName || '',
+            'CustomerVAT': clientVat || '',
+            'CodiceFiscale': clientVat || '',
+            'PartitaIVA': clientVat || '',
+            'CustomerPhone': booking.customer_phone || '',
+            'Telefono': booking.customer_phone || '',
+            'CustomerEmail': booking.customer_email || '',
+            'Email': booking.customer_email || '',
+            'CustomerAddress': clientAddress || '',
+            'Indirizzo': clientAddress || '',
+            'CustomerCity': customer?.citta_residenza || '',
+            'Citta': customer?.citta_residenza || '',
+            'CustomerProvince': customer?.provincia_residenza || '',
+            'Provincia': customer?.provincia_residenza || '',
+            'CustomerZipCode': customer?.codice_postale || '',
+            'CAP': customer?.codice_postale || '',
+            'DriverZipCode': customer?.codice_postale || '',
+
+            // Personal Details
+            'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
+            'DataNascita': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
+            'CustomerBirthPlace': customer?.luogo_nascita || '',
+            'LuogoNascita': customer?.luogo_nascita || '',
+            'CittaNascita': customer?.luogo_nascita || '',
+            'CustomerBirthProvince': customer?.provincia_nascita || '',
+            'ProvinciaNascita': customer?.provincia_nascita || '',
+            'CustomerSex': customer?.sesso || customer?.metadata?.sesso || '',
+            'Sesso': customer?.sesso || customer?.metadata?.sesso || '',
+            'DriverSex': customer?.sesso || customer?.metadata?.sesso || '',
+
+            // License Details
+            'DriverLicense': customer?.numero_patente || driverLicense || '',
+            'NumeroPatente': customer?.numero_patente || driverLicense || '',
+            'DriverLicenseType': customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B',
+            'TipoPatente': customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B',
+            'DriverLicenseIssuedBy': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
+            'PatenteEmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
+            'EmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
+            'DriverLicenseIssueDate': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : '',
+            'DataRilascioPatente': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : '',
+            'DataRilascio': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : '',
+            'DriverLicenseExpiryDate': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : '',
+            'DataScadenzaPatente': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : '',
+            'ScadenzaPatente': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : '',
+            'Scadenza': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : '',
+
+            // Vehicle Fields
+            'VehicleBrand': parsedBrand,
+            'Marca': parsedBrand,
+            'VehicleModel': parsedModel,
+            'Modello': parsedModel,
+            'VehiclePlate': vehiclePlate,
+            'Targa': vehiclePlate,
+            'VehicleColor': parsedColor,
+            'Colore': parsedColor,
+            'VehicleFuel': parsedFuel,
+            'Alimentazione': parsedFuel,
+            'VehicleSeats': parsedSeats,
+            'Posti': parsedSeats,
+
+            // EXTENSION DATES - Previous dropoff becomes pickup, new dropoff is the end
+            'PickupLocation': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            'SedeRitiro': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            'DropoffLocation': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            'SedeRiconsegna': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            // Start date = previous return date (extension starts where original ended)
+            'PickupDate': previousDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            'DataInizio': previousDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            'PickupTime': previousDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'OraInizio': previousDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            // End date = new return date
+            'DropoffDate': newDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            'DataFine': newDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            'DropoffTime': newDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'OraFine': newDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'TotalDays': extensionDays.toString(),
+            'Giorni': extensionDays.toString(),
+            'TotalHours': (extensionDays * 24).toString(),
+            'Ore': (extensionDays * 24).toString(),
+
+            // Insurance and Financial - EXTENSION AMOUNT ONLY
+            'Insurance': insuranceLabel,
+            'Assicurazione': insuranceLabel,
+            'Deposit': booking.booking_details?.deposit || '0',
+            'Cauzione': booking.booking_details?.deposit || '0',
+            'TotalKM': booking.booking_details?.km_limit || 'Illimitati',
+            'KMTotaliNoleggio': booking.booking_details?.km_limit || 'Illimitati',
+
+            // Company Data (for business clients)
+            'CompanyName': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',
+            'CompanyEmail': customer?.tipo_cliente === 'azienda' ? customer.email : '',
+            'CompanyAddress': customer?.tipo_cliente === 'azienda' ? customer.indirizzo : '',
+            'CompanyPhone': customer?.tipo_cliente === 'azienda' ? customer.telefono : '',
+            'CompanyVAT': customer?.tipo_cliente === 'azienda' ? customer.partita_iva : '',
+            'CompanyFiscalCode': customer?.tipo_cliente === 'azienda' ? customer.codice_fiscale : '',
         }
 
-        // Divider
-        page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 1, color: gold })
-        y -= 20
-
-        // ===== TERMS =====
-        page.drawText('CONDIZIONI', { x: 50, y, size: 11, font: fontBold, color: black })
-        y -= 18
-        const terms = [
-            'Il presente addendum estende il contratto di noleggio originale.',
-            'Tutte le condizioni del contratto originale rimangono invariate.',
-            'La copertura assicurativa è estesa fino alla nuova data di riconsegna.',
-            'Il cliente si impegna a riconsegnare il veicolo entro la nuova data.',
-            'Eventuali ulteriori estensioni dovranno essere concordate preventivamente.',
-            'Il deposito cauzionale originale rimane valido.'
-        ]
-
-        for (const term of terms) {
-            page.drawText(`• ${term}`, { x: 50, y, size: 9, font: fontRegular, color: gray })
-            y -= 14
+        // Fill form fields
+        let filledFields = 0
+        for (const [key, value] of Object.entries(dataMap)) {
+            try {
+                const field = form.getTextField(key)
+                if (field) {
+                    const sanitizedValue = sanitizeForPDF(value)
+                    field.setText(sanitizedValue)
+                    filledFields++
+                }
+            } catch (e) {
+                // Field not found or type mismatch, skip
+            }
         }
 
-        y -= 20
+        console.log(`[generate-extension-contract] Filled ${filledFields} fields`)
 
-        // ===== SIGNATURES =====
-        page.drawText('FIRME', { x: 50, y, size: 11, font: fontBold, color: black })
-        y -= 30
+        // Flatten if fields were filled
+        if (filledFields > 0) {
+            try { form.flatten() } catch (e) { }
+        }
 
-        page.drawText('Il Locatore (DR7 Autonoleggio)', { x: 50, y, size: 9, font: fontRegular, color: black })
-        page.drawText('Il Locatario', { x: 350, y, size: 9, font: fontRegular, color: black })
-        y -= 40
-        page.drawLine({ start: { x: 50, y }, end: { x: 200, y }, thickness: 0.5, color: black })
-        page.drawLine({ start: { x: 350, y }, end: { x: 500, y }, thickness: 0.5, color: black })
-        y -= 15
-        page.drawText('Timbro e Firma', { x: 90, y, size: 8, font: fontRegular, color: gray })
-        page.drawText(customerName, { x: 380, y, size: 8, font: fontRegular, color: gray })
-
-        // Footer
-        page.drawText('DR7 Autonoleggio - Viale Marconi 229, 09131 Cagliari - P.IVA: 03837550922',
-            { x: 50, y: 50, size: 8, font: fontRegular, color: gray })
-        page.drawText(`Documento generato il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`,
-            { x: 50, y: 38, size: 8, font: fontRegular, color: gray })
-
-        // Save PDF
+        // 7. Save and Upload
         const pdfBytes = await pdfDoc.save()
-        const fileName = `extensions/addendum_${bookingId}_${Date.now()}.pdf`
+        const fileName = `extensions/contratto_estensione_${bookingId}_${Date.now()}.pdf`
 
         console.log(`[generate-extension-contract] Uploading to storage: ${fileName}`)
 
@@ -298,12 +314,12 @@ export const handler: Handler = async (event) => {
             return { statusCode: 500, body: JSON.stringify({ error: uploadError.message }) }
         }
 
-        // Get public URL
+        // 8. Get Public URL
         const { data: { publicUrl } } = supabase.storage
             .from('contracts')
             .getPublicUrl(fileName)
 
-        // Update booking with extension contract URL
+        // 9. Update booking with extension contract info
         const existingExtensionContracts = booking.booking_details?.extension_contracts || []
         await supabase
             .from('bookings')
@@ -314,8 +330,11 @@ export const handler: Handler = async (event) => {
                         ...existingExtensionContracts,
                         {
                             url: publicUrl,
+                            contract_number: contractNumber,
                             generated_at: new Date().toISOString(),
-                            extension_index: extensionHistory.length - 1
+                            extension_index: extensionHistory.length - 1,
+                            extension_days: extensionDays,
+                            additional_amount: additionalAmount
                         }
                     ]
                 }
@@ -325,7 +344,7 @@ export const handler: Handler = async (event) => {
         console.log('[generate-extension-contract] Success:', publicUrl)
         return {
             statusCode: 200,
-            body: JSON.stringify({ success: true, url: publicUrl })
+            body: JSON.stringify({ success: true, url: publicUrl, contractNumber })
         }
 
     } catch (error: any) {
