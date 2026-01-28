@@ -473,21 +473,25 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         console.log('🔄 Updating existing customer:', initialData.id)
         console.log('📝 Customer data to save:', customerData)
 
-        // 1. Update customers_extended (Upsert is safer as it might not exist there yet)
-        console.log('[NewClientModal] Upserting to customers_extended with ID:', initialData.id, 'Data:', customerData)
-        const { data: updatedExtended, error: extendedError } = await supabase
-          .from('customers_extended')
-          .upsert({ ...customerData, id: initialData.id })
-          .select()
-          .single()
+        // 1. Update customers_extended via Netlify function (bypasses RLS)
+        console.log('[NewClientModal] Updating customer via Netlify function with ID:', initialData.id)
+        const updateResponse = await fetch('/.netlify/functions/save-customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerData: { ...customerData, id: initialData.id },
+            customerId: initialData.id
+          })
+        })
 
-        if (extendedError) {
-          console.error('❌ Error updating customers_extended:', extendedError)
-          throw extendedError
+        const updateResult = await updateResponse.json()
+        if (!updateResponse.ok) {
+          console.error('❌ Error updating customer:', updateResult)
+          throw { message: updateResult.error, code: updateResult.code }
         }
 
-        console.log('✅ customers_extended updated successfully:', updatedExtended)
-        resultData = updatedExtended
+        console.log('✅ customers_extended updated successfully:', updateResult.customer)
+        resultData = updateResult.customer
         createdClientId = editingId
 
         // 2. Also update basic 'customers' table to keep sync
@@ -525,16 +529,22 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       // CREATE NEW CUSTOMER
       if (!editingId) {
-        // CREATE New
-        const { data: newClient, error } = await supabase
-          .from('customers_extended')
-          .insert([customerData])
-          .select()
-          .single()
+        // CREATE New via Netlify function (bypasses RLS)
+        console.log('[NewClientModal] Creating customer via Netlify function')
+        const createResponse = await fetch('/.netlify/functions/save-customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerData })
+        })
 
-        if (error) throw error
-        resultData = newClient
-        createdClientId = newClient.id
+        const createResult = await createResponse.json()
+        if (!createResponse.ok) {
+          console.error('❌ Error creating customer:', createResult)
+          throw { message: createResult.error, code: createResult.code }
+        }
+
+        resultData = createResult.customer
+        createdClientId = createResult.customer.id
 
         // Also insert into basic 'customers' table for backward compatibility
         try {
