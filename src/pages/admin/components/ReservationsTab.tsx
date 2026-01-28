@@ -1960,10 +1960,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setIsExtending(true)
 
     try {
-      // Build new dropoff datetime in Rome timezone
+      // Build new dropoff datetime - store as-is (the date picker gives local Rome time)
       const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00`)
-      // Convert to UTC for database storage (subtract Rome offset)
-      const utcDropoff = new Date(newDropoffDateTime.getTime() - (60 * 60000)) // -1 hour for Rome winter time
 
       // Calculate new total
       const additionalAmount = parseFloat(extendData.additional_amount) || 0
@@ -1977,7 +1975,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {
             extended_at: new Date().toISOString(),
             previous_dropoff: extendingBooking.dropoff_date,
-            new_dropoff: utcDropoff.toISOString(),
+            new_dropoff: newDropoffDateTime.toISOString(),
             additional_amount: additionalAmount,
             notes: extendData.notes
           }
@@ -1988,7 +1986,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const { error: updateError } = await supabase
         .from('bookings')
         .update({
-          dropoff_date: utcDropoff.toISOString(),
+          dropoff_date: newDropoffDateTime.toISOString(),
           price_total: newTotal,
           booking_details: updatedBookingDetails,
           updated_at: new Date().toISOString()
@@ -2024,7 +2022,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               bookingId,
               extensionData: {
                 previous_dropoff: extendingBooking.dropoff_date,
-                new_dropoff: utcDropoff.toISOString(),
+                new_dropoff: newDropoffDateTime.toISOString(),
                 additional_amount: additionalAmount,
                 notes: extendData.notes
               }

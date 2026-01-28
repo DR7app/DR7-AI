@@ -247,6 +247,31 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
+        // Helper to format date/time in Rome timezone correctly
+        const formatDateRome = (date: Date) => {
+            return date.toLocaleDateString('it-IT', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                timeZone: 'Europe/Rome'
+            })
+        }
+        const formatTimeRome = (date: Date) => {
+            return date.toLocaleTimeString('it-IT', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'Europe/Rome'
+            })
+        }
+
+        console.log('[generate-contract] Date debug:', {
+            pickup_raw: booking.pickup_date,
+            dropoff_raw: booking.dropoff_date,
+            pickup_formatted: formatDateRome(pickupDate) + ' ' + formatTimeRome(pickupDate),
+            dropoff_formatted: formatDateRome(dropoffDate) + ' ' + formatTimeRome(dropoffDate)
+        })
+
         // 3.5. Fetch Second Driver Data from customers_extended if customer_id is present
         let secondDriverCustomer = null
         const secondDriverId = booking.booking_details?.second_driver?.customer_id
@@ -641,14 +666,14 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
             'SedeRitiro': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
             'DropoffLocation': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
             'SedeRiconsegna': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'PickupDate': pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'DataInizio': pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'PickupTime': pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
-            'OraInizio': pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
-            'DropoffDate': dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'DataFine': dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'DropoffTime': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
-            'OraFine': dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'PickupDate': formatDateRome(pickupDate),
+            'DataInizio': formatDateRome(pickupDate),
+            'PickupTime': formatTimeRome(pickupDate),
+            'OraInizio': formatTimeRome(pickupDate),
+            'DropoffDate': formatDateRome(dropoffDate),
+            'DataFine': formatDateRome(dropoffDate),
+            'DropoffTime': formatTimeRome(dropoffDate),
+            'OraFine': formatTimeRome(dropoffDate),
             'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
             'Giorni': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
             'TotalHours': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),

@@ -124,6 +124,24 @@ export const handler: Handler = async (event) => {
         // Calculate extension days
         const extensionDays = Math.ceil((newDropoffDate.getTime() - previousDropoffDate.getTime()) / (1000 * 60 * 60 * 24))
 
+        // Helper to format date/time in Rome timezone
+        const formatDateRome = (date: Date) => {
+            return date.toLocaleDateString('it-IT', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                timeZone: 'Europe/Rome'
+            })
+        }
+        const formatTimeRome = (date: Date) => {
+            return date.toLocaleTimeString('it-IT', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'Europe/Rome'
+            })
+        }
+
         // 5. Fetch Template from Supabase Storage (same template as main contract)
         console.log(`[generate-extension-contract] Fetching template from storage`)
 
@@ -246,15 +264,15 @@ export const handler: Handler = async (event) => {
             'DropoffLocation': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
             'SedeRiconsegna': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
             // Start date = previous return date (extension starts where original ended)
-            'PickupDate': previousDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'DataInizio': previousDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'PickupTime': previousDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
-            'OraInizio': previousDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'PickupDate': formatDateRome(previousDropoffDate),
+            'DataInizio': formatDateRome(previousDropoffDate),
+            'PickupTime': formatTimeRome(previousDropoffDate),
+            'OraInizio': formatTimeRome(previousDropoffDate),
             // End date = new return date
-            'DropoffDate': newDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'DataFine': newDropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-            'DropoffTime': newDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
-            'OraFine': newDropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'DropoffDate': formatDateRome(newDropoffDate),
+            'DataFine': formatDateRome(newDropoffDate),
+            'DropoffTime': formatTimeRome(newDropoffDate),
+            'OraFine': formatTimeRome(newDropoffDate),
             'TotalDays': extensionDays.toString(),
             'Giorni': extensionDays.toString(),
             'TotalHours': (extensionDays * 24).toString(),
