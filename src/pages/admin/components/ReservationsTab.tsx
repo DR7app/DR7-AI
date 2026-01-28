@@ -588,49 +588,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Get available vehicles based on selected dates and times
   const availableVehicles = useMemo((): Vehicle[] => {
-    // If no dates selected, show all vehicles
-    if (!formData.pickup_date || !formData.return_date) {
-      console.log('[Vehicle Availability] No dates selected - showing all vehicles:', vehicles.length)
-      return vehicles
-    }
-
-    // Use the new availability engine to filter vehicles
-    const pickupTime = formData.pickup_time || '09:00'
-    const returnTime = formData.return_time || '18:00'
-
-    // Combine all bookings for availability checking
-    const allBookingsForCheck = [...bookings, ...carWashBookings]
-
-    // Debug: Log all bookings with their vehicle info
-    console.log('[Vehicle Availability] All bookings for check:', allBookingsForCheck.map(b => ({
-      id: b.id?.substring(0, 8),
-      vehicle_id: b.vehicle_id,
-      vehicle_plate: b.vehicle_plate,
-      vehicle_name: b.vehicle_name,
-      pickup: b.pickup_date,
-      dropoff: b.dropoff_date,
-      status: b.status
-    })))
-
-    const filteredVehicles = getAvailableVehicles(
-      vehicles,
-      formData.pickup_date,
-      formData.return_date,
-      pickupTime,
-      returnTime,
-      allBookingsForCheck,
-      editingId || undefined
-    )
-
-    console.log('[Vehicle Availability] Filtered vehicles:', {
-      total: vehicles.length,
-      available: filteredVehicles.length,
-      filteredOut: vehicles.filter(v => !filteredVehicles.includes(v)).map(v => `${v.display_name} (${v.plate})`),
-      dates: `${formData.pickup_date} ${pickupTime} → ${formData.return_date} ${returnTime}`
-    })
-
-    return filteredVehicles
-  }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
+    // ADMIN: Show ALL vehicles - admin can book any vehicle
+    // Availability checks are done at submission time, not dropdown filtering
+    console.log('[Vehicle Availability] ADMIN MODE - showing all vehicles:', vehicles.length)
+    return vehicles
+  }, [vehicles])
 
   // Base vehicles for dropdown (before adding same-day availability)
   // This will be enhanced later after vehicleEarliestTimes is calculated
