@@ -308,6 +308,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [newSecondDriverMode, setNewSecondDriverMode] = useState(false)
 
+  // Extend Booking Modal State
+  const [showExtendModal, setShowExtendModal] = useState(false)
+  const [extendingBooking, setExtendingBooking] = useState<Booking | null>(null)
+  const [extendData, setExtendData] = useState({
+    new_return_date: '',
+    new_return_time: '10:00',
+    additional_amount: '0',
+    notes: ''
+  })
+  const [isExtending, setIsExtending] = useState(false)
+
   // Add custom scrollbar styles
   const scrollbarStyle = `
     .custom-scrollbar::-webkit-scrollbar {
@@ -1923,6 +1934,87 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     setEditingId(booking.id)
     setShowForm(true)
+  }
+
+  // ===== SIMPLE EXTEND BOOKING FUNCTION =====
+  function handleExtendBooking(booking: Booking) {
+    console.log('[handleExtendBooking] Opening extend modal for booking:', booking.id)
+
+    // Pre-populate with current return date
+    const currentReturnDate = new Date(booking.dropoff_date)
+    const romeTime = new Date(currentReturnDate.getTime() + (currentReturnDate.getTimezoneOffset() * 60000) + (60 * 60000))
+
+    setExtendingBooking(booking)
+    setExtendData({
+      new_return_date: romeTime.toISOString().split('T')[0],
+      new_return_time: romeTime.toISOString().split('T')[1].substring(0, 5),
+      additional_amount: '0',
+      notes: ''
+    })
+    setShowExtendModal(true)
+  }
+
+  async function handleConfirmExtend() {
+    if (!extendingBooking) return
+
+    setIsExtending(true)
+
+    try {
+      // Build new dropoff datetime in Rome timezone
+      const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00`)
+      // Convert to UTC for database storage (subtract Rome offset)
+      const utcDropoff = new Date(newDropoffDateTime.getTime() - (60 * 60000)) // -1 hour for Rome winter time
+
+      // Calculate new total
+      const additionalAmount = parseFloat(extendData.additional_amount) || 0
+      const newTotal = extendingBooking.price_total + (additionalAmount * 100) // price_total is in cents
+
+      // Update booking_details with extension info
+      const updatedBookingDetails = {
+        ...extendingBooking.booking_details,
+        extension_history: [
+          ...(extendingBooking.booking_details?.extension_history || []),
+          {
+            extended_at: new Date().toISOString(),
+            previous_dropoff: extendingBooking.dropoff_date,
+            new_dropoff: utcDropoff.toISOString(),
+            additional_amount: additionalAmount,
+            notes: extendData.notes
+          }
+        ]
+      }
+
+      // Update the booking directly - NO validation checks
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({
+          dropoff_date: utcDropoff.toISOString(),
+          price_total: newTotal,
+          booking_details: updatedBookingDetails,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', extendingBooking.id)
+
+      if (updateError) {
+        console.error('[handleConfirmExtend] Update error:', updateError)
+        alert('Errore durante l\'estensione: ' + updateError.message)
+        return
+      }
+
+      console.log('[handleConfirmExtend] ✅ Booking extended successfully')
+      alert(`Prenotazione estesa con successo!\n\nNuova data riconsegna: ${extendData.new_return_date} ${extendData.new_return_time}\nImporto aggiuntivo: €${additionalAmount}`)
+
+      // Close modal and refresh data
+      setShowExtendModal(false)
+      setExtendingBooking(null)
+      await loadData()
+
+    } catch (error: any) {
+      console.error('[handleConfirmExtend] Error:', error)
+      alert('Errore: ' + (error.message || 'Errore sconosciuto'))
+    } finally {
+      setIsExtending(false)
+    }
   }
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -3875,12 +3967,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                   </div>
                   <div className="flex flex-col gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
-                      className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                    >
-                      Modifica
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
+                        className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                      >
+                        Modifica
+                      </button>
+                      {!isCarWash && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleExtendBooking(booking) }}
+                          className="px-3 py-1 bg-purple-600/30 hover:bg-purple-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                        >
+                          Estendi
+                        </button>
+                      )}
+                    </div>
 
                     {/* Contract Actions */}
                     {booking.booking_details?.contract_generated_at || booking.contract_url ? (
@@ -4031,6 +4133,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               >
                                 Modifica
                               </button>
+                              {!isCarWash && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleExtendBooking(booking) }}
+                                  className="px-3 py-1 bg-purple-600/30 hover:bg-purple-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
+                                >
+                                  Estendi
+                                </button>
+                              )}
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                                 className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
@@ -4314,6 +4424,103 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 >
                   Sì, Elimina Definitivamente
                 </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== EXTEND BOOKING MODAL ===== */}
+        {showExtendModal && extendingBooking && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowExtendModal(false)}>
+            <div className="bg-[#1a1a1a] rounded-lg p-6 max-w-md w-full shadow-xl border border-gray-700/50" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-xl font-bold mb-4 text-purple-400">Estendi Prenotazione</h3>
+
+              {/* Current Booking Info */}
+              <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
+                <div className="text-sm text-gray-400">Cliente</div>
+                <div className="text-white font-medium">{extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}</div>
+                <div className="text-sm text-gray-400 mt-2">Veicolo</div>
+                <div className="text-white font-medium">{extendingBooking.vehicle_name || 'N/A'}</div>
+                <div className="text-sm text-gray-400 mt-2">Riconsegna Attuale</div>
+                <div className="text-white font-medium">
+                  {new Date(extendingBooking.dropoff_date).toLocaleString('it-IT', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'Europe/Rome'
+                  })}
+                </div>
+              </div>
+
+              {/* Extension Form */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Nuova Data Riconsegna</label>
+                  <input
+                    type="date"
+                    value={extendData.new_return_date}
+                    onChange={(e) => setExtendData({ ...extendData, new_return_date: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Nuovo Orario Riconsegna</label>
+                  <select
+                    value={extendData.new_return_time}
+                    onChange={(e) => setExtendData({ ...extendData, new_return_time: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  >
+                    {TIME_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Importo Aggiuntivo (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={extendData.additional_amount}
+                    onChange={(e) => setExtendData({ ...extendData, additional_amount: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Note (opzionale)</label>
+                  <textarea
+                    value={extendData.notes}
+                    onChange={(e) => setExtendData({ ...extendData, notes: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 resize-none"
+                    rows={2}
+                    placeholder="Motivo estensione..."
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={() => { setShowExtendModal(false); setExtendingBooking(null); }}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmExtend}
+                  disabled={isExtending || !extendData.new_return_date}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isExtending ? 'Estensione...' : 'Conferma Estensione'}
+                </button>
               </div>
             </div>
           </div>
