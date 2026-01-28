@@ -7,12 +7,14 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// Configure Nodemailer with Gmail
+// SMTP configuration - uses info@dr7.app
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
     auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
     },
 })
 
@@ -137,7 +139,7 @@ export const handler: Handler = async (event) => {
         console.log(`[send-manual-ticket-pdf] Sending email to customer: ${email}`)
 
         await transporter.sendMail({
-            from: `"DR7 Empire" <${process.env.GMAIL_USER}>`,
+            from: '"DR7 Empire" <info@dr7.app>',
             to: email,
             subject: `Il Tuo Biglietto - LOTTERIA DR7 (#${String(ticketNumber).padStart(4, '0')})`,
             text: `Grazie per l'acquisto!\n\nIn allegato trovi il tuo biglietto della lotteria DR7 Empire.\n\nNumero Biglietto: #${String(ticketNumber).padStart(4, '0')}\n\nIn bocca al lupo!\nDR7 Empire`,
@@ -152,7 +154,7 @@ export const handler: Handler = async (event) => {
         console.log(`[send-manual-ticket-pdf] Sending notification to admin: ${adminEmail}`)
 
         await transporter.sendMail({
-            from: `"DR7 System" <${process.env.GMAIL_USER}>`,
+            from: '"DR7 System" <info@dr7.app>',
             to: adminEmail,
             subject: `🎯 Vendita Manuale Biglietto #${String(ticketNumber).padStart(4, '0')}`,
             text: `È stato venduto un biglietto della lotteria manualmente.\n\nN. Biglietto: #${String(ticketNumber).padStart(4, '0')}\nCliente: ${fullName}\nEmail: ${email}\nTelefono: ${phone}\n\nIl PDF del biglietto è in allegato.`,

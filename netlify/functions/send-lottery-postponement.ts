@@ -6,11 +6,14 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// SMTP configuration - uses info@dr7.app
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
     auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
     },
 })
 
@@ -186,11 +189,11 @@ Questa è una comunicazione ufficiale riguardante la tua partecipazione alla Lot
         console.log('[send-lottery-postponement] Found', uniqueCustomers.length, 'unique customers')
 
         // 4. Verify SMTP credentials
-        const smtpUser = process.env.GMAIL_USER
-        const smtpPass = process.env.GMAIL_APP_PASSWORD
+        const smtpUser = process.env.SMTP_USER
+        const smtpPass = process.env.SMTP_PASSWORD
 
         if (!smtpUser || !smtpPass) {
-            console.error('[send-lottery-postponement] Missing SMTP credentials')
+            console.error('[send-lottery-postponement] Missing SMTP credentials (SMTP_USER and SMTP_PASSWORD)')
             return { statusCode: 500, body: JSON.stringify({ error: 'SMTP credentials not configured' }) }
         }
 
@@ -202,7 +205,7 @@ Questa è una comunicazione ufficiale riguardante la tua partecipazione alla Lot
         for (const customer of uniqueCustomers) {
             try {
                 const mailOptions = {
-                    from: `"DR7 Empire - Lotteria" <${smtpUser}>`,
+                    from: '"DR7 Empire - Lotteria" <info@dr7.app>',
                     to: customer.email,
                     subject: emailSubject,
                     html: emailHtml,

@@ -1,11 +1,14 @@
 import type { Handler } from "@netlify/functions";
 import nodemailer from "nodemailer";
 
+// SMTP configuration - uses info@dr7.app
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASSWORD,
   },
 });
 
@@ -42,7 +45,7 @@ export const handler: Handler = async (event) => {
       }
 
       const mailOptions = {
-        from: `"Dubai Rent 7.0" <${process.env.GMAIL_USER}>`,
+        from: '"DR7 Empire" <info@dr7.app>',
         to: booking.email,
         subject: "Come è stata la tua esperienza con DR7?",
         html: `

@@ -6,12 +6,14 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// Use the same SMTP configuration as the lottery ticket function
+// SMTP configuration - uses info@dr7.app
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
     auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
     },
 })
 
@@ -78,21 +80,21 @@ export const handler: Handler = async (event) => {
         }
 
         // 4. Verify SMTP credentials
-        const smtpUser = process.env.GMAIL_USER
-        const smtpPass = process.env.GMAIL_APP_PASSWORD
+        const smtpUser = process.env.SMTP_USER
+        const smtpPass = process.env.SMTP_PASSWORD
 
         if (!smtpUser || !smtpPass) {
             console.error('[send-contract-email] Missing SMTP credentials')
-            console.error('[send-contract-email] GMAIL_USER:', smtpUser ? 'SET' : 'NOT SET')
-            console.error('[send-contract-email] GMAIL_APP_PASSWORD:', smtpPass ? 'SET' : 'NOT SET')
-            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP credentials not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD in Netlify environment variables.' }) }
+            console.error('[send-contract-email] SMTP_USER:', smtpUser ? 'SET' : 'NOT SET')
+            console.error('[send-contract-email] SMTP_PASSWORD:', smtpPass ? 'SET' : 'NOT SET')
+            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP credentials not configured. Please set SMTP_USER and SMTP_PASSWORD in Netlify environment variables.' }) }
         }
 
         console.log('[send-contract-email] SMTP user configured:', smtpUser)
 
         // 5. Send Email
         const mailOptions = {
-            from: `"DR7 Empire" <${smtpUser}>`,
+            from: '"DR7 Empire" <info@dr7.app>',
             to: recipientEmail,
             subject: `Contratto Noleggio DR7 - ${booking.vehicle_name}`,
             text: `Gentile ${booking.customer_name},\n\nIn allegato trovi il contratto di noleggio per il veicolo ${booking.vehicle_name}.\n\nGrazie per aver scelto DR7 Empire.\n\nCordiali saluti,\nDR7 Empire Team`,

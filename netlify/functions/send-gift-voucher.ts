@@ -1,11 +1,14 @@
 import { Handler } from '@netlify/functions'
 import nodemailer from 'nodemailer'
 
+// SMTP configuration - uses info@dr7.app
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
     auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
     },
 })
 
@@ -68,11 +71,11 @@ export const handler: Handler = async (event) => {
         }
 
         // Verify SMTP credentials
-        const smtpUser = process.env.GMAIL_USER
-        const smtpPass = process.env.GMAIL_APP_PASSWORD
+        const smtpUser = process.env.SMTP_USER
+        const smtpPass = process.env.SMTP_PASSWORD
 
         if (!smtpUser || !smtpPass) {
-            console.error('[send-gift-voucher] Missing SMTP credentials')
+            console.error('[send-gift-voucher] Missing SMTP credentials (SMTP_USER and SMTP_PASSWORD)')
             return { statusCode: 500, body: JSON.stringify({ error: 'SMTP credentials not configured' }) }
         }
 
@@ -93,7 +96,7 @@ export const handler: Handler = async (event) => {
                     .replace(/{cognome}/g, customer.cognome || '')
 
                 const mailOptions = {
-                    from: `"DR7 Empire" <${smtpUser}>`,
+                    from: '"DR7 Empire" <info@dr7.app>',
                     to: customer.email,
                     subject: subject,
                     html: `
