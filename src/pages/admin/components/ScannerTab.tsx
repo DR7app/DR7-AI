@@ -269,7 +269,7 @@ export default function ScannerTab() {
                     {Object.entries(documents).map(([key, slot]) => (
                         <div key={key} className="relative">
                             <input
-                                ref={el => fileInputRefs.current[key] = el}
+                                ref={el => { fileInputRefs.current[key] = el }}
                                 type="file"
                                 accept="image/jpeg,image/png,image/webp"
                                 onChange={handleFileSelect(key)}
