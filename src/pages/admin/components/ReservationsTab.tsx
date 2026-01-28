@@ -2002,12 +2002,45 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       console.log('[handleConfirmExtend] ✅ Booking extended successfully')
-      alert(`Prenotazione estesa con successo!\n\nNuova data riconsegna: ${extendData.new_return_date} ${extendData.new_return_time}\nImporto aggiuntivo: €${additionalAmount}`)
 
-      // Close modal and refresh data
+      // Close modal first
+      const bookingId = extendingBooking.id
       setShowExtendModal(false)
       setExtendingBooking(null)
+
+      // Refresh data to get the updated booking
       await loadData()
+
+      // Ask if they want to regenerate the contract
+      const wantsNewContract = confirm(
+        `Prenotazione estesa con successo!\n\n` +
+        `Nuova data riconsegna: ${extendData.new_return_date} ${extendData.new_return_time}\n` +
+        `Importo aggiuntivo: €${additionalAmount}\n\n` +
+        `---\n\n` +
+        `Vuoi generare un NUOVO CONTRATTO con le date aggiornate?\n\n` +
+        `Clicca OK per generare nuovo contratto\n` +
+        `Clicca ANNULLA per continuare senza nuovo contratto`
+      )
+
+      if (wantsNewContract) {
+        // Find the updated booking from the refreshed data
+        const updatedBooking = bookings.find(b => b.id === bookingId)
+        if (updatedBooking) {
+          console.log('[handleConfirmExtend] Generating new contract for extended booking...')
+          handleGenerateContract(updatedBooking)
+        } else {
+          // If not found immediately, fetch it
+          const { data: fetchedBooking } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('id', bookingId)
+            .single()
+
+          if (fetchedBooking) {
+            handleGenerateContract(fetchedBooking as Booking)
+          }
+        }
+      }
 
     } catch (error: any) {
       console.error('[handleConfirmExtend] Error:', error)
