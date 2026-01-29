@@ -362,7 +362,6 @@ export default function CustomersTab() {
 
           const extendedData = {
             // We map the DB fields to our Customer interface
-            // ... (preserve existing mapping logig) ...
             id: customer.id,
             full_name: fullName,
             email: customer.email,
@@ -373,38 +372,66 @@ export default function CustomersTab() {
             created_at: customer.created_at,
             updated_at: customer.updated_at || customer.created_at,
             notes: customer.note,
+            note: customer.note,
             source: 'db', // Flag to know this is from DB
+
+            // CRITICAL: Include nome/cognome for form pre-population
+            nome: customer.nome,
+            cognome: customer.cognome,
 
             // Extended fields
             tipo_cliente: customer.tipo_cliente,
             codice_fiscale: customer.codice_fiscale,
             partita_iva: customer.partita_iva,
             ragione_sociale: customer.ragione_sociale,
+            denominazione: customer.denominazione,
             indirizzo: customer.indirizzo,
             citta: customer.citta,
             cap: customer.cap,
             data_nascita: customer.data_nascita,
-            luogo_nascita: customer.luogo_nascita, // ensure mapped
+            luogo_nascita: customer.luogo_nascita,
+            provincia_nascita: customer.provincia_nascita,
             sesso: customer.sesso,
 
-            // Licenses matches
+            // Licenses - all fields for form
             numero_patente: customer.numero_patente,
+            patente: customer.numero_patente || customer.patente,
+            tipo_patente: customer.tipo_patente,
             rilasciata_da: customer.rilasciata_da,
+            emessa_da: customer.emessa_da || customer.rilasciata_da,
             data_rilascio: customer.data_rilascio,
+            data_rilascio_patente: customer.data_rilascio_patente || customer.data_rilascio,
             scadenza_patente: customer.scadenza_patente,
 
             // Common
             nazione: customer.nazione,
             telefono: customer.telefono,
-            // Additional fields
+            pec: customer.pec,
+
+            // Address fields
             citta_residenza: customer.citta_residenza,
             provincia_residenza: customer.provincia_residenza,
             codice_postale: customer.codice_postale,
             numero_civico: customer.numero_civico,
+
+            // Company fields
+            sede_legale: customer.sede_legale,
+            codice_destinatario: customer.codice_destinatario,
+            indirizzo_azienda: customer.indirizzo_azienda,
+            indirizzo_ddt: customer.indirizzo_ddt,
+            contatti_cliente: customer.contatti_cliente,
+
+            // PA fields
+            codice_univoco: customer.codice_univoco,
+            ente_ufficio: customer.ente_ufficio,
+
             // Membership
             membership_tier: customer.membership_tier,
             membership_expires_at: customer.membership_expires_at,
-            status: customer.status
+            status: customer.status,
+
+            // CRITICAL: Include metadata for form pre-population
+            metadata: customer.metadata
           }
 
           // INSERT the "Real" customer
@@ -1759,7 +1786,10 @@ export default function CustomersTab() {
                 </div>
               </>
             )}
-            <Button onClick={() => setShowNewClientModal(true)}>
+            <Button onClick={() => {
+              setSelectedCustomer(null)  // Clear any previous selection
+              setShowNewClientModal(true)
+            }}>
               + Nuovo Cliente
             </Button>
           </div>
