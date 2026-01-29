@@ -135,7 +135,13 @@ export default function CustomersTab() {
 
   // Handle filtering and pagination locally
   useEffect(() => {
-    if (!allCustomers.length) return
+    console.log('[useEffect] allCustomers changed, count:', allCustomers.length)
+
+    if (!allCustomers.length) {
+      setCustomers([])
+      setTotalCustomers(0)
+      return
+    }
 
     let result = [...allCustomers]
 
@@ -539,6 +545,8 @@ export default function CustomersTab() {
   async function handleDelete(id: string) {
     if (!confirm('Sei sicuro di voler eliminare questo cliente?')) return
 
+    console.log('[handleDelete] Starting delete for ID:', id)
+
     try {
       const response = await fetch('/.netlify/functions/manage-customer', {
         method: 'POST',
@@ -547,18 +555,28 @@ export default function CustomersTab() {
       })
 
       const result = await response.json()
+      console.log('[handleDelete] API response:', result)
 
       if (!response.ok) {
         throw new Error(result.error || 'Errore durante l\'eliminazione')
       }
 
-      // Remove from both states immediately for instant UI feedback
-      setAllCustomers(prev => prev.filter(c => c.id !== id))
-      setCustomers(prev => prev.filter(c => c.id !== id))
+      if (!result.success) {
+        throw new Error(result.error || result.message || 'Eliminazione fallita')
+      }
+
+      console.log('[handleDelete] Success! Removing from state. Current allCustomers count:', allCustomers.length)
+
+      // Remove from allCustomers - the useEffect will update customers automatically
+      setAllCustomers(prevAll => {
+        const newAll = prevAll.filter(c => c.id !== id)
+        console.log('[handleDelete] New allCustomers count:', newAll.length)
+        return newAll
+      })
 
       alert('Cliente eliminato con successo')
     } catch (error: any) {
-      console.error('Failed to delete customer:', error)
+      console.error('[handleDelete] Failed:', error)
       alert('Impossibile eliminare il cliente: ' + (error.message || 'Errore sconosciuto'))
     }
   }
