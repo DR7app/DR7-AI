@@ -21,7 +21,7 @@ interface BirthdaySentRecord {
 
 export default function BirthdaysTab() {
     const [customers, setCustomers] = useState<CustomerBirthday[]>([])
-    const [sentRecords, setSentRecords] = useState<BirthdaySentRecord[]>([])
+    const [, setSentRecords] = useState<BirthdaySentRecord[]>([])
     const [loading, setLoading] = useState(true)
     const [sending, setSending] = useState<string | null>(null)
     const [bulkSending, setBulkSending] = useState(false)
