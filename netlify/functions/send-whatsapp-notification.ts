@@ -16,7 +16,10 @@ const handler: Handler = async (event) => {
     };
   }
 
-  const { booking, ticket, type, message: customMessage, ticketNumbers, customerInfo, customPhone } = JSON.parse(event.body || '{}');
+  const body = JSON.parse(event.body || '{}');
+  const { booking, ticket, type, ticketNumbers, customerInfo, customPhone } = body;
+  // Accept both 'message' and 'customMessage' for flexibility
+  const customMessage = body.customMessage || body.message;
 
   // Check if Green API is configured
   if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
