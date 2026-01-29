@@ -14,6 +14,17 @@
   publish = "dist"
   autoLaunch = false
 
+# WhatsApp AI Webhook - clean URL for Green API
+[[redirects]]
+  from = "/api/whatsapp-webhook"
+  to = "/.netlify/functions/whatsapp-ai-webhook"
+  status = 200
+
+[[redirects]]
+  from = "/api/whatsapp-webhook/*"
+  to = "/.netlify/functions/whatsapp-ai-webhook"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
