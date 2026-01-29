@@ -1,12 +1,13 @@
 import { Handler, schedule } from '@netlify/functions'
-import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
+const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || "393457905205"
 
 interface Booking {
     id: string
@@ -18,66 +19,48 @@ interface Booking {
     booking_details: any
 }
 
-function getAlarmEmailHTML(bookings: Booking[]): string {
-    const bookingRows = bookings.map(b => `
-        <tr style="border-bottom: 1px solid #333;">
-            <td style="padding: 12px; color: #ffffff;">${new Date(b.rental_start_date + 'T' + b.rental_start_time).toLocaleString('it-IT')}</td>
-            <td style="padding: 12px; color: #ffffff;">${b.customer_name}</td>
-            <td style="padding: 12px; color: #ffffff;">${b.vehicle_name}</td>
-            <td style="padding: 12px; color: #d4af37; font-weight: bold;">⚠️ NON PAGATA</td>
-        </tr>
-    `).join('')
+async function sendWhatsAppAlert(message: string): Promise<boolean> {
+    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
+        console.error('Green API not configured')
+        return false
+    }
 
-    return `
-    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 800px; margin: 0 auto; background-color: #000000; color: #ffffff; padding: 40px 20px;">
-      <div style="text-align: center; margin-bottom: 30px;">
-        <img src="https://dr7-empire-admin.netlify.app/DR7logo1.png" alt="DR7 Empire" style="height: 60px;" />
-      </div>
+    try {
+        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
 
-      <h1 style="color: #ff4444; font-size: 24px; margin-bottom: 20px; text-align: center;">🚨 ALLARME CAUZIONE PRE-NOLEGGIO</h1>
+        const response = await fetch(greenApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chatId: `${NOTIFICATION_PHONE}@c.us`,
+                message: message,
+            }),
+        })
 
-      <p style="font-size: 16px; line-height: 1.6; color: #cccccc; margin-bottom: 20px;">
-        I seguenti noleggi iniziano tra <strong style="color: #d4af37;">10 minuti</strong> ma la cauzione <strong style="color: #ff4444;">NON risulta presente/pagata</strong>:
-      </p>
+        const result = await response.json()
 
-      <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #111;">
-        <thead>
-          <tr style="background-color: #222; border-bottom: 2px solid #d4af37;">
-            <th style="padding: 12px; text-align: left; color: #d4af37;">Orario Inizio</th>
-            <th style="padding: 12px; text-align: left; color: #d4af37;">Cliente</th>
-            <th style="padding: 12px; text-align: left; color: #d4af37;">Veicolo</th>
-            <th style="padding: 12px; text-align: left; color: #d4af37;">Stato Cauzione</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${bookingRows}
-        </tbody>
-      </table>
+        if (!response.ok || result.error) {
+            console.error('Green API error:', result)
+            return false
+        }
 
-      <div style="background-color: #1a0000; border-left: 4px solid #ff4444; padding: 20px; margin: 30px 0;">
-        <p style="font-size: 16px; color: #ffffff; margin: 0;">
-          <strong>⚠️ AZIONE RICHIESTA:</strong> Verificare immediatamente lo stato delle cauzioni prima della consegna del veicolo.
-        </p>
-      </div>
-
-      <div style="border-top: 1px solid #333; padding-top: 20px; margin-top: 30px; text-align: center;">
-        <p style="font-size: 14px; color: #999999; margin: 0;">
-          Sistema Automatico Allarmi Cauzione – DR7 Empire Admin
-        </p>
-      </div>
-    </div>
-    `
+        console.log('✅ WhatsApp alert sent:', result.idMessage)
+        return true
+    } catch (error) {
+        console.error('Error sending WhatsApp:', error)
+        return false
+    }
 }
 
 const scheduledHandler: Handler = async (event) => {
     console.log('🔍 Checking for pre-rental deposits...')
 
-    // Check if Resend is configured
-    if (!process.env.RESEND_API_KEY) {
-        console.log('⚠️ RESEND_API_KEY not configured, skipping deposit check')
+    // Check if Green API is configured
+    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
+        console.log('⚠️ Green API not configured, skipping deposit check')
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Resend not configured, skipping' })
+            body: JSON.stringify({ message: 'Green API not configured, skipping' })
         }
     }
 
@@ -86,7 +69,7 @@ const scheduledHandler: Handler = async (event) => {
         const now = new Date()
         const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000)
 
-        // Query bookings starting in the next 10-15 minutes
+        // Query bookings starting today
         const { data: upcomingBookings, error } = await supabase
             .from('bookings')
             .select('*')
@@ -139,21 +122,26 @@ const scheduledHandler: Handler = async (event) => {
             }
         }
 
-        // Send alarm email to admin using Resend
-        const adminEmail = process.env.ADMIN_EMAIL || 'info@dr7.app'
+        // Build WhatsApp message
+        let message = `🚨 *ALLARME CAUZIONE PRE-NOLEGGIO*\n\n`
+        message += `${bookingsWithoutDeposit.length} noleggio/i iniziano tra 10 minuti *SENZA CAUZIONE PAGATA*:\n\n`
 
-        const { error: emailError } = await resend.emails.send({
-            from: 'DR7 Empire Allarmi <info@dr7.app>',
-            to: adminEmail,
-            subject: `🚨 ALLARME CAUZIONE: ${bookingsWithoutDeposit.length} noleggio/i senza cauzione`,
-            html: getAlarmEmailHTML(bookingsWithoutDeposit),
-        })
+        for (const b of bookingsWithoutDeposit) {
+            const startTime = new Date(b.rental_start_date + 'T' + (b.rental_start_time || '09:00'))
+            message += `⚠️ *${b.vehicle_name}*\n`
+            message += `   Cliente: ${b.customer_name}\n`
+            message += `   Orario: ${startTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n\n`
+        }
 
-        if (emailError) {
-            console.error('❌ Error sending email:', emailError)
+        message += `*Verificare immediatamente le cauzioni!*`
+
+        // Send WhatsApp alert
+        const sent = await sendWhatsAppAlert(message)
+
+        if (!sent) {
             return {
                 statusCode: 500,
-                body: JSON.stringify({ error: emailError.message })
+                body: JSON.stringify({ error: 'Failed to send WhatsApp alert' })
             }
         }
 
@@ -162,7 +150,7 @@ const scheduledHandler: Handler = async (event) => {
         return {
             statusCode: 200,
             body: JSON.stringify({
-                message: 'Alarm sent',
+                message: 'Alarm sent via WhatsApp',
                 count: bookingsWithoutDeposit.length,
                 bookings: bookingsWithoutDeposit.map(b => ({
                     id: b.id,
