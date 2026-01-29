@@ -552,8 +552,10 @@ export default function CustomersTab() {
         throw new Error(result.error || 'Errore durante l\'eliminazione')
       }
 
-      // Remove from local state immediately
+      // Remove from both states immediately for instant UI feedback
       setAllCustomers(prev => prev.filter(c => c.id !== id))
+      setCustomers(prev => prev.filter(c => c.id !== id))
+
       alert('Cliente eliminato con successo')
     } catch (error: any) {
       console.error('Failed to delete customer:', error)
