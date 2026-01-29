@@ -1,11 +1,12 @@
 import type { Handler } from "@netlify/functions";
 
-const CALLMEBOT_PHONE = process.env.CALLMEBOT_ADMIN_PHONE; // Your phone number for CallMeBot
-const CALLMEBOT_API_KEY = "6526748";
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
+const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || "393457905205";
 
 /**
- * Sends WhatsApp notification for new bookings, tickets, and other events from admin panel
- * Uses CallMeBot API
+ * Sends WhatsApp notification using Green API
+ * Used for admin panel notifications
  */
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -15,20 +16,30 @@ const handler: Handler = async (event) => {
     };
   }
 
-  const { booking, ticket, type, message: customMessage, ticketNumbers, customerInfo } = JSON.parse(event.body || '{}');
+  const { booking, ticket, type, message: customMessage, ticketNumbers, customerInfo, customPhone } = JSON.parse(event.body || '{}');
 
-  // Check if CallMeBot is configured
-  if (!CALLMEBOT_PHONE) {
-    console.error('CallMeBot admin phone number not configured - CALLMEBOT_ADMIN_PHONE env var missing');
+  // Check if Green API is configured
+  if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
+    console.error('Green API not configured. Set GREEN_API_INSTANCE_ID and GREEN_API_TOKEN in environment variables.');
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'CALLMEBOT_ADMIN_PHONE environment variable not configured' }),
+      body: JSON.stringify({ message: 'Green API not configured' }),
     };
   }
 
   let message = '';
+  let targetPhone = customPhone || NOTIFICATION_PHONE;
 
-  // Handle custom message (from admin lottery ticket sales)
+  // Clean phone number - Green API format: 393457905205 (no + or spaces)
+  targetPhone = targetPhone.replace(/[\s\-\+]/g, '');
+  if (targetPhone.startsWith('0')) {
+    targetPhone = '39' + targetPhone.substring(1);
+  }
+  if (!targetPhone.startsWith('39') && targetPhone.length === 10) {
+    targetPhone = '39' + targetPhone;
+  }
+
+  // Handle custom message (from admin lottery ticket sales, birthdays, etc.)
   if (customMessage) {
     message = customMessage;
   }
@@ -72,13 +83,11 @@ const handler: Handler = async (event) => {
     const totalPrice = (booking.price_total / 100).toFixed(2);
 
     if (serviceType === 'car_wash') {
-      // Car Wash Booking
       const appointmentDate = new Date(booking.appointment_date);
       const serviceName = booking.service_name;
       const additionalService = booking.booking_details?.additionalService;
       const notes = booking.booking_details?.notes;
 
-      // Format date and time in Europe/Rome timezone
       const formattedDate = appointmentDate.toLocaleDateString('it-IT', {
         weekday: 'long',
         day: '2-digit',
@@ -108,6 +117,40 @@ const handler: Handler = async (event) => {
       }
       message += `*Totale:* €${totalPrice}\n`;
       message += `*Stato Pagamento:* ${booking.payment_status === 'paid' || booking.payment_status === 'completed' ? '✅ Pagato' : '⏳ In attesa'}`;
+    } else if (serviceType === 'mechanical') {
+      const appointmentDate = new Date(booking.appointment_date);
+      const serviceName = booking.service_name || 'Servizio Meccanica';
+      const vehicleInfo = booking.booking_details?.vehicle || {};
+      const notes = booking.booking_details?.notes;
+
+      const formattedDate = appointmentDate.toLocaleDateString('it-IT', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Europe/Rome'
+      });
+      const formattedTime = appointmentDate.toLocaleTimeString('it-IT', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Europe/Rome'
+      });
+
+      message = `🔧 *NUOVA PRENOTAZIONE MECCANICA*\n\n`;
+      message += `*ID:* DR7-${bookingId}\n`;
+      message += `*Cliente:* ${customerName}\n`;
+      message += `*Email:* ${customerEmail}\n`;
+      message += `*Telefono:* ${customerPhone}\n`;
+      message += `*Servizio:* ${serviceName}\n`;
+      if (vehicleInfo.brand || vehicleInfo.model) {
+        message += `*Veicolo:* ${vehicleInfo.brand || ''} ${vehicleInfo.model || ''}\n`;
+      }
+      message += `*Data e Ora:* ${formattedDate} alle ${formattedTime}\n`;
+      if (notes) {
+        message += `*Note:* ${notes}\n`;
+      }
+      message += `*Stato Pagamento:* ${booking.payment_status === 'paid' || booking.payment_status === 'completed' ? '✅ Pagato' : '⏳ In attesa'}`;
     } else {
       // Car Rental Booking
       const vehicleName = booking.vehicle_name;
@@ -116,7 +159,6 @@ const handler: Handler = async (event) => {
       const pickupLocation = booking.pickup_location;
       const insuranceOption = booking.insurance_option || booking.booking_details?.insuranceOption || 'Nessuna';
 
-      // Format dates and times in Europe/Rome timezone
       const pickupDateFormatted = pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
       const pickupTimeFormatted = pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
       const dropoffDateFormatted = dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
@@ -143,23 +185,36 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    // Send via CallMeBot
-    const encodedMessage = encodeURIComponent(message);
-    const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${CALLMEBOT_PHONE}&text=${encodedMessage}&apikey=${CALLMEBOT_API_KEY}`;
+    // Send via Green API
+    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
-    const response = await fetch(callmebotUrl);
+    const response = await fetch(greenApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chatId: `${targetPhone}@c.us`,
+        message: message,
+      }),
+    });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('CallMeBot API error:', error);
-      throw new Error(`CallMeBot API error: ${error}`);
+    const result = await response.json();
+
+    if (!response.ok || result.error) {
+      console.error('Green API error:', result);
+      throw new Error(result.error || 'Green API error');
     }
 
-    console.log('✅ WhatsApp notification sent via CallMeBot');
+    console.log('✅ WhatsApp notification sent via Green API:', result.idMessage);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'WhatsApp notification sent via CallMeBot', success: true }),
+      body: JSON.stringify({
+        message: 'WhatsApp notification sent via Green API',
+        success: true,
+        messageId: result.idMessage
+      }),
     };
   } catch (error: any) {
     console.error('Error sending WhatsApp notification:', error);

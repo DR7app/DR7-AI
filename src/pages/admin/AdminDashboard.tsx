@@ -23,10 +23,11 @@ import DailyCalendarModal from './components/DailyCalendarModal'
 import ScannerTab from './components/ScannerTab'
 import CauzioniTab from './components/CauzioniTab'
 import NexiTab from './components/NexiTab'
+import BirthdaysTab, { useBirthdayCount } from './components/BirthdaysTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -40,6 +41,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
   const { theme, toggleTheme } = useTheme()
+  const birthdayCount = useBirthdayCount()
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -282,6 +284,18 @@ export default function AdminDashboard() {
                 Marketing
               </button>
               <button
+                onClick={() => { setActiveTab('birthdays'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors flex items-center justify-between ${activeTab === 'birthdays' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                <span>Compleanni</span>
+                {birthdayCount > 0 && (
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'birthdays' ? 'bg-black text-dr7-gold' : 'bg-dr7-gold text-black'}`}>
+                    {birthdayCount}
+                  </span>
+                )}
+              </button>
+              <button
                 onClick={() => { setActiveTab('reviews'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reviews' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
@@ -498,6 +512,20 @@ export default function AdminDashboard() {
                 Marketing
               </button>
               <button
+                onClick={() => setActiveTab('birthdays')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'birthdays'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Compleanni
+                {birthdayCount > 0 && (
+                  <span className="bg-dr7-gold text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
+                    {birthdayCount}
+                  </span>
+                )}
+              </button>
+              <button
                 onClick={() => setActiveTab('reviews')}
                 className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reviews'
                   ? 'text-theme-text-primary'
@@ -547,7 +575,7 @@ export default function AdminDashboard() {
             {activeTab === 'cargos' && 'Cargos'}
             {activeTab === 'cauzioni' && 'Cauzioni'}
             {activeTab === 'marketing' && 'Marketing'}
-
+            {activeTab === 'birthdays' && 'Compleanni'}
             {activeTab === 'reviews' && 'Recensioni'}
             {activeTab === 'scanner' && 'Scanner Documenti'}
             {activeTab === 'nexi' && 'Nexi'}
@@ -589,6 +617,7 @@ export default function AdminDashboard() {
           {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'cauzioni' && <CauzioniTab />}
           {activeTab === 'marketing' && <MarketingTab />}
+          {activeTab === 'birthdays' && <BirthdaysTab />}
           {activeTab === 'reviews' && <ReviewsTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
           {activeTab === 'scanner' && <ScannerTab />}
