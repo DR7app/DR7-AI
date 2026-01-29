@@ -540,28 +540,24 @@ export default function CustomersTab() {
     if (!confirm('Sei sicuro di voler eliminare questo cliente?')) return
 
     try {
-      // Try deleting from customers_extended first (likely the main table for detailed clients)
-      const { error: extendedError } = await supabase
-        .from('customers_extended')
-        .delete()
-        .eq('id', id)
+      const response = await fetch('/.netlify/functions/manage-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', customerId: id })
+      })
 
-      if (extendedError) {
-        console.warn('Error deleting from customers_extended (might not exist or be a view):', extendedError)
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Errore durante l\'eliminazione')
       }
 
-      // Also delete from 'customers' table for backward compatibility
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-
-      loadCustomers()
-    } catch (error) {
+      // Remove from local state immediately
+      setAllCustomers(prev => prev.filter(c => c.id !== id))
+      alert('Cliente eliminato con successo')
+    } catch (error: any) {
       console.error('Failed to delete customer:', error)
-      alert('Impossibile eliminare il cliente')
+      alert('Impossibile eliminare il cliente: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 
@@ -979,26 +975,35 @@ export default function CustomersTab() {
   }
 
   async function handleUpdateCustomerStatus(customerId: string, newStatus: 'blacklist' | 'member' | 'elite' | null) {
-    try {
-      const { error } = await supabase
-        .from('customers_extended')
-        .update({ status: newStatus })
-        .eq('id', customerId)
+    const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
+      newStatus === 'elite' ? 'Elite' :
+        newStatus === 'member' ? 'Member' : 'Nessuno'
 
-      if (error) throw error
+    try {
+      const response = await fetch('/.netlify/functions/manage-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateStatus', customerId, status: newStatus })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Errore durante l\'aggiornamento')
+      }
 
       // Update local state
       setCustomers(customers.map(c =>
         c.id === customerId ? { ...c, status: newStatus } : c
       ))
+      setAllCustomers(prev => prev.map(c =>
+        c.id === customerId ? { ...c, status: newStatus } : c
+      ))
 
-      const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
-        newStatus === 'elite' ? 'Elite' :
-          newStatus === 'member' ? 'Member' : 'Nessuno'
       alert(`Status aggiornato a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer status:', error)
-      alert('Errore nell\'aggiornamento dello status')
+      alert('Errore nell\'aggiornamento dello status: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 
@@ -1011,29 +1016,39 @@ export default function CustomersTab() {
     if (!confirm(`Vuoi cambiare lo status di ${count} clienti a: ${statusLabel}?`)) return
 
     try {
-      const updates = Array.from(selectedCustomerIds).map(async (customerId) => {
-        const { error } = await supabase
-          .from('customers_extended')
-          .update({ status: newStatus })
-          .eq('id', customerId)
+      const customerIds = Array.from(selectedCustomerIds)
 
-        if (error) throw error
+      const response = await fetch('/.netlify/functions/manage-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulkUpdateStatus', customerIds, status: newStatus })
       })
 
-      await Promise.all(updates)
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Errore durante l\'aggiornamento')
+      }
 
       // Update local state
       setCustomers(customers.map(c =>
+        selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
+      ))
+      setAllCustomers(prev => prev.map(c =>
         selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
       ))
 
       // Clear selection
       setSelectedCustomerIds(new Set())
 
-      alert(`Status aggiornato per ${count} clienti a: ${statusLabel}`)
+      let message = `Status aggiornato per ${result.message || count + ' clienti'}`
+      if (result.skippedTemp > 0) {
+        message += ` (${result.skippedTemp} clienti temporanei ignorati)`
+      }
+      alert(message)
     } catch (error: any) {
       console.error('Error updating customer statuses:', error)
-      alert('Errore nell\'aggiornamento degli status')
+      alert('Errore nell\'aggiornamento degli status: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 
