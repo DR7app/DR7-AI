@@ -66,15 +66,47 @@ const handler: Handler = async (event) => {
         };
       }
 
+      // First delete related records (before cascade might not work)
+      console.log("[manage-customer] Deleting birthday_messages for:", customerId);
+      const { error: birthdayError, count: birthdayCount } = await supabaseAdmin
+        .from("birthday_messages")
+        .delete()
+        .eq("customer_id", customerId)
+        .select();
+
+      if (birthdayError) {
+        console.error("Error deleting birthday_messages:", birthdayError);
+      } else {
+        console.log("[manage-customer] Deleted birthday_messages count:", birthdayCount);
+      }
+
+      console.log("[manage-customer] Deleting customer_memberships for:", customerId);
+      const { error: membershipError } = await supabaseAdmin
+        .from("customer_memberships")
+        .delete()
+        .eq("client_id", customerId);
+
+      if (membershipError) {
+        console.error("Error deleting customer_memberships:", membershipError);
+      }
+
       // Delete from customers_extended
-      const { error: extError } = await supabaseAdmin
+      console.log("[manage-customer] Deleting from customers_extended:", customerId);
+      const { error: extError, count: extCount } = await supabaseAdmin
         .from("customers_extended")
         .delete()
-        .eq("id", customerId);
+        .eq("id", customerId)
+        .select();
 
       if (extError) {
         console.error("Error deleting from customers_extended:", extError);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ error: "Failed to delete customer: " + extError.message }),
+        };
       }
+      console.log("[manage-customer] Deleted from customers_extended, count:", extCount);
 
       // Also delete from customers table for backward compatibility
       const { error: custError } = await supabaseAdmin
@@ -86,14 +118,14 @@ const handler: Handler = async (event) => {
         console.warn("Error deleting from customers (may not exist):", custError);
       }
 
-      // Delete related records
-      await supabaseAdmin.from("birthday_messages").delete().eq("customer_id", customerId);
-      await supabaseAdmin.from("customer_memberships").delete().eq("client_id", customerId);
-
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ success: true, message: "Customer deleted" }),
+        body: JSON.stringify({
+          success: true,
+          message: "Customer deleted",
+          deletedBirthdays: birthdayCount || 0
+        }),
       };
     }
 
