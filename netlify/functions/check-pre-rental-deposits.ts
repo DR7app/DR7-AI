@@ -1,21 +1,12 @@
 import { Handler, schedule } from '@netlify/functions'
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// SMTP configuration - uses info@dr7.app
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-    },
-})
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 interface Booking {
     id: string
@@ -42,9 +33,9 @@ function getAlarmEmailHTML(bookings: Booking[]): string {
       <div style="text-align: center; margin-bottom: 30px;">
         <img src="https://dr7-empire-admin.netlify.app/DR7logo1.png" alt="DR7 Empire" style="height: 60px;" />
       </div>
-      
+
       <h1 style="color: #ff4444; font-size: 24px; margin-bottom: 20px; text-align: center;">🚨 ALLARME CAUZIONE PRE-NOLEGGIO</h1>
-      
+
       <p style="font-size: 16px; line-height: 1.6; color: #cccccc; margin-bottom: 20px;">
         I seguenti noleggi iniziano tra <strong style="color: #d4af37;">10 minuti</strong> ma la cauzione <strong style="color: #ff4444;">NON risulta presente/pagata</strong>:
       </p>
@@ -81,11 +72,19 @@ function getAlarmEmailHTML(bookings: Booking[]): string {
 const scheduledHandler: Handler = async (event) => {
     console.log('🔍 Checking for pre-rental deposits...')
 
+    // Check if Resend is configured
+    if (!process.env.RESEND_API_KEY) {
+        console.log('⚠️ RESEND_API_KEY not configured, skipping deposit check')
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ message: 'Resend not configured, skipping' })
+        }
+    }
+
     try {
         // Calculate time window: 10 minutes from now
         const now = new Date()
         const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000)
-        const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60 * 1000)
 
         // Query bookings starting in the next 10-15 minutes
         const { data: upcomingBookings, error } = await supabase
@@ -140,15 +139,23 @@ const scheduledHandler: Handler = async (event) => {
             }
         }
 
-        // Send alarm email to admin
+        // Send alarm email to admin using Resend
         const adminEmail = process.env.ADMIN_EMAIL || 'info@dr7.app'
 
-        await transporter.sendMail({
-            from: '"DR7 Empire Allarmi" <info@dr7.app>',
+        const { error: emailError } = await resend.emails.send({
+            from: 'DR7 Empire Allarmi <info@dr7.app>',
             to: adminEmail,
             subject: `🚨 ALLARME CAUZIONE: ${bookingsWithoutDeposit.length} noleggio/i senza cauzione`,
             html: getAlarmEmailHTML(bookingsWithoutDeposit),
         })
+
+        if (emailError) {
+            console.error('❌ Error sending email:', emailError)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: emailError.message })
+            }
+        }
 
         console.log(`✅ Alarm sent for ${bookingsWithoutDeposit.length} booking(s) without deposit`)
 
