@@ -35,18 +35,28 @@ export default function BirthdaysTab() {
 
     // Birthday message template
     const currentYear = new Date().getFullYear()
-    const defaultMessage = `Ciao {nome},
+    const defaultMessage = `Ciao {nome} 👋🏻
 
-Tanti auguri di buon compleanno da parte di tutto il team DR7 Empire!
+mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
 
-Per festeggiare il tuo giorno speciale, ti regaliamo un BUONO SCONTO del 15% su tutti i nostri servizi.
+Non vogliamo anticipare gli auguri, ma fare qualcosa di più autentico: riconoscere il tuo valore, prima ancora di celebrarlo.
 
-Codice: COMPLEANNO${currentYear}
+In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁
 
-Valido per 30 giorni.
+Per questo ti abbiamo riservato:
 
-A presto!
-Team DR7 Empire`
+🚗 Credito personale di €100 utilizzabile per un noleggio DR7
+
+🧼 Buono sconto di €10 per un lavaggio auto DR7
+
+Non è solo un regalo, ma un invito a concederti un'esperienza che ti rappresenti: potente, elegante, inconfondibile.
+
+Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻
+
+Con stima,
+Dubai Rent 7.0 S.p.A.
+
+Ogni compleanno merita uno stile all'altezza.`
 
     useEffect(() => {
         loadData()
