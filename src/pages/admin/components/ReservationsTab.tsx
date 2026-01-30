@@ -1665,11 +1665,64 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     isInitialEditLoad.current = true
 
     // Set customer data - Match the field path used in validateCustomerData
-    const customerId = booking.user_id ||
+    let customerId = booking.user_id ||
       booking.booking_details?.customer?.id ||
       booking.booking_details?.customer?.customerId ||
       booking.booking_details?.customer_id ||
       ''
+
+    // Get customer name from booking for fallback matching
+    const customerName = booking.customer_name ||
+      booking.booking_details?.customer?.fullName ||
+      booking.booking_details?.customer?.name ||
+      ''
+    const customerEmail = booking.customer_email ||
+      booking.booking_details?.customer?.email ||
+      ''
+
+    console.log('[handleEditBooking] 👤 CUSTOMER DATA:', {
+      extractedId: customerId,
+      customerName,
+      customerEmail,
+      booking_user_id: booking.user_id,
+      booking_details_customer: booking.booking_details?.customer
+    })
+
+    // Check if customer exists in our customers array
+    let matchedCustomer = customers.find(c => c.id === customerId)
+
+    if (!matchedCustomer && customerName) {
+      // Try to find by name if ID doesn't match
+      matchedCustomer = customers.find(c =>
+        c.full_name?.toLowerCase() === customerName.toLowerCase()
+      )
+      if (matchedCustomer) {
+        console.log('[handleEditBooking] ✅ Found customer by name match:', matchedCustomer.full_name)
+        customerId = matchedCustomer.id
+      }
+    }
+
+    if (!matchedCustomer && customerEmail) {
+      // Try to find by email if name doesn't match
+      matchedCustomer = customers.find(c =>
+        c.email?.toLowerCase() === customerEmail.toLowerCase()
+      )
+      if (matchedCustomer) {
+        console.log('[handleEditBooking] ✅ Found customer by email match:', matchedCustomer.full_name)
+        customerId = matchedCustomer.id
+      }
+    }
+
+    if (!matchedCustomer) {
+      console.warn('[handleEditBooking] ⚠️ Customer NOT found in customers array!', {
+        searchedId: customerId,
+        searchedName: customerName,
+        searchedEmail: customerEmail,
+        totalCustomers: customers.length
+      })
+    } else {
+      console.log('[handleEditBooking] ✅ Customer found:', matchedCustomer.full_name, matchedCustomer.id)
+    }
 
     // Populate rental data
     const pickupDate = booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date) : null
