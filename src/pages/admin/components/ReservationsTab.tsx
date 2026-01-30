@@ -2104,34 +2104,74 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         targetCustomerId = targetId
 
-        // Fetch fresh customer data to be sure
+        // Fetch fresh customer data - try multiple methods
         console.log('[processBookingSubmission] Looking up customer:', targetCustomerId)
-        const { data: customerData, error: customerError } = await supabase
+
+        // First, try to find in local customers array (includes customers from bookings)
+        const localCustomer = customers.find(c => c.id === targetCustomerId)
+        console.log('[processBookingSubmission] Local customer found:', localCustomer?.full_name || 'NOT FOUND')
+
+        // Then try database lookup
+        let { data: customerData, error: customerError } = await supabase
           .from('customers_extended')
           .select('*')
           .eq('id', targetCustomerId)
           .limit(1)
 
-        if (customerError) {
-          // Distinguish between "not found" (PGRST116) vs other errors
-          if (customerError.code === 'PGRST116' || customerError.message?.includes('no rows')) {
-            // Client truly doesn't exist in customers_extended
-            // Don't alert yet - let it fall through to the autocomplete/local check below
-            console.log('[processBookingSubmission] Customer not found in DB (PGRST116), attempting fallback to autocomplete list...')
-          } else {
-            console.error('[processBookingSubmission] Customer lookup error:', customerError)
-            // Other errors (network, permissions, etc.)
-            const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
-            alert(
-              `Errore nel caricamento del cliente:\n\n${errorMsg}\n\n` +
-              `ID Cliente: ${targetCustomerId}\n\n` +
-              'Riprova o contatta il supporto tecnico.'
-            )
-            return
+        // If not found by ID, try by email from local customer
+        if ((!customerData || customerData.length === 0) && localCustomer?.email) {
+          console.log('[processBookingSubmission] Trying lookup by email:', localCustomer.email)
+          const { data: emailData } = await supabase
+            .from('customers_extended')
+            .select('*')
+            .eq('email', localCustomer.email)
+            .limit(1)
+          if (emailData && emailData.length > 0) {
+            customerData = emailData
+            console.log('[processBookingSubmission] ✅ Found by email:', emailData[0].id)
           }
         }
 
-        const customer = customerData?.[0]
+        // If not found by email, try by phone
+        if ((!customerData || customerData.length === 0) && localCustomer?.phone) {
+          console.log('[processBookingSubmission] Trying lookup by phone:', localCustomer.phone)
+          const { data: phoneData } = await supabase
+            .from('customers_extended')
+            .select('*')
+            .eq('telefono', localCustomer.phone)
+            .limit(1)
+          if (phoneData && phoneData.length > 0) {
+            customerData = phoneData
+            console.log('[processBookingSubmission] ✅ Found by phone:', phoneData[0].id)
+          }
+        }
+
+        if (customerError && customerError.code !== 'PGRST116') {
+          console.error('[processBookingSubmission] Customer lookup error:', customerError)
+          const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
+          alert(
+            `Errore nel caricamento del cliente:\n\n${errorMsg}\n\n` +
+            `ID Cliente: ${targetCustomerId}\n\n` +
+            'Riprova o contatta il supporto tecnico.'
+          )
+          return
+        }
+
+        let customer = customerData?.[0]
+
+        // If still not found in DB but we have local data, use that with a warning
+        if (!customer && localCustomer) {
+          console.log('[processBookingSubmission] ⚠️ Customer not in DB, using local data from autocomplete')
+          customer = {
+            id: localCustomer.id,
+            full_name: localCustomer.full_name,
+            email: localCustomer.email,
+            telefono: localCustomer.phone,
+            tipo_cliente: 'persona_fisica', // Default
+            nome: localCustomer.full_name?.split(' ')[0] || '',
+            cognome: localCustomer.full_name?.split(' ').slice(1).join(' ') || ''
+          }
+        }
 
         if (customer) {
           console.log('[processBookingSubmission] Customer found:', customer)
