@@ -6,27 +6,44 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
-// Birthday message template - {nome} will be replaced with customer's first name
+// Birthday message template - {nome} and {codice} will be replaced
 const BIRTHDAY_MESSAGE = `Ciao {nome} 👋🏻
 
-mancano esattamente 10 giorni a una data speciale: il tuo compleanno.🥳
+mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
 
-Non siamo qui per anticipare gli auguri, ma per fare qualcosa di più sincero e raro: riconoscere il tuo valore, prima ancora di celebrarlo.
+Non vogliamo anticipare gli auguri, ma fare qualcosa di più autentico: riconoscere il tuo valore, prima ancora di celebrarlo.
 
-In qualità di nostro cliente, ci fa piacere riservarti un pensiero autentico, all'altezza del tuo stile.🎁
+In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁
 
-Per questo, abbiamo predisposto per te un credito personale del valore di €100 utilizzabile per un noleggio DR7 e un buono sconto del valore di €10 per un lavaggio auto DR7.
+Per questo ti abbiamo riservato:
 
-È un invito, discreto ma reale, a concederti un momento diverso.
+Credito personale di €100 utilizzabile per un noleggio DR7
 
-Non un semplice regalo, ma un'occasione per guidare qualcosa che ti rappresenti: potente, elegante, inconfondibile.
+Buono sconto di €10 per un lavaggio auto DR7
 
-Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo felici di accompagnarti nella scelta.👇🏻
+CODICE SCONTO: {codice}
 
-Con stima e attenzione,
+Non è solo un regalo, ma un invito a concederti un'esperienza che ti rappresenti: potente, elegante, inconfondibile.
 
-Dubai Rent 7.0 – S.p.A.
+Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻
+
+Con stima,
+Dubai Rent 7.0 S.p.A.
 Ogni compleanno merita uno stile all'altezza.`;
+
+// Generate unique discount code
+function generateDiscountCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded confusing chars: I, O, 0, 1
+  let code = 'BDAY-';
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  code += '-';
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 const birthdayHandler: Handler = async (event) => {
   console.log('[Birthday Auto] Starting automatic birthday message sender...');
@@ -111,9 +128,50 @@ const birthdayHandler: Handler = async (event) => {
       try {
         // Get first name
         const firstName = customer.nome || customer.cognome || 'Cliente';
+        const fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim() || 'Cliente';
 
-        // Personalize message
-        const personalizedMessage = BIRTHDAY_MESSAGE.replace('{nome}', firstName);
+        // Generate unique discount code
+        let discountCode = generateDiscountCode();
+
+        // Ensure code is unique (retry if exists)
+        let attempts = 0;
+        while (attempts < 5) {
+          const { data: existingCode } = await supabase
+            .from('birthday_discount_codes')
+            .select('code')
+            .eq('code', discountCode)
+            .single();
+
+          if (!existingCode) break;
+          discountCode = generateDiscountCode();
+          attempts++;
+        }
+
+        // Save discount code to database
+        const { error: codeError } = await supabase
+          .from('birthday_discount_codes')
+          .insert({
+            code: discountCode,
+            customer_id: customer.id,
+            customer_name: fullName,
+            customer_phone: customer.telefono,
+            rental_credit: 100.00,
+            car_wash_discount: 10.00,
+            sent_via: 'whatsapp_auto'
+          });
+
+        if (codeError) {
+          console.error(`[Birthday Auto] Failed to save discount code for ${customer.nome}:`, codeError);
+          errors++;
+          continue;
+        }
+
+        console.log(`[Birthday Auto] Generated code ${discountCode} for ${fullName}`);
+
+        // Personalize message with name and code
+        const personalizedMessage = BIRTHDAY_MESSAGE
+          .replace('{nome}', firstName)
+          .replace('{codice}', discountCode);
 
         // Clean phone number
         let cleanPhone = customer.telefono.replace(/[\s\-\+]/g, '');
@@ -144,7 +202,7 @@ const birthdayHandler: Handler = async (event) => {
           continue;
         }
 
-        console.log(`[Birthday Auto] ✅ Sent to ${customer.nome} ${customer.cognome} (${cleanPhone})`);
+        console.log(`[Birthday Auto] ✅ Sent to ${customer.nome} ${customer.cognome} (${cleanPhone}) with code ${discountCode}`);
 
         // Record as sent
         await supabase

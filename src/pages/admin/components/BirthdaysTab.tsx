@@ -33,28 +33,45 @@ export default function BirthdaysTab() {
     const [showOnlyWithPhone, setShowOnlyWithPhone] = useState(true)
     const [showOnlyNotSent, setShowOnlyNotSent] = useState(false)
 
-    // Birthday message template
+    // Birthday message template - {nome} and {codice} will be replaced
     const currentYear = new Date().getFullYear()
     const defaultMessage = `Ciao {nome} 👋🏻
 
-mancano esattamente 10 giorni a una data speciale: il tuo compleanno.🥳
+mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
 
-Non siamo qui per anticipare gli auguri, ma per fare qualcosa di più sincero e raro: riconoscere il tuo valore, prima ancora di celebrarlo.
+Non vogliamo anticipare gli auguri, ma fare qualcosa di più autentico: riconoscere il tuo valore, prima ancora di celebrarlo.
 
-In qualità di nostro cliente, ci fa piacere riservarti un pensiero autentico, all'altezza del tuo stile.🎁
+In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁
 
-Per questo, abbiamo predisposto per te un credito personale del valore di €100 utilizzabile per un noleggio DR7 e un buono sconto del valore di €10 per un lavaggio auto DR7.
+Per questo ti abbiamo riservato:
 
-È un invito, discreto ma reale, a concederti un momento diverso.
+Credito personale di €100 utilizzabile per un noleggio DR7
 
-Non un semplice regalo, ma un'occasione per guidare qualcosa che ti rappresenti: potente, elegante, inconfondibile.
+Buono sconto di €10 per un lavaggio auto DR7
 
-Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo felici di accompagnarti nella scelta.👇🏻
+CODICE SCONTO: {codice}
 
-Con stima e attenzione,
+Non è solo un regalo, ma un invito a concederti un'esperienza che ti rappresenti: potente, elegante, inconfondibile.
 
-Dubai Rent 7.0 – S.p.A.
+Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻
+
+Con stima,
+Dubai Rent 7.0 S.p.A.
 Ogni compleanno merita uno stile all'altezza.`
+
+    // Generate unique discount code
+    function generateDiscountCode(): string {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        let code = 'BDAY-'
+        for (let i = 0; i < 4; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length))
+        }
+        code += '-'
+        for (let i = 0; i < 4; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length))
+        }
+        return code
+    }
 
     useEffect(() => {
         loadData()
@@ -229,11 +246,50 @@ Ogni compleanno merita uno stile all'altezza.`
         setBulkSending(true)
         let sent = 0
         let errors = 0
+        const generatedCodes: string[] = []
 
         for (const customer of toSend) {
             try {
+                // Generate unique discount code
+                let discountCode = generateDiscountCode()
+
+                // Check if code exists (retry if needed)
+                let attempts = 0
+                while (attempts < 5) {
+                    const { data: existingCode } = await supabase
+                        .from('birthday_discount_codes')
+                        .select('code')
+                        .eq('code', discountCode)
+                        .single()
+
+                    if (!existingCode) break
+                    discountCode = generateDiscountCode()
+                    attempts++
+                }
+
+                // Save discount code to database
+                const { error: codeError } = await supabase
+                    .from('birthday_discount_codes')
+                    .insert({
+                        code: discountCode,
+                        customer_id: customer.id,
+                        customer_name: customer.full_name,
+                        customer_phone: customer.phone,
+                        rental_credit: 100.00,
+                        car_wash_discount: 10.00,
+                        sent_via: 'whatsapp_bulk'
+                    })
+
+                if (codeError) {
+                    console.error('Error saving discount code:', codeError)
+                    errors++
+                    continue
+                }
+
                 const firstName = customer.full_name.split(' ')[0]
-                const personalizedMessage = defaultMessage.replace('{nome}', firstName)
+                const personalizedMessage = defaultMessage
+                    .replace('{nome}', firstName)
+                    .replace('{codice}', discountCode)
 
                 let cleanPhone = customer.phone!.replace(/\s+/g, '').replace(/[^\d+]/g, '')
                 if (cleanPhone.startsWith('0')) {
@@ -270,6 +326,7 @@ Ogni compleanno merita uno stile all'altezza.`
                     setCustomers(prev => prev.map(c =>
                         c.id === customer.id ? { ...c, already_sent_this_year: true } : c
                     ))
+                    generatedCodes.push(`${customer.full_name}: ${discountCode}`)
                     sent++
                 } else {
                     errors++
@@ -285,7 +342,7 @@ Ogni compleanno merita uno stile all'altezza.`
 
         setBulkSending(false)
         setSelectedIds(new Set())
-        alert(`Invio completato!\n\nInviati: ${sent}\nErrori: ${errors}`)
+        alert(`Invio completato!\n\nInviati: ${sent}\nErrori: ${errors}\n\nCodici generati:\n${generatedCodes.join('\n')}`)
     }
 
     async function sendBirthdayMessage(customer: CustomerBirthday) {
@@ -297,9 +354,46 @@ Ogni compleanno merita uno stile all'altezza.`
         setSending(customer.id)
 
         try {
-            // Prepare personalized message
+            // Generate unique discount code
+            let discountCode = generateDiscountCode()
+
+            // Check if code exists (retry if needed)
+            let attempts = 0
+            while (attempts < 5) {
+                const { data: existingCode } = await supabase
+                    .from('birthday_discount_codes')
+                    .select('code')
+                    .eq('code', discountCode)
+                    .single()
+
+                if (!existingCode) break
+                discountCode = generateDiscountCode()
+                attempts++
+            }
+
+            // Save discount code to database
+            const { error: codeError } = await supabase
+                .from('birthday_discount_codes')
+                .insert({
+                    code: discountCode,
+                    customer_id: customer.id,
+                    customer_name: customer.full_name,
+                    customer_phone: customer.phone,
+                    rental_credit: 100.00,
+                    car_wash_discount: 10.00,
+                    sent_via: 'whatsapp_manual'
+                })
+
+            if (codeError) {
+                console.error('Error saving discount code:', codeError)
+                throw new Error('Errore nel generare il codice sconto')
+            }
+
+            // Prepare personalized message with code
             const firstName = customer.full_name.split(' ')[0]
-            const personalizedMessage = defaultMessage.replace('{nome}', firstName)
+            const personalizedMessage = defaultMessage
+                .replace('{nome}', firstName)
+                .replace('{codice}', discountCode)
 
             // Clean phone number
             let cleanPhone = customer.phone.replace(/\s+/g, '').replace(/[^\d+]/g, '')
@@ -347,8 +441,8 @@ Ogni compleanno merita uno stile all'altezza.`
                 c.id === customer.id ? { ...c, already_sent_this_year: true } : c
             ))
 
-            // Show success
-            alert(`Messaggio inviato a ${customer.full_name}!`)
+            // Show success with code
+            alert(`Messaggio inviato a ${customer.full_name}!\n\nCodice sconto generato: ${discountCode}`)
         } catch (error: any) {
             console.error('Error sending birthday message:', error)
             alert('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
@@ -481,8 +575,9 @@ Ogni compleanno merita uno stile all'altezza.`
             <div className="bg-theme-bg-tertiary p-4 rounded-lg border border-theme-border">
                 <h3 className="text-theme-text-primary font-semibold mb-2">Messaggio Auguri</h3>
                 <pre className="text-theme-text-muted text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border">
-                    {defaultMessage.replace('{nome}', '[Nome Cliente]')}
+                    {defaultMessage.replace('{nome}', '[Nome Cliente]').replace('{codice}', 'BDAY-XXXX-XXXX')}
                 </pre>
+                <p className="text-xs text-green-400 mt-2">Il codice sconto viene generato automaticamente per ogni cliente</p>
             </div>
 
             {/* Customers Table */}
