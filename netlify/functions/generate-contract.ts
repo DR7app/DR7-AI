@@ -569,7 +569,7 @@ Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti
         const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'RCA'
         const insuranceLabels: Record<string, string> = {
             'RCA': 'RCA',
-            'KASKO_BASE': 'Kasko Base',
+            'KASKO_BASE': 'Kasko',
             'KASKO_BLACK': 'Kasko Black',
             'KASKO_SIGNATURE': 'Kasko Signature',
             'DR7': 'Kasko DR7'
