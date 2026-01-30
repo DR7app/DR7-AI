@@ -1987,55 +1987,50 @@ export default function CustomersTab() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center justify-end">
-                      {customer.status === 'blacklist' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600 text-theme-text-primary border border-red-500 backdrop-blur-sm shadow-sm">
-                          Blacklist
-                        </span>
-                      )}
-                      {customer.status === 'elite' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/30 text-amber-200 border border-amber-400/30 backdrop-blur-sm">
-                          Elite
-                        </span>
-                      )}
-                      {customer.status === 'member' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/30 text-blue-200 border border-blue-400/30 backdrop-blur-sm">
-                          Member
-                        </span>
-                      )}
-                      {!customer.status && (
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-theme-text-primary border border-red-500/30 backdrop-blur-sm transition-all"
-                            title="Blacklist"
-                          >
-                            BL
-                          </button>
-                          <button
-                            onClick={() => handleUpdateCustomerStatus(customer.id, 'member')}
-                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-200/70 hover:bg-blue-500/30 hover:text-blue-200 border border-blue-400/20 backdrop-blur-sm transition-all"
-                            title="Member"
-                          >
-                            MEM
-                          </button>
-                          <button
-                            onClick={() => handleUpdateCustomerStatus(customer.id, 'elite')}
-                            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-200/70 hover:bg-amber-500/30 hover:text-amber-200 border border-amber-400/20 backdrop-blur-sm transition-all"
-                            title="Elite"
-                          >
-                            ELT
-                          </button>
-                        </div>
-                      )}
-                      {customer.status && (
+                      <div className="flex gap-1.5">
                         <button
-                          onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                          className="px-2 py-1.5 rounded-full text-xs font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
-                          title="Rimuovi Status"
+                          onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
+                          className={`px-2.5 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all ${
+                            customer.status === 'blacklist'
+                              ? 'bg-red-600/50 text-red-100 border-red-400/50 ring-1 ring-red-400'
+                              : 'bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-theme-text-primary border-red-500/30'
+                          }`}
+                          title="Blacklist"
                         >
-                          X
+                          BL
                         </button>
-                      )}
+                        <button
+                          onClick={() => handleUpdateCustomerStatus(customer.id, 'member')}
+                          className={`px-2.5 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all ${
+                            customer.status === 'member'
+                              ? 'bg-blue-500/50 text-blue-100 border-blue-400/50 ring-1 ring-blue-400'
+                              : 'bg-blue-500/20 text-blue-200/70 hover:bg-blue-500/30 hover:text-blue-200 border-blue-400/20'
+                          }`}
+                          title="Member"
+                        >
+                          MEM
+                        </button>
+                        <button
+                          onClick={() => handleUpdateCustomerStatus(customer.id, 'elite')}
+                          className={`px-2.5 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all ${
+                            customer.status === 'elite'
+                              ? 'bg-amber-500/50 text-amber-100 border-amber-400/50 ring-1 ring-amber-400'
+                              : 'bg-amber-500/20 text-amber-200/70 hover:bg-amber-500/30 hover:text-amber-200 border-amber-400/20'
+                          }`}
+                          title="Elite"
+                        >
+                          ELT
+                        </button>
+                        {customer.status && (
+                          <button
+                            onClick={() => handleUpdateCustomerStatus(customer.id, null)}
+                            className="px-2 py-1.5 rounded-full text-xs font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
+                            title="Rimuovi Status"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-right">
