@@ -1792,28 +1792,28 @@ export default function CustomersTab() {
                   <span className="text-sm text-theme-text-muted">Cambia Status:</span>
                   <button
                     onClick={() => handleBulkStatusUpdate('blacklist')}
-                    className="px-3 py-2 rounded-full text-sm font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 border border-red-400/20 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-bold bg-red-800 text-white hover:bg-red-600 border border-red-500 transition-all"
                     title="Imposta come Blacklist"
                   >
                     Blacklist
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate('member')}
-                    className="px-3 py-2 rounded-full text-sm font-medium bg-blue-500/20 text-blue-200 hover:bg-blue-500/30 border border-blue-400/20 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-bold bg-blue-800 text-white hover:bg-blue-600 border border-blue-500 transition-all"
                     title="Imposta come Member"
                   >
                     Member
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate('elite')}
-                    className="px-3 py-2 rounded-full text-sm font-medium bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 border border-amber-400/20 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-bold bg-amber-700 text-white hover:bg-amber-500 border border-amber-400 transition-all"
                     title="Imposta come Elite"
                   >
                     Elite
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate(null)}
-                    className="px-3 py-2 rounded-full text-sm font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 border border-white/10 backdrop-blur-sm transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-bold bg-gray-700 text-white hover:bg-gray-500 border border-gray-500 transition-all"
                     title="Rimuovi Status"
                   >
                     Rimuovi
@@ -1990,10 +1990,10 @@ export default function CustomersTab() {
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                          className={`px-2.5 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all ${
+                          className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${
                             customer.status === 'blacklist'
-                              ? 'bg-red-600/50 text-red-100 border-red-400/50 ring-1 ring-red-400'
-                              : 'bg-red-600/20 text-red-200/90 hover:bg-red-600/40 hover:text-theme-text-primary border-red-500/30'
+                              ? 'bg-red-600 text-white border-red-400 ring-2 ring-red-400'
+                              : 'bg-red-900/80 text-red-100 hover:bg-red-700 border-red-600'
                           }`}
                           title="Blacklist"
                         >
@@ -2001,10 +2001,10 @@ export default function CustomersTab() {
                         </button>
                         <button
                           onClick={() => handleUpdateCustomerStatus(customer.id, 'member')}
-                          className={`px-2.5 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all ${
+                          className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${
                             customer.status === 'member'
-                              ? 'bg-blue-500/50 text-blue-100 border-blue-400/50 ring-1 ring-blue-400'
-                              : 'bg-blue-500/20 text-blue-200/70 hover:bg-blue-500/30 hover:text-blue-200 border-blue-400/20'
+                              ? 'bg-blue-600 text-white border-blue-400 ring-2 ring-blue-400'
+                              : 'bg-blue-900/80 text-blue-100 hover:bg-blue-700 border-blue-600'
                           }`}
                           title="Member"
                         >
@@ -2012,10 +2012,10 @@ export default function CustomersTab() {
                         </button>
                         <button
                           onClick={() => handleUpdateCustomerStatus(customer.id, 'elite')}
-                          className={`px-2.5 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all ${
+                          className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${
                             customer.status === 'elite'
-                              ? 'bg-amber-500/50 text-amber-100 border-amber-400/50 ring-1 ring-amber-400'
-                              : 'bg-amber-500/20 text-amber-200/70 hover:bg-amber-500/30 hover:text-amber-200 border-amber-400/20'
+                              ? 'bg-amber-500 text-white border-amber-300 ring-2 ring-amber-400'
+                              : 'bg-amber-900/80 text-amber-100 hover:bg-amber-600 border-amber-600'
                           }`}
                           title="Elite"
                         >
