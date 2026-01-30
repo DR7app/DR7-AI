@@ -37,25 +37,23 @@ export default function BirthdaysTab() {
     const currentYear = new Date().getFullYear()
     const defaultMessage = `Ciao {nome} 👋🏻
 
-mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
+mancano esattamente 10 giorni a una data speciale: il tuo compleanno.🥳
 
-Non vogliamo anticipare gli auguri, ma fare qualcosa di più autentico: riconoscere il tuo valore, prima ancora di celebrarlo.
+Non siamo qui per anticipare gli auguri, ma per fare qualcosa di più sincero e raro: riconoscere il tuo valore, prima ancora di celebrarlo.
 
-In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁
+In qualità di nostro cliente, ci fa piacere riservarti un pensiero autentico, all'altezza del tuo stile.🎁
 
-Per questo ti abbiamo riservato:
+Per questo, abbiamo predisposto per te un credito personale del valore di €100 utilizzabile per un noleggio DR7 e un buono sconto del valore di €10 per un lavaggio auto DR7.
 
-🚗 Credito personale di €100 utilizzabile per un noleggio DR7
+È un invito, discreto ma reale, a concederti un momento diverso.
 
-🧼 Buono sconto di €10 per un lavaggio auto DR7
+Non un semplice regalo, ma un'occasione per guidare qualcosa che ti rappresenti: potente, elegante, inconfondibile.
 
-Non è solo un regalo, ma un invito a concederti un'esperienza che ti rappresenti: potente, elegante, inconfondibile.
+Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo felici di accompagnarti nella scelta.👇🏻
 
-Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻
+Con stima e attenzione,
 
-Con stima,
-Dubai Rent 7.0 S.p.A.
-
+Dubai Rent 7.0 – S.p.A.
 Ogni compleanno merita uno stile all'altezza.`
 
     useEffect(() => {
