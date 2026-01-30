@@ -634,25 +634,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return filteredVehicles
   }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
 
-  // Base vehicles for dropdown
-  // ADMIN MODE: Show ALL vehicles, not just available ones
-  // This allows admins to book any vehicle and override availability
+  // Base vehicles for dropdown (before adding same-day availability)
+  // This will be enhanced later after vehicleEarliestTimes is calculated
   const baseVehiclesForDropdown = useMemo((): Vehicle[] => {
-    // For admin panel, show ALL active vehicles (not retired)
-    // The availability check will happen on save with a warning
-    let result = vehicles.filter(v => v.status !== 'retired')
+    // Start with available vehicles
+    let result = [...availableVehicles]
 
-    // Mark which vehicles are available vs unavailable for visual indication
-    result = result.map(v => ({
-      ...v,
-      _isAvailable: availableVehicles.some(av => av.id === v.id)
-    }))
-
-    console.log('[Vehicle Dropdown] Admin mode: showing all', result.length, 'vehicles')
-    console.log('[Vehicle Dropdown] Available:', availableVehicles.length, '| Unavailable:', result.length - availableVehicles.length)
+    // If editing, ensure selected vehicle is included
+    if (editingId && formData.vehicle_id) {
+      const isSelectedInResult = result.some(v => v.id === formData.vehicle_id)
+      if (!isSelectedInResult) {
+        const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+        if (selectedVehicle) {
+          console.log('[Vehicle Dropdown] Adding currently selected vehicle to dropdown:', selectedVehicle.display_name)
+          result = [selectedVehicle, ...result]
+        }
+      }
+    }
 
     return result
-  }, [vehicles, availableVehicles])
+  }, [availableVehicles, editingId, formData.vehicle_id, vehicles])
 
 
   // Calculate earliest available time for each vehicle based on existing bookings and automatic wash
@@ -3562,36 +3563,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   </div>
                 ) : (
                   <Select
-                    label={`Veicolo (${vehiclesForDropdown.length} totali - ${availableVehicles.length} disponibili)`}
+                    label={`Veicolo (${vehiclesForDropdown.length} disponibili)`}
                     required
                     value={formData.vehicle_id}
                     onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
                     options={[
                       { value: '', label: 'Seleziona veicolo...' },
-                      ...vehiclesForDropdown.map((v: any) => {
-                        const isAvailable = v._isAvailable !== false && availableVehicles.some(av => av.id === v.id)
-                        let label = v.plate || v.targa ? `${v.display_name} (${v.plate || v.targa})` : v.display_name
-
+                      ...vehiclesForDropdown.map((v: Vehicle) => {
+                        let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
                         const earliestTime = vehicleEarliestTimes.get(v.id)
                         if (earliestTime) {
                           const hours = earliestTime.getHours().toString().padStart(2, '0')
                           const minutes = earliestTime.getMinutes().toString().padStart(2, '0')
-                          label += ` - dalle ${hours}:${minutes}`
+                          label += ` (disponibile dalle ${hours}:${minutes})`
                         }
-
-                        // Mark unavailable vehicles with a warning indicator
-                        if (!isAvailable && !earliestTime) {
-                          label = `⚠️ ${label} [VERIFICA DISPONIBILITÀ]`
-                        }
-
                         return { value: v.id, label }
                       })
                     ]}
                   />
                 )}
-                {formData.pickup_date && formData.return_date && availableVehicles.length === 0 && vehiclesForDropdown.length > 0 && (
-                  <p className="text-yellow-400 text-sm mt-2">
-                    ⚠️ Attenzione: tutti i veicoli potrebbero avere conflitti. Seleziona comunque e verifica la disponibilità.
+                {formData.pickup_date && formData.return_date && vehiclesForDropdown.length === 0 && (
+                  <p className="text-red-400 text-sm mt-2">
+                    Nessun veicolo disponibile per le date selezionate
                   </p>
                 )}
               </div>

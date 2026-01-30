@@ -16,8 +16,8 @@ import { createRomeDate, getRomeDateComponents } from './timezoneUtils'
 
 // Configuration constants
 const BUFFER_MINUTES = 75 // 30min gap + 45min wash
-const BUSINESS_START_HOUR = 9
-const BUSINESS_END_HOUR = 19
+const BUSINESS_START_HOUR = 0  // Admin can book any time
+const BUSINESS_END_HOUR = 24   // Admin can book any time
 const TIME_SLOT_INTERVAL_MINUTES = 15
 
 // Types
