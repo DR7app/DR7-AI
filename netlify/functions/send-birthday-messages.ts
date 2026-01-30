@@ -28,7 +28,7 @@ Con stima e attenzione,
 Dubai Rent 7.0 – S.p.A.
 Ogni compleanno merita uno stile all'altezza.`;
 
-const handler: Handler = async (event) => {
+const birthdayHandler: Handler = async (event) => {
   console.log('[Birthday Auto] Starting automatic birthday message sender...');
 
   // Check configuration
@@ -210,4 +210,4 @@ function parseBirthday(dateStr: string): Date | null {
 }
 
 // Run every day at 9:00 AM (Rome time = UTC+1, so 8:00 UTC)
-export const handler = schedule('0 8 * * *', handler);
+export const handler = schedule('0 8 * * *', birthdayHandler);
