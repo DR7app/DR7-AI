@@ -90,6 +90,17 @@ const handler: Handler = async (event) => {
 
     // VALIDATE action - just check and return info
     if (action === "validate" || !action) {
+      // Fetch customer email from customers_extended if we have customer_id
+      let customerEmail = null;
+      if (discountCode.customer_id) {
+        const { data: customer } = await supabase
+          .from("customers_extended")
+          .select("email")
+          .eq("id", discountCode.customer_id)
+          .single();
+        customerEmail = customer?.email || null;
+      }
+
       return {
         statusCode: 200,
         headers,
@@ -97,6 +108,8 @@ const handler: Handler = async (event) => {
           valid: true,
           code: discountCode.code,
           customer_name: discountCode.customer_name,
+          customer_phone: discountCode.customer_phone,
+          customer_email: customerEmail,
           rental_credit: discountCode.rental_credit,
           rental_used: discountCode.rental_used,
           car_wash_discount: discountCode.car_wash_discount,
