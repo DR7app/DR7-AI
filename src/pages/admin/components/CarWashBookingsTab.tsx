@@ -278,6 +278,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   useEffect(() => {
     loadData()
+
+    // Real-time subscription for new bookings
+    const subscription = supabase
+      .channel('carwash-bookings-updates')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        (payload) => {
+          console.log('🔄 CarWashBookingsTab: Real-time update received', payload)
+          loadData()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
   // Handle initial data from calendar
@@ -969,6 +985,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     placeholder="Inizia a scrivere nome, email o telefono..."
                     required={true}
                   />
+                  {/* Show selected customer details */}
+                  {formData.customer_id && (() => {
+                    const selectedCustomer = customers.find(c => c.id === formData.customer_id)
+                    if (selectedCustomer) {
+                      return (
+                        <div className="mt-3 p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
+                          <p className="text-green-400 font-medium mb-1">Cliente selezionato:</p>
+                          <p className="text-white font-bold">{selectedCustomer.full_name}</p>
+                          {selectedCustomer.email && <p className="text-gray-300 text-sm">{selectedCustomer.email}</p>}
+                          {selectedCustomer.phone && <p className="text-gray-300 text-sm">{selectedCustomer.phone}</p>}
+                        </div>
+                      )
+                    }
+                    return null
+                  })()}
                 </div>
               ) : (
                 <div className="space-y-4">

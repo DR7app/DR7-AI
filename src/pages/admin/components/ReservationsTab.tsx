@@ -3483,6 +3483,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       required={true}
                     />
 
+                    {/* Show selected customer details */}
+                    {formData.customer_id && (() => {
+                      const selectedCustomer = customers.find(c => c.id === formData.customer_id)
+                      if (selectedCustomer) {
+                        return (
+                          <div className="mt-3 p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
+                            <p className="text-green-400 font-medium mb-1">Cliente selezionato:</p>
+                            <p className="text-white font-bold">{selectedCustomer.full_name}</p>
+                            {selectedCustomer.email && <p className="text-gray-300 text-sm">{selectedCustomer.email}</p>}
+                            {selectedCustomer.phone && <p className="text-gray-300 text-sm">{selectedCustomer.phone}</p>}
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
+
                     {customers.length === 0 && (
                       <p className="text-sm text-yellow-400 mt-2">
                         Nessun cliente trovato. Verifica che l'API sia attiva o crea un nuovo cliente.
