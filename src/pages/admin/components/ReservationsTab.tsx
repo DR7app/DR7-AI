@@ -1877,23 +1877,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // This handles cases where vehicle might be retired or temporarily unavailable
       vehicle_id: vehicle?.id || booking.vehicle_id || booking.booking_details?.vehicle_id || '',
       // CRITICAL: Convert UTC times from database to Rome local time for display
-      // Database stores UTC, we need to add Rome offset (+1 in winter, +2 in summer)
+      // Use toLocaleString with Europe/Rome timezone to handle DST automatically
       pickup_date: pickupDate ? (() => {
-        // Get Rome time by adding the offset
-        const romeTime = new Date(pickupDate.getTime() + (pickupDate.getTimezoneOffset() * 60000) + (60 * 60000)); // Add 1 hour for Rome winter time
-        return romeTime.toISOString().split('T')[0];
+        // Extract date parts using Rome timezone
+        const year = pickupDate.toLocaleString('en-CA', { timeZone: 'Europe/Rome', year: 'numeric' });
+        const month = pickupDate.toLocaleString('en-CA', { timeZone: 'Europe/Rome', month: '2-digit' });
+        const day = pickupDate.toLocaleString('en-CA', { timeZone: 'Europe/Rome', day: '2-digit' });
+        return `${year}-${month}-${day}`;
       })() : '',
       pickup_time: pickupDate ? (() => {
-        const romeTime = new Date(pickupDate.getTime() + (pickupDate.getTimezoneOffset() * 60000) + (60 * 60000));
-        return romeTime.toISOString().split('T')[1].substring(0, 5);
+        return pickupDate.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false });
       })() : '',
       return_date: dropoffDate ? (() => {
-        const romeTime = new Date(dropoffDate.getTime() + (dropoffDate.getTimezoneOffset() * 60000) + (60 * 60000));
-        return romeTime.toISOString().split('T')[0];
+        const year = dropoffDate.toLocaleString('en-CA', { timeZone: 'Europe/Rome', year: 'numeric' });
+        const month = dropoffDate.toLocaleString('en-CA', { timeZone: 'Europe/Rome', month: '2-digit' });
+        const day = dropoffDate.toLocaleString('en-CA', { timeZone: 'Europe/Rome', day: '2-digit' });
+        return `${year}-${month}-${day}`;
       })() : '',
       return_time: dropoffDate ? (() => {
-        const romeTime = new Date(dropoffDate.getTime() + (dropoffDate.getTimezoneOffset() * 60000) + (60 * 60000));
-        return romeTime.toISOString().split('T')[1].substring(0, 5);
+        return dropoffDate.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false });
       })() : '',
       pickup_location: pickupLoc,
       dropoff_location: dropoffLoc,
