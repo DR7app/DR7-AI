@@ -3006,19 +3006,49 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.log('Booking updated successfully:', insertedBooking)
       } else {
         // Create new booking
-        const { data, error: bookingError } = await supabase
-          .from('bookings')
-          .insert([bookingData])
-          .select()
-          .single()
+        // If showAllVehicles is enabled (force mode), use RPC to bypass availability trigger
+        if (showAllVehicles) {
+          console.log('🔓 FORCE MODE: Using admin_force_create_booking to bypass availability check')
+          const { data: rpcResult, error: rpcError } = await supabase
+            .rpc('admin_force_create_booking', {
+              p_booking_data: bookingData
+            })
 
-        if (bookingError) {
-          console.error('Failed to create booking:', bookingError)
-          console.error('Booking data that failed:', bookingData)
-          throw new Error(`Failed to create booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
+          if (rpcError) {
+            console.error('Failed to force create booking via RPC:', rpcError)
+            throw new Error(`Failed to force create booking: ${rpcError.message || JSON.stringify(rpcError)}`)
+          }
+
+          if (!rpcResult?.success) {
+            console.error('RPC returned error:', rpcResult?.error)
+            throw new Error(`Failed to force create booking: ${rpcResult?.error || 'Unknown error'}`)
+          }
+
+          // Fetch the full booking data
+          const { data: fullBooking } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('id', rpcResult.id)
+            .single()
+
+          insertedBooking = fullBooking || rpcResult
+          console.log('🔓 Booking FORCE created successfully:', insertedBooking)
+        } else {
+          // Normal insert (will be blocked by trigger if vehicle is already booked)
+          const { data, error: bookingError } = await supabase
+            .from('bookings')
+            .insert([bookingData])
+            .select()
+            .single()
+
+          if (bookingError) {
+            console.error('Failed to create booking:', bookingError)
+            console.error('Booking data that failed:', bookingData)
+            throw new Error(`Failed to create booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
+          }
+          insertedBooking = data
+          console.log('Booking created successfully:', insertedBooking)
         }
-        insertedBooking = data
-        console.log('Booking created successfully:', insertedBooking)
       }
 
       // Create Google Calendar event
