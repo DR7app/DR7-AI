@@ -308,16 +308,37 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                         <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4 mb-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <span className="text-theme-text-muted text-sm">Targa</span>
-                                    <p className="text-theme-text-primary font-bold">{editedVehicle.plate || '-'}</p>
+                                    <label className="text-theme-text-muted text-sm block mb-1">Targa</label>
+                                    <input
+                                        type="text"
+                                        value={editedVehicle.plate || ''}
+                                        onChange={(e) => updateField('plate', e.target.value.toUpperCase())}
+                                        className="w-full bg-gray-700 text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        placeholder="Inserisci targa"
+                                    />
                                 </div>
                                 <div>
-                                    <span className="text-theme-text-muted text-sm">Numero di Telaio</span>
-                                    <p className="text-theme-text-primary font-bold font-mono">{editedVehicle.chassis_number || '-'}</p>
+                                    <label className="text-theme-text-muted text-sm block mb-1">Numero di Telaio</label>
+                                    <input
+                                        type="text"
+                                        value={editedVehicle.chassis_number || ''}
+                                        onChange={(e) => updateField('chassis_number', e.target.value.toUpperCase())}
+                                        className="w-full bg-gray-700 text-theme-text-primary font-bold font-mono rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        placeholder="es. WVWZZZ3CZWE123456"
+                                    />
                                 </div>
                                 <div>
-                                    <span className="text-theme-text-muted text-sm">Chilometraggio</span>
-                                    <p className="text-theme-text-primary font-bold">{editedVehicle.current_km?.toLocaleString() || 0} km</p>
+                                    <label className="text-theme-text-muted text-sm block mb-1">Chilometraggio</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            value={editedVehicle.current_km || 0}
+                                            onChange={(e) => updateField('current_km', parseInt(e.target.value) || 0)}
+                                            onFocus={(e) => e.target.select()}
+                                            className="w-full bg-gray-700 text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        />
+                                        <span className="text-theme-text-muted">km</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
