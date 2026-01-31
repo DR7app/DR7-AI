@@ -69,32 +69,38 @@ export default function DailyCalendarTab() {
     async function loadDayBookings() {
         setLoading(true)
         try {
-            // Create start and end of the selected day in local time
-            const startOfDay = new Date(selectedDate)
-            startOfDay.setHours(0, 0, 0, 0)
+            // Format date for PostgreSQL timestamptz query (Rome timezone +01)
+            const year = selectedDate.getFullYear()
+            const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
+            const day = String(selectedDate.getDate()).padStart(2, '0')
 
-            const endOfDay = new Date(selectedDate)
-            endOfDay.setHours(23, 59, 59, 999)
+            const startStr = `${year}-${month}-${day} 00:00:00+01`
+            const endStr = `${year}-${month}-${day} 23:59:59+01`
 
-            // Convert to ISO strings for DB query - add buffer for timezone differences
-            // We look 1 day back and 1 day forward to be safe with UTC conversions
-            const queryStart = new Date(startOfDay)
-            queryStart.setDate(queryStart.getDate() - 1)
+            console.log('🔍 Daily Calendar loading for:', startStr)
 
-            const queryEnd = new Date(endOfDay)
-            queryEnd.setDate(queryEnd.getDate() + 1)
-
-            console.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
-
-            // Simplified query - load all recent bookings and filter client-side
+            // Server-side query - get all bookings where any date field falls on selected day
             const { data, error } = await supabase
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
-                .order('created_at', { ascending: false })
-                .limit(500)
+                .or(`pickup_date.gte.${startStr},pickup_date.lte.${endStr},dropoff_date.gte.${startStr},dropoff_date.lte.${endStr},appointment_date.gte.${startStr},appointment_date.lte.${endStr}`)
 
-            if (error) throw error
+            if (error) {
+                console.error('Query error, falling back to full load:', error)
+                // Fallback: load recent bookings
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .neq('status', 'cancelled')
+                    .order('created_at', { ascending: false })
+                    .limit(500)
+                if (fallbackError) throw fallbackError
+                console.log('📋 Fallback loaded:', fallbackData?.length, 'bookings')
+            }
+
+            const bookingsToProcess = data || []
+            console.log('📋 Daily Calendar loaded:', bookingsToProcess.length, 'bookings')
 
             const categorized: Booking[] = []
 
@@ -113,7 +119,7 @@ export default function DailyCalendarTab() {
                     romeComponents.year === selectedComponents.year
             }
 
-            data?.forEach((booking: any) => {
+            bookingsToProcess.forEach((booking: any) => {
                 // Check-In (Pickup)
                 if (isSameDay(booking.pickup_date)) {
                     const isRental = !booking.service_type ||
