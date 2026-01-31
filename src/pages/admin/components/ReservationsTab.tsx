@@ -316,6 +316,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     new_return_date: '',
     new_return_time: '10:00',
     additional_amount: '0',
+    extension_payment_status: 'pending' as 'paid' | 'pending',
     notes: ''
   })
   const [isExtending, setIsExtending] = useState(false)
@@ -1953,6 +1954,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       new_return_date: romeTime.toISOString().split('T')[0],
       new_return_time: romeTime.toISOString().split('T')[1].substring(0, 5),
       additional_amount: '0',
+      extension_payment_status: 'pending',
       notes: ''
     })
     setShowExtendModal(true)
@@ -1981,6 +1983,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             previous_dropoff: extendingBooking.dropoff_date,
             new_dropoff: newDropoffDateTime.toISOString(),
             additional_amount: additionalAmount,
+            payment_status: extendData.extension_payment_status, // 'paid' or 'pending'
             notes: extendData.notes
           }
         ]
@@ -4568,6 +4571,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
                     placeholder="0.00"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Stato Pagamento Estensione</label>
+                  <select
+                    value={extendData.extension_payment_status}
+                    onChange={(e) => setExtendData({ ...extendData, extension_payment_status: e.target.value as 'paid' | 'pending' })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="pending">Da Saldare</option>
+                    <option value="paid">Pagato</option>
+                  </select>
                 </div>
 
                 <div>
