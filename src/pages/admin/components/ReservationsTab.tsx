@@ -2421,7 +2421,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // ===== AVAILABILITY ENGINE VALIDATION =====
       // Check if the selected vehicle is actually available for the selected dates/times
       // SKIP this check when EDITING an existing booking - admin knows what they're doing
-      if (formData.vehicle_id && !editingId) {
+      // SKIP this check when showAllVehicles is enabled - admin is forcing the booking
+      if (formData.vehicle_id && !editingId && !showAllVehicles) {
         const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
 
         if (selectedVehicle) {
