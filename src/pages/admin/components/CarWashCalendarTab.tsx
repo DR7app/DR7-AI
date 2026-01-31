@@ -85,16 +85,23 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   useEffect(() => {
     loadData()
 
-    // Real-time subscription
+    // Real-time subscription for car wash bookings
     const subscription = supabase
-      .channel('carwash-calendar-updates')
+      .channel('carwash-calendar-realtime')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
-        () => loadData()
+        (payload) => {
+          console.log('🔄 CarWash Calendar: Real-time update received', payload.eventType, payload)
+          // Reload data when any booking changes
+          loadData()
+        }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('📡 CarWash Calendar subscription status:', status)
+      })
 
     return () => {
+      console.log('🔌 CarWash Calendar: Unsubscribing from real-time')
       subscription.unsubscribe()
     }
   }, [currentDate]) // Reload when month changes
@@ -127,6 +134,16 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       if (bookingsError) throw bookingsError
 
       console.log('🧼 CAR WASH CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0, `(${startDateStr} to ${endDateStr})`)
+      if (bookingsData && bookingsData.length > 0) {
+        console.log('🧼 CAR WASH CALENDAR - Bookings:', bookingsData.map(b => ({
+          id: b.id?.substring(0, 8),
+          date: b.appointment_date,
+          time: b.appointment_time,
+          service: b.service_name,
+          customer: b.customer_name,
+          status: b.status
+        })))
+      }
 
       setBookings(bookingsData || [])
     } catch (error) {
