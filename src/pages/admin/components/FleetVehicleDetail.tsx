@@ -410,9 +410,9 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             )
                                             window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
                                         }}
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
                                     >
-                                        <span>📅</span> Prenota Tagliando
+                                        Prenota Tagliando
                                     </button>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -466,9 +466,9 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             )
                                             window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
                                         }}
-                                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors"
                                     >
-                                        <span>🛞</span> Ordina Gomme
+                                        Ordina Gomme
                                     </button>
                                 </div>
 
