@@ -54,17 +54,32 @@ export default function UnpaidBookingsTab() {
   async function loadUnpaidBookings() {
     setLoading(true)
     try {
+      // Load bookings with pending payment OR bookings with pending extension payments
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
-        .in('payment_status', ['pending', 'unpaid'])
         .neq('status', 'cancelled')
         .neq('customer_name', 'Lavaggio Rientro')  // Exclude auto-generated car wash rientri
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      setBookings(data || [])
+      // Filter to include:
+      // 1. Bookings with pending/unpaid payment_status
+      // 2. Bookings with extension_history containing pending payments
+      const unpaidBookings = (data || []).filter(booking => {
+        // Check main payment status
+        if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
+          return true
+        }
+
+        // Check extension payments
+        const extensions = booking.booking_details?.extension_history || []
+        const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
+        return hasPendingExtension
+      })
+
+      setBookings(unpaidBookings)
     } catch (error) {
       console.error('Failed to load unpaid bookings:', error)
     } finally {
@@ -90,6 +105,35 @@ export default function UnpaidBookingsTab() {
       console.error('Failed to update payment status:', error)
       const errorMessage = error?.message || error?.details || JSON.stringify(error)
       alert(`Errore nell'aggiornamento dello stato pagamento:\n\n${errorMessage}\n\nID Prenotazione: ${bookingId.substring(0, 8)}`)
+    }
+  }
+
+  async function markExtensionsPaid(booking: UnpaidBooking) {
+    try {
+      // Update all pending extensions to paid
+      const extensions = booking.booking_details?.extension_history || []
+      const updatedExtensions = extensions.map((ext: any) => ({
+        ...ext,
+        payment_status: ext.payment_status === 'pending' ? 'paid' : ext.payment_status
+      }))
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          booking_details: {
+            ...booking.booking_details,
+            extension_history: updatedExtensions
+          }
+        })
+        .eq('id', booking.id)
+
+      if (error) throw error
+
+      alert('Estensioni segnate come pagate!')
+      loadUnpaidBookings()
+    } catch (error: any) {
+      console.error('Failed to update extension payment status:', error)
+      alert('Errore: ' + (error.message || error))
     }
   }
 
@@ -258,24 +302,33 @@ export default function UnpaidBookingsTab() {
     : bookings.filter(b => b.service_type === filterService)
 
   const getRemainingAmount = (booking: UnpaidBooking) => {
-    const total = booking.price_total || 0
+    let remaining = 0
 
-    // For "pending" (Da Saldare) status, check if this is truly unpaid
-    // If payment_status is "pending" and amountPaid is 0 or equals total (incorrectly set), 
-    // we should show the full amount as remaining
-    if (booking.payment_status === 'pending') {
+    // Check main booking payment
+    if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
+      const total = booking.price_total || 0
       const paid = booking.booking_details?.amountPaid || 0
-      // If nothing paid (0) or if paid equals total (data error), show full amount
       if (paid === 0 || paid === total) {
-        return total
+        remaining += total
+      } else {
+        remaining += Math.max(0, total - paid)
       }
-      // Otherwise show actual remaining (partial payment case)
-      return Math.max(0, total - paid)
     }
 
-    // For "unpaid" status, always show full amount
-    const paid = booking.booking_details?.amountPaid || 0
-    return Math.max(0, total - paid)
+    // Add pending extension payments
+    const extensions = booking.booking_details?.extension_history || []
+    extensions.forEach((ext: any) => {
+      if (ext.payment_status === 'pending' && ext.additional_amount) {
+        remaining += (ext.additional_amount * 100) // Convert to cents
+      }
+    })
+
+    return remaining
+  }
+
+  const getPendingExtensions = (booking: UnpaidBooking) => {
+    const extensions = booking.booking_details?.extension_history || []
+    return extensions.filter((ext: any) => ext.payment_status === 'pending')
   }
 
   const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
@@ -520,6 +573,11 @@ export default function UnpaidBookingsTab() {
                         su €{(booking.price_total / 100).toFixed(2)}
                       </div>
                     )}
+                    {getPendingExtensions(booking).length > 0 && (
+                      <div className="text-xs text-purple-400 mt-1">
+                        incl. {getPendingExtensions(booking).length} estensione/i
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'pending'
@@ -530,13 +588,23 @@ export default function UnpaidBookingsTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                      >
-                        Segna Pagato
-                      </button>
+                    <div className="flex gap-2 flex-wrap">
+                      {(booking.payment_status === 'pending' || booking.payment_status === 'unpaid') && (
+                        <button
+                          onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                        >
+                          Segna Pagato
+                        </button>
+                      )}
+                      {getPendingExtensions(booking).length > 0 && (
+                        <button
+                          onClick={() => markExtensionsPaid(booking)}
+                          className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                        >
+                          Estensioni Pagate
+                        </button>
+                      )}
                       <button
                         onClick={() => deleteSingleBooking(booking.id)}
                         className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
