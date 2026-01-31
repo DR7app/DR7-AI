@@ -15,12 +15,15 @@ interface VehicleInventory {
     oil_type: string | null
     oil_quantity: number
     oil_supplier_url: string | null
+    oil_supplier_phone: string | null
     pastiglie_ant_model: string | null
     pastiglie_ant_quantity: number
     pastiglie_ant_supplier_url: string | null
+    pastiglie_ant_supplier_phone: string | null
     pastiglie_post_model: string | null
     pastiglie_post_quantity: number
     pastiglie_post_supplier_url: string | null
+    pastiglie_post_supplier_phone: string | null
     updated_at: string
 }
 
@@ -98,12 +101,15 @@ export default function FleetInventory() {
                         oil_type: editForm.oil_type || null,
                         oil_quantity: editForm.oil_quantity || 0,
                         oil_supplier_url: editForm.oil_supplier_url || null,
+                        oil_supplier_phone: editForm.oil_supplier_phone || null,
                         pastiglie_ant_model: editForm.pastiglie_ant_model || null,
                         pastiglie_ant_quantity: editForm.pastiglie_ant_quantity || 0,
                         pastiglie_ant_supplier_url: editForm.pastiglie_ant_supplier_url || null,
+                        pastiglie_ant_supplier_phone: editForm.pastiglie_ant_supplier_phone || null,
                         pastiglie_post_model: editForm.pastiglie_post_model || null,
                         pastiglie_post_quantity: editForm.pastiglie_post_quantity || 0,
-                        pastiglie_post_supplier_url: editForm.pastiglie_post_supplier_url || null
+                        pastiglie_post_supplier_url: editForm.pastiglie_post_supplier_url || null,
+                        pastiglie_post_supplier_phone: editForm.pastiglie_post_supplier_phone || null
                     })
 
                 if (error) throw error
@@ -124,12 +130,15 @@ export default function FleetInventory() {
             oil_type: vehicle.inventory?.oil_type || '',
             oil_quantity: vehicle.inventory?.oil_quantity || 0,
             oil_supplier_url: vehicle.inventory?.oil_supplier_url || '',
+            oil_supplier_phone: vehicle.inventory?.oil_supplier_phone || '',
             pastiglie_ant_model: vehicle.inventory?.pastiglie_ant_model || '',
             pastiglie_ant_quantity: vehicle.inventory?.pastiglie_ant_quantity || 0,
             pastiglie_ant_supplier_url: vehicle.inventory?.pastiglie_ant_supplier_url || '',
+            pastiglie_ant_supplier_phone: vehicle.inventory?.pastiglie_ant_supplier_phone || '',
             pastiglie_post_model: vehicle.inventory?.pastiglie_post_model || '',
             pastiglie_post_quantity: vehicle.inventory?.pastiglie_post_quantity || 0,
-            pastiglie_post_supplier_url: vehicle.inventory?.pastiglie_post_supplier_url || ''
+            pastiglie_post_supplier_url: vehicle.inventory?.pastiglie_post_supplier_url || '',
+            pastiglie_post_supplier_phone: vehicle.inventory?.pastiglie_post_supplier_phone || ''
         })
     }
 
@@ -139,6 +148,50 @@ export default function FleetInventory() {
         } else {
             alert('Nessun fornitore configurato. Modifica il veicolo per aggiungere il link.')
         }
+    }
+
+    function formatPhoneForWhatsApp(phone: string): string {
+        // Remove spaces, dashes, and + sign
+        let cleaned = phone.replace(/[\s\-\+]/g, '')
+        // Add Italy prefix if starts with 0
+        if (cleaned.startsWith('0')) {
+            cleaned = '39' + cleaned.substring(1)
+        }
+        // Add Italy prefix if 10 digits without prefix
+        if (!cleaned.startsWith('39') && cleaned.length === 10) {
+            cleaned = '39' + cleaned
+        }
+        return cleaned
+    }
+
+    function sendWhatsAppOrder(vehicle: VehicleWithInventory, itemType: 'oil' | 'pastiglie_ant' | 'pastiglie_post') {
+        const inv = vehicle.inventory
+        let phone = ''
+        let message = ''
+
+        if (itemType === 'oil') {
+            phone = inv?.oil_supplier_phone || ''
+            const oilType = inv?.oil_type || 'Olio motore'
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Olio Motore*\nTipo: ${oilType}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+        } else if (itemType === 'pastiglie_ant') {
+            phone = inv?.pastiglie_ant_supplier_phone || ''
+            const model = inv?.pastiglie_ant_model || 'Pastiglie freno anteriori'
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+        } else if (itemType === 'pastiglie_post') {
+            phone = inv?.pastiglie_post_supplier_phone || ''
+            const model = inv?.pastiglie_post_model || 'Pastiglie freno posteriori'
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+        }
+
+        if (!phone) {
+            alert('Nessun numero di telefono fornitore configurato. Modifica il veicolo per aggiungere il numero.')
+            return
+        }
+
+        const formattedPhone = formatPhoneForWhatsApp(phone)
+        const encodedMessage = encodeURIComponent(message)
+        const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`
+        window.open(whatsappUrl, '_blank')
     }
 
     function getStatusColor(quantity: number): string {
@@ -236,7 +289,7 @@ export default function FleetInventory() {
                                     {/* Oil Section */}
                                     <div className="border-b border-gray-700 pb-4">
                                         <h4 className="font-semibold text-theme-text-primary mb-3">Olio Motore</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Tipo Olio</label>
                                                 <input
@@ -258,7 +311,17 @@ export default function FleetInventory() {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
+                                                <input
+                                                    type="tel"
+                                                    value={editForm.oil_supplier_phone || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, oil_supplier_phone: e.target.value })}
+                                                    placeholder="es. 3331234567"
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore (opz.)</label>
                                                 <input
                                                     type="url"
                                                     value={editForm.oil_supplier_url || ''}
@@ -273,7 +336,7 @@ export default function FleetInventory() {
                                     {/* Front Brake Pads Section */}
                                     <div className="border-b border-gray-700 pb-4">
                                         <h4 className="font-semibold text-theme-text-primary mb-3">Pastiglie Freno Anteriori</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
                                                 <input
@@ -295,7 +358,17 @@ export default function FleetInventory() {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
+                                                <input
+                                                    type="tel"
+                                                    value={editForm.pastiglie_ant_supplier_phone || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_supplier_phone: e.target.value })}
+                                                    placeholder="es. 3331234567"
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore (opz.)</label>
                                                 <input
                                                     type="url"
                                                     value={editForm.pastiglie_ant_supplier_url || ''}
@@ -310,7 +383,7 @@ export default function FleetInventory() {
                                     {/* Rear Brake Pads Section */}
                                     <div className="pb-2">
                                         <h4 className="font-semibold text-theme-text-primary mb-3">Pastiglie Freno Posteriori</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
                                                 <input
@@ -332,7 +405,17 @@ export default function FleetInventory() {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
+                                                <input
+                                                    type="tel"
+                                                    value={editForm.pastiglie_post_supplier_phone || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_supplier_phone: e.target.value })}
+                                                    placeholder="es. 3331234567"
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore (opz.)</label>
                                                 <input
                                                     type="url"
                                                     value={editForm.pastiglie_post_supplier_url || ''}
@@ -374,14 +457,16 @@ export default function FleetInventory() {
                                         <p className="text-xs text-theme-text-muted mb-2 truncate">
                                             {inv?.oil_type || 'Tipo non specificato'}
                                         </p>
-                                        {oilQty === 0 && (
-                                            <button
-                                                onClick={() => openSupplier(inv?.oil_supplier_url)}
-                                                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
-                                            >
-                                                Ordina Olio
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={() => sendWhatsAppOrder(vehicle, 'oil')}
+                                            className={`w-full py-2 rounded text-sm font-medium ${
+                                                oilQty === 0
+                                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                            }`}
+                                        >
+                                            Ordina via WhatsApp
+                                        </button>
                                     </div>
 
                                     {/* Front Brake Pads */}
@@ -395,14 +480,16 @@ export default function FleetInventory() {
                                         <p className="text-xs text-theme-text-muted mb-2 truncate">
                                             {inv?.pastiglie_ant_model || 'Modello non specificato'}
                                         </p>
-                                        {pastiglieAntQty === 0 && (
-                                            <button
-                                                onClick={() => openSupplier(inv?.pastiglie_ant_supplier_url)}
-                                                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
-                                            >
-                                                Ordina Pastiglie
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={() => sendWhatsAppOrder(vehicle, 'pastiglie_ant')}
+                                            className={`w-full py-2 rounded text-sm font-medium ${
+                                                pastiglieAntQty === 0
+                                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                            }`}
+                                        >
+                                            Ordina via WhatsApp
+                                        </button>
                                     </div>
 
                                     {/* Rear Brake Pads */}
@@ -416,14 +503,16 @@ export default function FleetInventory() {
                                         <p className="text-xs text-theme-text-muted mb-2 truncate">
                                             {inv?.pastiglie_post_model || 'Modello non specificato'}
                                         </p>
-                                        {pastigliePostQty === 0 && (
-                                            <button
-                                                onClick={() => openSupplier(inv?.pastiglie_post_supplier_url)}
-                                                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
-                                            >
-                                                Ordina Pastiglie
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={() => sendWhatsAppOrder(vehicle, 'pastiglie_post')}
+                                            className={`w-full py-2 rounded text-sm font-medium ${
+                                                pastigliePostQty === 0
+                                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                            }`}
+                                        >
+                                            Ordina via WhatsApp
+                                        </button>
                                     </div>
                                 </div>
                             )}
