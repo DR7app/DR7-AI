@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
-import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 
 // --- Configuration ---
