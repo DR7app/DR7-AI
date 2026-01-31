@@ -109,45 +109,56 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   async function loadData() {
     setLoading(true)
     try {
-      // Calculate date range for ONLY current month (more performant)
+      // Calculate date range for current month
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth()
-
-      // Start: first day of current month at 00:00:00
       const startDate = new Date(year, month, 1, 0, 0, 0)
-      const startDateISO = startDate.toISOString()
-
-      // End: last day of current month at 23:59:59
       const endDate = new Date(year, month + 1, 0, 23, 59, 59)
-      const endDateISO = endDate.toISOString()
 
-      console.log('🔍 CarWash Calendar loading for range:', startDateISO, 'to', endDateISO)
+      console.log('🔍 CarWash Calendar loading for:', year, month + 1)
 
-      // Load car wash bookings (exclude cancelled) - use full timestamp comparison
+      // Load ALL car wash bookings - some might have appointment_date NULL but pickup_date set
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
-        .gte('appointment_date', startDateISO)
-        .lte('appointment_date', endDateISO)
-        .order('appointment_date', { ascending: true })
+        .order('created_at', { ascending: false })
 
       if (bookingsError) throw bookingsError
 
-      console.log('🧼 CAR WASH CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0, `(${startDateISO} to ${endDateISO})`)
-      if (bookingsData && bookingsData.length > 0) {
-        console.log('🧼 CAR WASH CALENDAR - Bookings:', bookingsData.map(b => ({
-          id: b.id?.substring(0, 8),
-          date: b.appointment_date,
-          time: b.appointment_time,
-          service: b.service_name,
-          customer: b.customer_name,
-          status: b.status
-        })))
-      }
+      console.log('🧼 CAR WASH CALENDAR - Total car wash bookings:', bookingsData?.length || 0)
 
-      setBookings(bookingsData || [])
+      // Filter to current month - check both appointment_date AND pickup_date
+      const filteredBookings = (bookingsData || []).filter(b => {
+        // Use appointment_date if available, otherwise fall back to pickup_date
+        const dateToCheck = b.appointment_date || b.pickup_date
+        if (!dateToCheck) {
+          console.log('⚠️ Booking without date:', b.id, b.customer_name)
+          return false
+        }
+
+        const bookingDate = new Date(dateToCheck)
+        const inRange = bookingDate >= startDate && bookingDate <= endDate
+
+        if (inRange) {
+          console.log('✅ Booking in range:', b.customer_name, dateToCheck)
+        }
+
+        return inRange
+      }).map(b => ({
+        ...b,
+        // Normalize: ensure appointment_date is set (use pickup_date as fallback)
+        appointment_date: b.appointment_date || b.pickup_date,
+        appointment_time: b.appointment_time || (b.pickup_date ? new Date(b.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }) : '09:00')
+      }))
+
+      console.log('🧼 CAR WASH CALENDAR - Filtered for month:', filteredBookings.length)
+      filteredBookings.forEach(b => {
+        console.log(`  - ${b.customer_name}: ${b.appointment_date} @ ${b.appointment_time}`)
+      })
+
+      setBookings(filteredBookings)
     } catch (error) {
       console.error('Failed to load car wash bookings:', error)
     } finally {

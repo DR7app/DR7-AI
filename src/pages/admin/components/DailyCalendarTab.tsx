@@ -84,11 +84,15 @@ export default function DailyCalendarTab() {
             const queryEnd = new Date(endOfDay)
             queryEnd.setDate(queryEnd.getDate() + 1)
 
+            console.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
+
+            // Simplified query - load all recent bookings and filter client-side
             const { data, error } = await supabase
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
-                .or(`pickup_date.gte.${queryStart.toISOString()},pickup_date.lt.${queryEnd.toISOString()},dropoff_date.gte.${queryStart.toISOString()},dropoff_date.lt.${queryEnd.toISOString()},appointment_date.gte.${queryStart.toISOString()},appointment_date.lt.${queryEnd.toISOString()}`)
+                .order('created_at', { ascending: false })
+                .limit(500)
 
             if (error) throw error
 
