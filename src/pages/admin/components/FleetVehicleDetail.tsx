@@ -304,6 +304,24 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                     <div>
                         <h3 className="text-xl text-theme-text-primary mb-4">Cruscotto</h3>
 
+                        {/* Vehicle Info Card */}
+                        <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <span className="text-theme-text-muted text-sm">Targa</span>
+                                    <p className="text-theme-text-primary font-bold">{editedVehicle.plate || '-'}</p>
+                                </div>
+                                <div>
+                                    <span className="text-theme-text-muted text-sm">Numero di Telaio</span>
+                                    <p className="text-theme-text-primary font-bold font-mono">{editedVehicle.chassis_number || '-'}</p>
+                                </div>
+                                <div>
+                                    <span className="text-theme-text-muted text-sm">Chilometraggio</span>
+                                    <p className="text-theme-text-primary font-bold">{editedVehicle.current_km?.toLocaleString() || 0} km</p>
+                                </div>
+                            </div>
+                        </div>
+
                         {alerts.length === 0 ? (
                             <div className="bg-green-900/20 border border-green-700 rounded-full p-4">
                                 <p className="text-green-400">Nessun avviso. Tutto in regola!</p>
@@ -563,6 +581,16 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             value={editedVehicle.plate || ''}
                                             onChange={(e) => updateField('plate', e.target.value)}
                                             className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Numero di Telaio (VIN)</label>
+                                        <input
+                                            type="text"
+                                            value={editedVehicle.chassis_number || ''}
+                                            onChange={(e) => updateField('chassis_number', e.target.value.toUpperCase())}
+                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none font-mono"
+                                            placeholder="es. WVWZZZ3CZWE123456"
                                         />
                                     </div>
                                     <div>

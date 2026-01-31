@@ -35,6 +35,7 @@ export interface Vehicle {
   id: string
   display_name: string
   plate: string | null
+  chassis_number?: string | null  // Numero di Telaio (VIN)
   status: 'available' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
   category: 'exotic' | 'urban' | 'aziendali' | null
