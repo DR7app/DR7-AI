@@ -3088,6 +3088,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Send WhatsApp notification for car rental
       if (!editingId) { // Only for new bookings
         try {
+          // Calculate amount paid for notification
+          const totalCents = Math.round(parseFloat(formData.total_amount) * 100)
+          const paymentStatus = formData.payment_status || 'pending'
+          const amountPaid = paymentStatus === 'paid' ? totalCents : 0
+
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3102,8 +3107,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 pickup_date: `${formData.pickup_date}T${formData.pickup_time}:00`,
                 dropoff_date: `${formData.return_date}T${formData.return_time}:00`,
                 pickup_location: pickupLocationLabel,
-                price_total: parseFloat(formData.total_amount) * 100, // Convert to cents
-                payment_status: formData.payment_status || 'pending'
+                insurance_option: 'KASKO_BASE', // Always Kasko included
+                price_total: totalCents,
+                payment_status: paymentStatus,
+                booking_details: {
+                  amountPaid: amountPaid,
+                  insuranceOption: 'KASKO_BASE'
+                }
               }
             })
           })

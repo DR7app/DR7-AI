@@ -624,6 +624,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Send WhatsApp notification
     try {
+      // Calculate amount paid for notification
+      const paymentStatus = formData.payment_status || 'pending'
+      const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
+
       await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -631,15 +635,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           booking: {
             id: data.id || '',
             service_type: 'car_wash',
+            service_name: formData.service_name,
             customer_name: customerName,
             customer_email: customerEmail,
             customer_phone: customerPhone,
-            vehicle_name: formData.service_name,
-            pickup_date: appointmentDateTime,
-            dropoff_date: appointmentDateTime,
-            pickup_location: 'DR7 Empire - Car Wash',
+            appointment_date: appointmentDateTime,
             price_total: totalPrice * 100,
-            payment_status: formData.payment_status || 'pending'
+            payment_status: paymentStatus,
+            booking_details: {
+              serviceName: formData.service_name,
+              amountPaid: amountPaid,
+              notes: formData.notes || ''
+            }
           }
         })
       })
