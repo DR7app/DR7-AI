@@ -285,6 +285,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
 
   // Missing Data Modal State
   // Missing Data Modal State
@@ -713,6 +714,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // FINAL vehicles for dropdown - trust the availability engine completely
   // The availability engine (vehicleAvailability.ts) handles all conflict detection with proper Rome timezone
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
+    // Admin override: show ALL vehicles if checkbox is checked
+    if (showAllVehicles) {
+      console.log('[Vehicle Dropdown] ADMIN OVERRIDE: Showing all vehicles:', vehicles.length)
+      return vehicles
+    }
+
     // Start with the base vehicles (already filtered by availability engine)
     let result = [...baseVehiclesForDropdown]
 
@@ -745,7 +752,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     console.log('[Vehicle Dropdown] Final list:', result.length, 'vehicles:', result.map(v => v.display_name))
 
     return result
-  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes])
+  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes, showAllVehicles])
 
   const LOCATIONS = [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
@@ -3580,29 +3587,40 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     </p>
                   </div>
                 ) : (
-                  <Select
-                    label={`Veicolo (${vehiclesForDropdown.length} disponibili)`}
-                    required
-                    value={formData.vehicle_id}
-                    onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
-                    options={[
-                      { value: '', label: 'Seleziona veicolo...' },
-                      ...vehiclesForDropdown.map((v: Vehicle) => {
-                        let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
-                        const earliestTime = vehicleEarliestTimes.get(v.id)
-                        if (earliestTime) {
-                          const hours = earliestTime.getHours().toString().padStart(2, '0')
-                          const minutes = earliestTime.getMinutes().toString().padStart(2, '0')
-                          label += ` (disponibile dalle ${hours}:${minutes})`
-                        }
-                        return { value: v.id, label }
-                      })
-                    ]}
-                  />
+                  <>
+                    <Select
+                      label={`Veicolo (${vehiclesForDropdown.length} ${showAllVehicles ? 'totali' : 'disponibili'})`}
+                      required
+                      value={formData.vehicle_id}
+                      onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
+                      options={[
+                        { value: '', label: 'Seleziona veicolo...' },
+                        ...vehiclesForDropdown.map((v: Vehicle) => {
+                          let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
+                          const earliestTime = vehicleEarliestTimes.get(v.id)
+                          if (earliestTime && !showAllVehicles) {
+                            const hours = earliestTime.getHours().toString().padStart(2, '0')
+                            const minutes = earliestTime.getMinutes().toString().padStart(2, '0')
+                            label += ` (disponibile dalle ${hours}:${minutes})`
+                          }
+                          return { value: v.id, label }
+                        })
+                      ]}
+                    />
+                    <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showAllVehicles}
+                        onChange={(e) => setShowAllVehicles(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-amber-500 focus:ring-amber-500"
+                      />
+                      <span className="text-sm text-amber-400">Mostra tutti i veicoli (ignora disponibilità)</span>
+                    </label>
+                  </>
                 )}
-                {formData.pickup_date && formData.return_date && vehiclesForDropdown.length === 0 && (
+                {formData.pickup_date && formData.return_date && vehiclesForDropdown.length === 0 && !showAllVehicles && (
                   <p className="text-red-400 text-sm mt-2">
-                    Nessun veicolo disponibile per le date selezionate
+                    Nessun veicolo disponibile per le date selezionate. Usa la checkbox sopra per mostrare tutti.
                   </p>
                 )}
               </div>
