@@ -3787,19 +3787,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               )}
             </div>
 
-            {/* Kasko Selection & Deposit */}
+            {/* Kasko & Deposit */}
             <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
               <h4 className="text-theme-text-primary font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Select
-                  label="Opzione Kasko"
-                  value={formData.insurance_option}
-                  onChange={(e) => setFormData({ ...formData, insurance_option: e.target.value as KaskoTier })}
-                  options={
-                    getInsuranceOptions(vehicles.find(v => v.id === formData.vehicle_id))
-                      .map(o => ({ value: o.id, label: `${o.label} (+€${o.pricePerDay}/gg)` }))
-                  }
-                />
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Assicurazione</label>
+                  <div className="px-3 py-2 bg-gray-700 border border-theme-border rounded-lg text-theme-text-primary">
+                    Kasko (inclusa)
+                  </div>
+                </div>
                 <Input
                   label="Cauzione (€)"
                   type="number"
