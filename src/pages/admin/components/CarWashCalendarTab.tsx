@@ -113,27 +113,29 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth()
 
-      // Start: first day of current month
-      const startDate = new Date(year, month, 1)
-      const startDateStr = startDate.toISOString().split('T')[0]
+      // Start: first day of current month at 00:00:00
+      const startDate = new Date(year, month, 1, 0, 0, 0)
+      const startDateISO = startDate.toISOString()
 
-      // End: last day of current month
-      const endDate = new Date(year, month + 1, 0)
-      const endDateStr = endDate.toISOString().split('T')[0]
+      // End: last day of current month at 23:59:59
+      const endDate = new Date(year, month + 1, 0, 23, 59, 59)
+      const endDateISO = endDate.toISOString()
 
-      // Load car wash bookings (exclude cancelled) - OPTIMIZED: only load relevant date range
+      console.log('🔍 CarWash Calendar loading for range:', startDateISO, 'to', endDateISO)
+
+      // Load car wash bookings (exclude cancelled) - use full timestamp comparison
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
-        .gte('appointment_date', startDateStr)
-        .lte('appointment_date', endDateStr)
+        .gte('appointment_date', startDateISO)
+        .lte('appointment_date', endDateISO)
         .order('appointment_date', { ascending: true })
 
       if (bookingsError) throw bookingsError
 
-      console.log('🧼 CAR WASH CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0, `(${startDateStr} to ${endDateStr})`)
+      console.log('🧼 CAR WASH CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0, `(${startDateISO} to ${endDateISO})`)
       if (bookingsData && bookingsData.length > 0) {
         console.log('🧼 CAR WASH CALENDAR - Bookings:', bookingsData.map(b => ({
           id: b.id?.substring(0, 8),
