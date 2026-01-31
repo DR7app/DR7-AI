@@ -1,118 +1,162 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 
-interface InventoryItem {
+interface Vehicle {
     id: string
-    item_type: 'olio' | 'pastiglie_ant' | 'pastiglie_post'
-    quantity: number
-    unit: string
-    supplier_url: string | null
+    display_name: string
+    plate: string | null
+    category: string | null
+    metadata: Record<string, any> | null
+}
+
+interface VehicleInventory {
+    id: string
+    vehicle_id: string
+    oil_type: string | null
+    oil_quantity: number
+    oil_supplier_url: string | null
+    pastiglie_ant_model: string | null
+    pastiglie_ant_quantity: number
+    pastiglie_ant_supplier_url: string | null
+    pastiglie_post_model: string | null
+    pastiglie_post_quantity: number
+    pastiglie_post_supplier_url: string | null
     updated_at: string
 }
 
-const SUPPLIER_URLS = {
-    olio: 'https://www.amazon.it/s?k=olio+motore+5w30',
-    pastiglie_ant: 'https://www.amazon.it/s?k=pastiglie+freno+anteriori',
-    pastiglie_post: 'https://www.amazon.it/s?k=pastiglie+freno+posteriori'
+interface VehicleWithInventory extends Vehicle {
+    inventory?: VehicleInventory
 }
 
 export default function FleetInventory() {
-    const [inventory, setInventory] = useState<InventoryItem[]>([])
+    const [vehicles, setVehicles] = useState<VehicleWithInventory[]>([])
     const [loading, setLoading] = useState(true)
-    const [editing, setEditing] = useState<string | null>(null)
-    const [editValue, setEditValue] = useState<number>(0)
+    const [editingVehicle, setEditingVehicle] = useState<string | null>(null)
+    const [editForm, setEditForm] = useState<Partial<VehicleInventory>>({})
 
     useEffect(() => {
-        loadInventory()
+        loadVehiclesWithInventory()
     }, [])
 
-    async function loadInventory() {
+    async function loadVehiclesWithInventory() {
         try {
             setLoading(true)
-            const { data, error } = await supabase
-                .from('fleet_inventory')
+
+            // Load all vehicles
+            const { data: vehiclesData, error: vehiclesError } = await supabase
+                .from('vehicles')
                 .select('*')
-                .order('item_type')
+                .neq('status', 'retired')
+                .order('display_name')
 
-            if (error) throw error
+            if (vehiclesError) throw vehiclesError
 
-            // If no inventory exists, create default items
-            if (!data || data.length === 0) {
-                await initializeInventory()
-                return
+            // Load inventory for all vehicles
+            const { data: inventoryData, error: inventoryError } = await supabase
+                .from('fleet_vehicle_inventory')
+                .select('*')
+
+            if (inventoryError && inventoryError.code !== 'PGRST116') {
+                console.error('Inventory table may not exist yet:', inventoryError)
             }
 
-            setInventory(data)
+            // Merge vehicles with their inventory
+            const vehiclesWithInventory = (vehiclesData || []).map(vehicle => ({
+                ...vehicle,
+                inventory: inventoryData?.find(inv => inv.vehicle_id === vehicle.id)
+            }))
+
+            setVehicles(vehiclesWithInventory)
         } catch (error) {
-            console.error('Error loading inventory:', error)
+            console.error('Error loading vehicles:', error)
         } finally {
             setLoading(false)
         }
     }
 
-    async function initializeInventory() {
-        const defaultItems = [
-            { item_type: 'olio', quantity: 0, unit: 'litri', supplier_url: SUPPLIER_URLS.olio },
-            { item_type: 'pastiglie_ant', quantity: 0, unit: 'pezzi', supplier_url: SUPPLIER_URLS.pastiglie_ant },
-            { item_type: 'pastiglie_post', quantity: 0, unit: 'pezzi', supplier_url: SUPPLIER_URLS.pastiglie_post }
-        ]
-
-        const { data, error } = await supabase
-            .from('fleet_inventory')
-            .insert(defaultItems)
-            .select()
-
-        if (error) {
-            console.error('Error initializing inventory:', error)
-            return
-        }
-
-        setInventory(data || [])
-        setLoading(false)
-    }
-
-    async function updateQuantity(itemId: string, newQuantity: number) {
+    async function saveInventory(vehicleId: string) {
         try {
-            const { error } = await supabase
-                .from('fleet_inventory')
-                .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-                .eq('id', itemId)
+            const existingInventory = vehicles.find(v => v.id === vehicleId)?.inventory
 
-            if (error) throw error
+            if (existingInventory) {
+                // Update existing
+                const { error } = await supabase
+                    .from('fleet_vehicle_inventory')
+                    .update({
+                        ...editForm,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('vehicle_id', vehicleId)
 
-            setInventory(prev => prev.map(item =>
-                item.id === itemId ? { ...item, quantity: newQuantity } : item
-            ))
-            setEditing(null)
+                if (error) throw error
+            } else {
+                // Insert new
+                const { error } = await supabase
+                    .from('fleet_vehicle_inventory')
+                    .insert({
+                        vehicle_id: vehicleId,
+                        oil_type: editForm.oil_type || null,
+                        oil_quantity: editForm.oil_quantity || 0,
+                        oil_supplier_url: editForm.oil_supplier_url || null,
+                        pastiglie_ant_model: editForm.pastiglie_ant_model || null,
+                        pastiglie_ant_quantity: editForm.pastiglie_ant_quantity || 0,
+                        pastiglie_ant_supplier_url: editForm.pastiglie_ant_supplier_url || null,
+                        pastiglie_post_model: editForm.pastiglie_post_model || null,
+                        pastiglie_post_quantity: editForm.pastiglie_post_quantity || 0,
+                        pastiglie_post_supplier_url: editForm.pastiglie_post_supplier_url || null
+                    })
+
+                if (error) throw error
+            }
+
+            setEditingVehicle(null)
+            setEditForm({})
+            loadVehiclesWithInventory()
         } catch (error) {
-            console.error('Error updating quantity:', error)
-            alert('Errore aggiornamento quantità')
+            console.error('Error saving inventory:', error)
+            alert('Errore nel salvataggio')
         }
     }
 
-    function getItemLabel(itemType: string): string {
-        switch (itemType) {
-            case 'olio': return 'Olio Motore'
-            case 'pastiglie_ant': return 'Pastiglie Freno Anteriori'
-            case 'pastiglie_post': return 'Pastiglie Freno Posteriori'
-            default: return itemType
-        }
+    function startEditing(vehicle: VehicleWithInventory) {
+        setEditingVehicle(vehicle.id)
+        setEditForm({
+            oil_type: vehicle.inventory?.oil_type || '',
+            oil_quantity: vehicle.inventory?.oil_quantity || 0,
+            oil_supplier_url: vehicle.inventory?.oil_supplier_url || '',
+            pastiglie_ant_model: vehicle.inventory?.pastiglie_ant_model || '',
+            pastiglie_ant_quantity: vehicle.inventory?.pastiglie_ant_quantity || 0,
+            pastiglie_ant_supplier_url: vehicle.inventory?.pastiglie_ant_supplier_url || '',
+            pastiglie_post_model: vehicle.inventory?.pastiglie_post_model || '',
+            pastiglie_post_quantity: vehicle.inventory?.pastiglie_post_quantity || 0,
+            pastiglie_post_supplier_url: vehicle.inventory?.pastiglie_post_supplier_url || ''
+        })
     }
 
-    function getItemIcon(itemType: string): string {
-        switch (itemType) {
-            case 'olio': return 'O'
-            case 'pastiglie_ant': return 'FA'
-            case 'pastiglie_post': return 'FP'
-            default: return '?'
-        }
-    }
-
-    function openSupplier(url: string | null) {
+    function openSupplier(url: string | null | undefined) {
         if (url) {
             window.open(url, '_blank')
+        } else {
+            alert('Nessun fornitore configurato. Modifica il veicolo per aggiungere il link.')
         }
     }
+
+    function getStatusColor(quantity: number): string {
+        if (quantity === 0) return 'bg-red-900/30 border-red-500/50'
+        if (quantity <= 2) return 'bg-yellow-900/30 border-yellow-500/50'
+        return 'bg-green-900/30 border-green-500/50'
+    }
+
+    function getQuantityColor(quantity: number): string {
+        if (quantity === 0) return 'text-red-400'
+        if (quantity <= 2) return 'text-yellow-400'
+        return 'text-green-400'
+    }
+
+    // Count vehicles needing attention
+    const vehiclesNeedingOil = vehicles.filter(v => (v.inventory?.oil_quantity || 0) === 0).length
+    const vehiclesNeedingPastiglieAnt = vehicles.filter(v => (v.inventory?.pastiglie_ant_quantity || 0) === 0).length
+    const vehiclesNeedingPastigliePost = vehicles.filter(v => (v.inventory?.pastiglie_post_quantity || 0) === 0).length
 
     if (loading) return <div className="text-theme-text-muted">Caricamento magazzino...</div>
 
@@ -120,169 +164,272 @@ export default function FleetInventory() {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-theme-text-primary">Magazzino</h2>
+                    <h2 className="text-2xl font-bold text-theme-text-primary">Magazzino Veicoli</h2>
                     <p className="text-sm text-theme-text-muted mt-1">
-                        Gestione scorte ricambi e materiali
+                        Gestione scorte olio e pastiglie per ogni veicolo
                     </p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {inventory.map(item => (
-                    <div
-                        key={item.id}
-                        className={`rounded-lg border p-6 ${
-                            item.quantity === 0
-                                ? 'border-red-500/50 bg-red-900/20'
-                                : item.quantity <= 2
-                                    ? 'border-yellow-500/50 bg-yellow-900/20'
-                                    : 'border-gray-700/30 bg-theme-bg-card'
-                        }`}
-                    >
-                        <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-lg font-bold ${
-                                    item.quantity === 0
-                                        ? 'bg-red-900 text-red-200'
-                                        : item.quantity <= 2
-                                            ? 'bg-yellow-900 text-yellow-200'
-                                            : 'bg-blue-900 text-blue-200'
-                                }`}>
-                                    {getItemIcon(item.item_type)}
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-theme-text-primary">
-                                        {getItemLabel(item.item_type)}
-                                    </h3>
-                                    <p className="text-sm text-theme-text-muted">
-                                        Unità: {item.unit}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className={`rounded-lg p-4 border ${vehiclesNeedingOil > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
+                    <div className="text-3xl font-bold mb-1 ${vehiclesNeedingOil > 0 ? 'text-red-400' : 'text-green-400'}">
+                        {vehiclesNeedingOil}
+                    </div>
+                    <div className="text-sm text-theme-text-muted">Veicoli senza olio</div>
+                </div>
+                <div className={`rounded-lg p-4 border ${vehiclesNeedingPastiglieAnt > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
+                    <div className="text-3xl font-bold mb-1">
+                        {vehiclesNeedingPastiglieAnt}
+                    </div>
+                    <div className="text-sm text-theme-text-muted">Veicoli senza pastiglie ant.</div>
+                </div>
+                <div className={`rounded-lg p-4 border ${vehiclesNeedingPastigliePost > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
+                    <div className="text-3xl font-bold mb-1">
+                        {vehiclesNeedingPastigliePost}
+                    </div>
+                    <div className="text-sm text-theme-text-muted">Veicoli senza pastiglie post.</div>
+                </div>
+            </div>
 
-                        <div className="mb-4">
-                            {editing === item.id ? (
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(parseInt(e.target.value) || 0)}
-                                        className="w-24 px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary text-center text-2xl font-bold"
-                                        autoFocus
-                                    />
-                                    <button
-                                        onClick={() => updateQuantity(item.id, editValue)}
-                                        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                                    >
-                                        Salva
-                                    </button>
-                                    <button
-                                        onClick={() => setEditing(null)}
-                                        className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                                    >
-                                        Annulla
-                                    </button>
+            {/* Vehicle Inventory List */}
+            <div className="space-y-4">
+                {vehicles.map(vehicle => {
+                    const inv = vehicle.inventory
+                    const oilQty = inv?.oil_quantity || 0
+                    const pastiglieAntQty = inv?.pastiglie_ant_quantity || 0
+                    const pastigliePostQty = inv?.pastiglie_post_quantity || 0
+                    const needsAttention = oilQty === 0 || pastiglieAntQty === 0 || pastigliePostQty === 0
+
+                    return (
+                        <div
+                            key={vehicle.id}
+                            className={`rounded-lg border p-4 ${needsAttention ? 'border-red-500/50 bg-red-900/10' : 'border-gray-700/30 bg-theme-bg-card'}`}
+                        >
+                            {/* Vehicle Header */}
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold ${
+                                        vehicle.category === 'exotic' ? 'bg-purple-900 text-purple-200' :
+                                        vehicle.category === 'urban' ? 'bg-cyan-900 text-cyan-200' :
+                                        'bg-green-900 text-green-200'
+                                    }`}>
+                                        {vehicle.display_name.substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-theme-text-primary">{vehicle.display_name}</h3>
+                                        <p className="text-sm text-theme-text-muted">{vehicle.plate || 'No targa'}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => startEditing(vehicle)}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                                >
+                                    Modifica
+                                </button>
+                            </div>
+
+                            {/* Editing Form */}
+                            {editingVehicle === vehicle.id ? (
+                                <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+                                    {/* Oil Section */}
+                                    <div className="border-b border-gray-700 pb-4">
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Olio Motore</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Tipo Olio</label>
+                                                <input
+                                                    type="text"
+                                                    value={editForm.oil_type || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, oil_type: e.target.value })}
+                                                    placeholder="es. 5W30 Castrol Edge"
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Litri Disponibili</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editForm.oil_quantity || 0}
+                                                    onChange={(e) => setEditForm({ ...editForm, oil_quantity: parseInt(e.target.value) || 0 })}
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore</label>
+                                                <input
+                                                    type="url"
+                                                    value={editForm.oil_supplier_url || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, oil_supplier_url: e.target.value })}
+                                                    placeholder="https://..."
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Front Brake Pads Section */}
+                                    <div className="border-b border-gray-700 pb-4">
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Pastiglie Freno Anteriori</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
+                                                <input
+                                                    type="text"
+                                                    value={editForm.pastiglie_ant_model || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_model: e.target.value })}
+                                                    placeholder="es. Brembo P50067"
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Pezzi Disponibili</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editForm.pastiglie_ant_quantity || 0}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_quantity: parseInt(e.target.value) || 0 })}
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore</label>
+                                                <input
+                                                    type="url"
+                                                    value={editForm.pastiglie_ant_supplier_url || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_supplier_url: e.target.value })}
+                                                    placeholder="https://..."
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Rear Brake Pads Section */}
+                                    <div className="pb-2">
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Pastiglie Freno Posteriori</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
+                                                <input
+                                                    type="text"
+                                                    value={editForm.pastiglie_post_model || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_model: e.target.value })}
+                                                    placeholder="es. Brembo P50068"
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Pezzi Disponibili</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editForm.pastiglie_post_quantity || 0}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_quantity: parseInt(e.target.value) || 0 })}
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore</label>
+                                                <input
+                                                    type="url"
+                                                    value={editForm.pastiglie_post_supplier_url || ''}
+                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_supplier_url: e.target.value })}
+                                                    placeholder="https://..."
+                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex justify-end gap-3 pt-2">
+                                        <button
+                                            onClick={() => { setEditingVehicle(null); setEditForm({}) }}
+                                            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
+                                        >
+                                            Annulla
+                                        </button>
+                                        <button
+                                            onClick={() => saveInventory(vehicle.id)}
+                                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+                                        >
+                                            Salva
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
-                                <div
-                                    className="cursor-pointer"
-                                    onClick={() => {
-                                        setEditing(item.id)
-                                        setEditValue(item.quantity)
-                                    }}
-                                >
-                                    <span className={`text-4xl font-bold ${
-                                        item.quantity === 0
-                                            ? 'text-red-400'
-                                            : item.quantity <= 2
-                                                ? 'text-yellow-400'
-                                                : 'text-theme-text-primary'
-                                    }`}>
-                                        {item.quantity}
-                                    </span>
-                                    <span className="text-xl text-theme-text-muted ml-2">{item.unit}</span>
-                                    <p className="text-xs text-theme-text-muted mt-1">Clicca per modificare</p>
+                                /* Display Mode */
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* Oil */}
+                                    <div className={`rounded-lg p-3 border ${getStatusColor(oilQty)}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium text-theme-text-secondary">Olio Motore</span>
+                                            <span className={`text-xl font-bold ${getQuantityColor(oilQty)}`}>
+                                                {oilQty} L
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-theme-text-muted mb-2 truncate">
+                                            {inv?.oil_type || 'Tipo non specificato'}
+                                        </p>
+                                        {oilQty === 0 && (
+                                            <button
+                                                onClick={() => openSupplier(inv?.oil_supplier_url)}
+                                                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
+                                            >
+                                                Ordina Olio
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Front Brake Pads */}
+                                    <div className={`rounded-lg p-3 border ${getStatusColor(pastiglieAntQty)}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium text-theme-text-secondary">Pastiglie Ant.</span>
+                                            <span className={`text-xl font-bold ${getQuantityColor(pastiglieAntQty)}`}>
+                                                {pastiglieAntQty} pz
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-theme-text-muted mb-2 truncate">
+                                            {inv?.pastiglie_ant_model || 'Modello non specificato'}
+                                        </p>
+                                        {pastiglieAntQty === 0 && (
+                                            <button
+                                                onClick={() => openSupplier(inv?.pastiglie_ant_supplier_url)}
+                                                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
+                                            >
+                                                Ordina Pastiglie
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Rear Brake Pads */}
+                                    <div className={`rounded-lg p-3 border ${getStatusColor(pastigliePostQty)}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium text-theme-text-secondary">Pastiglie Post.</span>
+                                            <span className={`text-xl font-bold ${getQuantityColor(pastigliePostQty)}`}>
+                                                {pastigliePostQty} pz
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-theme-text-muted mb-2 truncate">
+                                            {inv?.pastiglie_post_model || 'Modello non specificato'}
+                                        </p>
+                                        {pastigliePostQty === 0 && (
+                                            <button
+                                                onClick={() => openSupplier(inv?.pastiglie_post_supplier_url)}
+                                                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
+                                            >
+                                                Ordina Pastiglie
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
-
-                        {item.quantity === 0 && (
-                            <div className="mb-4">
-                                <span className="inline-block px-3 py-1 bg-red-900 text-red-200 rounded text-sm font-bold animate-pulse">
-                                    ESAURITO - ORDINARE
-                                </span>
-                            </div>
-                        )}
-
-                        {item.quantity <= 2 && item.quantity > 0 && (
-                            <div className="mb-4">
-                                <span className="inline-block px-3 py-1 bg-yellow-900 text-yellow-200 rounded text-sm font-bold">
-                                    SCORTA BASSA
-                                </span>
-                            </div>
-                        )}
-
-                        <button
-                            onClick={() => openSupplier(item.supplier_url)}
-                            className={`w-full py-3 rounded-lg font-medium transition-colors ${
-                                item.quantity === 0
-                                    ? 'bg-red-600 text-white hover:bg-red-700'
-                                    : 'bg-transparent border border-white/20 text-white hover:bg-white/10'
-                            }`}
-                        >
-                            {item.quantity === 0 ? 'Ordina Subito' : 'Ordina'}
-                        </button>
-
-                        <p className="text-xs text-theme-text-muted mt-3 text-center">
-                            Ultimo aggiornamento: {new Date(item.updated_at).toLocaleDateString('it-IT')}
-                        </p>
-                    </div>
-                ))}
-            </div>
-
-            {/* Quick Actions */}
-            <div className="mt-8 p-4 bg-theme-bg-card rounded-lg border border-theme-border">
-                <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Azioni Rapide</h3>
-                <div className="flex flex-wrap gap-3">
-                    <button
-                        onClick={() => {
-                            const olioItem = inventory.find(i => i.item_type === 'olio')
-                            if (olioItem) {
-                                setEditing(olioItem.id)
-                                setEditValue(olioItem.quantity)
-                            }
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                        Aggiorna Olio
-                    </button>
-                    <button
-                        onClick={() => {
-                            const pastiglieAnt = inventory.find(i => i.item_type === 'pastiglie_ant')
-                            if (pastiglieAnt) {
-                                setEditing(pastiglieAnt.id)
-                                setEditValue(pastiglieAnt.quantity)
-                            }
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                        Aggiorna Pastiglie Ant
-                    </button>
-                    <button
-                        onClick={() => {
-                            const pastigliePost = inventory.find(i => i.item_type === 'pastiglie_post')
-                            if (pastigliePost) {
-                                setEditing(pastigliePost.id)
-                                setEditValue(pastigliePost.quantity)
-                            }
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                        Aggiorna Pastiglie Post
-                    </button>
-                </div>
+                    )
+                })}
             </div>
         </div>
     )
