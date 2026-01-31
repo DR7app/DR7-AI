@@ -109,44 +109,35 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   async function loadData() {
     setLoading(true)
     try {
-      // Calculate date range for current month (Rome timezone)
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth()
+      const startDate = new Date(year, month, 1, 0, 0, 0)
+      const endDate = new Date(year, month + 1, 0, 23, 59, 59)
 
-      // Format dates for PostgreSQL timestamptz query
-      // Start of month: YYYY-MM-01 00:00:00+01
-      const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01 00:00:00+01`
-      // End of month: YYYY-MM-lastday 23:59:59+01
-      const lastDay = new Date(year, month + 1, 0).getDate()
-      const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay} 23:59:59+01`
-
-      console.log('🔍 CarWash Calendar loading:', startStr, 'to', endStr)
-
-      // Server-side query with proper timestamptz format
+      // Load ALL car wash bookings - client-side filtering
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
-        .gte('appointment_date', startStr)
-        .lte('appointment_date', endStr)
         .order('appointment_date', { ascending: true })
 
       if (bookingsError) throw bookingsError
 
-      console.log('🧼 CAR WASH CALENDAR - Loaded:', bookingsData?.length || 0, 'bookings')
-
-      // Normalize data
-      const normalizedBookings = (bookingsData || []).map(b => ({
+      // Client-side filter for current month
+      const filteredBookings = (bookingsData || []).filter(b => {
+        const dateToCheck = b.appointment_date || b.pickup_date
+        if (!dateToCheck) return false
+        const bookingDate = new Date(dateToCheck)
+        return bookingDate >= startDate && bookingDate <= endDate
+      }).map(b => ({
         ...b,
+        appointment_date: b.appointment_date || b.pickup_date,
         appointment_time: b.appointment_time || '09:00'
       }))
 
-      normalizedBookings.forEach(b => {
-        console.log(`  📅 ${b.customer_name}: ${b.appointment_date} @ ${b.appointment_time}`)
-      })
-
-      setBookings(normalizedBookings)
+      console.log('🧼 CAR WASH CALENDAR:', filteredBookings.length, 'bookings for', year, month + 1)
+      setBookings(filteredBookings)
     } catch (error) {
       console.error('Failed to load car wash bookings:', error)
     } finally {
