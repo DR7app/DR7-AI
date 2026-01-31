@@ -393,7 +393,28 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
                             {/* Service (Tagliando) */}
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
-                                <h4 className="text-lg font-bold text-theme-text-primary mb-3">Tagliando</h4>
+                                <div className="flex justify-between items-center mb-3">
+                                    <h4 className="text-lg font-bold text-theme-text-primary">Tagliando</h4>
+                                    <button
+                                        onClick={() => {
+                                            const subject = encodeURIComponent(`Prenotazione Tagliando - ${editedVehicle.display_name} (${editedVehicle.plate})`)
+                                            const body = encodeURIComponent(
+                                                `Buongiorno,\n\n` +
+                                                `Vorrei prenotare un tagliando per:\n\n` +
+                                                `Veicolo: ${editedVehicle.display_name}\n` +
+                                                `Targa: ${editedVehicle.plate}\n` +
+                                                `Telaio: ${editedVehicle.chassis_number || 'N/A'}\n` +
+                                                `KM Attuali: ${editedVehicle.current_km?.toLocaleString() || 0}\n` +
+                                                `Ultimo Tagliando: ${editedVehicle.last_service_km?.toLocaleString() || 0} km\n\n` +
+                                                `Cordiali saluti,\nDR7 Empire`
+                                            )
+                                            window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
+                                        }}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                    >
+                                        <span>📅</span> Prenota Tagliando
+                                    </button>
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-theme-text-secondary text-sm mb-2">Ultimo Tagliando (km)</label>
@@ -425,7 +446,92 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
                             {/* Tires (Gomme) */}
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
-                                <h4 className="text-lg font-bold text-theme-text-primary mb-3">Gomme</h4>
+                                <div className="flex justify-between items-center mb-3">
+                                    <h4 className="text-lg font-bold text-theme-text-primary">Gomme</h4>
+                                    <button
+                                        onClick={() => {
+                                            const tireInfo = editedVehicle.metadata?.tire_specs || {}
+                                            const subject = encodeURIComponent(`Ordine Gomme - ${editedVehicle.display_name} (${editedVehicle.plate})`)
+                                            const body = encodeURIComponent(
+                                                `Buongiorno,\n\n` +
+                                                `Vorrei ordinare gomme per:\n\n` +
+                                                `Veicolo: ${editedVehicle.display_name}\n` +
+                                                `Targa: ${editedVehicle.plate}\n` +
+                                                `Telaio: ${editedVehicle.chassis_number || 'N/A'}\n\n` +
+                                                `SPECIFICHE GOMME:\n` +
+                                                `Anteriori: ${tireInfo.front_size || 'N/A'} - ${tireInfo.front_model || 'N/A'}\n` +
+                                                `Posteriori: ${tireInfo.rear_size || 'N/A'} - ${tireInfo.rear_model || 'N/A'}\n\n` +
+                                                `Quantità richiesta: ___\n\n` +
+                                                `Cordiali saluti,\nDR7 Empire`
+                                            )
+                                            window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
+                                        }}
+                                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                    >
+                                        <span>🛞</span> Ordina Gomme
+                                    </button>
+                                </div>
+
+                                {/* Tire Specifications */}
+                                <div className="bg-gray-800 rounded-lg p-3 mb-4 border border-gray-600">
+                                    <h5 className="text-sm font-semibold text-theme-text-primary mb-3">Specifiche Gomme</h5>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-xs mb-1">Misura Anteriori</label>
+                                            <input
+                                                type="text"
+                                                value={editedVehicle.metadata?.tire_specs?.front_size || ''}
+                                                onChange={(e) => updateField('metadata', {
+                                                    ...editedVehicle.metadata,
+                                                    tire_specs: { ...editedVehicle.metadata?.tire_specs, front_size: e.target.value }
+                                                })}
+                                                placeholder="es. 205/55 R16"
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-xs mb-1">Modello Anteriori</label>
+                                            <input
+                                                type="text"
+                                                value={editedVehicle.metadata?.tire_specs?.front_model || ''}
+                                                onChange={(e) => updateField('metadata', {
+                                                    ...editedVehicle.metadata,
+                                                    tire_specs: { ...editedVehicle.metadata?.tire_specs, front_model: e.target.value }
+                                                })}
+                                                placeholder="es. Michelin Pilot Sport 4"
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-xs mb-1">Misura Posteriori</label>
+                                            <input
+                                                type="text"
+                                                value={editedVehicle.metadata?.tire_specs?.rear_size || ''}
+                                                onChange={(e) => updateField('metadata', {
+                                                    ...editedVehicle.metadata,
+                                                    tire_specs: { ...editedVehicle.metadata?.tire_specs, rear_size: e.target.value }
+                                                })}
+                                                placeholder="es. 225/45 R17"
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-theme-text-secondary text-xs mb-1">Modello Posteriori</label>
+                                            <input
+                                                type="text"
+                                                value={editedVehicle.metadata?.tire_specs?.rear_model || ''}
+                                                onChange={(e) => updateField('metadata', {
+                                                    ...editedVehicle.metadata,
+                                                    tire_specs: { ...editedVehicle.metadata?.tire_specs, rear_model: e.target.value }
+                                                })}
+                                                placeholder="es. Michelin Pilot Sport 4"
+                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Tire Change Tracking */}
                                 <div className="grid grid-cols-2 gap-4">
                                     {/* Front Tires */}
                                     <div className="space-y-3">
