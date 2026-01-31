@@ -3486,7 +3486,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <CustomerAutocomplete
                       customers={customers}
                       selectedCustomerId={formData.customer_id}
-                      onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
+                      onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, customer_id: customerId }))}
                       placeholder="Inizia a scrivere nome, email o telefono..."
                       required={true}
                     />
@@ -3802,7 +3802,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <CustomerAutocomplete
                         customers={customers}
                         selectedCustomerId={formData.second_driver_id}
-                        onSelectCustomer={(customerId) => setFormData({ ...formData, second_driver_id: customerId })}
+                        onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, second_driver_id: customerId }))}
                         placeholder="Inizia a scrivere nome, email o telefono..."
                         required={false}
                       />

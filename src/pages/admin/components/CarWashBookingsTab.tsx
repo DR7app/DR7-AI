@@ -981,7 +981,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <CustomerAutocomplete
                     customers={customers}
                     selectedCustomerId={formData.customer_id}
-                    onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
+                    onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, customer_id: customerId }))}
                     placeholder="Inizia a scrivere nome, email o telefono..."
                     required={true}
                   />
