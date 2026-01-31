@@ -196,24 +196,31 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   }
 
   // Process bookings into calendar events
+  // Bookings are already filtered for current month in loadData()
   const calendarEvents = useMemo(() => {
-    return bookings
-      .filter(booking => {
-        const bookingComponents = getRomeDateComponents(booking.appointment_date)
-        return bookingComponents.year === currentRomeComponents.year &&
-          bookingComponents.month === (currentRomeComponents.month + 1)
-      })
-      .map(booking => {
-        const bookingComponents = getRomeDateComponents(booking.appointment_date)
-        const day = bookingComponents.day
+    console.log('🗓️ Processing', bookings.length, 'bookings for calendar events')
 
-        // Parse time
-        const [hours, minutes] = booking.appointment_time.split(':').map(Number)
+    return bookings
+      .map(booking => {
+        // Extract day from appointment_date
+        const appointmentDate = new Date(booking.appointment_date)
+        const day = appointmentDate.getDate()
+
+        // Parse time - handle both "HH:MM" and full datetime formats
+        let hours = 9, minutes = 0
+        if (booking.appointment_time) {
+          const timeParts = booking.appointment_time.split(':').map(Number)
+          hours = timeParts[0] || 9
+          minutes = timeParts[1] || 0
+        }
+
         const duration = getServiceDuration(booking.service_name)
 
         // Calculate position
         const dayIndex = day - 1
         const leftPx = dayIndex * CELL_WIDTH
+
+        console.log(`  📅 ${booking.customer_name}: day ${day}, ${hours}:${minutes}`)
 
         return {
           booking,
@@ -230,7 +237,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         if (a.hours !== b.hours) return a.hours - b.hours
         return a.minutes - b.minutes
       })
-  }, [bookings, currentRomeComponents, daysInMonth])
+  }, [bookings])
 
   // Filter by search query
   const filteredEvents = useMemo(() => {
