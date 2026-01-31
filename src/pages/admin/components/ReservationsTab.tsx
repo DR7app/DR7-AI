@@ -2121,11 +2121,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.log('[processBookingSubmission] Local customer found:', localCustomer?.full_name || 'NOT FOUND')
 
         // Then try database lookup
+        console.log('[processBookingSubmission] 🔍 Querying customers_extended for ID:', targetCustomerId)
         let { data: customerData, error: customerError } = await supabase
           .from('customers_extended')
           .select('*')
           .eq('id', targetCustomerId)
           .limit(1)
+
+        // Track if we found customer directly in DB
+        let foundDirectlyInDB = customerData && customerData.length > 0
+        console.log('[processBookingSubmission] Direct DB lookup result:', {
+          found: foundDirectlyInDB,
+          dataLength: customerData?.length || 0,
+          error: customerError?.message || 'none'
+        })
 
         // If not found by ID, try by email from local customer
         if ((!customerData || customerData.length === 0) && localCustomer?.email) {
@@ -2137,6 +2146,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             .limit(1)
           if (emailData && emailData.length > 0) {
             customerData = emailData
+            foundDirectlyInDB = true
             console.log('[processBookingSubmission] ✅ Found by email:', emailData[0].id)
           }
         }
@@ -2151,6 +2161,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             .limit(1)
           if (phoneData && phoneData.length > 0) {
             customerData = phoneData
+            foundDirectlyInDB = true
             console.log('[processBookingSubmission] ✅ Found by phone:', phoneData[0].id)
           }
         }
@@ -2183,39 +2194,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
 
         if (customer) {
-          console.log('[processBookingSubmission] Customer found:', customer)
-          console.log('[processBookingSubmission] Customer ID:', customer.id)
-          console.log('[processBookingSubmission] Customer tipo_cliente:', customer.tipo_cliente)
-          console.log('[processBookingSubmission] Customer nome:', customer.nome)
-          console.log('[processBookingSubmission] Customer cognome:', customer.cognome)
-          console.log('[processBookingSubmission] Customer email:', customer.email)
-          console.log('[processBookingSubmission] Customer telefono:', customer.telefono)
+          console.log('[processBookingSubmission] ✅ Customer resolved:', {
+            id: customer.id,
+            nome: customer.nome,
+            cognome: customer.cognome,
+            full_name: customer.full_name,
+            email: customer.email,
+            foundDirectlyInDB
+          })
 
           // CRITICAL FIX: Ensure customer ID is always present in tempCustData
-          // Even if the database result doesn't include it, we have it from targetCustomerId
           tempCustData = {
             ...customer,
-            id: customer.id || targetCustomerId // Fallback to targetCustomerId if customer.id is missing
+            id: customer.id || targetCustomerId
           }
 
-          // RELAXED VALIDATION FOR EXISTING CUSTOMERS
-          // For booking creation, only require basic identification fields
-          // Full validation (codice_fiscale, patente, etc.) happens when generating contracts
-          console.log('[processBookingSubmission] Validating customer data (relaxed for existing customers):', customer)
-
-          // Only check that we have a name to identify the customer
-          const hasName = customer.nome || customer.cognome || customer.denominazione || customer.ragione_sociale || customer.full_name
-          if (!hasName) {
-            console.log('❌ Missing name/identification')
-            missing.push('nome')
+          // CRITICAL: If customer was found directly in database, SKIP ALL VALIDATION
+          // The data is already in customers_extended, so no need to validate or show modal
+          if (foundDirectlyInDB) {
+            console.log('[processBookingSubmission] ✅✅ Customer found in customers_extended - SKIPPING ALL VALIDATION')
+            // No missing fields - customer exists in DB
+            missing = []
+          } else {
+            // Customer only exists in local autocomplete, not in DB - do basic validation
+            console.log('[processBookingSubmission] ⚠️ Customer not in DB, doing basic validation')
+            const hasName = customer.nome || customer.cognome || customer.denominazione || customer.ragione_sociale || customer.full_name
+            if (!hasName) {
+              console.log('❌ Missing name/identification')
+              missing.push('nome')
+            }
           }
-
-          // Contact info is helpful but not blocking - just log warnings
-          if (!customer.email) console.log('⚠️ Email missing - will be needed for contract')
-          if (!customer.telefono) console.log('⚠️ Phone missing - will be needed for contract')
-
-          console.log('[processBookingSubmission] Relaxed validation - missing fields:', missing)
-          console.log('[processBookingSubmission] ✅ Existing customer - skipping strict validation (will validate when generating contract)')
         } else {
           // Customer not found in customers_extended, but exists in autocomplete (from bookings)
           // This means the customer was created via the website but never got a full profile
