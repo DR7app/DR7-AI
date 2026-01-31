@@ -2188,14 +2188,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           console.log('[processBookingSubmission] Customer tipo_cliente:', customer.tipo_cliente)
           console.log('[processBookingSubmission] Customer nome:', customer.nome)
           console.log('[processBookingSubmission] Customer cognome:', customer.cognome)
-          console.log('[processBookingSubmission] Customer codice_fiscale:', customer.codice_fiscale)
-          console.log('[processBookingSubmission] Customer data_nascita:', customer.data_nascita)
-          console.log('[processBookingSubmission] Customer luogo_nascita:', customer.luogo_nascita)
-          console.log('[processBookingSubmission] Customer indirizzo:', customer.indirizzo)
-          console.log('[processBookingSubmission] Customer citta_residenza:', customer.citta_residenza)
-          console.log('[processBookingSubmission] Customer citta:', customer.citta)
-          console.log('[processBookingSubmission] Customer patente:', customer.patente)
-          console.log('[processBookingSubmission] Customer numero_patente:', customer.numero_patente)
           console.log('[processBookingSubmission] Customer email:', customer.email)
           console.log('[processBookingSubmission] Customer telefono:', customer.telefono)
 
@@ -2206,53 +2198,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             id: customer.id || targetCustomerId // Fallback to targetCustomerId if customer.id is missing
           }
 
+          // RELAXED VALIDATION FOR EXISTING CUSTOMERS
+          // For booking creation, only require basic identification fields
+          // Full validation (codice_fiscale, patente, etc.) happens when generating contracts
+          console.log('[processBookingSubmission] Validating customer data (relaxed for existing customers):', customer)
 
-          // Validate fields - STRICT validation for ALL required fields
-          console.log('[processBookingSubmission] Validating customer data:', customer)
-          console.log('[processBookingSubmission] Customer Type:', customer.tipo_cliente)
-
-          if (customer.tipo_cliente === 'persona_fisica' || !customer.tipo_cliente) { // Default to persona_fisica if undefined
-            // Log individual fields checks
-            if (!customer.nome) console.log('❌ Missing name')
-            if (!customer.cognome) console.log('❌ Missing surname')
-
-            if (!customer.nome) missing.push('nome')
-            if (!customer.cognome) missing.push('cognome')
-            if (!customer.codice_fiscale) missing.push('codice_fiscale')
-            if (!customer.data_nascita) missing.push('data_nascita')
-            if (!customer.luogo_nascita) missing.push('luogo_nascita')
-            if (!customer.indirizzo) missing.push('indirizzo')
-            if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
-            // Check both patente and numero_patente fields
-            if (!customer.patente && !customer.numero_patente) missing.push('patente')
-          } else if (customer.tipo_cliente === 'azienda') {
-            if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
-            if (!customer.partita_iva) missing.push('partita_iva')
-            if (!customer.indirizzo) missing.push('indirizzo')
-            if (!customer.citta && !customer.citta_residenza) missing.push('citta')
-          } else if (customer.tipo_cliente === 'pubblica_amministrazione') {
-            if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
-            if (!customer.codice_univoco) missing.push('codice_univoco')
-            if (!customer.indirizzo) missing.push('indirizzo')
-            if (!customer.citta && !customer.citta_residenza) missing.push('citta')
-          } else {
-            // Fallback for unknown types (e.g. 'privato' or mixed case) - Treat as strict Persona Fisica
-            console.warn('[processBookingSubmission] Unknown customer type:', customer.tipo_cliente, '- Defaulting to strict validation')
-            if (!customer.nome) missing.push('nome')
-            if (!customer.cognome) missing.push('cognome')
-            if (!customer.codice_fiscale) missing.push('codice_fiscale')
-            if (!customer.data_nascita) missing.push('data_nascita')
-            if (!customer.luogo_nascita) missing.push('luogo_nascita')
-            if (!customer.indirizzo) missing.push('indirizzo')
-            if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
-            if (!customer.patente && !customer.numero_patente) missing.push('patente')
+          // Only check that we have a name to identify the customer
+          const hasName = customer.nome || customer.cognome || customer.denominazione || customer.ragione_sociale || customer.full_name
+          if (!hasName) {
+            console.log('❌ Missing name/identification')
+            missing.push('nome')
           }
 
-          // Common
-          if (!customer.email) missing.push('email')
-          if (!customer.telefono) missing.push('telefono')
+          // Contact info is helpful but not blocking - just log warnings
+          if (!customer.email) console.log('⚠️ Email missing - will be needed for contract')
+          if (!customer.telefono) console.log('⚠️ Phone missing - will be needed for contract')
 
-          console.log('[processBookingSubmission] Missing fields found:', missing)
+          console.log('[processBookingSubmission] Relaxed validation - missing fields:', missing)
+          console.log('[processBookingSubmission] ✅ Existing customer - skipping strict validation (will validate when generating contract)')
         } else {
           // Customer not found in customers_extended, but exists in autocomplete (from bookings)
           // This means the customer was created via the website but never got a full profile
