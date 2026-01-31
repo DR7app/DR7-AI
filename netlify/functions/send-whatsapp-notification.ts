@@ -87,7 +87,11 @@ const handler: Handler = async (event) => {
 
     if (serviceType === 'car_wash') {
       const appointmentDate = new Date(booking.appointment_date);
-      const serviceName = booking.service_name;
+      // Get service name from multiple possible sources
+      const serviceName = booking.service_name ||
+        booking.booking_details?.serviceName ||
+        booking.booking_details?.service_name ||
+        'Lavaggio';
       const additionalService = booking.booking_details?.additionalService;
       const notes = booking.booking_details?.notes;
 
@@ -105,7 +109,22 @@ const handler: Handler = async (event) => {
         timeZone: 'Europe/Rome'
       });
 
-      message = `🚗 *NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
+      // Calculate payment info
+      const amountPaid = booking.booking_details?.amountPaid || 0;
+      const totalCents = booking.price_total || 0;
+      const amountPaidEuros = (amountPaid / 100).toFixed(2);
+      const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
+
+      let paymentInfo = '';
+      if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+        paymentInfo = `Pagato`;
+      } else if (amountPaid > 0) {
+        paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
+      } else {
+        paymentInfo = `NON pagato`;
+      }
+
+      message = `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
       message += `*ID:* DR7-${bookingId}\n`;
       message += `*Cliente:* ${customerName}\n`;
       message += `*Email:* ${customerEmail}\n`;
@@ -119,7 +138,7 @@ const handler: Handler = async (event) => {
         message += `*Note:* ${notes}\n`;
       }
       message += `*Totale:* €${totalPrice}\n`;
-      message += `*Stato Pagamento:* ${booking.payment_status === 'paid' || booking.payment_status === 'completed' ? '✅ Pagato' : '⏳ In attesa'}`;
+      message += `*Pagamento:* ${paymentInfo}`;
     } else if (serviceType === 'mechanical') {
       const appointmentDate = new Date(booking.appointment_date);
       const serviceName = booking.service_name || 'Servizio Meccanica';
@@ -140,7 +159,22 @@ const handler: Handler = async (event) => {
         timeZone: 'Europe/Rome'
       });
 
-      message = `🔧 *NUOVA PRENOTAZIONE MECCANICA*\n\n`;
+      // Calculate payment info
+      const amountPaid = booking.booking_details?.amountPaid || 0;
+      const totalCents = booking.price_total || 0;
+      const amountPaidEuros = (amountPaid / 100).toFixed(2);
+      const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
+
+      let paymentInfo = '';
+      if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+        paymentInfo = `Pagato`;
+      } else if (amountPaid > 0) {
+        paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
+      } else {
+        paymentInfo = `NON pagato`;
+      }
+
+      message = `*NUOVA PRENOTAZIONE MECCANICA*\n\n`;
       message += `*ID:* DR7-${bookingId}\n`;
       message += `*Cliente:* ${customerName}\n`;
       message += `*Email:* ${customerEmail}\n`;
@@ -153,21 +187,45 @@ const handler: Handler = async (event) => {
       if (notes) {
         message += `*Note:* ${notes}\n`;
       }
-      message += `*Stato Pagamento:* ${booking.payment_status === 'paid' || booking.payment_status === 'completed' ? '✅ Pagato' : '⏳ In attesa'}`;
+      message += `*Pagamento:* ${paymentInfo}`;
     } else {
       // Car Rental Booking
       const vehicleName = booking.vehicle_name;
       const pickupDate = new Date(booking.pickup_date);
       const dropoffDate = new Date(booking.dropoff_date);
       const pickupLocation = booking.pickup_location;
-      const insuranceOption = booking.insurance_option || booking.booking_details?.insuranceOption || 'Nessuna';
+      // Map insurance option to display name - default to Kasko instead of Nessuna
+      const insuranceRaw = booking.insurance_option || booking.booking_details?.insuranceOption || 'KASKO_BASE';
+      const insuranceMap: Record<string, string> = {
+        'RCA': 'RCA',
+        'KASKO_BASE': 'Kasko',
+        'KASKO_BLACK': 'Kasko Black',
+        'KASKO_SIGNATURE': 'Kasko Signature',
+        'DR7': 'Kasko DR7'
+      };
+      const insuranceOption = insuranceMap[insuranceRaw] || 'Kasko';
 
       const pickupDateFormatted = pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
       const pickupTimeFormatted = pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
       const dropoffDateFormatted = dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
       const dropoffTimeFormatted = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
 
-      message = `🚘 *NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
+      // Calculate payment info
+      const amountPaid = booking.booking_details?.amountPaid || 0;
+      const totalCents = booking.price_total || 0;
+      const amountPaidEuros = (amountPaid / 100).toFixed(2);
+      const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
+
+      let paymentInfo = '';
+      if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+        paymentInfo = `Pagato`;
+      } else if (amountPaid > 0) {
+        paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
+      } else {
+        paymentInfo = `NON pagato`;
+      }
+
+      message = `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
       message += `*ID:* DR7-${bookingId}\n`;
       message += `*Cliente:* ${customerName}\n`;
       message += `*Email:* ${customerEmail}\n`;
@@ -178,7 +236,7 @@ const handler: Handler = async (event) => {
       message += `*Luogo Ritiro:* ${pickupLocation}\n`;
       message += `*Assicurazione:* ${insuranceOption}\n`;
       message += `*Totale:* €${totalPrice}\n`;
-      message += `*Stato Pagamento:* ${booking.payment_status === 'paid' || booking.payment_status === 'completed' ? '✅ Pagato' : '⏳ In attesa'}`;
+      message += `*Pagamento:* ${paymentInfo}`;
     }
   } else {
     return {
