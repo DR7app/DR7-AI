@@ -231,7 +231,42 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
             }
 
-            const { data: returns, error: returnsError } = await supabase
+            // --- 1A. CHECK RETURNS - 10 mins BEFORE return (pre-return warning) ---
+            const { data: returnsBefore, error: returnsBeforeError } = await supabase
+                .from('bookings')
+                .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at')
+                .neq('status', 'returned')
+                .neq('status', 'cancelled')
+                .gte('dropoff_date', tenMinutesFutureISO)
+                .lt('dropoff_date', tenMinutesFuturePlusOne)
+
+            if (!returnsBeforeError && returnsBefore && returnsBefore.length > 0) {
+                for (const booking of returnsBefore) {
+                    const trackingId = `return_before_${booking.id}`
+                    if (triggeredAlarmsRef.current.has(trackingId)) continue
+
+                    // Check exact minute match locally
+                    const returnTime = new Date(booking.dropoff_date)
+                    returnTime.setSeconds(0, 0)
+
+                    if (returnTime.getTime() === tenMinutesFuture.getTime()) {
+                        triggeredAlarmsRef.current.add(trackingId)
+                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+
+                        playAlarm({
+                            bookingId: booking.id,
+                            vehicleName: booking.vehicle_name || 'Unknown Vehicle',
+                            returnTime: returnTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                            customerName: booking.customer_name || 'Unknown Customer',
+                            type: 'return'
+                        })
+                        return // Trigger one at a time
+                    }
+                }
+            }
+
+            // --- 1B. CHECK RETURNS - 10 mins AFTER return (late return warning) ---
+            const { data: returnsAfter, error: returnsAfterError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at')
                 .is('alarm_triggered_at', null)
@@ -240,9 +275,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 .gte('dropoff_date', tenMinutesAgoISO)
                 .lt('dropoff_date', tenMinutesAgoPlusOne)
 
-            if (!returnsError && returns && returns.length > 0) {
-                for (const booking of returns) {
-                    const trackingId = `return_${booking.id}`
+            if (!returnsAfterError && returnsAfter && returnsAfter.length > 0) {
+                for (const booking of returnsAfter) {
+                    const trackingId = `return_after_${booking.id}`
                     if (triggeredAlarmsRef.current.has(trackingId) || triggeredAlarmsRef.current.has(booking.id)) continue
 
                     // Check exact minute match locally
