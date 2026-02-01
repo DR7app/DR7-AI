@@ -142,14 +142,6 @@ export default function FleetInventory() {
         })
     }
 
-    function openSupplier(url: string | null | undefined) {
-        if (url) {
-            window.open(url, '_blank')
-        } else {
-            alert('Nessun fornitore configurato. Modifica il veicolo per aggiungere il link.')
-        }
-    }
-
     function formatPhoneForWhatsApp(phone: string): string {
         // Remove spaces, dashes, and + sign
         let cleaned = phone.replace(/[\s\-\+]/g, '')

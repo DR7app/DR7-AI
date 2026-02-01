@@ -560,7 +560,7 @@ export default function ScadenzeTab() {
   async function handleAddScadenza() {
     try {
       const categoryConfig = CATEGORIES[newScadenza.category as keyof typeof CATEGORIES]
-      const advanceDays = typeof categoryConfig.advanceDays === 'number'
+      const advanceDays = 'advanceDays' in categoryConfig && typeof categoryConfig.advanceDays === 'number'
         ? categoryConfig.advanceDays
         : 5
 
