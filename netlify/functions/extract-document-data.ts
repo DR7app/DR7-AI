@@ -40,9 +40,14 @@ interface ExtractedPersonData {
     notes?: string;
 }
 
-const EXTRACTION_PROMPT = `Sei un esperto OCR specializzato in documenti d'identità italiani. Analizza ATTENTAMENTE questa immagine, carattere per carattere.
+const EXTRACTION_PROMPT = `Sei un esperto OCR specializzato in documenti d'identità italiani.
 
-PRIMA DI TUTTO: Osserva l'immagine con molta attenzione. Leggi ogni carattere singolarmente, specialmente per codici e numeri.
+ISTRUZIONI CRITICHE - LEGGI CON ATTENZIONE:
+1. GUARDA l'immagine molto attentamente
+2. Leggi OGNI SINGOLA LETTERA dei nomi - non inventare, leggi esattamente quello che vedi
+3. I nomi italiani comuni: Marco, Luca, Giuseppe, Giovanni, Antonio, Francesco, Mario, Luigi, Paolo, Andrea, Matteo, Alessio, Simone, Davide, Fabio, Stefano, Roberto, Massimo, Gianluca, Vincenzo
+4. I cognomi italiani sono MOLTO VARI - leggi esattamente quello che c'è scritto, lettera per lettera
+5. NON fare assunzioni - se non riesci a leggere chiaramente, ometti il campo
 
 === CARTA D'IDENTITÀ ELETTRONICA (CIE) - LAYOUT ===
 FRONTE della CIE:
@@ -197,10 +202,10 @@ export const handler: Handler = async (event) => {
             };
         }
 
-        // Call Claude Vision API
+        // Call Claude Vision API - using Opus for best OCR accuracy
         const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 2000,
+            max_tokens: 4000,
             messages: [
                 {
                     role: 'user',

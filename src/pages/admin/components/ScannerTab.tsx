@@ -48,7 +48,7 @@ interface DocumentSlot {
     extracting: boolean;
 }
 
-// Compress image to max 4MB for API
+// Compress image to max 4MB for API - optimized for OCR quality
 const compressImage = (file: File, maxSizeMB: number = 4): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -58,8 +58,8 @@ const compressImage = (file: File, maxSizeMB: number = 4): Promise<string> => {
                 const canvas = document.createElement('canvas');
                 let { width, height } = img;
 
-                // Max dimension 2000px for documents (plenty for OCR)
-                const maxDim = 2000;
+                // Higher resolution for better OCR - max 3000px
+                const maxDim = 3000;
                 if (width > maxDim || height > maxDim) {
                     if (width > height) {
                         height = (height / width) * maxDim;
@@ -79,18 +79,22 @@ const compressImage = (file: File, maxSizeMB: number = 4): Promise<string> => {
                     return;
                 }
 
+                // Use better image smoothing for text
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Start with quality 0.8, reduce if still too large
-                let quality = 0.8;
+                // Start with high quality 0.92 for better text readability
+                let quality = 0.92;
                 let base64 = canvas.toDataURL('image/jpeg', quality);
 
                 // Keep reducing quality until under maxSizeMB
-                while (base64.length > maxSizeMB * 1024 * 1024 * 1.37 && quality > 0.1) {
-                    quality -= 0.1;
+                while (base64.length > maxSizeMB * 1024 * 1024 * 1.37 && quality > 0.3) {
+                    quality -= 0.05;
                     base64 = canvas.toDataURL('image/jpeg', quality);
                 }
 
+                console.log(`Image compressed: ${width}x${height}, quality: ${quality.toFixed(2)}`);
                 resolve(base64);
             };
             img.onerror = () => reject(new Error('Failed to load image'));
