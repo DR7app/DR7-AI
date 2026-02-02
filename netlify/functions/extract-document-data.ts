@@ -42,6 +42,12 @@ interface ExtractedPersonData {
 
 const EXTRACTION_PROMPT = `Estrai i dati da questo documento italiano.
 
+!!! REGOLA CRITICA PER PATENTE !!!
+Il NUMERO PATENTE si trova SOLO sul FRONTE della patente, al campo numero 5.
+Sul RETRO della patente NON c'è il numero patente - c'è solo la tabella delle categorie.
+Se stai guardando il FRONTE della patente, cerca il campo "5." che contiene il numero (es: U1234567A).
+Se stai guardando il RETRO, NON estrarre patente_numero perché non è presente sul retro.
+
 REGOLA FONDAMENTALE: Trascrivi ESATTAMENTE quello che leggi. NON inventare, NON aggiungere caratteri, NON indovinare.
 
 === FORMATI ESATTI ===
