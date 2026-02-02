@@ -93,17 +93,20 @@ CODICE FISCALE:
 
 === PATENTE DI GUIDA ITALIANA ===
 
-FRONTE della patente - campi numerati (leggi dal FRONTE!):
+FRONTE della patente - campi numerati (TUTTI i dati principali sono sul FRONTE!):
 - Campo 1: Cognome
 - Campo 2: Nome
 - Campo 3: Data e luogo di nascita
 - Campo 4a: Data rilascio patente
-- Campo 4b: DATA SCADENZA PATENTE ← IMPORTANTE! Leggi questa data dal FRONTE!
+- Campo 4b: DATA SCADENZA PATENTE
 - Campo 4c: Ente rilascio (es: MCTC, UCO)
-- Campo 5: NUMERO PATENTE (es: AB1234567X)
+- Campo 5: NUMERO PATENTE (es: U1234567A o MI1234567A) ← IL NUMERO È QUI SUL FRONTE!
 - Campo 9: Categorie
 
-ATTENZIONE: La SCADENZA PATENTE (4b) è sul FRONTE, NON sul retro!
+ATTENZIONE IMPORTANTE:
+- Il NUMERO PATENTE (patente_numero) è al campo 5 sul FRONTE - NON prenderlo dal retro!
+- La SCADENZA PATENTE (patente_scadenza) è al campo 4b sul FRONTE
+- Sul RETRO c'è solo la tabella delle categorie per il tipo patente
 
 RETRO della patente - TABELLA CATEGORIE:
 La tabella mostra TUTTE le categorie possibili: AM, A1, A2, A, B1, B, C1, C, D1, D, BE, C1E, CE, D1E, DE
@@ -125,10 +128,10 @@ Per PATENTE:
   "cognome": "dal campo 1 FRONTE",
   "data_nascita": "dal campo 3 FRONTE, formato YYYY-MM-DD",
   "luogo_nascita": "dal campo 3 FRONTE",
-  "patente_numero": "dal campo 5 FRONTE",
+  "patente_numero": "dal campo 5 FRONTE (NON dal retro!) - es: U1234567A",
   "patente_tipo": "SOLO categorie con date sul RETRO (es: B oppure AM, B)",
   "patente_rilascio": "dal campo 4a FRONTE, YYYY-MM-DD",
-  "patente_scadenza": "dal campo 4b FRONTE, YYYY-MM-DD - IMPORTANTE!",
+  "patente_scadenza": "dal campo 4b FRONTE, YYYY-MM-DD",
   "patente_ente": "dal campo 4c FRONTE",
   "document_type": "patente"
 }
