@@ -259,9 +259,39 @@ export default function ScannerTab() {
         }));
     };
 
+    // Convert base64 to File object
+    const base64ToFile = (base64: string, filename: string): File => {
+        const arr = base64.split(',');
+        const mimeMatch = arr[0]?.match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const bstr = atob(arr.length > 1 ? arr[1] : base64);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    };
+
     // Open NewClientModal with merged data
     const openClientModal = () => {
         if (!mergedData) return;
+
+        // Convert scanned documents to File objects for upload
+        const scannedFiles: any = {};
+
+        if (documents.id_front.preview) {
+            scannedFiles.identityFront = base64ToFile(documents.id_front.preview, 'carta_identita_fronte.jpg');
+        }
+        if (documents.id_back.preview) {
+            scannedFiles.identityBack = base64ToFile(documents.id_back.preview, 'carta_identita_retro.jpg');
+        }
+        if (documents.license_front.preview) {
+            scannedFiles.driversLicenseFront = base64ToFile(documents.license_front.preview, 'patente_fronte.jpg');
+        }
+        if (documents.license_back.preview) {
+            scannedFiles.driversLicenseBack = base64ToFile(documents.license_back.preview, 'patente_retro.jpg');
+        }
 
         // Map extracted data to NewClientModal format (matching expected field names)
         const clientData: any = {
@@ -290,6 +320,8 @@ export default function ScannerTab() {
             data_rilascio_patente: mergedData.patente_rilascio || '',
             scadenza_patente: mergedData.patente_scadenza || '',
             emessa_da: mergedData.patente_ente || '',
+            // Scanned document files for upload
+            scannedFiles: scannedFiles,
             // Also put in metadata for safety
             metadata: {
                 sesso: mergedData.sesso || '',

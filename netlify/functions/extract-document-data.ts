@@ -40,84 +40,96 @@ interface ExtractedPersonData {
     notes?: string;
 }
 
-const EXTRACTION_PROMPT = `Sei un esperto di estrazione dati da documenti italiani. Analizza questa immagine di un documento e estrai TUTTI i dati visibili in modo strutturato.
+const EXTRACTION_PROMPT = `Sei un esperto OCR specializzato in documenti d'identità italiani. Analizza ATTENTAMENTE questa immagine, carattere per carattere.
 
-TIPI DI DOCUMENTO SUPPORTATI:
-- Carta d'Identità Italiana (CIE o cartacea)
-- Patente di Guida Italiana
-- Passaporto
-- Tessera Sanitaria
+PRIMA DI TUTTO: Osserva l'immagine con molta attenzione. Leggi ogni carattere singolarmente, specialmente per codici e numeri.
 
-ESTRAI QUESTI DATI (se presenti):
+=== CARTA D'IDENTITÀ ELETTRONICA (CIE) - LAYOUT ===
+FRONTE della CIE:
+- In alto: "REPUBBLICA ITALIANA" e "CARTA D'IDENTITÀ"
+- COGNOME: dopo "Cognome/Surname"
+- NOME: dopo "Nome/Name"
+- DATA NASCITA: dopo "Nascita/Birth" (formato GG.MM.AAAA o GG/MM/AAAA)
+- SESSO: M o F
+- LUOGO NASCITA: città di nascita
+- SCADENZA: dopo "Scadenza/Expiry"
+- NUMERO DOCUMENTO: codice alfanumerico (es: CA00000AA) in alto a destra
+
+RETRO della CIE:
+- CODICE FISCALE: 16 caratteri, di solito in alto (es: RSSMRA85M01H501X)
+- INDIRIZZO: Via/Piazza + numero
+- COMUNE RESIDENZA: città
+- PROVINCIA: sigla 2 lettere
+- CAP: 5 cifre
+- ENTE RILASCIO: il comune che ha rilasciato
+
+=== CARTA D'IDENTITÀ CARTACEA (vecchio formato) ===
+- Numero documento in alto
+- Dati personali su righe separate
+- Codice fiscale spesso sul retro o in basso
+
+=== DATI DA ESTRARRE ===
 
 DATI PERSONALI:
-- nome (nome di battesimo)
-- cognome (cognome/i)
-- sesso (M o F)
-- data_nascita (formato YYYY-MM-DD)
-- luogo_nascita (comune)
-- provincia_nascita (sigla provincia, es: CA, MI, RM)
-- codice_fiscale (16 caratteri alfanumerici)
+- nome: solo il nome di battesimo
+- cognome: il cognome
+- sesso: M o F
+- data_nascita: convertire in YYYY-MM-DD
+- luogo_nascita: solo il comune
+- provincia_nascita: sigla 2 lettere (es: MI, RM, NA)
+- codice_fiscale: ESATTAMENTE 16 caratteri
 
-INDIRIZZO DI RESIDENZA:
-- indirizzo (via/piazza + nome)
-- numero_civico
-- codice_postale (CAP, 5 cifre)
-- citta_residenza (comune)
-- provincia_residenza (sigla)
+INDIRIZZO:
+- indirizzo: via/piazza + nome strada
+- numero_civico: il numero
+- codice_postale: CAP 5 cifre
+- citta_residenza: comune
+- provincia_residenza: sigla 2 lettere
 
-DATI DOCUMENTO (per Carta d'Identità):
-- documento_tipo ("Carta d'Identità")
-- documento_numero
-- documento_rilascio (data rilascio, YYYY-MM-DD)
-- documento_scadenza (data scadenza, YYYY-MM-DD)
-- documento_ente (comune che ha rilasciato)
+DOCUMENTO:
+- documento_tipo: "Carta d'Identità Elettronica" o "Carta d'Identità"
+- documento_numero: il codice del documento
+- documento_rilascio: data rilascio in YYYY-MM-DD
+- documento_scadenza: data scadenza in YYYY-MM-DD
+- documento_ente: comune di rilascio
 
-DATI PATENTE (se è una patente):
-- patente_numero (il numero della patente, es: "AB1234567X")
-- patente_tipo (vedi REGOLA SPECIALE sotto per come identificare le categorie possedute)
-- patente_rilascio (YYYY-MM-DD)
-- patente_scadenza (YYYY-MM-DD)
-- patente_ente (Motorizzazione o Prefettura)
-
-REGOLA SPECIALE - CATEGORIE PATENTE (MOLTO IMPORTANTE):
-Sul RETRO della patente italiana c'è una tabella con TUTTE le categorie possibili (AM, A1, A2, A, B, B1, C1, C, D1, D, BE, C1E, CE, D1E, DE).
-MA il titolare possiede SOLO le categorie che hanno DATE compilate nelle colonne 10, 11, 12.
-- Colonna 10 = data rilascio categoria
-- Colonna 11 = data scadenza categoria
-- Colonna 12 = restrizioni/codici
-Le righe VUOTE (senza date) sono categorie che il titolare NON possiede.
-Esempio: se solo la riga "B" ha date (es: 10: 15.03.2015, 11: 15.03.2025), allora patente_tipo = "B"
-Se le righe "AM" e "B" hanno date, allora patente_tipo = "AM, B"
+PATENTE (se è una patente):
+- patente_numero: numero patente (es: AB1234567X)
+- patente_tipo: SOLO categorie con date (es: "B" o "AM, B")
+- patente_rilascio: YYYY-MM-DD
+- patente_scadenza: YYYY-MM-DD
+- patente_ente: ente rilascio
 
 METADATI:
-- document_type: uno tra "carta_identita", "patente", "passaporto", "tessera_sanitaria", "unknown"
-- confidence: "high" se tutti i dati sono chiari, "medium" se alcuni sono incerti, "low" se il documento è poco leggibile
-- notes: eventuali problemi riscontrati (es: "documento scaduto", "foto poco leggibile", "dati parzialmente oscurati")
+- document_type: "carta_identita", "patente", "passaporto", "tessera_sanitaria", o "unknown"
+- confidence: "high", "medium", o "low"
+- notes: problemi riscontrati
 
-REGOLE IMPORTANTI:
-1. Converti TUTTE le date nel formato YYYY-MM-DD (es: 15/03/1990 → 1990-03-15)
-2. I nomi propri vanno con la prima lettera maiuscola (es: MARIO ROSSI → Mario Rossi)
-3. CODICE FISCALE - VALIDAZIONE RIGOROSA:
-   - Esattamente 16 caratteri, tutto MAIUSCOLO
-   - Posizioni 1-6: SEMPRE LETTERE (cognome + nome)
-   - Posizioni 7-8: SEMPRE NUMERI (anno nascita)
-   - Posizione 9: SEMPRE LETTERA (mese: A=Gen, B=Feb, C=Mar, D=Apr, E=Mag, H=Giu, L=Lug, M=Ago, P=Set, R=Ott, S=Nov, T=Dic)
-   - Posizioni 10-11: SEMPRE NUMERI (giorno nascita: 01-31 maschi, 41-71 femmine)
-   - Posizione 12: SEMPRE LETTERA (codice comune)
-   - Posizioni 13-15: SEMPRE NUMERI (codice comune)
-   - Posizione 16: SEMPRE LETTERA (carattere di controllo)
-   ATTENZIONE ai caratteri simili:
-   - O (lettera) vs 0 (zero): nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera O, mai zero
-   - I (lettera) vs 1 (uno): nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera I, mai uno
-   - S vs 5: nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera S, mai cinque
-   - B vs 8: nelle posizioni 1-6, 9, 12, 16 è SEMPRE una lettera B, mai otto
-   Se un carattere sembra ambiguo, usa la REGOLA POSIZIONALE sopra per decidere.
-4. Se un campo non è visibile o leggibile, omettilo dal risultato
-5. PATENTE TIPO: vedi REGOLA SPECIALE sopra - estrai SOLO categorie con date compilate
-6. La provincia è sempre la sigla di 2 lettere (CA, MI, RM, TO, etc.)
+=== REGOLE CRITICHE PER CODICE FISCALE ===
+Il codice fiscale italiano è SEMPRE 16 caratteri con questa struttura FISSA:
+- Posizioni 1-6: LETTERE (cognome+nome)
+- Posizioni 7-8: NUMERI (anno)
+- Posizione 9: LETTERA (mese: A,B,C,D,E,H,L,M,P,R,S,T)
+- Posizioni 10-11: NUMERI (giorno: 01-31 o 41-71)
+- Posizione 12: LETTERA (codice comune)
+- Posizioni 13-15: NUMERI (codice comune)
+- Posizione 16: LETTERA (controllo)
 
-Rispondi SOLO con un oggetto JSON valido, senza markdown o altro testo.`;
+ATTENZIONE MASSIMA a questi errori comuni:
+- 0 (zero) ↔ O (lettera): usa la regola posizionale!
+- 1 (uno) ↔ I (lettera): usa la regola posizionale!
+- 5 ↔ S: usa la regola posizionale!
+- 8 ↔ B: usa la regola posizionale!
+
+Esempio: se leggi "RSSMRA85M01H5O1X" ma posizione 15 deve essere un NUMERO, correggi in "RSSMRA85M01H501X"
+
+=== REGOLE GENERALI ===
+1. Date: converti SEMPRE in YYYY-MM-DD (15/03/1990 → 1990-03-15)
+2. Nomi: Prima lettera maiuscola (MARIO ROSSI → Mario Rossi)
+3. Province: sempre 2 lettere maiuscole (Milano = MI)
+4. Se non riesci a leggere un campo, OMETTILO
+
+Rispondi SOLO con JSON valido, senza markdown o commenti.`;
 
 export const handler: Handler = async (event) => {
     const headers = {

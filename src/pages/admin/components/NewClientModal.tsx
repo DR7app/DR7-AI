@@ -289,6 +289,30 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   const [codiceFiscaleFront, setCodiceFiscaleFront] = useState<File | null>(null)
   const [codiceFiscaleBack, setCodiceFiscaleBack] = useState<File | null>(null)
 
+  // Handle scanned files from Scanner tab
+  useEffect(() => {
+    if (isOpen && initialData?.scannedFiles) {
+      const files = initialData.scannedFiles
+      console.log('[NewClientModal] Loading scanned files:', Object.keys(files))
+
+      if (files.identityFront) {
+        setIdentityFront(files.identityFront)
+      }
+      if (files.identityBack) {
+        setIdentityBack(files.identityBack)
+      }
+      if (files.driversLicenseFront) {
+        setDriversLicenseFront(files.driversLicenseFront)
+      }
+      if (files.driversLicenseBack) {
+        setDriversLicenseBack(files.driversLicenseBack)
+      }
+
+      // Auto-expand document section if we have scanned files
+      setShowDocumentSection(true)
+    }
+  }, [initialData, isOpen])
+
   // Validation functions
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
