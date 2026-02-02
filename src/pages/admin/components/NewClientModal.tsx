@@ -845,7 +845,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setFormData({ ...formData, sesso: e.target.value as any })}
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       >
-                        <option value="">Seleziona...</option>
+                        {!formData.sesso && <option value="">Seleziona...</option>}
                         <option value="M">Maschio</option>
                         <option value="F">Femmina</option>
                       </select>
@@ -990,18 +990,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Categoria</label>
-                      <select
+                      <input
+                        type="text"
                         value={formData.patente_tipo}
-                        onChange={(e) => setFormData({ ...formData, patente_tipo: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      >
-                        <option value="">Seleziona...</option>
-                        <option value="B">B</option>
-                        <option value="A">A</option>
-                        <option value="C">C</option>
-                        <option value="D">D</option>
-                        <option value="E">E</option>
-                      </select>
+                        onChange={(e) => setFormData({ ...formData, patente_tipo: e.target.value.toUpperCase() })}
+                        placeholder="es. B, AM, A"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Emessa da (Ente)</label>
