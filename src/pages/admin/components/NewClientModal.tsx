@@ -366,7 +366,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       if (!formData.indirizzo) newErrors.indirizzo = 'Indirizzo obbligatorio'
       if (!formData.citta_residenza) newErrors.citta_residenza = 'Città obbligatoria'
-      if (!formData.codice_postale) newErrors.codice_postale = 'CAP obbligatorio'
       if (!formData.provincia_residenza) newErrors.provincia_residenza = 'Provincia obbligatoria'
 
     } else if (formData.tipo_cliente === 'azienda') {
@@ -920,7 +919,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CAP *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CAP</label>
                       <input
                         type="text"
                         value={formData.codice_postale}
