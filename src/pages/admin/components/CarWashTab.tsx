@@ -15,6 +15,10 @@ interface CarWashService {
   features_en: string[]
   display_order: number
   is_active: boolean
+  category: string
+  main_tab: string
+  price_unit?: string
+  price_options?: { label: string; price: number }[]
   created_at: string
   updated_at: string
 }
@@ -24,6 +28,7 @@ export default function CarWashTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [filterTab, setFilterTab] = useState<'all' | 'lavaggio' | 'meccanica'>('all')
   const [formData, setFormData] = useState({
     id: '',
     name: '',
@@ -35,7 +40,11 @@ export default function CarWashTab() {
     features: '',
     features_en: '',
     display_order: '0',
-    is_active: true
+    is_active: true,
+    category: 'urban',
+    main_tab: 'lavaggio',
+    price_unit: '',
+    price_options: ''
   })
 
   useEffect(() => {
@@ -73,7 +82,11 @@ export default function CarWashTab() {
       features: service.features.join('\n'),
       features_en: service.features_en.join('\n'),
       display_order: service.display_order.toString(),
-      is_active: service.is_active
+      is_active: service.is_active,
+      category: service.category || 'urban',
+      main_tab: service.main_tab || 'lavaggio',
+      price_unit: service.price_unit || '',
+      price_options: service.price_options ? JSON.stringify(service.price_options) : ''
     })
     setShowForm(true)
   }
@@ -81,18 +94,33 @@ export default function CarWashTab() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const serviceData = {
+      // Parse price_options if provided
+      let priceOptions = null
+      if (formData.price_options.trim()) {
+        try {
+          priceOptions = JSON.parse(formData.price_options)
+        } catch {
+          alert('Formato price_options non valido. Usa JSON: [{"label":"1h","price":9.90}]')
+          return
+        }
+      }
+
+      const serviceData: any = {
         id: formData.id || undefined,
         name: formData.name,
         name_en: formData.name_en,
-        price: parseInt(formData.price),
+        price: parseFloat(formData.price),
         duration: formData.duration,
         description: formData.description,
         description_en: formData.description_en,
         features: formData.features.split('\n').filter(f => f.trim()),
         features_en: formData.features_en.split('\n').filter(f => f.trim()),
         display_order: parseInt(formData.display_order),
-        is_active: formData.is_active
+        is_active: formData.is_active,
+        category: formData.category,
+        main_tab: formData.main_tab,
+        price_unit: formData.price_unit || null,
+        price_options: priceOptions
       }
 
       if (editingId) {
@@ -171,7 +199,11 @@ export default function CarWashTab() {
       features: '',
       features_en: '',
       display_order: '0',
-      is_active: true
+      is_active: true,
+      category: 'urban',
+      main_tab: 'lavaggio',
+      price_unit: '',
+      price_options: ''
     })
   }
 
@@ -183,7 +215,7 @@ export default function CarWashTab() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-        <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">🚿 Servizi Autolavaggio</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-dr7-gold">🚿 Prime Wash Services</h2>
         <Button
           onClick={() => {
             resetForm()
@@ -196,6 +228,40 @@ export default function CarWashTab() {
         </Button>
       </div>
 
+      {/* Filter Tabs */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setFilterTab('all')}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            filterTab === 'all'
+              ? 'bg-dr7-gold text-black'
+              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+          }`}
+        >
+          TUTTI ({services.length})
+        </button>
+        <button
+          onClick={() => setFilterTab('lavaggio')}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            filterTab === 'lavaggio'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+          }`}
+        >
+          LAVAGGIO ({services.filter(s => s.main_tab === 'lavaggio').length})
+        </button>
+        <button
+          onClick={() => setFilterTab('meccanica')}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            filterTab === 'meccanica'
+              ? 'bg-orange-600 text-white'
+              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+          }`}
+        >
+          MECCANICA ({services.filter(s => s.main_tab === 'meccanica').length})
+        </button>
+      </div>
+
       {showForm && (
         <form onSubmit={handleSubmit} className=" p-4 sm:p-6 rounded-lg mb-6 border border-theme-border">
           <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
@@ -204,41 +270,42 @@ export default function CarWashTab() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="ID Servizio (es: full-clean)"
+              label="ID Servizio (es: urban-full)"
               required
               value={formData.id}
               onChange={(e) => setFormData({ ...formData, id: e.target.value })}
               disabled={!!editingId}
-              placeholder="full-clean"
+              placeholder="urban-full"
             />
             <Input
               label="Prezzo (€)"
               type="number"
+              step="0.01"
               required
               value={formData.price}
               onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-              placeholder="25"
+              placeholder="24.90"
             />
             <Input
               label="Nome (Italiano)"
               required
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="LAVAGGIO COMPLETO"
+              placeholder="PRIME FULL CLEAN"
             />
             <Input
               label="Nome (Inglese)"
               required
               value={formData.name_en}
               onChange={(e) => setFormData({ ...formData, name_en: e.target.value })}
-              placeholder="FULL CLEAN"
+              placeholder="PRIME FULL CLEAN"
             />
             <Input
               label="Durata"
               required
               value={formData.duration}
               onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-              placeholder="30-45 min"
+              placeholder="45 min"
             />
             <Input
               label="Ordine di visualizzazione"
@@ -247,6 +314,50 @@ export default function CarWashTab() {
               value={formData.display_order}
               onChange={(e) => setFormData({ ...formData, display_order: e.target.value })}
               placeholder="1"
+            />
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                Categoria *
+              </label>
+              <select
+                required
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+              >
+                <option value="urban">PRIME URBAN CLASS</option>
+                <option value="maxi">PRIME MAXI CLASS</option>
+                <option value="extra">PRIME EXTRA CARE</option>
+                <option value="moto">PRIME MOTO</option>
+                <option value="experience">PRIME EXPERIENCE</option>
+                <option value="tech">PRIME TECH SERVICE</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                Tab Principale *
+              </label>
+              <select
+                required
+                value={formData.main_tab}
+                onChange={(e) => setFormData({ ...formData, main_tab: e.target.value })}
+                className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+              >
+                <option value="lavaggio">LAVAGGIO</option>
+                <option value="meccanica">MECCANICA</option>
+              </select>
+            </div>
+            <Input
+              label="Unità Prezzo (opzionale)"
+              value={formData.price_unit}
+              onChange={(e) => setFormData({ ...formData, price_unit: e.target.value })}
+              placeholder="a sedile, per 4 cerchi, ant/post"
+            />
+            <Input
+              label="Opzioni Prezzo (JSON, opzionale)"
+              value={formData.price_options}
+              onChange={(e) => setFormData({ ...formData, price_options: e.target.value })}
+              placeholder='[{"label":"1h","price":9.90},{"label":"2h","price":14.90}]'
             />
           </div>
 
@@ -339,7 +450,9 @@ export default function CarWashTab() {
 
       {/* Services Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {services.map((service) => (
+        {services
+          .filter(s => filterTab === 'all' || s.main_tab === filterTab)
+          .map((service) => (
           <div
             key={service.id}
             className={` rounded-lg border p-6 ${
@@ -348,13 +461,26 @@ export default function CarWashTab() {
           >
             <div className="flex justify-between items-start mb-4">
               <div>
+                <div className="flex gap-2 mb-1">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    service.main_tab === 'lavaggio' ? 'bg-blue-600' : 'bg-orange-600'
+                  }`}>
+                    {service.main_tab?.toUpperCase() || 'LAVAGGIO'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-600">
+                    {service.category?.toUpperCase() || 'URBAN'}
+                  </span>
+                </div>
                 <h3 className="text-xl font-bold text-theme-text-primary">{service.name}</h3>
                 <p className="text-sm text-theme-text-muted">{service.name_en}</p>
                 <p className="text-xs text-gray-500 mt-1">ID: {service.id}</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-theme-text-primary">€{service.price}</div>
+                <div className="text-3xl font-bold text-theme-text-primary">€{service.price.toFixed(2)}</div>
                 <div className="text-sm text-theme-text-muted">{service.duration}</div>
+                {service.price_unit && (
+                  <div className="text-xs text-dr7-gold">{service.price_unit}</div>
+                )}
               </div>
             </div>
 
