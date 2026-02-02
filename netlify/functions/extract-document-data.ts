@@ -91,13 +91,43 @@ CODICE FISCALE:
   "notes": "eventuali problemi"
 }
 
+=== PATENTE DI GUIDA ITALIANA ===
+
+FRONTE della patente - campi numerati:
+- Campo 1: Cognome
+- Campo 2: Nome
+- Campo 3: Data e luogo di nascita
+- Campo 4a: Data rilascio
+- Campo 4b: Scadenza
+- Campo 4c: Ente rilascio (es: MCTC, UCO)
+- Campo 5: NUMERO PATENTE (es: AB1234567X) ← QUESTO È IL NUMERO!
+- Campo 9: Categorie
+
+RETRO della patente - TABELLA CATEGORIE:
+La tabella mostra TUTTE le categorie possibili: AM, A1, A2, A, B1, B, C1, C, D1, D, BE, C1E, CE, D1E, DE
+
+IMPORTANTE PER TIPO PATENTE:
+- Colonna 10 = data rilascio categoria
+- Colonna 11 = data scadenza categoria
+- Colonna 12 = restrizioni
+
+Il titolare possiede SOLO le categorie che hanno DATE scritte nelle colonne 10 e 11.
+Le righe SENZA date = categorie NON possedute, NON includerle!
+
+Esempio: Se solo la riga "B" ha date (10: 15.03.2015, 11: 15.03.2025), allora patente_tipo = "B"
+Se le righe "AM" e "B" hanno date, allora patente_tipo = "AM, B"
+
 Per PATENTE:
 {
-  "patente_numero": "numero patente",
-  "patente_tipo": "B, AM, ecc",
-  "patente_rilascio": "YYYY-MM-DD",
-  "patente_scadenza": "YYYY-MM-DD",
-  "patente_ente": "ente",
+  "nome": "dal campo 2",
+  "cognome": "dal campo 1",
+  "data_nascita": "dal campo 3, formato YYYY-MM-DD",
+  "luogo_nascita": "dal campo 3",
+  "patente_numero": "dal campo 5 sul FRONTE",
+  "patente_tipo": "SOLO categorie con date sul RETRO (es: B oppure AM, B)",
+  "patente_rilascio": "dal campo 4a, YYYY-MM-DD",
+  "patente_scadenza": "dal campo 4b, YYYY-MM-DD",
+  "patente_ente": "dal campo 4c",
   "document_type": "patente"
 }
 
