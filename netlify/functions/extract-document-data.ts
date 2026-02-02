@@ -54,8 +54,15 @@ REGOLA FONDAMENTALE: Trascrivi ESATTAMENTE quello che leggi. NON inventare, NON 
 
 NUMERO DOCUMENTO CIE (Carta Identità Elettronica):
 - Formato: 2 lettere + 5 numeri + 2 lettere
-- Esempio: CA12345AB
+- Esempio: CA12345AB, CA44528GJ
 - ESATTAMENTE 9 caratteri, non di più, non di meno
+
+!!! ATTENZIONE - NON INCLUDERE "ITA" !!!
+Sul fronte della CIE, in alto a destra, c'è scritto "ITA" (codice paese Italia).
+"ITA" NON FA PARTE del numero documento!
+Il numero documento è SOTTO "ITA", nel formato CA12345AB.
+Se leggi "ITA CA44528GJ", il numero documento è SOLO "CA44528GJ" (9 caratteri).
+NON scrivere mai "ITA" nel campo documento_numero!
 
 DATA DI NASCITA:
 - Sul documento: GG.MM.AAAA oppure GG/MM/AAAA
