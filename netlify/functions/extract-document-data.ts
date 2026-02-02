@@ -40,101 +40,76 @@ interface ExtractedPersonData {
     notes?: string;
 }
 
-const EXTRACTION_PROMPT = `Sei un esperto OCR specializzato in documenti d'identità italiani.
+const EXTRACTION_PROMPT = `Estrai i dati da questo documento italiano.
 
-ISTRUZIONI CRITICHE - LEGGI CON ATTENZIONE:
-1. GUARDA l'immagine molto attentamente
-2. Leggi OGNI SINGOLA LETTERA dei nomi - non inventare, leggi esattamente quello che vedi
-3. I nomi italiani comuni: Marco, Luca, Giuseppe, Giovanni, Antonio, Francesco, Mario, Luigi, Paolo, Andrea, Matteo, Alessio, Simone, Davide, Fabio, Stefano, Roberto, Massimo, Gianluca, Vincenzo
-4. I cognomi italiani sono MOLTO VARI - leggi esattamente quello che c'è scritto, lettera per lettera
-5. NON fare assunzioni - se non riesci a leggere chiaramente, ometti il campo
+REGOLA FONDAMENTALE: Trascrivi ESATTAMENTE quello che leggi. NON inventare, NON aggiungere caratteri, NON indovinare.
 
-=== CARTA D'IDENTITÀ ELETTRONICA (CIE) - LAYOUT ===
-FRONTE della CIE:
-- In alto: "REPUBBLICA ITALIANA" e "CARTA D'IDENTITÀ"
-- COGNOME: dopo "Cognome/Surname"
-- NOME: dopo "Nome/Name"
-- DATA NASCITA: dopo "Nascita/Birth" (formato GG.MM.AAAA o GG/MM/AAAA)
-- SESSO: M o F
-- LUOGO NASCITA: città di nascita
-- SCADENZA: dopo "Scadenza/Expiry"
-- NUMERO DOCUMENTO: codice alfanumerico (es: CA00000AA) in alto a destra
+=== FORMATI ESATTI ===
 
-RETRO della CIE:
-- CODICE FISCALE: 16 caratteri, di solito in alto (es: RSSMRA85M01H501X)
-- INDIRIZZO: Via/Piazza + numero
-- COMUNE RESIDENZA: città
-- PROVINCIA: sigla 2 lettere
-- CAP: 5 cifre
-- ENTE RILASCIO: il comune che ha rilasciato
+NUMERO DOCUMENTO CIE (Carta Identità Elettronica):
+- Formato: 2 lettere + 5 numeri + 2 lettere
+- Esempio: CA12345AB
+- ESATTAMENTE 9 caratteri, non di più, non di meno
 
-=== CARTA D'IDENTITÀ CARTACEA (vecchio formato) ===
-- Numero documento in alto
-- Dati personali su righe separate
-- Codice fiscale spesso sul retro o in basso
+DATA DI NASCITA:
+- Sul documento: GG.MM.AAAA oppure GG/MM/AAAA
+- Estrai come: YYYY-MM-DD
+- Esempio: 15.03.1990 → 1990-03-15
 
-=== DATI DA ESTRARRE ===
+NOME e COGNOME:
+- Trascrivi LETTERA PER LETTERA quello che vedi
+- Sul documento sono in MAIUSCOLO, tu convertili in: Prima Lettera Maiuscola
+- Esempio: MARIO → Mario, ROSSI → Rossi
 
-DATI PERSONALI:
-- nome: solo il nome di battesimo
-- cognome: il cognome
-- sesso: M o F
-- data_nascita: convertire in YYYY-MM-DD
-- luogo_nascita: solo il comune
-- provincia_nascita: sigla 2 lettere (es: MI, RM, NA)
-- codice_fiscale: ESATTAMENTE 16 caratteri
+CODICE FISCALE:
+- ESATTAMENTE 16 caratteri
+- Formato: LLLLLLNNLNNLNNNL (L=lettera, N=numero)
+- NON aggiungere caratteri extra
 
-INDIRIZZO:
-- indirizzo: via/piazza + nome strada
-- numero_civico: il numero
-- codice_postale: CAP 5 cifre
-- citta_residenza: comune
-- provincia_residenza: sigla 2 lettere
+=== CAMPI DA ESTRARRE ===
 
-DOCUMENTO:
-- documento_tipo: "Carta d'Identità Elettronica" o "Carta d'Identità"
-- documento_numero: il codice del documento
-- documento_rilascio: data rilascio in YYYY-MM-DD
-- documento_scadenza: data scadenza in YYYY-MM-DD
-- documento_ente: comune di rilascio
+{
+  "nome": "Nome di battesimo",
+  "cognome": "Cognome",
+  "sesso": "M o F",
+  "data_nascita": "YYYY-MM-DD",
+  "luogo_nascita": "Comune di nascita",
+  "provincia_nascita": "XX (2 lettere)",
+  "codice_fiscale": "16 caratteri esatti",
+  "indirizzo": "Via/Piazza nome",
+  "numero_civico": "numero",
+  "codice_postale": "5 cifre",
+  "citta_residenza": "Comune",
+  "provincia_residenza": "XX (2 lettere)",
+  "documento_tipo": "Carta d'Identità Elettronica",
+  "documento_numero": "9 caratteri per CIE",
+  "documento_rilascio": "YYYY-MM-DD",
+  "documento_scadenza": "YYYY-MM-DD",
+  "documento_ente": "Comune di rilascio",
+  "document_type": "carta_identita",
+  "confidence": "high/medium/low",
+  "notes": "eventuali problemi"
+}
 
-PATENTE (se è una patente):
-- patente_numero: numero patente (es: AB1234567X)
-- patente_tipo: SOLO categorie con date (es: "B" o "AM, B")
-- patente_rilascio: YYYY-MM-DD
-- patente_scadenza: YYYY-MM-DD
-- patente_ente: ente rilascio
+Per PATENTE:
+{
+  "patente_numero": "numero patente",
+  "patente_tipo": "B, AM, ecc",
+  "patente_rilascio": "YYYY-MM-DD",
+  "patente_scadenza": "YYYY-MM-DD",
+  "patente_ente": "ente",
+  "document_type": "patente"
+}
 
-METADATI:
-- document_type: "carta_identita", "patente", "passaporto", "tessera_sanitaria", o "unknown"
-- confidence: "high", "medium", o "low"
-- notes: problemi riscontrati
+=== REGOLE RIGIDE ===
 
-=== REGOLE CRITICHE PER CODICE FISCALE ===
-Il codice fiscale italiano è SEMPRE 16 caratteri con questa struttura FISSA:
-- Posizioni 1-6: LETTERE (cognome+nome)
-- Posizioni 7-8: NUMERI (anno)
-- Posizione 9: LETTERA (mese: A,B,C,D,E,H,L,M,P,R,S,T)
-- Posizioni 10-11: NUMERI (giorno: 01-31 o 41-71)
-- Posizione 12: LETTERA (codice comune)
-- Posizioni 13-15: NUMERI (codice comune)
-- Posizione 16: LETTERA (controllo)
+1. Se non riesci a leggere un campo chiaramente, OMETTILO dal JSON
+2. NON aggiungere numeri o lettere extra a nessun campo
+3. Il numero documento CIE è SEMPRE 9 caratteri (es: CA12345AB)
+4. La data è SEMPRE nel formato YYYY-MM-DD
+5. Il codice fiscale è SEMPRE 16 caratteri
 
-ATTENZIONE MASSIMA a questi errori comuni:
-- 0 (zero) ↔ O (lettera): usa la regola posizionale!
-- 1 (uno) ↔ I (lettera): usa la regola posizionale!
-- 5 ↔ S: usa la regola posizionale!
-- 8 ↔ B: usa la regola posizionale!
-
-Esempio: se leggi "RSSMRA85M01H5O1X" ma posizione 15 deve essere un NUMERO, correggi in "RSSMRA85M01H501X"
-
-=== REGOLE GENERALI ===
-1. Date: converti SEMPRE in YYYY-MM-DD (15/03/1990 → 1990-03-15)
-2. Nomi: Prima lettera maiuscola (MARIO ROSSI → Mario Rossi)
-3. Province: sempre 2 lettere maiuscole (Milano = MI)
-4. Se non riesci a leggere un campo, OMETTILO
-
-Rispondi SOLO con JSON valido, senza markdown o commenti.`;
+Rispondi SOLO con JSON valido.`;
 
 export const handler: Handler = async (event) => {
     const headers = {
