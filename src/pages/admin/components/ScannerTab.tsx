@@ -48,12 +48,65 @@ interface DocumentSlot {
     extracting: boolean;
 }
 
+// Compress image to max 4MB for API
+const compressImage = (file: File, maxSizeMB: number = 4): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+
+                // Max dimension 2000px for documents (plenty for OCR)
+                const maxDim = 2000;
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = (height / width) * maxDim;
+                        width = maxDim;
+                    } else {
+                        width = (width / height) * maxDim;
+                        height = maxDim;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    reject(new Error('Failed to get canvas context'));
+                    return;
+                }
+
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Start with quality 0.8, reduce if still too large
+                let quality = 0.8;
+                let base64 = canvas.toDataURL('image/jpeg', quality);
+
+                // Keep reducing quality until under maxSizeMB
+                while (base64.length > maxSizeMB * 1024 * 1024 * 1.37 && quality > 0.1) {
+                    quality -= 0.1;
+                    base64 = canvas.toDataURL('image/jpeg', quality);
+                }
+
+                resolve(base64);
+            };
+            img.onerror = () => reject(new Error('Failed to load image'));
+            img.src = e.target?.result as string;
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+    });
+};
+
 export default function ScannerTab() {
     const [documents, setDocuments] = useState<Record<string, DocumentSlot>>({
-        id_front: { label: 'Carta Identità (Fronte)', key: 'id_front', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
-        id_back: { label: 'Carta Identità (Retro)', key: 'id_back', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
-        license_front: { label: 'Patente (Fronte)', key: 'license_front', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
-        license_back: { label: 'Patente (Retro)', key: 'license_back', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
+        id_front: { label: 'Carta Identità (Fronte)', key: 'id_front', icon: 'ID', preview: null, base64: null, extracted: null, extracting: false },
+        id_back: { label: 'Carta Identità (Retro)', key: 'id_back', icon: 'ID', preview: null, base64: null, extracted: null, extracting: false },
+        license_front: { label: 'Patente (Fronte)', key: 'license_front', icon: 'PAT', preview: null, base64: null, extracted: null, extracting: false },
+        license_back: { label: 'Patente (Retro)', key: 'license_back', icon: 'PAT', preview: null, base64: null, extracted: null, extracting: false },
     });
 
     const [mergedData, setMergedData] = useState<ExtractedData | null>(null);
@@ -66,10 +119,10 @@ export default function ScannerTab() {
     // Reset all
     const resetAll = () => {
         setDocuments({
-            id_front: { label: 'Carta Identità (Fronte)', key: 'id_front', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
-            id_back: { label: 'Carta Identità (Retro)', key: 'id_back', icon: '🪪', preview: null, base64: null, extracted: null, extracting: false },
-            license_front: { label: 'Patente (Fronte)', key: 'license_front', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
-            license_back: { label: 'Patente (Retro)', key: 'license_back', icon: '🚗', preview: null, base64: null, extracted: null, extracting: false },
+            id_front: { label: 'Carta Identità (Fronte)', key: 'id_front', icon: 'ID', preview: null, base64: null, extracted: null, extracting: false },
+            id_back: { label: 'Carta Identità (Retro)', key: 'id_back', icon: 'ID', preview: null, base64: null, extracted: null, extracting: false },
+            license_front: { label: 'Patente (Fronte)', key: 'license_front', icon: 'PAT', preview: null, base64: null, extracted: null, extracting: false },
+            license_back: { label: 'Patente (Retro)', key: 'license_back', icon: 'PAT', preview: null, base64: null, extracted: null, extracting: false },
         });
         setMergedData(null);
         setError(null);
@@ -77,7 +130,7 @@ export default function ScannerTab() {
     };
 
     // Handle file selection for a specific slot
-    const handleFileSelect = (slotKey: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = (slotKey: string) => async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
@@ -87,29 +140,32 @@ export default function ScannerTab() {
             return;
         }
 
-        if (file.size > 10 * 1024 * 1024) {
-            setError('File troppo grande. Massimo 10MB.');
+        if (file.size > 20 * 1024 * 1024) {
+            setError('File troppo grande. Massimo 20MB.');
             return;
         }
 
         setError(null);
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const result = e.target?.result as string;
-            const base64 = result.split(',')[1];
+        try {
+            // Compress image to max 4MB for API
+            const compressedDataUrl = await compressImage(file, 4);
+            const base64 = compressedDataUrl.split(',')[1];
 
             setDocuments(prev => ({
                 ...prev,
                 [slotKey]: {
                     ...prev[slotKey],
-                    preview: result,
+                    preview: compressedDataUrl,
                     base64: base64,
                     extracted: null
                 }
             }));
-        };
-        reader.readAsDataURL(file);
+        } catch (err) {
+            console.error('Compression error:', err);
+            setError('Errore durante la compressione dell\'immagine');
+        }
+
         event.target.value = '';
     };
 
@@ -301,14 +357,14 @@ export default function ScannerTab() {
                                     {slot.extracting && (
                                         <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                                             <div className="text-center">
-                                                <div className="animate-spin text-3xl mb-2">⏳</div>
+                                                <div className="animate-spin w-6 h-6 border-2 border-white border-t-transparent rounded-full mx-auto mb-2"></div>
                                                 <p className="text-white text-xs">Estrazione...</p>
                                             </div>
                                         </div>
                                     )}
                                     {slot.extracted && !slot.extracting && (
                                         <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                                            ✓ Estratto
+                                            OK
                                         </div>
                                     )}
                                     <button
@@ -327,7 +383,7 @@ export default function ScannerTab() {
                                     onClick={() => fileInputRefs.current[key]?.click()}
                                     className="aspect-[3/2] border-2 border-dashed border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-dr7-gold hover:bg-gray-800/30 transition-all"
                                 >
-                                    <div className="text-3xl mb-2">{slot.icon}</div>
+                                    <div className="text-lg font-bold text-dr7-gold mb-2">{slot.icon}</div>
                                     <p className="text-white text-xs font-medium text-center px-2">{slot.label}</p>
                                 </div>
                             )}
@@ -345,12 +401,11 @@ export default function ScannerTab() {
                         >
                             {isExtracting ? (
                                 <>
-                                    <span className="animate-spin">⏳</span>
+                                    <span className="animate-spin w-4 h-4 border-2 border-black border-t-transparent rounded-full"></span>
                                     Estrazione in corso...
                                 </>
                             ) : (
                                 <>
-                                    <span>🔍</span>
                                     Estrai Dati ({uploadedCount} doc)
                                 </>
                             )}
@@ -469,9 +524,8 @@ export default function ScannerTab() {
                         </button>
                         <button
                             onClick={openClientModal}
-                            className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all flex items-center gap-2"
+                            className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all"
                         >
-                            <span>✅</span>
                             Apri Form Nuovo Cliente
                         </button>
                     </div>
@@ -485,22 +539,22 @@ export default function ScannerTab() {
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">1️⃣</div>
+                            <div className="text-2xl font-bold text-dr7-gold mb-2">1</div>
                             <p className="text-white font-medium text-sm">Carica i documenti</p>
                             <p className="text-theme-text-muted text-xs mt-1">Fronte e retro di CI e Patente</p>
                         </div>
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">2️⃣</div>
+                            <div className="text-2xl font-bold text-dr7-gold mb-2">2</div>
                             <p className="text-white font-medium text-sm">Estrai i dati</p>
                             <p className="text-theme-text-muted text-xs mt-1">L'AI legge tutti i documenti</p>
                         </div>
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">3️⃣</div>
+                            <div className="text-2xl font-bold text-dr7-gold mb-2">3</div>
                             <p className="text-white font-medium text-sm">Verifica</p>
                             <p className="text-theme-text-muted text-xs mt-1">Controlla i dati estratti</p>
                         </div>
                         <div className="p-4 bg-gray-800/50 rounded-xl text-center">
-                            <div className="text-3xl mb-2">4️⃣</div>
+                            <div className="text-2xl font-bold text-dr7-gold mb-2">4</div>
                             <p className="text-white font-medium text-sm">Crea Cliente</p>
                             <p className="text-theme-text-muted text-xs mt-1">Apri il form precompilato</p>
                         </div>
