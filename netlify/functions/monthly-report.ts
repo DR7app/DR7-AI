@@ -109,10 +109,11 @@ async function generateVehicleReport(
   if (vehiclesError) throw vehiclesError
 
   // Fetch ALL bookings that overlap with this month — we filter in JS for full control
+  // Only fetch bookings with statuses that represent actual rentals
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
     .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date')
-    .neq('status', 'cancelled')
+    .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
 
   if (bookingsError) throw bookingsError
 
