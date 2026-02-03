@@ -245,85 +245,76 @@ export default function ScadenzeTab() {
 
       // Vehicle documents
       vehicles?.forEach(vehicle => {
-        // Insurance
+        // Insurance - always show
         if (vehicle.insurance_expiry) {
-          const daysUntil = Math.ceil((new Date(vehicle.insurance_expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          if (daysUntil <= 30) { // Show if within 30 days
-            autoScadenze.push({
-              id: `insurance-${vehicle.id}`,
-              category: 'veicoli_documenti',
-              item_type: 'Assicurazione',
-              description: vehicle.display_name,
-              reference_id: vehicle.id,
-              reference_type: 'vehicle',
-              reference_name: vehicle.display_name,
-              due_date: vehicle.insurance_expiry,
-              due_km: null,
-              current_km: null,
-              amount: null,
-              status: daysUntil <= 0 ? 'pending' : 'pending',
-              advance_days: 2,
-              advance_km: null,
-              is_recurring: true,
-              recurring_interval: 'yearly',
-              is_manual: false,
-              created_at: new Date().toISOString()
-            })
-          }
+          autoScadenze.push({
+            id: `insurance-${vehicle.id}`,
+            category: 'veicoli_documenti',
+            item_type: 'Assicurazione',
+            description: vehicle.display_name,
+            reference_id: vehicle.id,
+            reference_type: 'vehicle',
+            reference_name: vehicle.display_name,
+            due_date: vehicle.insurance_expiry,
+            due_km: null,
+            current_km: null,
+            amount: null,
+            status: 'pending',
+            advance_days: 2,
+            advance_km: null,
+            is_recurring: true,
+            recurring_interval: 'yearly',
+            is_manual: false,
+            created_at: new Date().toISOString()
+          })
         }
 
-        // Tax (Bollo)
+        // Tax (Bollo) - always show
         if (vehicle.tax_expiry) {
-          const daysUntil = Math.ceil((new Date(vehicle.tax_expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          if (daysUntil <= 30) {
-            autoScadenze.push({
-              id: `tax-${vehicle.id}`,
-              category: 'veicoli_documenti',
-              item_type: 'Bollo',
-              description: vehicle.display_name,
-              reference_id: vehicle.id,
-              reference_type: 'vehicle',
-              reference_name: vehicle.display_name,
-              due_date: vehicle.tax_expiry,
-              due_km: null,
-              current_km: null,
-              amount: null,
-              status: 'pending',
-              advance_days: 0,
-              advance_km: null,
-              is_recurring: true,
-              recurring_interval: 'yearly',
-              is_manual: false,
-              created_at: new Date().toISOString()
-            })
-          }
+          autoScadenze.push({
+            id: `tax-${vehicle.id}`,
+            category: 'veicoli_documenti',
+            item_type: 'Bollo',
+            description: vehicle.display_name,
+            reference_id: vehicle.id,
+            reference_type: 'vehicle',
+            reference_name: vehicle.display_name,
+            due_date: vehicle.tax_expiry,
+            due_km: null,
+            current_km: null,
+            amount: null,
+            status: 'pending',
+            advance_days: 0,
+            advance_km: null,
+            is_recurring: true,
+            recurring_interval: 'yearly',
+            is_manual: false,
+            created_at: new Date().toISOString()
+          })
         }
 
-        // Inspection (Revisione)
+        // Inspection (Revisione) - always show
         if (vehicle.inspection_expiry) {
-          const daysUntil = Math.ceil((new Date(vehicle.inspection_expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          if (daysUntil <= 30) {
-            autoScadenze.push({
-              id: `inspection-${vehicle.id}`,
-              category: 'veicoli_documenti',
-              item_type: 'Revisione',
-              description: vehicle.display_name,
-              reference_id: vehicle.id,
-              reference_type: 'vehicle',
-              reference_name: vehicle.display_name,
-              due_date: vehicle.inspection_expiry,
-              due_km: null,
-              current_km: null,
-              amount: null,
-              status: 'pending',
-              advance_days: 7,
-              advance_km: null,
-              is_recurring: true,
-              recurring_interval: 'biennial',
-              is_manual: false,
-              created_at: new Date().toISOString()
-            })
-          }
+          autoScadenze.push({
+            id: `inspection-${vehicle.id}`,
+            category: 'veicoli_documenti',
+            item_type: 'Revisione',
+            description: vehicle.display_name,
+            reference_id: vehicle.id,
+            reference_type: 'vehicle',
+            reference_name: vehicle.display_name,
+            due_date: vehicle.inspection_expiry,
+            due_km: null,
+            current_km: null,
+            amount: null,
+            status: 'pending',
+            advance_days: 7,
+            advance_km: null,
+            is_recurring: true,
+            recurring_interval: 'biennial',
+            is_manual: false,
+            created_at: new Date().toISOString()
+          })
         }
 
         // Maintenance - Tagliando
@@ -602,6 +593,8 @@ export default function ScadenzeTab() {
     return scadenze
       .filter(s => s.category === category && s.status !== 'completed' && s.status !== 'paid' && s.status !== 'refunded')
       .filter(s => {
+        // Always show vehicle documents (insurance, tax, inspection)
+        if (category === 'veicoli_documenti') return true
         // Check if within advance period
         if (s.due_date) {
           const dueDate = new Date(s.due_date)
