@@ -204,6 +204,7 @@ export default function BulkImportTab() {
           sesso: d.sesso || null,
           data_nascita: d.data_nascita || null,
           luogo_nascita: d.luogo_nascita || null,
+          citta_nascita: d.luogo_nascita || null,
           provincia_nascita: d.provincia_nascita || null,
           codice_fiscale: d.codice_fiscale?.toUpperCase() || null,
           indirizzo: d.indirizzo || null,
@@ -217,6 +218,7 @@ export default function BulkImportTab() {
           // Top-level patente fields (same as NewClientModal)
           patente: d.patente_numero?.toUpperCase() || null,
           numero_patente: d.patente_numero?.toUpperCase() || null,
+          tipo_patente: d.patente_tipo || null,
           data_rilascio_patente: d.patente_rilascio || null,
           scadenza_patente: d.patente_scadenza || null,
           emessa_da: d.patente_ente || null,
