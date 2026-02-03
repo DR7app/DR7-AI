@@ -128,6 +128,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const [newCustomerMode, setNewCustomerMode] = useState(false)
   const [selectedMainTab, setSelectedMainTab] = useState<'lavaggio' | 'meccanica'>('lavaggio')
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedServiceId, setSelectedServiceId] = useState('')
 
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -1215,7 +1217,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div className="flex gap-2 mb-4">
                 <button
                   type="button"
-                  onClick={() => setSelectedMainTab('lavaggio')}
+                  onClick={() => { setSelectedMainTab('lavaggio'); setSelectedCategory(''); setSelectedServiceId('') }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'lavaggio'
                       ? 'bg-white text-black border-white'
@@ -1226,7 +1228,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedMainTab('meccanica')}
+                  onClick={() => { setSelectedMainTab('meccanica'); setSelectedCategory(''); setSelectedServiceId('') }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'meccanica'
                       ? 'bg-white text-black border-white'
@@ -1237,7 +1239,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
               </div>
 
-              {/* Service Cards by Category */}
+              {/* Service Selection Dropdowns */}
               {(() => {
                 const filteredServices = carWashServices.filter(s => s.main_tab === selectedMainTab)
                 const categories = [...new Set(filteredServices.map(s => s.category))]
@@ -1251,66 +1253,80 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   tech: 'PRIME TECH SERVICE'
                 }
 
-                return categories.map(category => (
-                  <div key={category} className="mb-4">
-                    <h4 className="text-sm font-semibold text-dr7-gold mb-2">{categoryLabels[category] || category.toUpperCase()}</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                      {filteredServices
-                        .filter(s => s.category === category)
-                        .map(service => {
-                          const inCart = isInCart(service.id)
-                          const hasPriceOptions = service.price_options && service.price_options.length > 0
-
-                          return (
-                            <div
-                              key={service.id}
-                              className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                                inCart
-                                  ? 'border-dr7-gold bg-dr7-gold/10'
-                                  : 'border-theme-border hover:border-dr7-gold/50 bg-gray-800/50'
-                              }`}
-                            >
-                              <div className="text-xs font-semibold text-theme-text-primary mb-1 truncate">
-                                {service.name}
-                              </div>
-                              <div className="text-sm font-bold text-dr7-gold">
-                                €{service.price.toFixed(2)}
-                                {service.price_unit && <span className="text-xs font-normal text-theme-text-muted ml-1">{service.price_unit}</span>}
-                              </div>
-                              <div className="text-xs text-theme-text-muted">{service.duration}</div>
-
-                              {hasPriceOptions ? (
-                                <div className="flex gap-1 mt-2 flex-wrap">
-                                  {service.price_options!.map(opt => (
-                                    <button
-                                      key={opt.label}
-                                      type="button"
-                                      onClick={() => addToCart(service, opt)}
-                                      className="px-2 py-1 text-xs bg-gray-700 hover:bg-dr7-gold hover:text-black rounded transition-colors"
-                                    >
-                                      {opt.label} €{opt.price}
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => addToCart(service)}
-                                  className={`mt-2 w-full px-2 py-1 text-xs rounded transition-colors ${
-                                    inCart
-                                      ? 'bg-dr7-gold text-black'
-                                      : 'bg-gray-700 hover:bg-dr7-gold hover:text-black'
-                                  }`}
-                                >
-                                  {inCart ? '✓ Aggiunto' : '+ Aggiungi'}
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })}
+                return (
+                  <div className="space-y-3">
+                    {/* Category Dropdown */}
+                    <div>
+                      <label className="block text-xs text-theme-text-muted mb-1">Categoria</label>
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => {
+                          setSelectedCategory(e.target.value)
+                          setSelectedServiceId('')
+                        }}
+                        className="w-full max-w-md px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-sm"
+                      >
+                        <option value="">-- Seleziona categoria --</option>
+                        {categories.map(cat => (
+                          <option key={cat} value={cat}>{categoryLabels[cat] || cat.toUpperCase()}</option>
+                        ))}
+                      </select>
                     </div>
+
+                    {/* Service Dropdown */}
+                    {selectedCategory && (
+                      <div>
+                        <label className="block text-xs text-theme-text-muted mb-1">Servizio</label>
+                        <select
+                          value={selectedServiceId}
+                          onChange={(e) => setSelectedServiceId(e.target.value)}
+                          className="w-full max-w-md px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-sm"
+                        >
+                          <option value="">-- Seleziona servizio --</option>
+                          {filteredServices
+                            .filter(s => s.category === selectedCategory)
+                            .map(service => (
+                              <option key={service.id} value={service.id}>
+                                {service.name} — €{service.price.toFixed(2)} {service.price_unit || ''} ({service.duration})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Add to cart button for selected service */}
+                    {selectedServiceId && (() => {
+                      const service = filteredServices.find(s => s.id === selectedServiceId)
+                      if (!service) return null
+                      const hasPriceOptions = service.price_options && service.price_options.length > 0
+
+                      return (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {hasPriceOptions ? (
+                            service.price_options!.map(opt => (
+                              <button
+                                key={opt.label}
+                                type="button"
+                                onClick={() => addToCart(service, opt)}
+                                className="px-4 py-2 text-sm bg-gray-700 hover:bg-dr7-gold hover:text-black rounded-full transition-colors border border-theme-border"
+                              >
+                                + {opt.label} — €{opt.price}
+                              </button>
+                            ))
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => addToCart(service)}
+                              className="px-4 py-2 text-sm bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors"
+                            >
+                              + Aggiungi al carrello
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
-                ))
+                )
               })()}
 
               {/* Cart Display */}
