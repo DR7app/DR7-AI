@@ -27,8 +27,9 @@ import BirthdaysTab, { useBirthdayCount } from './components/BirthdaysTab'
 
 import FleetManagementTab from './components/FleetManagementTab'
 import ScadenzeTab from './components/ScadenzeTab'
+import ReportsTab from './components/ReportsTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -317,6 +318,13 @@ export default function AdminDashboard() {
               >
                 Scadenze
               </button>
+              <button
+                onClick={() => { setActiveTab('reports'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reports' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Report
+              </button>
             </nav>
           </div>
         </div>
@@ -569,6 +577,15 @@ export default function AdminDashboard() {
               >
                 Scadenze
               </button>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reports'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Report
+              </button>
             </nav>
           </div>
         </div>
@@ -597,6 +614,7 @@ export default function AdminDashboard() {
             {activeTab === 'scanner' && 'Scanner Documenti'}
             {activeTab === 'nexi' && 'Nexi'}
             {activeTab === 'scadenze' && 'Scadenze'}
+            {activeTab === 'reports' && 'Report Mensili'}
           </h2>
         </div>
 
@@ -641,6 +659,7 @@ export default function AdminDashboard() {
           {activeTab === 'scanner' && <ScannerTab />}
           {activeTab === 'nexi' && <NexiTab />}
           {activeTab === 'scadenze' && <ScadenzeTab />}
+          {activeTab === 'reports' && <ReportsTab />}
         </div>
       </main>
 
