@@ -42,6 +42,7 @@ export const handler: Handler = async (event) => {
   const params = event.queryStringParameters || {}
   const reportType = params.type
   const month = params.month
+  const debug = params.debug === 'true'
 
   if (!reportType || !month) {
     return {
@@ -69,7 +70,7 @@ export const handler: Handler = async (event) => {
 
   try {
     if (reportType === 'vehicles') {
-      return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, month)
+      return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, month, debug)
     } else if (reportType === 'washes') {
       return await generateWashReport(monthStartISO, monthEndISO, month, daysInMonth)
     } else {
@@ -95,7 +96,8 @@ async function generateVehicleReport(
   monthEnd: Date,
   monthStartISO: string,
   monthEndISO: string,
-  month: string
+  month: string,
+  debug: boolean
 ) {
   // Fetch all vehicles (excluding retired)
   const { data: vehicles, error: vehiclesError } = await supabase
@@ -106,26 +108,44 @@ async function generateVehicleReport(
 
   if (vehiclesError) throw vehiclesError
 
-  // Fetch bookings that overlap with this month (exclude only cancelled)
+  // Fetch ALL bookings that overlap with this month — we filter in JS for full control
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details')
-    .lte('pickup_date', monthEndISO + 'T23:59:59')
-    .gte('dropoff_date', monthStartISO + 'T00:00:00')
+    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date')
     .neq('status', 'cancelled')
 
   if (bookingsError) throw bookingsError
 
-  // Filter to ONLY rental bookings — strictly exclude car_wash and mechanical_service
+  // STEP 1: Filter to ONLY real rental bookings
   const rentalBookings = (allBookings || []).filter(b => {
+    // Must have pickup_date and dropoff_date (car wash uses appointment_date instead)
+    if (!b.pickup_date || !b.dropoff_date) return false
+
+    // Exclude any service-type bookings
     const st = (b.service_type || '').trim().toLowerCase()
-    // Only include if service_type is empty/null (rental) or explicitly not a service booking
     if (st === 'car_wash' || st === 'mechanical_service' || st === 'mechanical') return false
-    // Also exclude if it looks like a car wash booking (pickup_location contains Car Wash)
+
+    // Exclude internal/automatic bookings
     const details = b.booking_details || {}
     if (details.internal === true) return false
     if (details.createdBy === 'automatic_system') return false
+
+    // Must overlap with the report month
+    const pickupDate = b.pickup_date.split('T')[0]
+    const dropoffDate = b.dropoff_date.split('T')[0]
+    if (pickupDate > monthEndISO || dropoffDate < monthStartISO) return false
+
     return true
+  })
+
+  // Build a set of all vehicle plates and IDs for quick lookup
+  const vehiclePlateSet = new Set<string>()
+  const vehicleIdSet = new Set<string>()
+  const vehicleNameSet = new Set<string>();
+  (vehicles || []).forEach(v => {
+    vehicleIdSet.add(v.id)
+    if (v.plate) vehiclePlateSet.add(v.plate.replace(/\s/g, '').toUpperCase())
+    if (v.display_name) vehicleNameSet.add(v.display_name.trim().toLowerCase())
   })
 
   // Build vehicle report
@@ -133,7 +153,7 @@ async function generateVehicleReport(
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // Find bookings for this vehicle
+    // Find bookings for this vehicle — match by ID first, then plate
     const vehicleBookings = rentalBookings.filter(b => {
       // Match by vehicle_id (primary, most reliable)
       if (b.vehicle_id && b.vehicle_id === vehicle.id) return true
@@ -144,8 +164,9 @@ async function generateVehicleReport(
         const bPlate = b.vehicle_plate.replace(/\s/g, '').toUpperCase()
         if (bPlate === vPlate) return true
       }
-      // Match by exact vehicle name (case-insensitive)
-      if (vName && b.vehicle_name) {
+      // Match by exact vehicle name — BUT only if the booking doesn't have an appointment_date
+      // (bookings with appointment_date are likely car wash, even if service_type is wrong)
+      if (vName && b.vehicle_name && !b.appointment_date) {
         const bName = b.vehicle_name.trim().toLowerCase()
         if (bName === vName) return true
       }
@@ -155,6 +176,7 @@ async function generateVehicleReport(
     // Calculate rented days (union of all booking day ranges)
     const rentedDays = new Set<number>()
     let rentalRevenue = 0
+    const matchedBookingDetails: any[] = []
 
     vehicleBookings.forEach(booking => {
       const start = new Date(booking.pickup_date)
@@ -170,6 +192,26 @@ async function generateVehicleReport(
       const overlapDays = days.size
       const bookingRevenue = (booking.price_total || 0) / 100
       rentalRevenue += (bookingRevenue / totalBookingDays) * overlapDays
+
+      if (debug) {
+        matchedBookingDetails.push({
+          id: booking.id,
+          vehicle_name: booking.vehicle_name,
+          vehicle_plate: booking.vehicle_plate,
+          vehicle_id: booking.vehicle_id,
+          pickup_date: booking.pickup_date,
+          dropoff_date: booking.dropoff_date,
+          service_type: booking.service_type,
+          status: booking.status,
+          appointment_date: booking.appointment_date,
+          overlapDays,
+          totalBookingDays,
+          matchMethod: booking.vehicle_id === vehicle.id ? 'vehicle_id'
+            : booking.booking_details?.vehicle_id === vehicle.id ? 'booking_details.vehicle_id'
+            : (vPlate && booking.vehicle_plate?.replace(/\s/g, '').toUpperCase() === vPlate) ? 'plate'
+            : 'name'
+        })
+      }
     })
 
     // Calculate maintenance days from vehicle metadata (unavailability)
@@ -195,7 +237,7 @@ async function generateVehicleReport(
     const maintenanceCount = finalMaintenanceDays.size
     const idleCount = daysInMonth - rentedCount - maintenanceCount
 
-    return {
+    const report: any = {
       vehicleId: vehicle.id,
       label: vehicle.display_name,
       plate: vehicle.plate || '-',
@@ -208,9 +250,14 @@ async function generateVehicleReport(
       idleRate: Math.round((Math.max(0, idleCount) / daysInMonth) * 100) / 100,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
-      // Debug: show which bookings matched
       _bookingIds: vehicleBookings.map(b => b.id)
     }
+
+    if (debug) {
+      report._matchedBookings = matchedBookingDetails
+    }
+
+    return report
   })
 
   // Sort by utilization rate descending
@@ -219,7 +266,7 @@ async function generateVehicleReport(
   // Find unmatched bookings
   const allMatchedIds = new Set<string>()
   vehicleReports.forEach(vr => {
-    (vr as any)._bookingIds?.forEach((id: string) => allMatchedIds.add(id))
+    vr._bookingIds?.forEach((id: string) => allMatchedIds.add(id))
   })
   const unmatchedBookings = rentalBookings
     .filter(b => !allMatchedIds.has(b.id))
@@ -234,8 +281,10 @@ async function generateVehicleReport(
       status: b.status
     }))
 
-  // Clean up debug fields from output
-  const cleanReports = vehicleReports.map(({ _bookingIds, ...rest }: any) => rest)
+  // Clean up debug fields from output (unless debug mode)
+  const cleanReports = debug
+    ? vehicleReports
+    : vehicleReports.map(({ _bookingIds, _matchedBookings, ...rest }: any) => rest)
 
   return {
     statusCode: 200,
