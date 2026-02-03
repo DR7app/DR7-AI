@@ -60,6 +60,7 @@ export default function ReportsTab() {
   const [vehicleData, setVehicleData] = useState<VehicleReportData | null>(null)
   const [washData, setWashData] = useState<WashReportData | null>(null)
 
+  const [plateSearch, setPlateSearch] = useState('')
   const [sortField, setSortField] = useState<keyof VehicleReport>('utilizationRate')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -91,18 +92,26 @@ export default function ReportsTab() {
     }
   }
 
-  const sortedVehicles = vehicleData?.vehicles
-    ? [...vehicleData.vehicles].sort((a, b) => {
-        const aVal = a[sortField]
-        const bVal = b[sortField]
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return sortDir === 'asc' ? aVal - bVal : bVal - aVal
-        }
-        return sortDir === 'asc'
-          ? String(aVal).localeCompare(String(bVal))
-          : String(bVal).localeCompare(String(aVal))
+  const filteredVehicles = vehicleData?.vehicles
+    ? vehicleData.vehicles.filter(v => {
+        if (!plateSearch.trim()) return true
+        const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
+        const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
+        const name = (v.label || '').toLowerCase()
+        return plate.includes(q) || name.includes(q)
       })
     : []
+
+  const sortedVehicles = [...filteredVehicles].sort((a, b) => {
+    const aVal = a[sortField]
+    const bVal = b[sortField]
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return sortDir === 'asc' ? aVal - bVal : bVal - aVal
+    }
+    return sortDir === 'asc'
+      ? String(aVal).localeCompare(String(bVal))
+      : String(bVal).localeCompare(String(aVal))
+  })
 
   function formatPercent(rate: number): string {
     return `${Math.round(rate * 100)}%`
@@ -210,6 +219,22 @@ export default function ReportsTab() {
               <p className="text-xs text-theme-text-muted">Ricavo Totale Noleggi</p>
               <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRentalRevenue)}</p>
             </div>
+          </div>
+
+          {/* Plate Search */}
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              placeholder="Cerca per targa o nome..."
+              value={plateSearch}
+              onChange={(e) => setPlateSearch(e.target.value)}
+              className="px-4 py-2 bg-gray-700 border border-theme-border-light rounded-lg text-theme-text-primary text-sm placeholder-gray-500 w-full max-w-xs"
+            />
+            {plateSearch && (
+              <span className="text-xs text-theme-text-muted">
+                {sortedVehicles.length} di {vehicleData.vehicleCount} veicoli
+              </span>
+            )}
           </div>
 
           {/* Vehicle Table */}
