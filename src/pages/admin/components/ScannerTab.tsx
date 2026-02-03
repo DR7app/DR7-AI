@@ -530,10 +530,22 @@ export default function ScannerTab() {
                                 <p className="text-white font-medium">{mergedData.patente_tipo}</p>
                             </div>
                         )}
+                        {mergedData.patente_rilascio && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Data Rilascio Patente</p>
+                                <p className="text-white font-medium">{mergedData.patente_rilascio}</p>
+                            </div>
+                        )}
                         {mergedData.patente_scadenza && (
                             <div className="bg-gray-800/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Scadenza Patente</p>
                                 <p className="text-white font-medium">{mergedData.patente_scadenza}</p>
+                            </div>
+                        )}
+                        {mergedData.patente_ente && (
+                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                                <p className="text-xs text-theme-text-muted">Ente Rilascio</p>
+                                <p className="text-white font-medium">{mergedData.patente_ente}</p>
                             </div>
                         )}
                         {mergedData.indirizzo && (
