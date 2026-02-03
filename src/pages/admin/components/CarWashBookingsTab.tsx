@@ -221,9 +221,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }, 0)
   }
 
-  const isInCart = (serviceId: string) => {
-    return cart.some(item => item.service.id === serviceId)
-  }
+
 
   async function openEditCustomer(customerId: string) {
     if (!customerId) return
