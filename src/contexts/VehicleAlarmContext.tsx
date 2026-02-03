@@ -193,12 +193,13 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // --- 0. CHECK CAR WASH (10 mins BEFORE appointment) ---
             // ONLY for external client washes, NOT rientro/internal washes
 
+            const todayISO = now.toISOString().split('T')[0]
             const { data: carWash, error: carWashError } = await supabase
                 .from('bookings')
-                .select('id, customer_name, vehicle_name, service_name, appointment_date, appointment_time, status, booking_details, booking_source')
+                .select('id, customer_name, vehicle_name, service_name, appointment_date, appointment_time, status, booking_details, booking_source, price_total')
                 .eq('service_type', 'car_wash')
-                .neq('status', 'cancelled')
-                .gte('appointment_date', tenMinutesFutureISO.split('T')[0])
+                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                .eq('appointment_date', todayISO)
 
             if (!carWashError && carWash && carWash.length > 0) {
                 for (const booking of carWash) {
@@ -209,11 +210,15 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     if (details.internal === true) continue
                     if (details.createdBy === 'automatic_system') continue
                     if (booking.vehicle_name && booking.vehicle_name.toUpperCase().startsWith('INTERNO')) continue
+                    // Zero-price washes are likely internal
+                    if (!booking.price_total || booking.price_total === 0) continue
                     const source = (details.source || '').toLowerCase()
                     const notes = (details.notes || '').toLowerCase()
                     const bookingSource = (booking.booking_source || '').toLowerCase()
-                    const combined = source + ' ' + notes + ' ' + bookingSource
-                    const rientroKeywords = ['reintegration', 'reint', 'internal', 'reconditioning', 'automatico', 'auto-wash', 'rientro']
+                    const serviceName = (booking.service_name || '').toLowerCase()
+                    const vehicleName = (booking.vehicle_name || '').toLowerCase()
+                    const combined = source + ' ' + notes + ' ' + bookingSource + ' ' + serviceName + ' ' + vehicleName
+                    const rientroKeywords = ['reintegration', 'reint', 'internal', 'reconditioning', 'automatico', 'auto-wash', 'rientro', 'interno']
                     if (rientroKeywords.some(kw => combined.includes(kw))) continue
 
                     const appointmentDateTime = new Date(`${booking.appointment_date}T${booking.appointment_time}`)
@@ -239,11 +244,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             }
 
             // --- 1A. CHECK RETURNS - 10 mins BEFORE return (pre-return warning) ---
+            // Only active rentals (not completed, not car wash)
             const { data: returnsBefore, error: returnsBeforeError } = await supabase
                 .from('bookings')
-                .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at')
-                .neq('status', 'returned')
-                .neq('status', 'cancelled')
+                .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
+                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                .not('service_type', 'eq', 'car_wash')
                 .gte('dropoff_date', tenMinutesFutureISO)
                 .lt('dropoff_date', tenMinutesFuturePlusOne)
 
@@ -273,11 +279,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             }
 
             // --- 1B. CHECK RETURNS - 10 mins AFTER return (second alarm, independent of before-alarm) ---
+            // Only active rentals (not completed, not car wash)
             const { data: returnsAfter, error: returnsAfterError } = await supabase
                 .from('bookings')
-                .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at')
-                .neq('status', 'returned')
-                .neq('status', 'cancelled')
+                .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
+                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                .not('service_type', 'eq', 'car_wash')
                 .gte('dropoff_date', tenMinutesAgoISO)
                 .lt('dropoff_date', tenMinutesAgoPlusOne)
 
@@ -312,8 +319,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // We need to fetch bookings starting soon and check deposit in JS/JSON field
             const { data: pickups, error: pickupsError } = await supabase
                 .from('bookings')
-                .select('id, customer_name, vehicle_name, pickup_date, status, booking_details')
-                .neq('status', 'cancelled')
+                .select('id, customer_name, vehicle_name, pickup_date, status, booking_details, service_type')
+                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                .not('service_type', 'eq', 'car_wash')
                 .gte('pickup_date', tenMinutesFutureISO)
                 .lt('pickup_date', tenMinutesFuturePlusOne)
 
@@ -352,9 +360,10 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // --- 3. CHECK UNPAID PICKUP (10 mins BEFORE pickup) ---
             const { data: unpaidPickups, error: unpaidError } = await supabase
                 .from('bookings')
-                .select('id, customer_name, vehicle_name, pickup_date, status, payment_status, price_total, booking_details')
-                .neq('status', 'cancelled')
+                .select('id, customer_name, vehicle_name, pickup_date, status, payment_status, price_total, booking_details, service_type')
+                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .neq('payment_status', 'paid')
+                .not('service_type', 'eq', 'car_wash')
                 .gte('pickup_date', tenMinutesFutureISO)
                 .lt('pickup_date', tenMinutesFuturePlusOne)
 
