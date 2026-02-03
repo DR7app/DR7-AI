@@ -118,25 +118,44 @@ async function generateVehicleReport(
 
   if (vehiclesError) throw vehiclesError
 
-  // Fetch all rental bookings that overlap with this month
-  // Rental bookings: service_type is null or not 'car_wash'/'mechanical_service'
-  const { data: rentalBookings, error: bookingsError } = await supabase
+  // Fetch all bookings that overlap with this month (we filter service_type in JS to avoid PostgREST quirks)
+  const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type')
-    .or(`service_type.is.null,and(service_type.neq.car_wash,service_type.neq.mechanical_service)`)
+    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details')
     .lte('pickup_date', monthEndISO + 'T23:59:59')
     .gte('dropoff_date', monthStartISO + 'T00:00:00')
-    .in('status', ['confirmed', 'confermata', 'completed', 'in_corso'])
+    .not('status', 'eq', 'cancelled')
 
   if (bookingsError) throw bookingsError
 
+  // Filter to rental bookings only (exclude car_wash and mechanical_service)
+  const rentalBookings = (allBookings || []).filter(b =>
+    !b.service_type || (b.service_type !== 'car_wash' && b.service_type !== 'mechanical_service')
+  )
+
   // Build vehicle report
   const vehicleReports = (vehicles || []).map(vehicle => {
-    // Find bookings for this vehicle (match by vehicle_id or plate)
-    const vehicleBookings = (rentalBookings || []).filter(b =>
-      b.vehicle_id === vehicle.id ||
-      (vehicle.plate && b.vehicle_plate && b.vehicle_plate.replace(/\s/g, '').toUpperCase() === vehicle.plate.replace(/\s/g, '').toUpperCase())
-    )
+    const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
+    const vName = (vehicle.display_name || '').toLowerCase().trim()
+
+    // Find bookings for this vehicle (match by vehicle_id, plate, or vehicle_name)
+    const vehicleBookings = rentalBookings.filter(b => {
+      // Match by vehicle_id
+      if (b.vehicle_id && b.vehicle_id === vehicle.id) return true
+      // Match by booking_details.vehicle_id
+      if (b.booking_details?.vehicle_id && b.booking_details.vehicle_id === vehicle.id) return true
+      // Match by plate
+      if (vPlate && b.vehicle_plate) {
+        const bPlate = b.vehicle_plate.replace(/\s/g, '').toUpperCase()
+        if (bPlate === vPlate) return true
+      }
+      // Match by vehicle_name
+      if (b.vehicle_name && vName) {
+        const bName = b.vehicle_name.toLowerCase().trim()
+        if (bName === vName || bName.includes(vName) || vName.includes(bName)) return true
+      }
+      return false
+    })
 
     // Calculate rented days (union of all booking day ranges)
     const rentedDays = new Set<number>()
@@ -208,12 +227,30 @@ async function generateVehicleReport(
   // Sort by utilization rate descending
   vehicleReports.sort((a, b) => b.utilizationRate - a.utilizationRate)
 
+  // Find unmatched bookings (bookings that didn't match any vehicle)
+  const matchedBookingIds = new Set<string>()
+  vehicleReports.forEach(vr => {
+    const vPlate = (vehicles?.find(v => v.id === vr.vehicleId)?.plate || '').replace(/\s/g, '').toUpperCase()
+    const vName = (vehicles?.find(v => v.id === vr.vehicleId)?.display_name || '').toLowerCase().trim()
+    rentalBookings.forEach(b => {
+      if (b.vehicle_id === vr.vehicleId) matchedBookingIds.add(b.id)
+      if (b.booking_details?.vehicle_id === vr.vehicleId) matchedBookingIds.add(b.id)
+      if (vPlate && b.vehicle_plate && b.vehicle_plate.replace(/\s/g, '').toUpperCase() === vPlate) matchedBookingIds.add(b.id)
+      if (b.vehicle_name && vName && (b.vehicle_name.toLowerCase().trim() === vName || b.vehicle_name.toLowerCase().trim().includes(vName) || vName.includes(b.vehicle_name.toLowerCase().trim()))) matchedBookingIds.add(b.id)
+    })
+  })
+  const unmatchedBookings = rentalBookings
+    .filter(b => !matchedBookingIds.has(b.id))
+    .map(b => ({ id: b.id, vehicle_name: b.vehicle_name, vehicle_plate: b.vehicle_plate, vehicle_id: b.vehicle_id }))
+
   return {
     statusCode: 200,
     body: JSON.stringify({
       month,
       daysInMonth,
       vehicleCount: vehicleReports.length,
+      totalBookingsFound: rentalBookings.length,
+      unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
       totalRentalRevenue: Math.round(vehicleReports.reduce((sum, v) => sum + v.rentalRevenue, 0) * 100) / 100,
       avgUtilizationRate: Math.round((vehicleReports.reduce((sum, v) => sum + v.utilizationRate, 0) / Math.max(1, vehicleReports.length)) * 100) / 100,
       vehicles: vehicleReports

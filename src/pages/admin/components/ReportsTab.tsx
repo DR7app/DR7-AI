@@ -15,10 +15,19 @@ interface VehicleReport {
   rentalRevenue: number
 }
 
+interface UnmatchedBooking {
+  id: string
+  vehicle_name: string
+  vehicle_plate: string
+  vehicle_id: string
+}
+
 interface VehicleReportData {
   month: string
   daysInMonth: number
   vehicleCount: number
+  totalBookingsFound: number
+  unmatchedBookings?: UnmatchedBooking[]
   totalRentalRevenue: number
   avgUtilizationRate: number
   vehicles: VehicleReport[]
@@ -178,10 +187,14 @@ export default function ReportsTab() {
       {activeReport === 'vehicles' && vehicleData && (
         <div className="space-y-4">
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Veicoli Attivi</p>
               <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.vehicleCount}</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+              <p className="text-xs text-theme-text-muted">Prenotazioni Trovate</p>
+              <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.totalBookingsFound}</p>
             </div>
             <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Giorni nel Mese</p>
