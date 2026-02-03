@@ -36,6 +36,7 @@ export default function FleetInventory() {
     const [loading, setLoading] = useState(true)
     const [editingVehicle, setEditingVehicle] = useState<string | null>(null)
     const [editForm, setEditForm] = useState<Partial<VehicleInventory>>({})
+    const [plateSearch, setPlateSearch] = useState('')
 
     useEffect(() => {
         loadVehiclesWithInventory()
@@ -207,12 +208,24 @@ export default function FleetInventory() {
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
                     <h2 className="text-2xl font-bold text-theme-text-primary">Magazzino Veicoli</h2>
                     <p className="text-sm text-theme-text-muted mt-1">
                         Gestione scorte olio e pastiglie per ogni veicolo
                     </p>
+                </div>
+                <div className="relative w-full sm:w-64">
+                    <input
+                        type="text"
+                        placeholder="Ricerca auto per targa..."
+                        value={plateSearch}
+                        onChange={(e) => setPlateSearch(e.target.value)}
+                        className="w-full px-4 py-2 pl-10 bg-gray-700 border border-theme-border-light rounded-full text-theme-text-primary text-sm placeholder-theme-text-muted"
+                    />
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                 </div>
             </div>
 
@@ -240,7 +253,13 @@ export default function FleetInventory() {
 
             {/* Vehicle Inventory List */}
             <div className="space-y-4">
-                {vehicles.map(vehicle => {
+                {vehicles.filter(v => {
+                    if (!plateSearch.trim()) return true
+                    const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
+                    const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
+                    const name = v.display_name.toLowerCase()
+                    return plate.includes(q) || name.includes(q)
+                }).map(vehicle => {
                     const inv = vehicle.inventory
                     const oilQty = inv?.oil_quantity || 0
                     const pastiglieAntQty = inv?.pastiglie_ant_quantity || 0
