@@ -39,6 +39,11 @@ interface WashTypeBreakdown {
   revenue: number
 }
 
+interface InternalWashBreakdown {
+  vehicle: string
+  count: number
+}
+
 interface WashReportData {
   month: string
   daysInMonth: number
@@ -46,6 +51,8 @@ interface WashReportData {
   washRevenue: number
   avgWashesPerDay: number
   byType: WashTypeBreakdown[]
+  internalWashesCount?: number
+  internalByVehicle?: InternalWashBreakdown[]
 }
 
 const CATEGORY_ORDER = ['exotic', 'urban', 'moto', 'utilitaire', '-']
@@ -461,6 +468,42 @@ export default function ReportsTab() {
           {washData.byType.length === 0 && (
             <div className="bg-gray-800/50 rounded-xl border border-theme-border p-8 text-center">
               <p className="text-theme-text-muted">Nessun lavaggio fatturabile trovato per questo mese.</p>
+            </div>
+          )}
+
+          {/* Internal Rientro Washes */}
+          {washData.internalWashesCount != null && washData.internalWashesCount > 0 && (
+            <div className="bg-gray-800/50 rounded-xl border border-orange-500/30 overflow-hidden">
+              <div className="px-4 py-3 border-b border-orange-500/30 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-theme-text-primary">Lavaggi Rientro (Interni)</h3>
+                <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-full font-semibold">
+                  {washData.internalWashesCount} lavaggi
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-900/50 text-theme-text-muted">
+                      <th className="text-left px-4 py-3">Veicolo</th>
+                      <th className="text-center px-4 py-3">Quantità</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(washData.internalByVehicle || []).map(item => (
+                      <tr key={item.vehicle} className="border-t border-theme-border hover:bg-gray-700/30 transition-colors">
+                        <td className="px-4 py-3 font-medium text-theme-text-primary">{item.vehicle}</td>
+                        <td className="text-center px-4 py-3 text-theme-text-primary">{item.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-orange-500/30 bg-gray-900/30">
+                      <td className="px-4 py-3 font-bold text-theme-text-primary">Totale Interni</td>
+                      <td className="text-center px-4 py-3 font-bold text-theme-text-primary">{washData.internalWashesCount}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           )}
         </div>

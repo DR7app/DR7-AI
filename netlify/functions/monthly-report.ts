@@ -317,20 +317,29 @@ async function generateWashReport(
 
   if (washError) throw washError
 
-  const billableWashes = (washBookings || []).filter(booking => {
+  // Separate external (billable) washes from internal rientro washes
+  const isInternalWash = (booking: any): boolean => {
     const details = booking.booking_details || {}
-    if (details.internal === true) return false
-    if (details.createdBy === 'automatic_system') return false
-    if (!booking.price_total || booking.price_total === 0) return false
-    if (booking.vehicle_name && booking.vehicle_name.toUpperCase().startsWith('INTERNO')) return false
+    if (details.internal === true) return true
+    if (details.createdBy === 'automatic_system') return true
+    if (booking.vehicle_name && booking.vehicle_name.toUpperCase().startsWith('INTERNO')) return true
     const source = (details.source || '').toLowerCase()
     const notes = (details.notes || '').toLowerCase()
     const combined = source + ' ' + notes
-    const excludeKeywords = ['reintegration', 'reint', 'internal', 'reconditioning', 'automatico', 'auto-wash']
-    if (excludeKeywords.some(kw => combined.includes(kw))) return false
+    const rientroKeywords = ['reintegration', 'reint', 'internal', 'reconditioning', 'automatico', 'auto-wash', 'rientro']
+    if (rientroKeywords.some(kw => combined.includes(kw))) return true
+    return false
+  }
+
+  const billableWashes = (washBookings || []).filter(booking => {
+    if (isInternalWash(booking)) return false
+    if (!booking.price_total || booking.price_total === 0) return false
     return true
   })
 
+  const internalWashes = (washBookings || []).filter(booking => isInternalWash(booking))
+
+  // Billable washes by type
   const byType: Record<string, { count: number; revenue: number }> = {}
 
   billableWashes.forEach(wash => {
@@ -350,8 +359,17 @@ async function generateWashReport(
     }
   })
 
+  // Internal rientro washes by vehicle
+  const internalByVehicle: Record<string, { count: number }> = {}
+  internalWashes.forEach(wash => {
+    const vehicleName = wash.vehicle_name || wash.service_name || 'Sconosciuto'
+    if (!internalByVehicle[vehicleName]) internalByVehicle[vehicleName] = { count: 0 }
+    internalByVehicle[vehicleName].count += 1
+  })
+
   const totalRevenue = Object.values(byType).reduce((sum, t) => sum + t.revenue, 0)
   const totalCount = Object.values(byType).reduce((sum, t) => sum + t.count, 0)
+  const totalInternalCount = internalWashes.length
 
   return {
     statusCode: 200,
@@ -366,6 +384,14 @@ async function generateWashReport(
           type,
           count: data.count,
           revenue: Math.round(data.revenue * 100) / 100
+        }))
+        .sort((a, b) => b.count - a.count),
+      // Internal rientro washes section
+      internalWashesCount: totalInternalCount,
+      internalByVehicle: Object.entries(internalByVehicle)
+        .map(([vehicle, data]) => ({
+          vehicle,
+          count: data.count
         }))
         .sort((a, b) => b.count - a.count)
     })

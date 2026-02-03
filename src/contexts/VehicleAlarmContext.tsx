@@ -191,30 +191,37 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             const tenMinutesFuturePlusOne = new Date(tenMinutesFuture.getTime() + 60000).toISOString()
 
             // --- 0. CHECK CAR WASH (10 mins BEFORE appointment) ---
+            // ONLY for external client washes, NOT rientro/internal washes
 
             const { data: carWash, error: carWashError } = await supabase
                 .from('bookings')
-                .select('id, customer_name, service_name, appointment_date, appointment_time, status')
+                .select('id, customer_name, vehicle_name, service_name, appointment_date, appointment_time, status, booking_details, booking_source')
                 .eq('service_type', 'car_wash')
                 .neq('status', 'cancelled')
-                .gte('appointment_date', tenMinutesFutureISO.split('T')[0]) // Check date match first
+                .gte('appointment_date', tenMinutesFutureISO.split('T')[0])
 
             if (!carWashError && carWash && carWash.length > 0) {
                 for (const booking of carWash) {
-                    // Car wash has separate date and time fields usually, or a combined one. 
-                    // Based on UnpaidBookingsTab it uses appointment_date (string YYYY-MM-DD) and appointment_time (string HH:MM)
-                    // We need to construct the full Date object
                     if (!booking.appointment_date || !booking.appointment_time) continue
+
+                    // Skip internal/rientro washes
+                    const details = (booking.booking_details || {}) as any
+                    if (details.internal === true) continue
+                    if (details.createdBy === 'automatic_system') continue
+                    if (booking.vehicle_name && booking.vehicle_name.toUpperCase().startsWith('INTERNO')) continue
+                    const source = (details.source || '').toLowerCase()
+                    const notes = (details.notes || '').toLowerCase()
+                    const bookingSource = (booking.booking_source || '').toLowerCase()
+                    const combined = source + ' ' + notes + ' ' + bookingSource
+                    const rientroKeywords = ['reintegration', 'reint', 'internal', 'reconditioning', 'automatico', 'auto-wash', 'rientro']
+                    if (rientroKeywords.some(kw => combined.includes(kw))) continue
 
                     const appointmentDateTime = new Date(`${booking.appointment_date}T${booking.appointment_time}`)
 
                     const trackingId = `car_wash_${booking.id}`
                     if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                    // Check if appointment is in the 10 minute window (checking precise minute)
-                    // We simply compare the minutes
                     const diff = appointmentDateTime.getTime() - now.getTime()
-                    // 10 minutes = 600000 ms. Allow small window.
                     if (diff >= 600000 && diff < 660000) {
                         triggeredAlarmsRef.current.add(trackingId)
                         localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
@@ -265,11 +272,10 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
             }
 
-            // --- 1B. CHECK RETURNS - 10 mins AFTER return (late return warning) ---
+            // --- 1B. CHECK RETURNS - 10 mins AFTER return (second alarm, independent of before-alarm) ---
             const { data: returnsAfter, error: returnsAfterError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at')
-                .is('alarm_triggered_at', null)
                 .neq('status', 'returned')
                 .neq('status', 'cancelled')
                 .gte('dropoff_date', tenMinutesAgoISO)
