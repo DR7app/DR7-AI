@@ -1317,7 +1317,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               onClick={() => addToCart(service)}
                               className="px-4 py-2 text-sm bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors"
                             >
-                              + Aggiungi al carrello
+                              + Aggiungi
                             </button>
                           )}
                         </div>
