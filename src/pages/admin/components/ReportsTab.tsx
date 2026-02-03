@@ -48,6 +48,29 @@ interface WashReportData {
   byType: WashTypeBreakdown[]
 }
 
+const CATEGORY_ORDER = ['exotic', 'urban', 'moto', 'utilitaire', '-']
+const CATEGORY_LABELS: Record<string, string> = {
+  exotic: 'Supercar & Luxury',
+  urban: 'Urban',
+  moto: 'Moto',
+  utilitaire: 'Utilitaire',
+  '-': 'Altro'
+}
+const CATEGORY_COLORS: Record<string, string> = {
+  exotic: 'border-yellow-500/50 bg-yellow-500/5',
+  urban: 'border-blue-500/50 bg-blue-500/5',
+  moto: 'border-purple-500/50 bg-purple-500/5',
+  utilitaire: 'border-green-500/50 bg-green-500/5',
+  '-': 'border-gray-500/50 bg-gray-500/5'
+}
+const CATEGORY_BADGE: Record<string, string> = {
+  exotic: 'bg-yellow-500/20 text-yellow-400',
+  urban: 'bg-blue-500/20 text-blue-400',
+  moto: 'bg-purple-500/20 text-purple-400',
+  utilitaire: 'bg-green-500/20 text-green-400',
+  '-': 'bg-gray-500/20 text-gray-400'
+}
+
 export default function ReportsTab() {
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -102,16 +125,53 @@ export default function ReportsTab() {
       })
     : []
 
-  const sortedVehicles = [...filteredVehicles].sort((a, b) => {
-    const aVal = a[sortField]
-    const bVal = b[sortField]
-    if (typeof aVal === 'number' && typeof bVal === 'number') {
-      return sortDir === 'asc' ? aVal - bVal : bVal - aVal
-    }
-    return sortDir === 'asc'
-      ? String(aVal).localeCompare(String(bVal))
-      : String(bVal).localeCompare(String(aVal))
-  })
+  function sortVehicles(list: VehicleReport[]) {
+    return [...list].sort((a, b) => {
+      const aVal = a[sortField]
+      const bVal = b[sortField]
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDir === 'asc' ? aVal - bVal : bVal - aVal
+      }
+      return sortDir === 'asc'
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal))
+    })
+  }
+
+  // Group vehicles by category
+  function getGroupedVehicles() {
+    const groups: { category: string; vehicles: VehicleReport[] }[] = []
+    const byCategory: Record<string, VehicleReport[]> = {}
+
+    filteredVehicles.forEach(v => {
+      const cat = v.category || '-'
+      if (!byCategory[cat]) byCategory[cat] = []
+      byCategory[cat].push(v)
+    })
+
+    // Sort by predefined order, unknown categories at the end
+    const allCategories = Object.keys(byCategory)
+    allCategories.sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a)
+      const bi = CATEGORY_ORDER.indexOf(b)
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+    })
+
+    allCategories.forEach(cat => {
+      groups.push({ category: cat, vehicles: sortVehicles(byCategory[cat]) })
+    })
+
+    return groups
+  }
+
+  function getCategorySummary(vehicles: VehicleReport[]) {
+    const totalRented = vehicles.reduce((s, v) => s + v.rentedDays, 0)
+    const totalRevenue = vehicles.reduce((s, v) => s + v.rentalRevenue, 0)
+    const avgUtil = vehicles.length > 0
+      ? vehicles.reduce((s, v) => s + v.utilizationRate, 0) / vehicles.length
+      : 0
+    return { totalRented, totalRevenue, avgUtil, count: vehicles.length }
+  }
 
   function formatPercent(rate: number): string {
     return `${Math.round(rate * 100)}%`
@@ -125,6 +185,66 @@ export default function ReportsTab() {
     if (rate >= 0.7) return 'text-green-400'
     if (rate >= 0.4) return 'text-yellow-400'
     return 'text-red-400'
+  }
+
+  const grouped = getGroupedVehicles()
+
+  const tableHeader = (
+    <tr className="bg-gray-900/50 text-theme-text-muted">
+      <th className="text-left px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('label')}>
+        Veicolo {sortField === 'label' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-left px-4 py-3">Targa</th>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('rentedDays')}>
+        Noleggiato {sortField === 'rentedDays' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('maintenanceDays')}>
+        Manut. {sortField === 'maintenanceDays' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('idleDays')}>
+        Fermo {sortField === 'idleDays' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('utilizationRate')}>
+        Utilizzo {sortField === 'utilizationRate' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('bookingsCount')}>
+        Pren. {sortField === 'bookingsCount' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('rentalRevenue')}>
+        Ricavo {sortField === 'rentalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+    </tr>
+  )
+
+  function renderVehicleRow(v: VehicleReport) {
+    return (
+      <tr key={v.vehicleId} className="border-t border-theme-border hover:bg-gray-700/30 transition-colors">
+        <td className="px-4 py-3 font-medium text-theme-text-primary">{v.label}</td>
+        <td className="px-4 py-3 text-theme-text-muted text-xs">{v.plate}</td>
+        <td className="text-center px-4 py-3">
+          <span className="text-green-400 font-semibold">{v.rentedDays}g</span>
+        </td>
+        <td className="text-center px-4 py-3">
+          <span className="text-orange-400 font-semibold">{v.maintenanceDays}g</span>
+        </td>
+        <td className="text-center px-4 py-3">
+          <span className="text-gray-400">{v.idleDays}g</span>
+        </td>
+        <td className="text-center px-4 py-3">
+          <span className={`font-bold ${getUtilizationColor(v.utilizationRate)}`}>
+            {formatPercent(v.utilizationRate)}
+          </span>
+          <div className="w-full h-1.5 bg-gray-700 rounded-full mt-1">
+            <div
+              className={`h-full rounded-full ${v.utilizationRate >= 0.7 ? 'bg-green-400' : v.utilizationRate >= 0.4 ? 'bg-yellow-400' : 'bg-red-400'}`}
+              style={{ width: `${Math.round(v.utilizationRate * 100)}%` }}
+            />
+          </div>
+        </td>
+        <td className="text-center px-4 py-3 text-theme-text-primary">{v.bookingsCount}</td>
+        <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(v.rentalRevenue)}</td>
+      </tr>
+    )
   }
 
   return (
@@ -232,75 +352,49 @@ export default function ReportsTab() {
             />
             {plateSearch && (
               <span className="text-xs text-theme-text-muted">
-                {sortedVehicles.length} di {vehicleData.vehicleCount} veicoli
+                {filteredVehicles.length} di {vehicleData.vehicleCount} veicoli
               </span>
             )}
           </div>
 
-          {/* Vehicle Table */}
-          <div className="bg-gray-800/50 rounded-xl border border-theme-border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-900/50 text-theme-text-muted">
-                    <th className="text-left px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('label')}>
-                      Veicolo {sortField === 'label' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="text-left px-4 py-3">Targa</th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('rentedDays')}>
-                      Noleggiato {sortField === 'rentedDays' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('maintenanceDays')}>
-                      Manutenzione {sortField === 'maintenanceDays' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('idleDays')}>
-                      Fermo {sortField === 'idleDays' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('utilizationRate')}>
-                      Utilizzo {sortField === 'utilizationRate' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('bookingsCount')}>
-                      Prenotazioni {sortField === 'bookingsCount' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="text-right px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('rentalRevenue')}>
-                      Ricavo {sortField === 'rentalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedVehicles.map(v => (
-                    <tr key={v.vehicleId} className="border-t border-theme-border hover:bg-gray-700/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-theme-text-primary">{v.label}</td>
-                      <td className="px-4 py-3 text-theme-text-muted text-xs">{v.plate}</td>
-                      <td className="text-center px-4 py-3">
-                        <span className="text-green-400 font-semibold">{v.rentedDays}g</span>
-                      </td>
-                      <td className="text-center px-4 py-3">
-                        <span className="text-orange-400 font-semibold">{v.maintenanceDays}g</span>
-                      </td>
-                      <td className="text-center px-4 py-3">
-                        <span className="text-gray-400">{v.idleDays}g</span>
-                      </td>
-                      <td className="text-center px-4 py-3">
-                        <span className={`font-bold ${getUtilizationColor(v.utilizationRate)}`}>
-                          {formatPercent(v.utilizationRate)}
-                        </span>
-                        {/* Mini progress bar */}
-                        <div className="w-full h-1.5 bg-gray-700 rounded-full mt-1">
-                          <div
-                            className={`h-full rounded-full ${v.utilizationRate >= 0.7 ? 'bg-green-400' : v.utilizationRate >= 0.4 ? 'bg-yellow-400' : 'bg-red-400'}`}
-                            style={{ width: `${Math.round(v.utilizationRate * 100)}%` }}
-                          />
-                        </div>
-                      </td>
-                      <td className="text-center px-4 py-3 text-theme-text-primary">{v.bookingsCount}</td>
-                      <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(v.rentalRevenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* Vehicle Tables grouped by category */}
+          {grouped.map(group => {
+            const summary = getCategorySummary(group.vehicles)
+            const catLabel = CATEGORY_LABELS[group.category] || group.category
+            const catColor = CATEGORY_COLORS[group.category] || CATEGORY_COLORS['-']
+            const badgeColor = CATEGORY_BADGE[group.category] || CATEGORY_BADGE['-']
+
+            return (
+              <div key={group.category} className={`rounded-xl border overflow-hidden ${catColor}`}>
+                {/* Category Header */}
+                <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-theme-border">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${badgeColor}`}>
+                      {catLabel}
+                    </span>
+                    <span className="text-sm text-theme-text-muted">{summary.count} veicoli</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs">
+                    <span className="text-theme-text-muted">
+                      Utilizzo medio: <span className={`font-bold ${getUtilizationColor(summary.avgUtil)}`}>{formatPercent(summary.avgUtil)}</span>
+                    </span>
+                    <span className="text-theme-text-muted">
+                      Ricavo: <span className="font-bold text-dr7-gold">{formatCurrency(summary.totalRevenue)}</span>
+                    </span>
+                  </div>
+                </div>
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>{tableHeader}</thead>
+                    <tbody>
+                      {group.vehicles.map(v => renderVehicleRow(v))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 

@@ -106,14 +106,13 @@ async function generateVehicleReport(
 
   if (vehiclesError) throw vehiclesError
 
-  // Fetch bookings that overlap with this month
-  // Only confirmed/active/completed rentals (not pending, not cancelled)
+  // Fetch bookings that overlap with this month (exclude only cancelled)
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
     .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details')
     .lte('pickup_date', monthEndISO + 'T23:59:59')
     .gte('dropoff_date', monthStartISO + 'T00:00:00')
-    .in('status', ['confirmed', 'confermata', 'completed', 'in_corso', 'active'])
+    .neq('status', 'cancelled')
 
   if (bookingsError) throw bookingsError
 
@@ -132,17 +131,23 @@ async function generateVehicleReport(
   // Build vehicle report
   const vehicleReports = (vehicles || []).map(vehicle => {
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
+    const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // Find bookings for this vehicle — strict matching only (ID and plate, no fuzzy name)
+    // Find bookings for this vehicle
     const vehicleBookings = rentalBookings.filter(b => {
       // Match by vehicle_id (primary, most reliable)
       if (b.vehicle_id && b.vehicle_id === vehicle.id) return true
       // Match by booking_details.vehicle_id
       if (b.booking_details?.vehicle_id && b.booking_details.vehicle_id === vehicle.id) return true
-      // Match by exact plate (reliable)
+      // Match by exact plate
       if (vPlate && vPlate.length >= 4 && b.vehicle_plate) {
         const bPlate = b.vehicle_plate.replace(/\s/g, '').toUpperCase()
         if (bPlate === vPlate) return true
+      }
+      // Match by exact vehicle name (case-insensitive)
+      if (vName && b.vehicle_name) {
+        const bName = b.vehicle_name.trim().toLowerCase()
+        if (bName === vName) return true
       }
       return false
     })
