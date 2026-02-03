@@ -28,8 +28,9 @@ import BirthdaysTab, { useBirthdayCount } from './components/BirthdaysTab'
 import FleetManagementTab from './components/FleetManagementTab'
 import ScadenzeTab from './components/ScadenzeTab'
 import ReportsTab from './components/ReportsTab'
+import BulkImportTab from './components/BulkImportTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -325,6 +326,13 @@ export default function AdminDashboard() {
               >
                 Report
               </button>
+              <button
+                onClick={() => { setActiveTab('bulk-import'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'bulk-import' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Import Clienti
+              </button>
             </nav>
           </div>
         </div>
@@ -586,6 +594,15 @@ export default function AdminDashboard() {
               >
                 Report
               </button>
+              <button
+                onClick={() => setActiveTab('bulk-import')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'bulk-import'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Import Clienti
+              </button>
             </nav>
           </div>
         </div>
@@ -615,6 +632,7 @@ export default function AdminDashboard() {
             {activeTab === 'nexi' && 'Nexi'}
             {activeTab === 'scadenze' && 'Scadenze'}
             {activeTab === 'reports' && 'Report Mensili'}
+            {activeTab === 'bulk-import' && 'Import Clienti'}
           </h2>
         </div>
 
@@ -660,6 +678,7 @@ export default function AdminDashboard() {
           {activeTab === 'nexi' && <NexiTab />}
           {activeTab === 'scadenze' && <ScadenzeTab />}
           {activeTab === 'reports' && <ReportsTab />}
+          {activeTab === 'bulk-import' && <BulkImportTab />}
         </div>
       </main>
 
