@@ -158,12 +158,29 @@ export default function BulkImportTab() {
     ))
   }
 
+  // Determine storage bucket and document type based on extracted document_type
+  const getDocStorageInfo = (docType?: string): { bucket: string; docType: string } => {
+    switch (docType) {
+      case 'patente':
+        return { bucket: 'driver-licenses', docType: 'drivers_license' }
+      case 'codice_fiscale':
+      case 'tessera_sanitaria':
+        return { bucket: 'codice-fiscale', docType: 'codice_fiscale' }
+      case 'carta_identita':
+      default:
+        return { bucket: 'customer-documents', docType: 'identity_document' }
+    }
+  }
+
   const saveAllCustomers = async () => {
     const toSave = customers.filter(c => c.status === 'done' && c.data && !c.saved)
     if (toSave.length === 0) return
 
     setIsSaving(true)
     setSavedCount(0)
+
+    // Get authenticated user for document uploads
+    const { data: { user } } = await supabase.auth.getUser()
 
     for (const customer of toSave) {
       const d = customer.data!
@@ -186,7 +203,7 @@ export default function BulkImportTab() {
           cognome: d.cognome || null,
           sesso: d.sesso || null,
           data_nascita: d.data_nascita || null,
-          citta_nascita: d.luogo_nascita || null,
+          luogo_nascita: d.luogo_nascita || null,
           provincia_nascita: d.provincia_nascita || null,
           codice_fiscale: d.codice_fiscale?.toUpperCase() || null,
           indirizzo: d.indirizzo || null,
@@ -195,12 +212,24 @@ export default function BulkImportTab() {
           citta_residenza: d.citta_residenza || null,
           provincia_residenza: d.provincia_residenza || null,
           nazione: 'Italia',
+          source: 'admin',
+          created_at: new Date().toISOString(),
+          // Top-level patente fields (same as NewClientModal)
+          patente: d.patente_numero?.toUpperCase() || null,
+          numero_patente: d.patente_numero?.toUpperCase() || null,
+          data_rilascio_patente: d.patente_rilascio || null,
+          scadenza_patente: d.patente_scadenza || null,
+          emessa_da: d.patente_ente || null,
           metadata: {
-            tipo_patente: d.patente_tipo || null,
-            numero_patente: d.patente_numero || null,
-            patente_emessa_da: d.patente_ente || null,
-            patente_data_rilascio: d.patente_rilascio || null,
-            patente_scadenza: d.patente_scadenza || null,
+            sesso: d.sesso || null,
+            provincia_nascita: d.provincia_nascita || null,
+            patente: {
+              numero: d.patente_numero || null,
+              tipo: d.patente_tipo || null,
+              ente: d.patente_ente || null,
+              rilascio: d.patente_rilascio || null,
+              scadenza: d.patente_scadenza || null,
+            },
             documento_tipo: d.documento_tipo || null,
             documento_numero: d.documento_numero || null,
             documento_rilascio: d.documento_rilascio || null,
@@ -212,19 +241,79 @@ export default function BulkImportTab() {
           }
         }
 
+        // Save via save-customer Netlify function (bypasses RLS, same as NewClientModal)
+        let createdClientId: string | null = existingId
+
         if (existingId) {
-          // Update existing
-          const { error } = await supabase
-            .from('customers_extended')
-            .update(customerData)
-            .eq('id', existingId)
-          if (error) throw error
+          const response = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/save-customer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customerData, customerId: existingId })
+          })
+          const result = await response.json()
+          if (!response.ok) throw new Error(result.error || 'Update failed')
         } else {
-          // Insert new
-          const { error } = await supabase
-            .from('customers_extended')
-            .insert([customerData])
-          if (error) throw error
+          const response = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/save-customer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customerData })
+          })
+          const result = await response.json()
+          if (!response.ok) throw new Error(result.error || 'Insert failed')
+          createdClientId = result.customer?.id
+        }
+
+        // Also insert/update basic customers table for backward compatibility
+        if (createdClientId) {
+          const basicData = {
+            id: createdClientId,
+            full_name: `${d.nome || ''} ${d.cognome || ''}`.trim(),
+            driver_license_number: d.patente_numero?.toUpperCase() || null,
+            tipo_cliente: 'persona_fisica',
+            updated_at: new Date().toISOString()
+          }
+
+          if (existingId) {
+            await supabase.from('customers').update(basicData).eq('id', existingId)
+          } else {
+            await supabase.from('customers').insert([{ ...basicData, created_at: new Date().toISOString() }])
+          }
+        }
+
+        // Upload document file to Supabase Storage
+        const file = files[customer.fileIndex]
+        if (createdClientId && file && user) {
+          try {
+            const { bucket, docType: storageDocType } = getDocStorageInfo(d.document_type)
+            const fileExt = file.name.split('.').pop()
+            const fileName = `${storageDocType}_${Date.now()}.${fileExt}`
+            const filePath = `${createdClientId}/${fileName}`
+
+            const { error: uploadError } = await supabase.storage
+              .from(bucket)
+              .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: true
+              })
+
+            if (uploadError) {
+              console.warn('Document upload error (non-fatal):', uploadError)
+            } else {
+              // Record in customer_documents table
+              await supabase.from('customer_documents').insert({
+                customer_id: createdClientId,
+                document_type: storageDocType,
+                file_name: file.name,
+                file_path: filePath,
+                file_size: file.size,
+                mime_type: file.type,
+                bucket_id: bucket,
+                uploaded_by: user.id
+              })
+            }
+          } catch (uploadErr) {
+            console.warn('Document upload failed (non-fatal):', uploadErr)
+          }
         }
 
         // Mark as saved
