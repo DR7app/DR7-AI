@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { useTheme } from '../contexts/ThemeContext'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -8,6 +9,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const { theme, toggleTheme } = useTheme()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,19 +36,36 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Gradient Background - always dark for brand consistency */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-800" />
+      {/* Gradient Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-theme-bg-primary via-theme-bg-primary to-theme-bg-secondary" />
 
       {/* Subtle overlay pattern */}
       <div className="absolute inset-0 opacity-5" style={{
-        backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
+        backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)',
         backgroundSize: '40px 40px'
       }} />
 
-      <div className="w-full max-w-xl relative z-10">
-        {/* Main Card with Glassmorphism */}
-        <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl px-12 pt-12 pb-20 border border-gray-700/50 relative">
+      {/* Theme toggle - top right */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-6 right-6 z-20 p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+        title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        aria-label="Toggle theme"
+      >
+        {theme === 'dark' ? (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ) : (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        )}
+      </button>
 
+      <div className="w-full max-w-xl relative z-10">
+        {/* Main Card */}
+        <div className="bg-theme-bg-secondary backdrop-blur-xl rounded-2xl shadow-2xl px-12 pt-12 pb-20 border border-theme-border/50 relative">
 
           <div className="relative">
             <div className="flex justify-center mb-4">
@@ -55,7 +74,7 @@ export default function Login() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                <label htmlFor="email" className="block text-sm font-medium text-theme-text-primary mb-2">
                   Email
                 </label>
                 <input
@@ -64,13 +83,13 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-full text-white placeholder-gray-400 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-theme-bg-primary/50 border border-theme-border/50 rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="admin@dr7empire.com"
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-theme-text-primary mb-2">
                   Password
                 </label>
                 <input
@@ -79,7 +98,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-full text-white placeholder-gray-400 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-theme-bg-primary/50 border border-theme-border/50 rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="••••••••"
                 />
               </div>
