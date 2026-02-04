@@ -13,6 +13,7 @@ interface SyncCauzioneRequest {
     depositAmount: number
     paymentMethod: 'bonifico' | 'carta' | 'preautorizzazione'
     depositPaid: boolean
+    depositStatus?: 'da_incassare' | 'incassata'
 }
 
 export const handler: Handler = async (event) => {
@@ -25,7 +26,7 @@ export const handler: Handler = async (event) => {
 
     try {
         const request: SyncCauzioneRequest = JSON.parse(event.body || '{}')
-        const { bookingId, customerId, vehicleId, returnDate, depositAmount, paymentMethod, depositPaid } = request
+        const { bookingId, customerId, vehicleId, returnDate, depositAmount, paymentMethod, depositPaid, depositStatus } = request
 
         console.log('🔄 Syncing cauzione for booking:', bookingId)
 
@@ -81,7 +82,7 @@ export const handler: Handler = async (event) => {
             cauzioneMetodo = 'bonifico'
         }
 
-        const cauzioneData = {
+        const cauzioneData: Record<string, any> = {
             cliente_id: customerId,
             veicolo_id: vehicleId,
             riferimento_contratto_id: bookingId,
@@ -90,6 +91,8 @@ export const handler: Handler = async (event) => {
             metodo: cauzioneMetodo,
             // scadenza_cauzione will be auto-calculated by database trigger
             // stato will be auto-calculated by database trigger
+            // Set data_incasso when deposit is marked as collected
+            data_incasso: depositStatus === 'incassata' ? new Date().toISOString() : null,
         }
 
         if (existingCauzione) {

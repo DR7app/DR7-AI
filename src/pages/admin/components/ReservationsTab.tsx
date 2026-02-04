@@ -381,6 +381,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Kasko & Deposit
     insurance_option: 'KASKO_BASE' as KaskoTier,
     deposit: '0',
+    deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
     // KM Overage Fee
     km_overage_fee: '0',
     unlimited_km: false,
@@ -1125,6 +1126,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   async function validateCustomerData(booking: Booking): Promise<string[]> {
     // Check multiple possible locations for customer ID
     const customerId = booking.user_id ||
+      booking.booking_details?.customer?.customerId ||
       booking.booking_details?.customer?.id ||
       booking.booking_details?.customer_id
 
@@ -1208,13 +1210,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Common fields
     if (!customer.codice_fiscale) missing.push('codice_fiscale')
     if (!customer.indirizzo) missing.push('indirizzo')
-    if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza') // Handle different naming
+    if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
+    if (!customer.provincia_residenza) missing.push('provincia_residenza')
+    if (!customer.codice_postale) missing.push('codice_postale')
 
     // Persona Fisica specific
-    if (customer.tipo_cliente === 'persona_fisica') {
+    if (customer.tipo_cliente === 'persona_fisica' || !customer.tipo_cliente) {
+      if (!customer.nome) missing.push('nome')
+      if (!customer.cognome) missing.push('cognome')
       if (!customer.data_nascita) missing.push('data_nascita')
       if (!customer.luogo_nascita) missing.push('luogo_nascita')
-      if (!customer.patente) missing.push('patente')
+      if (!customer.patente && !customer.numero_patente) missing.push('patente')
     }
 
     // Azienda specific
@@ -1340,7 +1346,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (customerId) {
         const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
-        customerData = customer || {}
+        customerData = customer || { id: customerId }
       } else {
         // No customer ID, but we might have data from booking
         const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
@@ -1934,6 +1940,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       second_driver_license_expiry: booking.booking_details?.second_driver?.license_expiry || '',
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
       deposit: booking.booking_details?.deposit || '0',
+      deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0'
     })
 
@@ -2961,6 +2968,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Kasko & Deposit
           insuranceOption: formData.insurance_option,
           deposit: formData.deposit,
+          deposit_status: formData.deposit_status,
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
@@ -3140,7 +3148,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               returnDate: formData.return_date,
               depositAmount: depositAmount,
               paymentMethod: formData.payment_method || 'carta',
-              depositPaid: depositPaid
+              depositPaid: depositPaid,
+              depositStatus: formData.deposit_status
             })
           })
           console.log('✅ Cauzione synced successfully')
@@ -3231,6 +3240,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Kasko & Deposit
       insurance_option: 'KASKO_BASE',
       deposit: '0',
+      deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
       unlimited_km: false,
       km_limit: '0'
     })
@@ -3800,7 +3810,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             {/* Kasko & Deposit */}
             <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
               <h4 className="text-theme-text-primary font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Assicurazione</label>
                   <div className="px-3 py-2 bg-gray-700 border border-theme-border rounded-lg text-theme-text-primary">
@@ -3812,6 +3822,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   type="number"
                   value={formData.deposit}
                   onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
+                />
+                <Select
+                  label="Stato Cauzione"
+                  value={formData.deposit_status}
+                  onChange={(e) => setFormData({ ...formData, deposit_status: e.target.value as 'da_incassare' | 'incassata' })}
+                  options={[
+                    { value: 'da_incassare', label: 'Da incassare' },
+                    { value: 'incassata', label: 'Incassata' },
+                  ]}
                 />
               </div>
             </div>
@@ -4428,10 +4447,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
         {/* Missing Fields Modal - Shows only the missing fields */}
-        {showMissingDataModal && tempCustomerData && tempCustomerData.id && (
+        {showMissingDataModal && tempCustomerData && (tempCustomerData.id || currentValidationBooking?.user_id) && (
           <MissingFieldsModal
             isOpen={showMissingDataModal}
-            customerId={tempCustomerData.id}
+            customerId={tempCustomerData.id || currentValidationBooking?.user_id}
             customerData={tempCustomerData}
             missingFields={missingFields}
             onClose={() => setShowMissingDataModal(false)}

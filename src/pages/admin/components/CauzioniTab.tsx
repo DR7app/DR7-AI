@@ -383,22 +383,20 @@ export default function CauzioniTab() {
         fetchCauzioni()
     }
 
-    const getStatoBadgeClass = (stato: string, isOverdue: boolean) => {
-        if (isOverdue) return 'bg-red-600 text-white'
-        switch (stato) {
-            case 'Attiva': return 'bg-green-600 text-white'
-            case 'In scadenza': return 'bg-yellow-600 text-black'
-            case 'Restituita': return 'bg-blue-600 text-white'
-            case 'Sbloccata': return 'bg-gray-600 text-white'
-            case 'Incassata': return 'bg-purple-600 text-white'
-            case 'Bloccata': return 'bg-orange-600 text-white'
-            default: return 'bg-gray-400 text-white'
-        }
+    const getStatoBadgeClass = (cauzione: Cauzione) => {
+        if (cauzione.stato === 'Bloccata') return 'bg-orange-600 text-white'
+        if (!cauzione.data_incasso) return 'bg-yellow-600 text-black' // Da incassare
+        if (cauzione.is_overdue) return 'bg-red-600 text-white'
+        if (cauzione.stato === 'In scadenza') return 'bg-yellow-600 text-black'
+        return 'bg-green-600 text-white' // Incassata / Attiva
     }
 
-    const getStatoLabel = (stato: string, isOverdue: boolean) => {
-        if (isOverdue) return 'Scaduta'
-        return stato
+    const getStatoLabel = (cauzione: Cauzione) => {
+        if (cauzione.stato === 'Bloccata') return 'Bloccata'
+        if (!cauzione.data_incasso) return 'Da incassare'
+        if (cauzione.is_overdue) return 'Scaduta'
+        if (cauzione.stato === 'In scadenza') return 'In scadenza'
+        return 'Attiva' // Incassata and within deadline
     }
 
     // --- Shared table row renderer ---
@@ -433,8 +431,8 @@ export default function CauzioniTab() {
             </td>
             <td className="px-4 py-3 text-sm text-theme-text-primary capitalize">{cauzione.metodo}</td>
             <td className="px-4 py-3">
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatoBadgeClass(cauzione.stato, cauzione.is_overdue)}`}>
-                    {getStatoLabel(cauzione.stato, cauzione.is_overdue)}
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatoBadgeClass(cauzione)}`}>
+                    {getStatoLabel(cauzione)}
                 </span>
             </td>
             <td className="px-4 py-3">

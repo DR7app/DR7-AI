@@ -81,77 +81,104 @@ export const handler: Handler = async (event) => {
         // 1. booking.booking_details.customer.customerId (admin-created bookings)
         // 2. booking.user_id (website bookings)
         // 3. Fallback to booking data directly if no customer record found
-        const customerId = booking.booking_details?.customer?.customerId || booking.user_id
+        const customerId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.user_id
         let customer = null
+        let matchedBy = 'none'
 
-        console.log(`[generate-contract] Fetching customer. ID: ${customerId}, Email: ${booking.customer_email}`)
+        console.log(`[generate-contract] Fetching customer. booking_details.customer.customerId: ${booking.booking_details?.customer?.customerId}, booking_details.customer.id: ${booking.booking_details?.customer?.id}, user_id: ${booking.user_id}, resolved ID: ${customerId}, Email: ${booking.customer_email}, Phone: ${booking.customer_phone}`)
 
+        // 1. Try by customer ID (most reliable)
         if (customerId) {
             const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
             if (cError) console.error('[generate-contract] Error fetching by ID:', cError)
             if (cData) {
-                console.log('[generate-contract] ✅ Found customer by ID:', JSON.stringify(cData))
+                console.log('[generate-contract] Found customer by ID:', cData.id, cData.nome, cData.cognome)
                 customer = cData
+                matchedBy = 'id'
             }
         }
 
-        // Fallback: Try by email in customers_extended
+        // 2. Fallback: Try by email (use maybeSingle to handle duplicates)
         if (!customer && booking.customer_email) {
             console.log('[generate-contract] Fallback: Fetching by email from customers_extended...')
-            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).single()
-            if (cError) console.error('[generate-contract] Error fetching by email (customers_extended):', cError)
+            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+            if (cError) console.error('[generate-contract] Error fetching by email:', cError)
             if (cData) {
-                console.log('[generate-contract] ✅ Found customer by Email (extended):', JSON.stringify(cData))
+                console.log('[generate-contract] Found customer by Email:', cData.id, cData.nome, cData.cognome)
                 customer = cData
+                matchedBy = 'email'
             }
         }
 
-        // Fallback: Try basic customers table
-        if (!customer && booking.customer_email) {
-            console.log('[generate-contract] Fallback: Fetching by email from basic customers...')
-            const { data: cData } = await supabase.from('customers').select('*').eq('email', booking.customer_email).single()
+        // 3. Fallback: Try by phone number
+        if (!customer && booking.customer_phone) {
+            console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...')
+            const phone = booking.customer_phone.replace(/\s+/g, '')
+            const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', phone).order('updated_at', { ascending: false }).limit(1).maybeSingle()
             if (cData) {
-                console.log('[generate-contract] ✅ Found customer by Email (basic):', JSON.stringify(cData))
-                customer = { ...cData, tipo_cliente: 'persona_fisica', nome: cData.full_name, indirizzo: cData.notes }
+                console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome)
+                customer = cData
+                matchedBy = 'phone'
             }
         }
+
+        // 4. Fallback: Try by customer name in customers_extended
+        if (!customer && booking.customer_name) {
+            console.log('[generate-contract] Fallback: Fetching by name from customers_extended...')
+            const nameParts = booking.customer_name.trim().split(/\s+/)
+            if (nameParts.length >= 2) {
+                const { data: cData } = await supabase.from('customers_extended').select('*')
+                    .or(`and(nome.ilike.%${nameParts[0]}%,cognome.ilike.%${nameParts[nameParts.length - 1]}%),and(nome.ilike.%${nameParts[nameParts.length - 1]}%,cognome.ilike.%${nameParts[0]}%)`)
+                    .order('updated_at', { ascending: false }).limit(1).maybeSingle()
+                if (cData) {
+                    console.log('[generate-contract] Found customer by Name:', cData.id, cData.nome, cData.cognome)
+                    customer = cData
+                    matchedBy = 'name'
+                }
+            }
+        }
+
+        // 5. Last resort: Try basic customers table
+        if (!customer && booking.customer_email) {
+            console.log('[generate-contract] Fallback: Fetching by email from basic customers...')
+            const { data: cData } = await supabase.from('customers').select('*').eq('email', booking.customer_email).limit(1).maybeSingle()
+            if (cData) {
+                console.log('[generate-contract] Found customer by Email (basic):', cData.id, cData.full_name)
+                customer = { ...cData, tipo_cliente: 'persona_fisica', nome: cData.full_name?.split(' ')[0] || '', cognome: cData.full_name?.split(' ').slice(1).join(' ') || '', indirizzo: cData.notes }
+                matchedBy = 'basic_customers'
+            }
+        }
+
+        console.log(`[generate-contract] Customer resolution: matched by "${matchedBy}", customer ID: ${customer?.id || 'NONE'}`)
 
         // AUTO-LINKING: If we found a customer but the booking wasn't linked, link it now!
         if (customer && !customerId) {
-            console.log(`[generate-contract] 🔗 Auto-linking booking ${bookingId} to customer ${customer.id}`)
+            console.log(`[generate-contract] Auto-linking booking ${bookingId} to customer ${customer.id}`)
             const { error: linkError } = await supabase
                 .from('bookings')
-                .update({
-                    user_id: customer.id,
-                    // If your schema uses customer_id column as well, update it too
-                    // based on schema typically used in this project:
-                    // customer_id might be in booking_details json, but some projects have it on root.
-                    // We'll update user_id which is standard, and if there's a specific column check schema.
-                    // Checking previous files, user_id is the main FK.
-                })
+                .update({ user_id: customer.id })
                 .eq('id', bookingId)
 
             if (linkError) {
-                console.error('[generate-contract] ❌ Failed to auto-link booking:', linkError)
+                console.error('[generate-contract] Failed to auto-link booking:', linkError)
             } else {
-                console.log('[generate-contract] ✅ Booking successfully auto-linked to customer')
+                console.log('[generate-contract] Booking successfully auto-linked to customer')
             }
         }
 
         // Final fallback: Use booking data directly if no customer record exists
         if (!customer) {
-            console.warn('[generate-contract] ⚠️ No customer record found in database. Using booking data as fallback.')
-            // Construct a minimal customer object from booking data
+            console.warn('[generate-contract] WARNING: No customer record found by any method! Using booking data as fallback.')
+            const nameParts = (booking.customer_name || '').split(' ')
             customer = {
                 tipo_cliente: 'persona_fisica',
-                nome: booking.customer_name || '',
-                cognome: '',
+                nome: nameParts[0] || '',
+                cognome: nameParts.slice(1).join(' ') || '',
                 email: booking.customer_email || '',
                 telefono: booking.customer_phone || '',
                 indirizzo: booking.booking_details?.customer?.address || '',
                 codice_fiscale: booking.booking_details?.customer?.taxCode || '',
                 patente: booking.booking_details?.customer?.driverLicense || '',
-                // Additional fields from booking_details if available
                 data_nascita: booking.booking_details?.customer?.birthDate || null,
                 luogo_nascita: booking.booking_details?.customer?.birthPlace || null,
                 citta_residenza: booking.booking_details?.customer?.city || null,
@@ -169,12 +196,35 @@ export const handler: Handler = async (event) => {
         }
 
         // 3. Prepare Data
-        const clientName = customer?.tipo_cliente === 'azienda' ? customer.denominazione : await (async () => {
-            return customer?.nome ? `${customer.nome} ${customer.cognome}` : booking.customer_name
-        })()
+        console.log('[generate-contract] Customer data summary:', {
+            id: customer?.id,
+            nome: customer?.nome,
+            cognome: customer?.cognome,
+            codice_fiscale: customer?.codice_fiscale,
+            indirizzo: customer?.indirizzo,
+            citta_residenza: customer?.citta_residenza,
+            provincia_residenza: customer?.provincia_residenza,
+            codice_postale: customer?.codice_postale,
+            data_nascita: customer?.data_nascita,
+            luogo_nascita: customer?.luogo_nascita,
+            patente: customer?.patente,
+            numero_patente: customer?.numero_patente,
+            tipo_cliente: customer?.tipo_cliente,
+        })
+
+        // CRITICAL: Always prefer customers_extended data over booking snapshot data
+        // The booking stores a snapshot (customer_name, customer_email) at creation time,
+        // but the customers_extended record has the authoritative/corrected data.
+        const clientName = customer?.tipo_cliente === 'azienda'
+            ? (customer.denominazione || booking.customer_name || '')
+            : (customer?.nome || customer?.cognome)
+                ? `${customer.nome || ''} ${customer.cognome || ''}`.trim()
+                : (customer?.full_name || booking.customer_name || '')
         const clientAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
         const clientVat = customer?.tipo_cliente === 'azienda' ? customer.partita_iva : customer?.codice_fiscale
-        const driverLicense = customer?.patente || customer?.driver_license_number || ''
+        const driverLicense = customer?.numero_patente || customer?.patente || customer?.driver_license_number || ''
+
+        console.log('[generate-contract] Resolved contract data:', { clientName, clientAddress, clientVat, driverLicense })
 
         // Vehicle Data Prep
         const vehicleName = vehicleData?.display_name || booking.vehicle_name || ''
