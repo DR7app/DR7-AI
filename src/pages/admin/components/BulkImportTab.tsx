@@ -1,46 +1,57 @@
 import { useState, useRef, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 
-interface ExtractedCustomer {
+interface ExtractedData {
+  nome?: string
+  cognome?: string
+  sesso?: string
+  data_nascita?: string
+  luogo_nascita?: string
+  provincia_nascita?: string
+  codice_fiscale?: string
+  indirizzo?: string
+  numero_civico?: string
+  codice_postale?: string
+  citta_residenza?: string
+  provincia_residenza?: string
+  documento_tipo?: string
+  documento_numero?: string
+  documento_rilascio?: string
+  documento_scadenza?: string
+  documento_ente?: string
+  patente_numero?: string
+  patente_tipo?: string
+  patente_rilascio?: string
+  patente_scadenza?: string
+  patente_ente?: string
+  document_type?: string
+  confidence?: string
+  notes?: string
+}
+
+interface ExtractedFile {
   fileIndex: number
   fileName: string
   status: 'pending' | 'processing' | 'done' | 'error'
   error?: string
-  data?: {
-    nome?: string
-    cognome?: string
-    sesso?: string
-    data_nascita?: string
-    luogo_nascita?: string
-    provincia_nascita?: string
-    codice_fiscale?: string
-    indirizzo?: string
-    numero_civico?: string
-    codice_postale?: string
-    citta_residenza?: string
-    provincia_residenza?: string
-    documento_tipo?: string
-    documento_numero?: string
-    documento_rilascio?: string
-    documento_scadenza?: string
-    documento_ente?: string
-    patente_numero?: string
-    patente_tipo?: string
-    patente_rilascio?: string
-    patente_scadenza?: string
-    patente_ente?: string
-    document_type?: string
-    confidence?: string
-    notes?: string
-  }
-  saved?: boolean
+  data?: ExtractedData
+}
+
+// A merged customer groups multiple documents from the same person
+interface MergedCustomer {
+  key: string
+  sources: { fileIndex: number; fileName: string; docType: string }[]
+  data: ExtractedData
+  saved: boolean
+  error?: string
 }
 
 const FUNCTIONS_BASE = import.meta.env.DEV ? 'http://localhost:8888' : ''
 
 export default function BulkImportTab() {
   const [files, setFiles] = useState<File[]>([])
-  const [customers, setCustomers] = useState<ExtractedCustomer[]>([])
+  const [extractedFiles, setExtractedFiles] = useState<ExtractedFile[]>([])
+  const [mergedCustomers, setMergedCustomers] = useState<MergedCustomer[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [processedCount, setProcessedCount] = useState(0)
@@ -82,7 +93,6 @@ export default function BulkImportTab() {
               const childFiles = await readEntryFiles(child)
               allFiles.push(...childFiles)
             }
-            // readEntries may not return all at once, keep reading
             readBatch()
           }, () => resolve(allFiles))
         }
@@ -98,15 +108,12 @@ export default function BulkImportTab() {
 
     const items = e.dataTransfer.items
     if (!items) {
-      // Fallback: no items API, use files directly
       const droppedFiles = Array.from(e.dataTransfer.files).filter(isValidFile)
       setFiles(prev => [...prev, ...droppedFiles])
       return
     }
 
     const collectedFiles: File[] = []
-
-    // Use webkitGetAsEntry to handle folders
     const entries: FileSystemEntry[] = []
     for (let i = 0; i < items.length; i++) {
       const entry = items[i].webkitGetAsEntry?.()
@@ -119,7 +126,6 @@ export default function BulkImportTab() {
         collectedFiles.push(...entryFiles)
       }
     } else {
-      // Fallback if webkitGetAsEntry not supported
       collectedFiles.push(...Array.from(e.dataTransfer.files).filter(isValidFile))
     }
 
@@ -141,7 +147,6 @@ export default function BulkImportTab() {
       const reader = new FileReader()
       reader.onload = () => {
         const result = reader.result as string
-        // Remove the data:image/...;base64, prefix
         const base64 = result.split(',')[1]
         resolve(base64)
       }
@@ -150,28 +155,130 @@ export default function BulkImportTab() {
     })
   }
 
+  // --- Merge logic: group extracted docs by same person ---
+  const normalizeKey = (nome?: string, cognome?: string): string => {
+    const n = (nome || '').trim().toLowerCase().replace(/\s+/g, ' ')
+    const c = (cognome || '').trim().toLowerCase().replace(/\s+/g, ' ')
+    return `${n}|${c}`
+  }
+
+  const mergeExtractedFiles = (extracted: ExtractedFile[]): MergedCustomer[] => {
+    const successful = extracted.filter(e => e.status === 'done' && e.data)
+
+    // Group by codice_fiscale first (strongest match), then by nome+cognome
+    const groups = new Map<string, ExtractedFile[]>()
+
+    for (const entry of successful) {
+      const cf = entry.data?.codice_fiscale?.trim().toUpperCase()
+      const nameKey = normalizeKey(entry.data?.nome, entry.data?.cognome)
+
+      // Skip entries with no name at all
+      if (nameKey === '|' && !cf) {
+        // Create standalone entry
+        const soloKey = `__solo_${entry.fileIndex}`
+        groups.set(soloKey, [entry])
+        continue
+      }
+
+      // Find existing group by CF or name
+      let matchedKey: string | null = null
+
+      if (cf) {
+        for (const [key, members] of groups) {
+          const memberCf = members[0].data?.codice_fiscale?.trim().toUpperCase()
+          if (memberCf && memberCf === cf) {
+            matchedKey = key
+            break
+          }
+        }
+      }
+
+      if (!matchedKey && nameKey !== '|') {
+        for (const [key, members] of groups) {
+          const memberNameKey = normalizeKey(members[0].data?.nome, members[0].data?.cognome)
+          if (memberNameKey !== '|' && memberNameKey === nameKey) {
+            matchedKey = key
+            break
+          }
+        }
+      }
+
+      if (matchedKey) {
+        groups.get(matchedKey)!.push(entry)
+      } else {
+        const groupKey = cf || nameKey
+        groups.set(groupKey, [entry])
+      }
+    }
+
+    // Now merge each group into a single MergedCustomer
+    const merged: MergedCustomer[] = []
+
+    for (const [key, members] of groups) {
+      const sources = members.map(m => ({
+        fileIndex: m.fileIndex,
+        fileName: m.fileName,
+        docType: m.data?.document_type || 'sconosciuto'
+      }))
+
+      // Merge data: for each field, take the first non-empty value across all docs
+      const mergedData: ExtractedData = {}
+      const allFields: (keyof ExtractedData)[] = [
+        'nome', 'cognome', 'sesso', 'data_nascita', 'luogo_nascita', 'provincia_nascita',
+        'codice_fiscale', 'indirizzo', 'numero_civico', 'codice_postale',
+        'citta_residenza', 'provincia_residenza',
+        'documento_tipo', 'documento_numero', 'documento_rilascio',
+        'documento_scadenza', 'documento_ente',
+        'patente_numero', 'patente_tipo', 'patente_rilascio',
+        'patente_scadenza', 'patente_ente',
+      ]
+
+      for (const field of allFields) {
+        for (const member of members) {
+          const val = member.data?.[field]
+          if (val && val.trim()) {
+            (mergedData as any)[field] = val
+            break
+          }
+        }
+      }
+
+      // Collect all document types
+      const docTypes = members.map(m => m.data?.document_type).filter(Boolean)
+      if (docTypes.length > 0) mergedData.document_type = docTypes.join(', ')
+
+      merged.push({
+        key,
+        sources,
+        data: mergedData,
+        saved: false
+      })
+    }
+
+    return merged
+  }
+
   const processFiles = async () => {
     if (files.length === 0) return
     setIsProcessing(true)
     setProcessedCount(0)
+    setMergedCustomers([])
     abortRef.current = false
 
-    // Initialize customer entries
-    const initialCustomers: ExtractedCustomer[] = files.map((file, index) => ({
+    const initialExtracted: ExtractedFile[] = files.map((file, index) => ({
       fileIndex: index,
       fileName: file.name,
       status: 'pending'
     }))
-    setCustomers(initialCustomers)
+    setExtractedFiles(initialExtracted)
 
-    // Process files sequentially (to avoid overloading the API)
+    const results = [...initialExtracted]
+
     for (let i = 0; i < files.length; i++) {
       if (abortRef.current) break
 
-      // Update status to processing
-      setCustomers(prev => prev.map((c, idx) =>
-        idx === i ? { ...c, status: 'processing' } : c
-      ))
+      results[i] = { ...results[i], status: 'processing' }
+      setExtractedFiles([...results])
 
       try {
         const base64 = await fileToBase64(files[i])
@@ -185,28 +292,25 @@ export default function BulkImportTab() {
         const result = await response.json()
 
         if (response.ok && result.success) {
-          setCustomers(prev => prev.map((c, idx) =>
-            idx === i ? { ...c, status: 'done', data: result.data } : c
-          ))
+          results[i] = { ...results[i], status: 'done', data: result.data }
         } else {
-          setCustomers(prev => prev.map((c, idx) =>
-            idx === i ? { ...c, status: 'error', error: result.error || 'Extraction failed' } : c
-          ))
+          results[i] = { ...results[i], status: 'error', error: result.error || 'Extraction failed' }
         }
       } catch (error: any) {
-        setCustomers(prev => prev.map((c, idx) =>
-          idx === i ? { ...c, status: 'error', error: error.message } : c
-        ))
+        results[i] = { ...results[i], status: 'error', error: error.message }
       }
 
+      setExtractedFiles([...results])
       setProcessedCount(i + 1)
 
-      // Small delay between requests to avoid rate limiting
       if (i < files.length - 1 && !abortRef.current) {
         await new Promise(r => setTimeout(r, 500))
       }
     }
 
+    // After all files processed, merge by person
+    const merged = mergeExtractedFiles(results)
+    setMergedCustomers(merged)
     setIsProcessing(false)
   }
 
@@ -214,8 +318,8 @@ export default function BulkImportTab() {
     abortRef.current = true
   }
 
-  const updateCustomerField = (index: number, field: string, value: string) => {
-    setCustomers(prev => prev.map((c, idx) =>
+  const updateMergedField = (index: number, field: string, value: string) => {
+    setMergedCustomers(prev => prev.map((c, idx) =>
       idx === index ? { ...c, data: { ...c.data, [field]: value } } : c
     ))
   }
@@ -235,17 +339,19 @@ export default function BulkImportTab() {
   }
 
   const saveAllCustomers = async () => {
-    const toSave = customers.filter(c => c.status === 'done' && c.data && !c.saved)
+    const toSave = mergedCustomers.filter(c => !c.saved && !c.error)
     if (toSave.length === 0) return
 
     setIsSaving(true)
     setSavedCount(0)
 
-    // Get authenticated user for document uploads
     const { data: { user } } = await supabase.auth.getUser()
 
-    for (const customer of toSave) {
-      const d = customer.data!
+    for (let mi = 0; mi < mergedCustomers.length; mi++) {
+      const customer = mergedCustomers[mi]
+      if (customer.saved || customer.error) continue
+
+      const d = customer.data
 
       try {
         // Check if customer already exists by codice_fiscale
@@ -277,7 +383,6 @@ export default function BulkImportTab() {
           nazione: 'Italia',
           source: 'admin',
           created_at: new Date().toISOString(),
-          // Top-level patente fields (same as NewClientModal)
           patente: d.patente_numero?.toUpperCase() || null,
           numero_patente: d.patente_numero?.toUpperCase() || null,
           tipo_patente: d.patente_tipo || null,
@@ -301,11 +406,11 @@ export default function BulkImportTab() {
             documento_ente: d.documento_ente || null,
             imported_at: new Date().toISOString(),
             import_source: 'bulk_import',
-            extraction_confidence: d.confidence || null
+            merged_documents: customer.sources.length,
+            source_files: customer.sources.map(s => s.fileName)
           }
         }
 
-        // Save via save-customer Netlify function (bypasses RLS, same as NewClientModal)
         let createdClientId: string | null = existingId
 
         if (existingId) {
@@ -344,53 +449,53 @@ export default function BulkImportTab() {
           }
         }
 
-        // Upload document file to Supabase Storage
-        const file = files[customer.fileIndex]
-        if (createdClientId && file && user) {
-          try {
-            const { bucket, docType: storageDocType } = getDocStorageInfo(d.document_type)
-            const fileExt = file.name.split('.').pop()
-            const fileName = `${storageDocType}_${Date.now()}.${fileExt}`
-            const filePath = `${createdClientId}/${fileName}`
+        // Upload ALL document files for this merged customer
+        if (createdClientId && user) {
+          for (const source of customer.sources) {
+            const file = files[source.fileIndex]
+            if (!file) continue
 
-            const { error: uploadError } = await supabase.storage
-              .from(bucket)
-              .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: true
-              })
+            try {
+              const { bucket, docType: storageDocType } = getDocStorageInfo(source.docType)
+              const fileExt = file.name.split('.').pop()
+              const fileName = `${storageDocType}_${Date.now()}_${source.fileIndex}.${fileExt}`
+              const filePath = `${createdClientId}/${fileName}`
 
-            if (uploadError) {
-              console.warn('Document upload error (non-fatal):', uploadError)
-            } else {
-              // Record in customer_documents table
-              await supabase.from('customer_documents').insert({
-                customer_id: createdClientId,
-                document_type: storageDocType,
-                file_name: file.name,
-                file_path: filePath,
-                file_size: file.size,
-                mime_type: file.type,
-                bucket_id: bucket,
-                uploaded_by: user.id
-              })
+              const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, file, {
+                  cacheControl: '3600',
+                  upsert: true
+                })
+
+              if (uploadError) {
+                console.warn('Document upload error (non-fatal):', uploadError)
+              } else {
+                await supabase.from('customer_documents').insert({
+                  customer_id: createdClientId,
+                  document_type: storageDocType,
+                  file_name: file.name,
+                  file_path: filePath,
+                  file_size: file.size,
+                  mime_type: file.type,
+                  bucket_id: bucket,
+                  uploaded_by: user.id
+                })
+              }
+            } catch (uploadErr) {
+              console.warn('Document upload failed (non-fatal):', uploadErr)
             }
-          } catch (uploadErr) {
-            console.warn('Document upload failed (non-fatal):', uploadErr)
           }
         }
 
-        // Mark as saved
-        setCustomers(prev => prev.map(c =>
-          c.fileIndex === customer.fileIndex ? { ...c, saved: true } : c
+        setMergedCustomers(prev => prev.map((c, idx) =>
+          idx === mi ? { ...c, saved: true } : c
         ))
         setSavedCount(prev => prev + 1)
       } catch (error: any) {
         console.error('Error saving customer:', error)
-        setCustomers(prev => prev.map(c =>
-          c.fileIndex === customer.fileIndex
-            ? { ...c, error: `Save failed: ${error.message}` }
-            : c
+        setMergedCustomers(prev => prev.map((c, idx) =>
+          idx === mi ? { ...c, error: `Save failed: ${error.message}` } : c
         ))
       }
     }
@@ -398,9 +503,12 @@ export default function BulkImportTab() {
     setIsSaving(false)
   }
 
-  const successCount = customers.filter(c => c.status === 'done').length
-  const errorCount = customers.filter(c => c.status === 'error').length
-  const savedTotal = customers.filter(c => c.saved).length
+  const extractedSuccess = extractedFiles.filter(c => c.status === 'done').length
+  const extractedErrors = extractedFiles.filter(c => c.status === 'error').length
+  const mergedCount = mergedCustomers.length
+  const mergedWithMultipleDocs = mergedCustomers.filter(c => c.sources.length > 1).length
+  const savedTotal = mergedCustomers.filter(c => c.saved).length
+  const unsavedCount = mergedCustomers.filter(c => !c.saved && !c.error).length
 
   return (
     <div className="space-y-6">
@@ -415,7 +523,7 @@ export default function BulkImportTab() {
       </div>
 
       {/* Drop Zone */}
-      {!isProcessing && customers.length === 0 && (
+      {!isProcessing && mergedCustomers.length === 0 && extractedFiles.length === 0 && (
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -467,7 +575,7 @@ export default function BulkImportTab() {
       )}
 
       {/* File List (before processing) */}
-      {files.length > 0 && customers.length === 0 && (
+      {files.length > 0 && mergedCustomers.length === 0 && extractedFiles.length === 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-theme-text-primary font-semibold">{files.length} documenti selezionati</p>
@@ -538,39 +646,43 @@ export default function BulkImportTab() {
             />
           </div>
           <div className="flex gap-4 mt-3 text-sm">
-            <span className="text-green-400">{successCount} estratti</span>
-            <span className="text-red-400">{errorCount} errori</span>
+            <span className="text-green-400">{extractedSuccess} estratti</span>
+            <span className="text-red-400">{extractedErrors} errori</span>
           </div>
         </div>
       )}
 
-      {/* Results Table */}
-      {customers.length > 0 && !isProcessing && (
+      {/* Merged Results */}
+      {mergedCustomers.length > 0 && !isProcessing && (
         <div className="space-y-4">
           {/* Summary */}
           <div className="flex items-center justify-between">
-            <div className="flex gap-4 text-sm">
-              <span className="text-green-400 font-semibold">{successCount} estratti</span>
-              <span className="text-red-400 font-semibold">{errorCount} errori</span>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <span className="text-green-400 font-semibold">{extractedSuccess} documenti estratti</span>
+              {extractedErrors > 0 && <span className="text-red-400 font-semibold">{extractedErrors} errori</span>}
+              <span className="text-theme-text-primary font-semibold">{mergedCount} clienti identificati</span>
+              {mergedWithMultipleDocs > 0 && (
+                <span className="text-dr7-gold font-semibold">{mergedWithMultipleDocs} uniti da piu documenti</span>
+              )}
               {savedTotal > 0 && <span className="text-blue-400 font-semibold">{savedTotal} salvati</span>}
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { setFiles([]); setCustomers([]); setProcessedCount(0); setSavedCount(0) }}
+                onClick={() => { setFiles([]); setExtractedFiles([]); setMergedCustomers([]); setProcessedCount(0); setSavedCount(0) }}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 transition-colors"
               >
                 Ricomincia
               </button>
               <button
                 onClick={saveAllCustomers}
-                disabled={isSaving || successCount === 0 || savedTotal === successCount}
+                disabled={isSaving || unsavedCount === 0}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving
-                  ? `Salvataggio ${savedCount}/${successCount - savedTotal}...`
-                  : savedTotal === successCount
+                  ? `Salvataggio ${savedCount}/${unsavedCount}...`
+                  : unsavedCount === 0
                     ? 'Tutti salvati'
-                    : `Salva ${successCount - savedTotal} Clienti`
+                    : `Salva ${unsavedCount} Clienti`
                 }
               </button>
             </div>
@@ -583,66 +695,94 @@ export default function BulkImportTab() {
                 <thead>
                   <tr className="bg-gray-900/50 text-theme-text-muted text-xs">
                     <th className="text-left px-4 py-3 w-8">#</th>
-                    <th className="text-left px-4 py-3">File</th>
+                    <th className="text-left px-4 py-3">Documenti</th>
                     <th className="text-left px-4 py-3">Nome</th>
                     <th className="text-left px-4 py-3">Cognome</th>
                     <th className="text-left px-4 py-3">Codice Fiscale</th>
                     <th className="text-left px-4 py-3">Data Nascita</th>
-                    <th className="text-left px-4 py-3">Tipo Doc</th>
+                    <th className="text-left px-4 py-3">Tipi Doc</th>
                     <th className="text-center px-4 py-3">Stato</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {customers.map((customer, i) => (
+                  {mergedCustomers.map((customer, i) => (
                     <>
                       <tr
                         key={`row-${i}`}
                         onClick={() => setExpandedRow(expandedRow === i ? null : i)}
                         className={`border-t border-theme-border cursor-pointer transition-colors ${
                           customer.saved ? 'bg-green-900/10' :
-                          customer.status === 'error' ? 'bg-red-900/10' :
+                          customer.error ? 'bg-red-900/10' :
+                          customer.sources.length > 1 ? 'bg-dr7-gold/5' :
                           'hover:bg-gray-700/30'
                         }`}
                       >
                         <td className="px-4 py-3 text-theme-text-muted">{i + 1}</td>
-                        <td className="px-4 py-3 text-theme-text-muted text-xs truncate max-w-[120px]">{customer.fileName}</td>
-                        <td className="px-4 py-3 text-theme-text-primary font-medium">{customer.data?.nome || '-'}</td>
-                        <td className="px-4 py-3 text-theme-text-primary font-medium">{customer.data?.cognome || '-'}</td>
-                        <td className="px-4 py-3 text-theme-text-primary font-mono text-xs">{customer.data?.codice_fiscale || '-'}</td>
-                        <td className="px-4 py-3 text-theme-text-primary">{customer.data?.data_nascita || '-'}</td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            customer.data?.document_type === 'carta_identita' ? 'bg-blue-500/20 text-blue-400' :
-                            customer.data?.document_type === 'patente' ? 'bg-purple-500/20 text-purple-400' :
-                            'bg-gray-500/20 text-gray-400'
-                          }`}>
-                            {customer.data?.document_type === 'carta_identita' ? 'CI' :
-                             customer.data?.document_type === 'patente' ? 'Patente' :
-                             customer.data?.document_type || '-'}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {customer.sources.length > 1 && (
+                              <span className="bg-dr7-gold text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
+                                {customer.sources.length}
+                              </span>
+                            )}
+                            <div className="text-xs text-theme-text-muted truncate max-w-[160px]">
+                              {customer.sources.map(s => s.fileName).join(', ')}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-theme-text-primary font-medium">{customer.data.nome || '-'}</td>
+                        <td className="px-4 py-3 text-theme-text-primary font-medium">{customer.data.cognome || '-'}</td>
+                        <td className="px-4 py-3 text-theme-text-primary font-mono text-xs">{customer.data.codice_fiscale || '-'}</td>
+                        <td className="px-4 py-3 text-theme-text-primary">{customer.data.data_nascita || '-'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1 flex-wrap">
+                            {customer.sources.map((s, si) => (
+                              <span key={si} className={`text-xs px-2 py-0.5 rounded-full ${
+                                s.docType === 'carta_identita' ? 'bg-blue-500/20 text-blue-400' :
+                                s.docType === 'patente' ? 'bg-purple-500/20 text-purple-400' :
+                                s.docType === 'codice_fiscale' || s.docType === 'tessera_sanitaria' ? 'bg-green-500/20 text-green-400' :
+                                'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {s.docType === 'carta_identita' ? 'CI' :
+                                 s.docType === 'patente' ? 'Patente' :
+                                 s.docType === 'codice_fiscale' ? 'CF' :
+                                 s.docType === 'tessera_sanitaria' ? 'TS' :
+                                 s.docType}
+                              </span>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {customer.status === 'processing' && (
-                            <div className="w-4 h-4 border-2 border-t-white border-gray-600 rounded-full animate-spin mx-auto" />
-                          )}
-                          {customer.status === 'done' && !customer.saved && (
-                            <span className="text-green-400 text-xs font-semibold">Estratto</span>
-                          )}
-                          {customer.saved && (
+                          {customer.saved ? (
                             <span className="text-blue-400 text-xs font-semibold">Salvato</span>
-                          )}
-                          {customer.status === 'error' && (
+                          ) : customer.error ? (
                             <span className="text-red-400 text-xs" title={customer.error}>Errore</span>
-                          )}
-                          {customer.status === 'pending' && (
-                            <span className="text-gray-500 text-xs">In attesa</span>
+                          ) : customer.sources.length > 1 ? (
+                            <span className="text-dr7-gold text-xs font-semibold">Unito</span>
+                          ) : (
+                            <span className="text-green-400 text-xs font-semibold">Estratto</span>
                           )}
                         </td>
                       </tr>
                       {/* Expanded row for editing */}
-                      {expandedRow === i && customer.data && (
+                      {expandedRow === i && (
                         <tr key={`detail-${i}`} className="border-t border-theme-border bg-gray-900/30">
                           <td colSpan={8} className="px-6 py-4">
+                            {/* Source files list */}
+                            {customer.sources.length > 1 && (
+                              <div className="mb-4 p-3 bg-dr7-gold/10 rounded-lg border border-dr7-gold/30">
+                                <p className="text-xs font-semibold text-dr7-gold mb-1">Documenti uniti ({customer.sources.length} file):</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {customer.sources.map((s, si) => (
+                                    <span key={si} className="text-xs bg-gray-800 text-theme-text-muted px-2 py-1 rounded">
+                                      {s.fileName} ({s.docType === 'carta_identita' ? 'CI' :
+                                       s.docType === 'patente' ? 'Patente' :
+                                       s.docType === 'codice_fiscale' ? 'CF' : s.docType})
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               {[
                                 { key: 'nome', label: 'Nome' },
@@ -669,15 +809,12 @@ export default function BulkImportTab() {
                                   <input
                                     type="text"
                                     value={(customer.data as any)?.[field.key] || ''}
-                                    onChange={(e) => updateCustomerField(i, field.key, e.target.value)}
+                                    onChange={(e) => updateMergedField(i, field.key, e.target.value)}
                                     className="mt-1 w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
                                   />
                                 </div>
                               ))}
                             </div>
-                            {customer.data.notes && (
-                              <p className="mt-3 text-xs text-yellow-400">Note: {customer.data.notes}</p>
-                            )}
                           </td>
                         </tr>
                       )}
