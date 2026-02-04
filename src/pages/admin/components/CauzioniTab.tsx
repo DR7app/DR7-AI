@@ -644,7 +644,7 @@ export default function CauzioniTab() {
                                                 onClick={() => handleSegnaIncassata(cauzione)}
                                                 className="px-3 py-1 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
                                             >
-                                                SEGNA INCASSATA
+                                                INCASSA
                                             </button>
                                             {cauzione.metodo === 'preautorizzazione' && !cauzione.nexi_transaction_id && (
                                                 <button
