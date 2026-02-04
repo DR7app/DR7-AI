@@ -3152,6 +3152,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               depositStatus: formData.deposit_status
             })
           })
+
+          // Directly update data_incasso on existing cauzione to ensure status sync
+          // (DB triggers may interfere with the sync function's null value)
+          if (editingId) {
+            const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
+            await supabase
+              .from('cauzioni')
+              .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
+              .eq('riferimento_contratto_id', insertedBooking.id)
+            console.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
+          }
           console.log('✅ Cauzione synced successfully')
         } catch (cauzioneError) {
           console.error('⚠️ Failed to sync cauzione:', cauzioneError)
