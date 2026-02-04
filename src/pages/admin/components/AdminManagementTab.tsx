@@ -98,7 +98,7 @@ export default function AdminManagementTab() {
 
             <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden">
                 <table className="w-full">
-                    <thead className="bg-gray-700">
+                    <thead className="bg-theme-bg-tertiary">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                                 Email
@@ -114,9 +114,9 @@ export default function AdminManagementTab() {
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-700">
+                    <tbody className="divide-y divide-theme-border">
                         {admins.map((admin) => (
-                            <tr key={admin.id} className="hover:bg-gray-750">
+                            <tr key={admin.id} className="hover:bg-theme-bg-hover">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                                     {admin.email}
                                 </td>
@@ -124,7 +124,7 @@ export default function AdminManagementTab() {
                                     <select
                                         value={admin.role}
                                         onChange={(e) => updateRole(admin.id, e.target.value as 'superadmin' | 'admin')}
-                                        className="bg-gray-700 text-theme-text-primary border border-theme-border-light rounded px-2 py-1"
+                                        className="bg-theme-bg-tertiary text-theme-text-primary border border-theme-border-light rounded px-2 py-1"
                                     >
                                         <option value="admin">Admin</option>
                                         <option value="superadmin">Superadmin</option>
@@ -135,7 +135,7 @@ export default function AdminManagementTab() {
                                         onClick={() => toggleFinancialAccess(admin.id, admin.can_view_financials)}
                                         className={`px-3 py-1 rounded-full text-xs font-medium ${admin.can_view_financials
                                                 ? 'bg-green-500 text-theme-text-primary'
-                                                : 'bg-gray-600 text-theme-text-secondary'
+                                                : 'bg-theme-bg-hover text-theme-text-secondary'
                                             }`}
                                     >
                                         {admin.can_view_financials ? 'Abilitato' : 'Disabilitato'}

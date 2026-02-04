@@ -174,7 +174,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                                 onClick={() => setCustomerId(c.id)}
                                                 className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover rounded-lg text-sm text-theme-text-secondary"
                                             >
-                                                {c.nome} {c.cognome} <span className="text-gray-500 text-xs">({c.email})</span>
+                                                {c.nome} {c.cognome} <span className="text-theme-text-muted text-xs">({c.email})</span>
                                             </button>
                                         ))}
                                     </div>
@@ -188,7 +188,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
 
                             <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Tipo Documento</label>
+                                    <label className="block text-xs text-theme-text-muted mb-1">Tipo Documento</label>
                                     <select
                                         value={docType}
                                         onChange={(e) => setDocType(e.target.value)}
@@ -203,7 +203,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                 </div>
                                 {extractedData.confidence && (
                                     <div>
-                                        <label className="block text-xs text-gray-500 mb-1">Confidence</label>
+                                        <label className="block text-xs text-theme-text-muted mb-1">Confidence</label>
                                         <div className="w-full bg-theme-bg-secondary border border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                             {(extractedData.confidence * 100).toFixed(0)}%
                                         </div>
@@ -217,7 +217,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                     <div className="grid grid-cols-2 gap-3">
                                         {extractedData.nome && (
                                             <div>
-                                                <label className="block text-xs text-gray-500 mb-1">Nome</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Nome</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.nome}
                                                 </div>
@@ -225,7 +225,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         )}
                                         {extractedData.cognome && (
                                             <div>
-                                                <label className="block text-xs text-gray-500 mb-1">Cognome</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Cognome</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.cognome}
                                                 </div>
@@ -233,7 +233,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         )}
                                         {extractedData.data_nascita && (
                                             <div>
-                                                <label className="block text-xs text-gray-500 mb-1">Data di Nascita</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Data di Nascita</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.data_nascita}
                                                 </div>
@@ -241,7 +241,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         )}
                                         {extractedData.luogo_nascita && (
                                             <div>
-                                                <label className="block text-xs text-gray-500 mb-1">Luogo di Nascita</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Luogo di Nascita</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.luogo_nascita}
                                                 </div>
@@ -249,7 +249,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         )}
                                         {extractedData.codice_fiscale && (
                                             <div className="col-span-2">
-                                                <label className="block text-xs text-gray-500 mb-1">Codice Fiscale</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Codice Fiscale</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm font-mono">
                                                     {extractedData.codice_fiscale}
                                                 </div>
@@ -257,7 +257,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         )}
                                         {extractedData.numero_documento && (
                                             <div>
-                                                <label className="block text-xs text-gray-500 mb-1">Numero Documento</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Numero Documento</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.numero_documento}
                                                 </div>
@@ -265,7 +265,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         )}
                                         {extractedData.data_scadenza && (
                                             <div>
-                                                <label className="block text-xs text-gray-500 mb-1">Scadenza</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Scadenza</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.data_scadenza}
                                                 </div>
@@ -273,7 +273,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                         )}
                                         {extractedData.indirizzo && (
                                             <div className="col-span-2">
-                                                <label className="block text-xs text-gray-500 mb-1">Indirizzo</label>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Indirizzo</label>
                                                 <div className="bg-theme-bg-secondary border border-green-700/50 rounded-full px-3 py-2 text-theme-text-primary text-sm">
                                                     {extractedData.indirizzo}
                                                 </div>
@@ -282,7 +282,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                     </div>
                                 </div>
                             ) : (
-                                <div className="p-4 bg-theme-bg-secondary/50 rounded-lg text-sm text-gray-500 text-center">
+                                <div className="p-4 bg-theme-bg-secondary/50 rounded-lg text-sm text-theme-text-muted text-center">
                                     Nessun dato OCR disponibile. Esegui OCR o inserisci manualmente.
                                 </div>
                             )}

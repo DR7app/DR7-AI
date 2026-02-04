@@ -309,7 +309,7 @@ export default function DailyCalendarTab() {
                 </div>
 
                 {/* Time Rows */}
-                <div className="divide-y divide-gray-800">
+                <div className="divide-y divide-theme-border">
                     {TIME_SLOTS.map((slot) => {
                         const slotBookings = getSlotBookings(slot)
                         const isCurrentSlot = isToday && slot === currentSlot

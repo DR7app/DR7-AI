@@ -628,9 +628,9 @@ export default function BulkImportTab() {
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          className="border-2 border-dashed border-gray-600 rounded-xl p-12 text-center hover:border-white/50 transition-colors bg-gray-800/30"
+          className="border-2 border-dashed border-theme-border rounded-xl p-12 text-center hover:border-white/50 transition-colors bg-theme-bg-secondary/30"
         >
-          <svg className="w-16 h-16 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
           <p className="text-lg text-theme-text-primary font-semibold mb-2">
@@ -648,7 +648,7 @@ export default function BulkImportTab() {
             </button>
             <button
               onClick={() => folderInputRef.current?.click()}
-              className="px-5 py-2 bg-gray-700 text-white rounded-lg font-semibold text-sm hover:bg-gray-600 transition-colors"
+              className="px-5 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg font-semibold text-sm hover:bg-theme-bg-hover transition-colors"
             >
               Seleziona Cartella
             </button>
@@ -691,13 +691,13 @@ export default function BulkImportTab() {
             <div className="flex gap-3">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 + Aggiungi file
               </button>
               <button
                 onClick={() => folderInputRef.current?.click()}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 + Aggiungi cartella
               </button>
@@ -712,7 +712,7 @@ export default function BulkImportTab() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {trackedFiles.map((tf, i) => (
-              <div key={i} className="relative bg-gray-800/50 rounded-lg border border-theme-border p-3 group">
+              <div key={i} className="relative bg-theme-bg-secondary/50 rounded-lg border border-theme-border p-3 group">
                 <button
                   onClick={() => removeFile(i)}
                   className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -720,7 +720,7 @@ export default function BulkImportTab() {
                   X
                 </button>
                 <div className="text-center">
-                  <svg className="w-8 h-8 mx-auto text-gray-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-8 h-8 mx-auto text-theme-text-muted mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   {tf.folder && (
@@ -736,10 +736,10 @@ export default function BulkImportTab() {
 
       {/* Processing Progress */}
       {isProcessing && (
-        <div className="bg-gray-800/50 rounded-xl border border-theme-border p-6">
+        <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 border-2 border-t-white border-gray-600 rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-t-white border-theme-border rounded-full animate-spin" />
               <p className="text-theme-text-primary font-semibold">
                 Estrazione in corso... {processedCount}/{files.length}
               </p>
@@ -751,7 +751,7 @@ export default function BulkImportTab() {
               Interrompi
             </button>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-2">
+          <div className="w-full bg-theme-bg-tertiary rounded-full h-2">
             <div
               className="bg-white h-2 rounded-full transition-all duration-300"
               style={{ width: `${(processedCount / files.length) * 100}%` }}
@@ -781,7 +781,7 @@ export default function BulkImportTab() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setTrackedFiles([]); setExtractedFiles([]); setMergedCustomers([]); setProcessedCount(0); setSavedCount(0) }}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 Ricomincia
               </button>
@@ -801,11 +801,11 @@ export default function BulkImportTab() {
           </div>
 
           {/* Table */}
-          <div className="bg-gray-800/50 rounded-xl border border-theme-border overflow-hidden">
+          <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-900/50 text-theme-text-muted text-xs">
+                  <tr className="bg-theme-bg-primary/50 text-theme-text-muted text-xs">
                     <th className="text-left px-4 py-3 w-8">#</th>
                     <th className="text-left px-4 py-3">Documenti</th>
                     <th className="text-left px-4 py-3">Nome</th>
@@ -826,7 +826,7 @@ export default function BulkImportTab() {
                           customer.saved ? 'bg-green-900/10' :
                           customer.error ? 'bg-red-900/10' :
                           customer.sources.length > 1 ? 'bg-dr7-gold/5' :
-                          'hover:bg-gray-700/30'
+                          'hover:bg-theme-bg-tertiary/30'
                         }`}
                       >
                         <td className="px-4 py-3 text-theme-text-muted">{i + 1}</td>
@@ -853,7 +853,7 @@ export default function BulkImportTab() {
                                 s.docType === 'carta_identita' ? 'bg-blue-500/20 text-blue-400' :
                                 s.docType === 'patente' ? 'bg-purple-500/20 text-purple-400' :
                                 s.docType === 'codice_fiscale' || s.docType === 'tessera_sanitaria' ? 'bg-green-500/20 text-green-400' :
-                                'bg-gray-500/20 text-gray-400'
+                                'bg-gray-500/20 text-theme-text-muted'
                               }`}>
                                 {s.docType === 'carta_identita' ? 'CI' :
                                  s.docType === 'patente' ? 'Patente' :
@@ -878,7 +878,7 @@ export default function BulkImportTab() {
                       </tr>
                       {/* Expanded row for editing */}
                       {expandedRow === i && (
-                        <tr key={`detail-${i}`} className="border-t border-theme-border bg-gray-900/30">
+                        <tr key={`detail-${i}`} className="border-t border-theme-border bg-theme-bg-primary/30">
                           <td colSpan={8} className="px-6 py-4">
                             {/* Source files list */}
                             {customer.sources.length > 1 && (
@@ -886,7 +886,7 @@ export default function BulkImportTab() {
                                 <p className="text-xs font-semibold text-dr7-gold mb-1">Documenti uniti ({customer.sources.length} file):</p>
                                 <div className="flex flex-wrap gap-2">
                                   {customer.sources.map((s, si) => (
-                                    <span key={si} className="text-xs bg-gray-800 text-theme-text-muted px-2 py-1 rounded">
+                                    <span key={si} className="text-xs bg-theme-bg-secondary text-theme-text-muted px-2 py-1 rounded">
                                       {s.fileName} ({s.docType === 'carta_identita' ? 'CI' :
                                        s.docType === 'patente' ? 'Patente' :
                                        s.docType === 'codice_fiscale' ? 'CF' : s.docType})
@@ -922,7 +922,7 @@ export default function BulkImportTab() {
                                     type="text"
                                     value={(customer.data as any)?.[field.key] || ''}
                                     onChange={(e) => updateMergedField(i, field.key, e.target.value)}
-                                    className="mt-1 w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
+                                    className="mt-1 w-full bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-sm text-theme-text-primary"
                                   />
                                 </div>
                               ))}

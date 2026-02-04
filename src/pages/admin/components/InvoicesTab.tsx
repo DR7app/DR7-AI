@@ -536,7 +536,7 @@ export default function InvoicesTab() {
               ))}
               {invoices.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-theme-text-muted">
                     Nessuna fattura trovata
                   </td>
                 </tr>

@@ -426,11 +426,11 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
               <div className="border rounded max-h-60 overflow-y-auto">
                 {customers.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
+                  <div className="p-4 text-center text-theme-text-muted">
                     Caricamento clienti...
                   </div>
                 ) : filteredCustomers.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
+                  <div className="p-4 text-center text-theme-text-muted">
                     Nessun cliente trovato per "{searchTerm}"
                   </div>
                 ) : (
@@ -445,7 +445,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
                         <div className="text-sm text-gray-600">{customer.email}</div>
                       )}
                       {customer.phone && (
-                        <div className="text-xs text-gray-500">{customer.phone}</div>
+                        <div className="text-xs text-theme-text-muted">{customer.phone}</div>
                       )}
                     </div>
                   ))
@@ -455,7 +455,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
             <div className="flex items-center gap-2 mt-4">
               <div className="flex-1 border-t border-gray-300"></div>
-              <span className="text-sm text-gray-500">oppure</span>
+              <span className="text-sm text-theme-text-muted">oppure</span>
               <div className="flex-1 border-t border-gray-300"></div>
             </div>
 
@@ -1346,7 +1346,7 @@ const LotteriaBoard: React.FC = () => {
                 value={searchEmail}
                 onChange={(e) => setSearchEmail(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearchTickets()}
-                className="w-full px-4 py-2 bg-gray-700 border border-theme-border-light rounded-full text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+                className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
               />
             </div>
             <button
@@ -1417,7 +1417,7 @@ const LotteriaBoard: React.FC = () => {
               }}
               className={`px-4 py-2 rounded-full font-semibold transition-colors ${multiSelectMode
                 ? 'bg-orange-600 text-theme-text-primary hover:bg-orange-700'
-                : 'bg-gray-700 text-theme-text-primary hover:bg-gray-600'
+                : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
                 }`}
             >
               {multiSelectMode ? '✓ Selezione Multipla ON' : 'Selezione Multipla'}
@@ -1426,7 +1426,7 @@ const LotteriaBoard: React.FC = () => {
               <>
                 <button
                   onClick={() => setSelectedTickets([])}
-                  className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded-full hover:bg-theme-bg-hover"
+                  className="px-4 py-2 bg-theme-bg-hover text-theme-text-primary rounded-full hover:bg-theme-bg-hover"
                 >
                   Pulisci ({selectedTickets.length})
                 </button>
@@ -1720,7 +1720,7 @@ const LotteriaBoard: React.FC = () => {
                   setSearchResults([]);
                   setSearchEmail('');
                 }}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-theme-text-muted hover:text-gray-700"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1748,7 +1748,7 @@ const LotteriaBoard: React.FC = () => {
                           <div><strong>Telefono:</strong> {ticket.customer_phone}</div>
                         )}
                         <div><strong>Data Acquisto:</strong> {new Date(ticket.purchase_date).toLocaleString('it-IT')}</div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-theme-text-muted">
                           <strong>ID Pagamento:</strong> {ticket.payment_intent_id}
                         </div>
                       </div>
@@ -1793,7 +1793,7 @@ const LotteriaBoard: React.FC = () => {
                   setShowTicketDetailsModal(false);
                   setSelectedTicketForDetails(null);
                 }}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
+                className="text-theme-text-muted hover:text-gray-700 text-2xl"
               >
                 ×
               </button>
@@ -2038,7 +2038,7 @@ const LotteriaBoard: React.FC = () => {
                         placeholder="🔍 Cerca cliente per nome o email..."
                         value={clientSearchFilter}
                         onChange={(e) => setClientSearchFilter(e.target.value)}
-                        className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+                        className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
                       />
 
                       {/* Client List with Checkboxes */}
@@ -2133,7 +2133,7 @@ const LotteriaBoard: React.FC = () => {
               <button
                 onClick={() => setShowEmailEditorModal(false)}
                 disabled={savingTemplate || sendingEmails}
-                className="px-6 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:opacity-50"
+                className="px-6 py-2 bg-theme-bg-hover text-theme-text-primary rounded-full hover:bg-theme-bg-tertiary transition-colors disabled:opacity-50"
               >
                 Annulla
               </button>

@@ -703,7 +703,7 @@ export default function BirthdaysTab() {
                                                 {customer.phone}
                                             </a>
                                         ) : (
-                                            <span className="text-gray-500">-</span>
+                                            <span className="text-theme-text-muted">-</span>
                                         )}
                                     </td>
                                     <td className="p-4">{formatBirthday(customer.data_nascita)}</td>
@@ -713,7 +713,7 @@ export default function BirthdaysTab() {
                                                 ? 'bg-green-900/50 text-green-300'
                                                 : customer.days_until <= 3
                                                     ? 'bg-orange-900/50 text-orange-300'
-                                                    : 'bg-gray-700 text-gray-300'
+                                                    : 'bg-theme-bg-tertiary text-theme-text-secondary'
                                         }`}>
                                             {customer.days_until === 0 ? 'OGGI' : `${customer.days_until}g`}
                                         </span>
@@ -726,7 +726,7 @@ export default function BirthdaysTab() {
                                                 </svg>
                                             </span>
                                         ) : (
-                                            <span className="text-gray-500" title="Nessun consenso marketing">
+                                            <span className="text-theme-text-muted" title="Nessun consenso marketing">
                                                 <svg className="w-5 h-5 inline" fill="currentColor" viewBox="0 0 20 20">
                                                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                                                 </svg>
@@ -739,7 +739,7 @@ export default function BirthdaysTab() {
                                                 INVIATO
                                             </span>
                                         ) : (
-                                            <span className="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs font-medium">
+                                            <span className="px-2 py-1 bg-theme-bg-tertiary text-theme-text-secondary rounded text-xs font-medium">
                                                 DA INVIARE
                                             </span>
                                         )}

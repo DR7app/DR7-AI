@@ -142,7 +142,7 @@ export default function BookingDiagnosticPanel() {
             case 'high': return 'bg-orange-900/30 border-orange-500'
             case 'medium': return 'bg-yellow-900/30 border-yellow-500'
             case 'low': return 'bg-blue-900/30 border-blue-500'
-            default: return 'bg-gray-900/30 border-gray-500'
+            default: return 'bg-theme-bg-primary/30 border-gray-500'
         }
     }
 
@@ -158,7 +158,7 @@ export default function BookingDiagnosticPanel() {
         return (
             <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dr7-gold mx-auto mb-4"></div>
-                <p className="text-white">Caricamento report di consistenza...</p>
+                <p className="text-theme-text-primary">Caricamento report di consistenza...</p>
             </div>
         )
     }
@@ -169,8 +169,8 @@ export default function BookingDiagnosticPanel() {
             <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-light text-white mb-2">Diagnostica Prenotazioni-Calendario</h2>
-                        <p className="text-gray-400 text-sm">
+                        <h2 className="text-2xl font-light text-theme-text-primary mb-2">Diagnostica Prenotazioni-Calendario</h2>
+                        <p className="text-theme-text-muted text-sm">
                             Verifica la consistenza dei collegamenti tra prenotazioni e calendario
                         </p>
                     </div>
@@ -185,20 +185,20 @@ export default function BookingDiagnosticPanel() {
                 {/* Summary */}
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                        <div className="text-3xl font-bold text-white">{issues.length}</div>
-                        <div className="text-gray-400 text-sm">Problemi Totali</div>
+                        <div className="text-3xl font-bold text-theme-text-primary">{issues.length}</div>
+                        <div className="text-theme-text-muted text-sm">Problemi Totali</div>
                     </div>
                     <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                         <div className="text-3xl font-bold text-red-400">
                             {issues.filter(i => getIssueSeverity(i.issue_type) === 'critical' || getIssueSeverity(i.issue_type) === 'high').length}
                         </div>
-                        <div className="text-gray-400 text-sm">Critici/Alti</div>
+                        <div className="text-theme-text-muted text-sm">Critici/Alti</div>
                     </div>
                     <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                         <div className="text-3xl font-bold text-yellow-400">
                             {issues.filter(i => getIssueSeverity(i.issue_type) === 'medium' || getIssueSeverity(i.issue_type) === 'low').length}
                         </div>
-                        <div className="text-gray-400 text-sm">Medi/Bassi</div>
+                        <div className="text-theme-text-muted text-sm">Medi/Bassi</div>
                     </div>
                 </div>
             </div>
@@ -208,22 +208,22 @@ export default function BookingDiagnosticPanel() {
                 <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-8 text-center">
                     <div className="text-6xl mb-4">✅</div>
                     <h3 className="text-2xl font-semibold text-green-400 mb-2">Nessun Problema Rilevato</h3>
-                    <p className="text-gray-400">
+                    <p className="text-theme-text-muted">
                         Tutti i collegamenti tra prenotazioni e calendario sono consistenti!
                     </p>
                 </div>
             ) : (
                 Object.entries(groupedIssues).map(([type, typeIssues]) => (
-                    <div key={type} className="bg-gray-900/50 rounded-lg border border-white/10 overflow-hidden">
+                    <div key={type} className="bg-theme-bg-primary/50 rounded-lg border border-white/10 overflow-hidden">
                         <div className={`p-4 border-l-4 ${getSeverityColor(getIssueSeverity(type))}`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">{getIssueIcon(type)}</span>
                                     <div>
-                                        <h3 className="text-lg font-semibold text-white">
+                                        <h3 className="text-lg font-semibold text-theme-text-primary">
                                             {type.replace(/_/g, ' ')}
                                         </h3>
-                                        <p className="text-sm text-gray-400">{typeIssues.length} prenotazioni</p>
+                                        <p className="text-sm text-theme-text-muted">{typeIssues.length} prenotazioni</p>
                                     </div>
                                 </div>
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getIssueSeverity(type) === 'critical' ? 'bg-red-500 text-white' :
@@ -242,23 +242,23 @@ export default function BookingDiagnosticPanel() {
                                     <div className="flex justify-between items-start">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-white font-mono text-sm">
+                                                <span className="text-theme-text-primary font-mono text-sm">
                                                     DR7-{issue.booking_id.substring(0, 8).toUpperCase()}
                                                 </span>
-                                                <span className="text-gray-400">•</span>
+                                                <span className="text-theme-text-muted">•</span>
                                                 <span className="text-dr7-gold">{issue.vehicle_name}</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 text-sm mb-2">
                                                 <div>
-                                                    <span className="text-gray-400">Targa Prenotazione:</span>
-                                                    <span className="text-white ml-2">{issue.vehicle_plate || 'N/A'}</span>
+                                                    <span className="text-theme-text-muted">Targa Prenotazione:</span>
+                                                    <span className="text-theme-text-primary ml-2">{issue.vehicle_plate || 'N/A'}</span>
                                                 </div>
                                                 <div>
-                                                    <span className="text-gray-400">Targa Attuale:</span>
-                                                    <span className="text-white ml-2">{issue.current_vehicle_plate || 'N/A'}</span>
+                                                    <span className="text-theme-text-muted">Targa Attuale:</span>
+                                                    <span className="text-theme-text-primary ml-2">{issue.current_vehicle_plate || 'N/A'}</span>
                                                 </div>
                                             </div>
-                                            <p className="text-gray-400 text-sm">{issue.details}</p>
+                                            <p className="text-theme-text-muted text-sm">{issue.details}</p>
                                         </div>
 
                                         {/* Action Buttons */}
@@ -293,7 +293,7 @@ export default function BookingDiagnosticPanel() {
             {/* Help Section */}
             <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-blue-400 mb-3">ℹ️ Guida ai Problemi</h3>
-                <div className="space-y-2 text-sm text-gray-300">
+                <div className="space-y-2 text-sm text-theme-text-secondary">
                     <p><strong>MISSING_VEHICLE_ID:</strong> La prenotazione non ha un vehicle_id. Usa solo nome/targa per il matching.</p>
                     <p><strong>ORPHANED_BOOKING:</strong> La prenotazione riferisce un veicolo che non esiste più.</p>
                     <p><strong>PLATE_MISMATCH:</strong> La targa nella prenotazione non corrisponde alla targa attuale del veicolo.</p>

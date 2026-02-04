@@ -393,7 +393,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                     )}
 
                                     <div className="w-16 flex-shrink-0 pt-2">
-                                        <span className={`text-sm font-mono ${isCurrentSlot ? 'text-dr7-gold font-semibold' : 'text-gray-500'}`}>
+                                        <span className={`text-sm font-mono ${isCurrentSlot ? 'text-dr7-gold font-semibold' : 'text-theme-text-muted'}`}>
                                             {slot}
                                         </span>
                                     </div>

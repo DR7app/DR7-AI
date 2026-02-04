@@ -433,7 +433,7 @@ export default function ContrattoTab() {
                 setEditingId(null)
                 resetForm()
               }}
-              className="px-6 bg-gray-700 hover:bg-gray-600 text-theme-text-primary font-bold py-3 rounded-full transition-colors"
+              className="px-6 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-bold py-3 rounded-full transition-colors"
             >
               Annulla
             </button>
@@ -463,7 +463,7 @@ export default function ContrattoTab() {
           placeholder="Cerca cliente..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
         />
       </div>
 
@@ -564,7 +564,7 @@ export default function ContrattoTab() {
                   <div className="flex gap-2 w-full">
                     <button
                       onClick={() => handleEdit(contract)}
-                      className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
+                      className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
                     >
                       Modifica
                     </button>

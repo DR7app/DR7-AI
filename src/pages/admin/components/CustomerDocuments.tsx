@@ -335,10 +335,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
               ) : (
                 <div className="w-32 h-32 flex-shrink-0 bg-gray-950 rounded flex items-center justify-center">
                   <div className="text-center">
-                    <svg className="w-12 h-12 mx-auto text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-12 h-12 mx-auto text-theme-text-muted mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
-                    <p className="text-xs text-gray-500">{doc.mime_type.split('/')[1].toUpperCase()}</p>
+                    <p className="text-xs text-theme-text-muted">{doc.mime_type.split('/')[1].toUpperCase()}</p>
                   </div>
                 </div>
               )}
@@ -393,7 +393,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             <input
               type="file"
               onChange={(e) => setSelectedFiles({ ...selectedFiles, [type]: e.target.files?.[0] || null })}
-              className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-sm
+              className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm
                 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0
                 file:text-sm file:font-semibold file:bg-dr7-gold file:text-black
                 hover:file:bg-yellow-500 file:cursor-pointer"
@@ -578,11 +578,11 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             <h5 className="text-sm font-semibold text-theme-text-primary mb-2">Informazioni Storage</h5>
             <div className="space-y-1">
               <p className="text-xs text-theme-text-muted">
-                <strong>Buckets:</strong> <code className="bg-gray-700 px-2 py-0.5 rounded mr-1">{DRIVERS_LICENSE_BUCKET}</code>
-                <code className="bg-gray-700 px-2 py-0.5 rounded">{IDENTITY_DOCS_BUCKET}</code>
+                <strong>Buckets:</strong> <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded mr-1">{DRIVERS_LICENSE_BUCKET}</code>
+                <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded">{IDENTITY_DOCS_BUCKET}</code>
               </p>
               <p className="text-xs text-theme-text-muted">
-                <strong>Path:</strong> <code className="bg-gray-700 px-2 py-0.5 rounded">{customerId}/</code>
+                <strong>Path:</strong> <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded">{customerId}/</code>
               </p>
               <p className="text-xs text-theme-text-muted">
                 <strong>Formati supportati:</strong> Immagini (JPG, PNG), PDF

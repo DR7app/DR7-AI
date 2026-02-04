@@ -281,8 +281,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">◄ Mese</button>
-            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Mese ►</button>
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">◄ Mese</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Mese ►</button>
           </div>
 
         </div>
@@ -328,7 +328,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           <input
             type="text"
             placeholder="Cerca cliente o servizio..."
-            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-white placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
+            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -341,7 +341,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         {/* A. Sticky Header Row - Days */}
         <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-lg min-w-max border-b border-white/10">
           {/* Header Spacer for Time Column */}
-          <div className="sticky left-0 w-[70px] z-[41] bg-[#0d0d0e] border-r border-white/10 flex items-center justify-center font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]" style={{ height: '50px' }}>
+          <div className="sticky left-0 w-[70px] z-[41] bg-[#0d0d0e] border-r border-white/10 flex items-center justify-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]" style={{ height: '50px' }}>
             Orario
           </div>
 
@@ -372,12 +372,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   )}
 
                   <span
-                    className={`text-sm font-bold ${isToday ? 'text-[#c9a84a]' : 'text-white/90'}`}
+                    className={`text-sm font-bold ${isToday ? 'text-[#c9a84a]' : 'text-theme-text-primary/90'}`}
                   >
                     {day}
                   </span>
                   <span
-                    className={`text-[9px] uppercase tracking-wide ${isToday ? 'text-[#c9a84a]/80' : 'text-white/50'}`}
+                    className={`text-[9px] uppercase tracking-wide ${isToday ? 'text-[#c9a84a]/80' : 'text-theme-text-primary/50'}`}
                   >
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
                   </span>
@@ -407,7 +407,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 <div
                   className={`sticky left-0 w-[70px] z-[30] bg-[#0d0d0e]/98 border-r border-white/10 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_rgba(0,0,0,0.4)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
                 >
-                  <span className={`text-xs ${isFullHour ? 'text-white/95 text-sm' : 'text-white/60'}`}>
+                  <span className={`text-xs ${isFullHour ? 'text-theme-text-primary/95 text-sm' : 'text-theme-text-primary/60'}`}>
                     {timeString}
                   </span>
                 </div>
@@ -476,7 +476,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
                             {/* Content */}
                             <div className="relative px-2 py-1.5 flex flex-col justify-center h-full items-center gap-0.5 text-center">
-                              <span className="font-bold text-[11px] leading-tight truncate max-w-full text-white drop-shadow-md">
+                              <span className="font-bold text-[11px] leading-tight truncate max-w-full text-theme-text-primary drop-shadow-md">
                                 {(() => {
                                   const name = slotBooking.booking.customer_name || 'Cliente'
                                   if (name.length > 10) {
@@ -489,10 +489,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                   return name
                                 })()}
                               </span>
-                              <span className="font-bold text-[12px] leading-tight text-white drop-shadow-md">
+                              <span className="font-bold text-[12px] leading-tight text-theme-text-primary drop-shadow-md">
                                 {slotBooking.booking.appointment_time}
                               </span>
-                              <span className="text-[9px] leading-tight text-white/90 drop-shadow-sm">
+                              <span className="text-[9px] leading-tight text-theme-text-primary/90 drop-shadow-sm">
                                 {(() => {
                                   const svc = slotBooking.booking.service_name.toLowerCase()
                                   if (svc.includes('scooter')) return 'Scooter'
@@ -513,25 +513,25 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                             <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/40" />
 
                             {/* Tooltip on hover */}
-                            <div className="hidden group-hover/booking:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 border border-gray-700 text-white text-xs p-3 rounded-lg shadow-2xl w-max z-[100] pointer-events-none min-w-[220px]">
+                            <div className="hidden group-hover/booking:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs p-3 rounded-lg shadow-2xl w-max z-[100] pointer-events-none min-w-[220px]">
                               <div className="font-bold mb-1 text-base">{slotBooking.booking.customer_name}</div>
-                              <div className="text-gray-400 mb-2">{slotBooking.booking.service_name}</div>
+                              <div className="text-theme-text-muted mb-2">{slotBooking.booking.service_name}</div>
 
                               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
-                                <span className="text-gray-500">Orario:</span>
+                                <span className="text-theme-text-muted">Orario:</span>
                                 <span className="font-mono">{slotBooking.booking.appointment_time}</span>
 
-                                <span className="text-gray-500">Durata:</span>
+                                <span className="text-theme-text-muted">Durata:</span>
                                 <span className="font-mono">{formatDuration(slotBooking.duration)}</span>
 
-                                <span className="text-gray-500">Prezzo:</span>
+                                <span className="text-theme-text-muted">Prezzo:</span>
                                 <span className="font-mono">€{(slotBooking.booking.price_total / 100).toFixed(2)}</span>
 
-                                <span className="text-gray-500">Stato:</span>
+                                <span className="text-theme-text-muted">Stato:</span>
                                 <span className="uppercase font-bold tracking-wider text-[10px]">{slotBooking.booking.status}</span>
                               </div>
 
-                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700" />
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-theme-bg-primary rotate-45 border-r border-b border-theme-border" />
                             </div>
                           </div>
                         )}
@@ -632,7 +632,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   </div>
                 </div>
 
-                <div className="mt-3 text-xs text-gray-500">
+                <div className="mt-3 text-xs text-theme-text-muted">
                   ID: DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
                 </div>
               </div>
@@ -808,7 +808,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               </button>
               <button
                 onClick={() => setEditingBooking(null)}
-                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded font-medium transition-colors"
+                className="px-6 py-3 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded font-medium transition-colors"
               >
                 Annulla
               </button>

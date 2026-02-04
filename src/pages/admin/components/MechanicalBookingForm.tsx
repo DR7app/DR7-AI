@@ -314,7 +314,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             onClick={() => setIsNewClientModalOpen(false)}
                             className={`px-4 py-2 rounded-full ${!isNewClientModalOpen
                                 ? 'bg-white text-black font-semibold'
-                                : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+                                : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                                 }`}
                         >
                             Seleziona Cliente
@@ -324,7 +324,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             onClick={() => setIsNewClientModalOpen(true)}
                             className={`px-4 py-2 rounded-full ${isNewClientModalOpen
                                 ? 'bg-white text-black font-semibold'
-                                : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+                                : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                                 }`}
                         >
                             Nuovo Cliente
@@ -521,7 +521,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary font-semibold rounded-full transition-colors"
+                        className="flex-1 px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-semibold rounded-full transition-colors"
                     >
                         Annulla
                     </button>

@@ -247,7 +247,7 @@ export default function MechanicalBookingTab() {
           placeholder="Cerca prenotazione per nome cliente..."
           value={bookingSearchQuery}
           onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
       </div>
 
@@ -352,7 +352,7 @@ export default function MechanicalBookingTab() {
                     <button
                       onClick={() => handleGenerateInvoice(booking)}
                       disabled={generatingInvoice}
-                      className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors disabled:opacity-50`}
+                      className={`px-3 py-1 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors disabled:opacity-50`}
                     >
                       {generatingInvoice ? '...' : 'Fattura'}
                     </button>
@@ -368,7 +368,7 @@ export default function MechanicalBookingTab() {
             ))}
             {bookings.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-theme-text-muted">
                   Nessuna prenotazione trovata
                 </td>
               </tr>

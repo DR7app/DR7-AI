@@ -760,7 +760,7 @@ export default function VehiclesTab() {
                         type="checkbox"
                         checked={urbanVehicles.length > 0 && urbanVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(urbanVehicles)}
-                        className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
@@ -780,7 +780,7 @@ export default function VehiclesTab() {
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
@@ -791,7 +791,7 @@ export default function VehiclesTab() {
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-gray-700 text-gray-200'
+                              'bg-theme-bg-tertiary text-gray-200'
                         }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
                           vehicle.status === 'unavailable' ? 'Non Disponibile' :
@@ -830,7 +830,7 @@ export default function VehiclesTab() {
                 ))}
                 {urbanVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-theme-text-muted">
                       Nessun veicolo Urban trovato
                     </td>
                   </tr>
@@ -858,7 +858,7 @@ export default function VehiclesTab() {
                         type="checkbox"
                         checked={exoticVehicles.length > 0 && exoticVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(exoticVehicles)}
-                        className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
@@ -878,7 +878,7 @@ export default function VehiclesTab() {
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
@@ -889,7 +889,7 @@ export default function VehiclesTab() {
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-gray-700 text-gray-200'
+                              'bg-theme-bg-tertiary text-gray-200'
                         }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
                           vehicle.status === 'unavailable' ? 'Non Disponibile' :
@@ -928,7 +928,7 @@ export default function VehiclesTab() {
                 ))}
                 {exoticVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-theme-text-muted">
                       Nessun veicolo Exotic trovato
                     </td>
                   </tr>
@@ -956,7 +956,7 @@ export default function VehiclesTab() {
                         type="checkbox"
                         checked={aziendaliVehicles.length > 0 && aziendaliVehicles.every(v => selectedVehicles.has(v.id))}
                         onChange={() => toggleSelectCategory(aziendaliVehicles)}
-                        className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                   )}
@@ -976,7 +976,7 @@ export default function VehiclesTab() {
                           type="checkbox"
                           checked={selectedVehicles.has(vehicle.id)}
                           onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                     )}
@@ -987,7 +987,7 @@ export default function VehiclesTab() {
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-gray-700 text-gray-200'
+                              'bg-theme-bg-tertiary text-gray-200'
                         }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
                           vehicle.status === 'unavailable' ? 'Non Disponibile' :
@@ -1026,7 +1026,7 @@ export default function VehiclesTab() {
                 ))}
                 {aziendaliVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-theme-text-muted">
                       Nessun veicolo Aziendali trovato
                     </td>
                   </tr>

@@ -327,7 +327,7 @@ export default function MechanicalCalendarTab() {
                     <h4 className="text-theme-text-primary font-bold text-sm">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</h4>
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-theme-text-primary' :
                       booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                        'bg-gray-600 text-theme-text-primary'
+                        'bg-theme-bg-hover text-theme-text-primary'
                       }`}>
                       {booking.status}
                     </span>
@@ -451,7 +451,7 @@ export default function MechanicalCalendarTab() {
                     <div className="flex gap-2">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${booking.status === 'confirmed' ? 'bg-green-600 text-theme-text-primary' :
                         booking.status === 'pending' ? 'bg-yellow-600 text-black' :
-                          'bg-gray-600 text-theme-text-primary'
+                          'bg-theme-bg-hover text-theme-text-primary'
                         }`}>
                         {booking.status}
                       </span>

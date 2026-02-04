@@ -16,7 +16,7 @@ export function FinancialData({ children, fallback = '***', type = 'total' }: Fi
   const { canViewFinancials, loading } = useAdminRole()
 
   if (loading) {
-    return <span className="text-gray-500">...</span>
+    return <span className="text-theme-text-muted">...</span>
   }
 
   // If type is 'price', always show (individual booking prices are visible to all)

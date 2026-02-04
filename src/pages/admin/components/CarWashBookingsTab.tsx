@@ -952,7 +952,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           placeholder="Cerca prenotazione per nome cliente..."
           value={bookingSearchQuery}
           onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
       </div>
 
@@ -978,7 +978,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   onClick={() => setNewCustomerMode(false)}
                   className={`px-4 py-2 rounded-full border ${!newCustomerMode
                     ? 'bg-white text-black font-semibold border-white'
-                    : 'bg-black text-white border-white hover:bg-white hover:text-black'
+                    : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
                     }`}
                 >
                   Seleziona Cliente
@@ -988,7 +988,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   onClick={() => setNewCustomerMode(true)}
                   className={`px-4 py-2 rounded-full border ${newCustomerMode
                     ? 'bg-white text-black font-semibold border-white'
-                    : 'bg-black text-white border-white hover:bg-white hover:text-black'
+                    : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
                     }`}
                 >
                   Nuovo Cliente
@@ -1012,9 +1012,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       return (
                         <div className="mt-3 p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
                           <p className="text-green-400 font-medium mb-1">Cliente selezionato:</p>
-                          <p className="text-white font-bold">{selectedCustomer.full_name}</p>
-                          {selectedCustomer.email && <p className="text-gray-300 text-sm">{selectedCustomer.email}</p>}
-                          {selectedCustomer.phone && <p className="text-gray-300 text-sm">{selectedCustomer.phone}</p>}
+                          <p className="text-theme-text-primary font-bold">{selectedCustomer.full_name}</p>
+                          {selectedCustomer.email && <p className="text-theme-text-secondary text-sm">{selectedCustomer.email}</p>}
+                          {selectedCustomer.phone && <p className="text-theme-text-secondary text-sm">{selectedCustomer.phone}</p>}
                         </div>
                       )
                     }
@@ -1031,7 +1031,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.nome}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, nome: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
@@ -1041,7 +1041,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.cognome}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
@@ -1054,7 +1054,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.codice_fiscale}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                         maxLength={16}
                       />
                     </div>
@@ -1064,7 +1064,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         type="date"
                         value={newCustomerData.data_nascita}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
@@ -1076,7 +1076,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         type="text"
                         value={newCustomerData.luogo_nascita}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
@@ -1085,7 +1085,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.nazione}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, nazione: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       >
                         <option value="Italia">Italia</option>
                         <option value="Francia">Francia</option>
@@ -1105,7 +1105,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.email}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
@@ -1115,7 +1115,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.telefono}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, telefono: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
@@ -1127,7 +1127,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         type="text"
                         value={newCustomerData.indirizzo}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, indirizzo: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
@@ -1136,7 +1136,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         type="text"
                         value={newCustomerData.numero_civico}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, numero_civico: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                   </div>
@@ -1149,7 +1149,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.citta_residenza}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, citta_residenza: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                       />
                     </div>
                     <div>
@@ -1159,7 +1159,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.codice_postale}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_postale: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                         maxLength={5}
                       />
                     </div>
@@ -1170,7 +1170,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         required
                         value={newCustomerData.provincia_residenza}
                         onChange={(e) => setNewCustomerData({ ...newCustomerData, provincia_residenza: e.target.value.toUpperCase() })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                         maxLength={2}
                         placeholder="ES: CA"
                       />
@@ -1183,7 +1183,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       type="email"
                       value={newCustomerData.pec}
                       onChange={(e) => setNewCustomerData({ ...newCustomerData, pec: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>
                 </div>
@@ -1198,7 +1198,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 required
                 value={formData.appointment_date}
                 onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
-                className="w-full max-w-xs px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                className="w-full max-w-xs px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
               />
             </div>
 
@@ -1219,7 +1219,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'lavaggio'
                       ? 'bg-white text-black border-white'
-                      : 'bg-black text-white border-white hover:bg-white hover:text-black'
+                      : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
                   }`}
                 >
                   LAVAGGIO
@@ -1230,7 +1230,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'meccanica'
                       ? 'bg-white text-black border-white'
-                      : 'bg-black text-white border-white hover:bg-white hover:text-black'
+                      : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
                   }`}
                 >
                   MECCANICA
@@ -1262,7 +1262,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           setSelectedCategory(e.target.value)
                           setSelectedServiceId('')
                         }}
-                        className="w-full max-w-md px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-sm"
+                        className="w-full max-w-md px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
                       >
                         <option value="">-- Seleziona categoria --</option>
                         {categories.map(cat => (
@@ -1278,7 +1278,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         <select
                           value={selectedServiceId}
                           onChange={(e) => setSelectedServiceId(e.target.value)}
-                          className="w-full max-w-md px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-sm"
+                          className="w-full max-w-md px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
                         >
                           <option value="">-- Seleziona servizio --</option>
                           {filteredServices
@@ -1306,7 +1306,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 key={opt.label}
                                 type="button"
                                 onClick={() => addToCart(service, opt)}
-                                className="px-4 py-2 text-sm bg-gray-700 hover:bg-dr7-gold hover:text-black rounded-full transition-colors border border-theme-border"
+                                className="px-4 py-2 text-sm bg-theme-bg-tertiary hover:bg-dr7-gold hover:text-black rounded-full transition-colors border border-theme-border"
                               >
                                 + {opt.label} — €{opt.price}
                               </button>
@@ -1329,7 +1329,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
               {/* Cart Display */}
               {cart.length > 0 && (
-                <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-dr7-gold/30">
+                <div className="mt-4 p-4 bg-theme-bg-secondary/50 rounded-lg border border-dr7-gold/30">
                   <h4 className="text-sm font-semibold text-dr7-gold mb-3">🛒 Carrello</h4>
                   <div className="space-y-2">
                     {cart.map((item, idx) => (
@@ -1344,7 +1344,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <button
                             type="button"
                             onClick={() => updateQuantity(item.service.id, item.selectedOption?.label, -1)}
-                            className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-theme-text-primary"
+                            className="w-6 h-6 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary"
                           >
                             -
                           </button>
@@ -1352,7 +1352,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <button
                             type="button"
                             onClick={() => updateQuantity(item.service.id, item.selectedOption?.label, 1)}
-                            className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-theme-text-primary"
+                            className="w-6 h-6 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary"
                           >
                             +
                           </button>
@@ -1402,7 +1402,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       required
                       value={formData.appointment_time}
                       onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                      className="w-full max-w-xs px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                      className="w-full max-w-xs px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     >
                       <option value="">Seleziona orario</option>
                       {(() => {
@@ -1460,7 +1460,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                     setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid })
                   }}
-                  className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                  className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                 >
                   <option value="paid">Pagato</option>
                   <option value="pending">Da Saldare</option>
@@ -1476,7 +1476,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   required
                   value={formData.amount_paid}
                   onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                  className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   placeholder="0.00"
                 />
               </div>
@@ -1487,7 +1487,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary"
+                className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                 rows={3}
               />
             </div>
@@ -1504,7 +1504,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-black hover:bg-white hover:text-black text-white border border-white rounded-full transition-colors"
+                className="px-4 py-2 bg-black hover:bg-white hover:text-black text-theme-text-primary border border-white rounded-full transition-colors"
               >
                 Annulla
               </button>
@@ -1512,8 +1512,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 type="submit"
                 disabled={submitting}
                 className={`px-4 py-2 font-semibold rounded-full transition-colors ${submitting
-                  ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                  : 'bg-white hover:bg-black hover:text-white text-black border border-white'
+                  ? 'bg-gray-500 text-theme-text-secondary cursor-not-allowed'
+                  : 'bg-white hover:bg-black hover:text-theme-text-primary text-black border border-white'
                   }`}
               >
                 {submitting ? 'Creazione in corso...' : 'Crea Prenotazione'}
@@ -1526,7 +1526,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       {
         bookings.length === 0 ? (
-          <div className=" rounded-lg border border-theme-border p-8 text-center text-gray-500">
+          <div className=" rounded-lg border border-theme-border p-8 text-center text-theme-text-muted">
             Nessuna prenotazione lavaggio trovata
           </div>
         ) : (
@@ -1623,7 +1623,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <button
                             onClick={() => handleGenerateInvoice(booking)}
                             disabled={generatingInvoice}
-                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
+                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
                           >
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
@@ -1635,7 +1635,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               Annulla
                             </button>
                           ) : (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-theme-text-muted">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted">
                               Annullata
                             </span>
                           )}
@@ -1811,7 +1811,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
                 <button
                   onClick={() => setEditingBooking(null)}
-                  className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded font-medium transition-colors"
+                  className="px-6 py-3 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded font-medium transition-colors"
                 >
                   Annulla
                 </button>

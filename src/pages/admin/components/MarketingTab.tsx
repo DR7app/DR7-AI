@@ -622,7 +622,7 @@ export default function MarketingTab() {
                         }}
                         className={`px-4 py-2 rounded-full font-semibold transition-colors ${multiSelectMode
                                 ? 'bg-orange-600 text-theme-text-primary hover:bg-orange-700'
-                                : 'bg-gray-700 text-theme-text-primary hover:bg-gray-600'
+                                : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
                             }`}
                     >
                         {multiSelectMode ? 'Selezione Multipla ON' : 'Selezione Multipla'}
@@ -658,7 +658,7 @@ export default function MarketingTab() {
                                                 setSelectedCustomerIds(newSet)
                                             }
                                         }}
-                                        className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                        className="rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-dr7-gold"
                                     />
                                 </th>
                                 <th className="p-4">Cliente</th>
@@ -667,7 +667,7 @@ export default function MarketingTab() {
                                 <th className="p-4 text-right">Data Reg.</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-700">
+                        <tbody className="divide-y divide-theme-border">
                             {paginatedCustomers.map((customer) => (
                                 <tr
                                     key={customer.id}
@@ -679,7 +679,7 @@ export default function MarketingTab() {
                                             type="checkbox"
                                             checked={selectedCustomerIds.has(customer.id)}
                                             onChange={() => toggleSelection(customer.id)}
-                                            className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                            className="rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-dr7-gold"
                                         />
                                     </td>
                                     <td className="p-4 font-medium text-theme-text-primary">{customer.full_name}</td>
@@ -692,7 +692,7 @@ export default function MarketingTab() {
                             ))}
                             {paginatedCustomers.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-8 text-center text-gray-500">
+                                    <td colSpan={5} className="p-8 text-center text-theme-text-muted">
                                         Nessun cliente trovato
                                     </td>
                                 </tr>

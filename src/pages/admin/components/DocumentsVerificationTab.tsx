@@ -307,7 +307,7 @@ export default function DocumentsVerificationTab() {
       verified: { text: 'Verificato', color: 'bg-green-600 text-theme-text-primary' },
       rejected: { text: 'Rifiutato', color: 'bg-red-600 text-theme-text-primary' }
     }
-    const config = statusConfig[status as keyof typeof statusConfig] || { text: status, color: 'bg-gray-600 text-theme-text-primary' }
+    const config = statusConfig[status as keyof typeof statusConfig] || { text: status, color: 'bg-theme-bg-hover text-theme-text-primary' }
     return (
       <span className={`px-2 py-1 rounded text-xs font-bold ${config.color}`}>
         {config.text}
@@ -449,7 +449,7 @@ export default function DocumentsVerificationTab() {
                         </span>
                       )}
                       {user?.source && (
-                        <span className="px-2 py-1 text-xs bg-gray-700/50 text-gray-400 rounded border border-gray-600/30" title={`Fonte: ${user.source}`}>
+                        <span className="px-2 py-1 text-xs bg-theme-bg-tertiary/50 text-theme-text-muted rounded border border-theme-border/30" title={`Fonte: ${user.source}`}>
                           {user.source === 'website' ? '🌐 Web' :
                             user.source === 'website_registration' ? '🌐 Web (Auth)' :
                               user.source === 'booking_auto_created' ? '📅 Auto' :
@@ -621,7 +621,7 @@ export default function DocumentsVerificationTab() {
 
                     {/* Registration Metadata */}
                     <div className="pt-2 border-t border-theme-border/30">
-                      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
+                      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-theme-text-muted">
                         {(user as any)?.created_at && (
                           <span>📅 Registrato: {new Date((user as any).created_at).toLocaleDateString('it-IT')} alle {new Date((user as any).created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
                         )}
@@ -697,7 +697,7 @@ export default function DocumentsVerificationTab() {
 
         {Object.keys(documentsByUser).length === 0 && (
           <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-8 text-center">
-            <p className="text-gray-500">
+            <p className="text-theme-text-muted">
               {filterStatus === 'all'
                 ? 'Nessun documento caricato'
                 : `Nessun documento ${filterStatus === 'pending_verification' ? 'da verificare' : filterStatus === 'verified' ? 'verificato' : 'rifiutato'}`
@@ -732,7 +732,7 @@ export default function DocumentsVerificationTab() {
                   setSelectedDoc(null)
                   setRejectionReason('')
                 }}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded font-medium transition-colors"
+                className="flex-1 px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded font-medium transition-colors"
               >
                 Annulla
               </button>

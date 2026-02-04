@@ -363,7 +363,7 @@ export default function ScannerTab() {
                     {uploadedCount > 0 && (
                         <button
                             onClick={resetAll}
-                            className="px-4 py-2 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors text-sm"
+                            className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-full hover:bg-theme-bg-hover transition-colors text-sm"
                         >
                             Ricomincia
                         </button>
@@ -394,7 +394,7 @@ export default function ScannerTab() {
                                         <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                                             <div className="text-center">
                                                 <div className="animate-spin w-6 h-6 border-2 border-white border-t-transparent rounded-full mx-auto mb-2"></div>
-                                                <p className="text-white text-xs">Estrazione...</p>
+                                                <p className="text-theme-text-primary text-xs">Estrazione...</p>
                                             </div>
                                         </div>
                                     )}
@@ -410,17 +410,17 @@ export default function ScannerTab() {
                                         ×
                                     </button>
                                     <div className="absolute bottom-0 inset-x-0 bg-black/70 p-2">
-                                        <p className="text-white text-xs text-center truncate">{slot.label}</p>
+                                        <p className="text-theme-text-primary text-xs text-center truncate">{slot.label}</p>
                                     </div>
                                 </div>
                             ) : (
                                 // Upload placeholder
                                 <div
                                     onClick={() => fileInputRefs.current[key]?.click()}
-                                    className="aspect-[3/2] border-2 border-dashed border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-dr7-gold hover:bg-gray-800/30 transition-all"
+                                    className="aspect-[3/2] border-2 border-dashed border-theme-border rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-dr7-gold hover:bg-theme-bg-secondary/30 transition-all"
                                 >
                                     <div className="text-lg font-bold text-dr7-gold mb-2">{slot.icon}</div>
-                                    <p className="text-white text-xs font-medium text-center px-2">{slot.label}</p>
+                                    <p className="text-theme-text-primary text-xs font-medium text-center px-2">{slot.label}</p>
                                 </div>
                             )}
                         </div>
@@ -477,96 +477,96 @@ export default function ScannerTab() {
                     {/* Data Preview Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         {mergedData.nome && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Nome</p>
-                                <p className="text-white font-medium">{mergedData.nome}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.nome}</p>
                             </div>
                         )}
                         {mergedData.cognome && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Cognome</p>
-                                <p className="text-white font-medium">{mergedData.cognome}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.cognome}</p>
                             </div>
                         )}
                         {mergedData.codice_fiscale && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg md:col-span-2">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg md:col-span-2">
                                 <p className="text-xs text-theme-text-muted">Codice Fiscale</p>
-                                <p className="text-white font-mono text-sm">{mergedData.codice_fiscale}</p>
+                                <p className="text-theme-text-primary font-mono text-sm">{mergedData.codice_fiscale}</p>
                             </div>
                         )}
                         {mergedData.data_nascita && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Data Nascita</p>
-                                <p className="text-white font-medium">{mergedData.data_nascita}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.data_nascita}</p>
                             </div>
                         )}
                         {mergedData.luogo_nascita && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Luogo Nascita</p>
-                                <p className="text-white font-medium">{mergedData.luogo_nascita}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.luogo_nascita}</p>
                             </div>
                         )}
                         {mergedData.documento_numero && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">N. Documento</p>
-                                <p className="text-white font-mono text-sm">{mergedData.documento_numero}</p>
+                                <p className="text-theme-text-primary font-mono text-sm">{mergedData.documento_numero}</p>
                             </div>
                         )}
                         {mergedData.documento_scadenza && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Scadenza Doc.</p>
-                                <p className="text-white font-medium">{mergedData.documento_scadenza}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.documento_scadenza}</p>
                             </div>
                         )}
                         {mergedData.patente_numero && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">N. Patente</p>
-                                <p className="text-white font-mono text-sm">{mergedData.patente_numero}</p>
+                                <p className="text-theme-text-primary font-mono text-sm">{mergedData.patente_numero}</p>
                             </div>
                         )}
                         {mergedData.patente_tipo && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Tipo Patente</p>
-                                <p className="text-white font-medium">{mergedData.patente_tipo}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.patente_tipo}</p>
                             </div>
                         )}
                         {mergedData.patente_rilascio && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Data Rilascio Patente</p>
-                                <p className="text-white font-medium">{mergedData.patente_rilascio}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.patente_rilascio}</p>
                             </div>
                         )}
                         {mergedData.patente_scadenza && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Scadenza Patente</p>
-                                <p className="text-white font-medium">{mergedData.patente_scadenza}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.patente_scadenza}</p>
                             </div>
                         )}
                         {mergedData.patente_ente && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Ente Rilascio</p>
-                                <p className="text-white font-medium">{mergedData.patente_ente}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.patente_ente}</p>
                             </div>
                         )}
                         {mergedData.indirizzo && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg md:col-span-2">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg md:col-span-2">
                                 <p className="text-xs text-theme-text-muted">Indirizzo</p>
-                                <p className="text-white font-medium">{mergedData.indirizzo} {mergedData.numero_civico}</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.indirizzo} {mergedData.numero_civico}</p>
                             </div>
                         )}
                         {mergedData.citta_residenza && (
-                            <div className="bg-gray-800/50 p-3 rounded-lg">
+                            <div className="bg-theme-bg-secondary/50 p-3 rounded-lg">
                                 <p className="text-xs text-theme-text-muted">Città</p>
-                                <p className="text-white font-medium">{mergedData.citta_residenza} ({mergedData.provincia_residenza})</p>
+                                <p className="text-theme-text-primary font-medium">{mergedData.citta_residenza} ({mergedData.provincia_residenza})</p>
                             </div>
                         )}
                     </div>
 
                     {/* Open NewClientModal Button */}
-                    <div className="flex justify-end gap-4 pt-4 border-t border-gray-700">
+                    <div className="flex justify-end gap-4 pt-4 border-t border-theme-border">
                         <button
                             onClick={resetAll}
-                            className="px-6 py-3 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors"
+                            className="px-6 py-3 bg-theme-bg-tertiary text-theme-text-primary rounded-full hover:bg-theme-bg-hover transition-colors"
                         >
                             Annulla
                         </button>
@@ -586,24 +586,24 @@ export default function ScannerTab() {
                     <h3 className="text-lg font-bold text-theme-text-primary mb-4">Come funziona</h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <div className="p-4 bg-gray-800/50 rounded-xl text-center">
+                        <div className="p-4 bg-theme-bg-secondary/50 rounded-xl text-center">
                             <div className="text-2xl font-bold text-dr7-gold mb-2">1</div>
-                            <p className="text-white font-medium text-sm">Carica i documenti</p>
+                            <p className="text-theme-text-primary font-medium text-sm">Carica i documenti</p>
                             <p className="text-theme-text-muted text-xs mt-1">Fronte e retro di CI e Patente</p>
                         </div>
-                        <div className="p-4 bg-gray-800/50 rounded-xl text-center">
+                        <div className="p-4 bg-theme-bg-secondary/50 rounded-xl text-center">
                             <div className="text-2xl font-bold text-dr7-gold mb-2">2</div>
-                            <p className="text-white font-medium text-sm">Estrai i dati</p>
+                            <p className="text-theme-text-primary font-medium text-sm">Estrai i dati</p>
                             <p className="text-theme-text-muted text-xs mt-1">L'AI legge tutti i documenti</p>
                         </div>
-                        <div className="p-4 bg-gray-800/50 rounded-xl text-center">
+                        <div className="p-4 bg-theme-bg-secondary/50 rounded-xl text-center">
                             <div className="text-2xl font-bold text-dr7-gold mb-2">3</div>
-                            <p className="text-white font-medium text-sm">Verifica</p>
+                            <p className="text-theme-text-primary font-medium text-sm">Verifica</p>
                             <p className="text-theme-text-muted text-xs mt-1">Controlla i dati estratti</p>
                         </div>
-                        <div className="p-4 bg-gray-800/50 rounded-xl text-center">
+                        <div className="p-4 bg-theme-bg-secondary/50 rounded-xl text-center">
                             <div className="text-2xl font-bold text-dr7-gold mb-2">4</div>
-                            <p className="text-white font-medium text-sm">Crea Cliente</p>
+                            <p className="text-theme-text-primary font-medium text-sm">Crea Cliente</p>
                             <p className="text-theme-text-muted text-xs mt-1">Apri il form precompilato</p>
                         </div>
                     </div>

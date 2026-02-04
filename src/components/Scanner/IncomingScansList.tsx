@@ -48,7 +48,7 @@ export default function IncomingScansList() {
 
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-theme-text-secondary">
-                    <thead className="text-xs text-gray-500 uppercase bg-theme-bg-tertiary/50">
+                    <thead className="text-xs text-theme-text-muted uppercase bg-theme-bg-tertiary/50">
                         <tr>
                             <th className="px-6 py-3">Data</th>
                             <th className="px-6 py-3">File</th>
@@ -68,7 +68,7 @@ export default function IncomingScansList() {
                                     {scan.customers_extended ? (
                                         <span className="text-dr7-gold">{scan.customers_extended.nome} {scan.customers_extended.cognome}</span>
                                     ) : (
-                                        <span className="text-gray-500 italic">Da assegnare</span>
+                                        <span className="text-theme-text-muted italic">Da assegnare</span>
                                     )}
                                 </td>
                                 <td className="px-6 py-4">
@@ -92,7 +92,7 @@ export default function IncomingScansList() {
                     </tbody>
                 </table>
                 {scans.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">Nessuna scansione in arrivo</div>
+                    <div className="text-center py-8 text-theme-text-muted">Nessuna scansione in arrivo</div>
                 )}
             </div>
 

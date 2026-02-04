@@ -268,7 +268,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                         type="button"
                         onClick={onClose}
                         disabled={loading}
-                        className="px-6 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        className="px-6 py-2 bg-theme-bg-hover text-theme-text-primary rounded-full hover:bg-theme-bg-tertiary transition-colors disabled:opacity-50"
                     >
                         Annulla
                     </button>

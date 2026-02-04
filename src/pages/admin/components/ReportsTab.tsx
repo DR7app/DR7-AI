@@ -75,7 +75,7 @@ const CATEGORY_BADGE: Record<string, string> = {
   urban: 'bg-blue-500/20 text-blue-400',
   moto: 'bg-purple-500/20 text-purple-400',
   utilitaire: 'bg-green-500/20 text-green-400',
-  '-': 'bg-gray-500/20 text-gray-400'
+  '-': 'bg-gray-500/20 text-theme-text-muted'
 }
 
 export default function ReportsTab() {
@@ -197,27 +197,27 @@ export default function ReportsTab() {
   const grouped = getGroupedVehicles()
 
   const tableHeader = (
-    <tr className="bg-gray-900/50 text-theme-text-muted">
-      <th className="text-left px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('label')}>
+    <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
+      <th className="text-left px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('label')}>
         Veicolo {sortField === 'label' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
       <th className="text-left px-4 py-3">Targa</th>
-      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('rentedDays')}>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('rentedDays')}>
         Noleggiato {sortField === 'rentedDays' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
-      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('maintenanceDays')}>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('maintenanceDays')}>
         Manut. {sortField === 'maintenanceDays' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
-      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('idleDays')}>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('idleDays')}>
         Fermo {sortField === 'idleDays' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
-      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('utilizationRate')}>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('utilizationRate')}>
         Utilizzo {sortField === 'utilizationRate' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
-      <th className="text-center px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('bookingsCount')}>
+      <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('bookingsCount')}>
         Pren. {sortField === 'bookingsCount' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
-      <th className="text-right px-4 py-3 cursor-pointer hover:text-white" onClick={() => handleSort('rentalRevenue')}>
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('rentalRevenue')}>
         Ricavo {sortField === 'rentalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
     </tr>
@@ -225,7 +225,7 @@ export default function ReportsTab() {
 
   function renderVehicleRow(v: VehicleReport) {
     return (
-      <tr key={v.vehicleId} className="border-t border-theme-border hover:bg-gray-700/30 transition-colors">
+      <tr key={v.vehicleId} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
         <td className="px-4 py-3 font-medium text-theme-text-primary">{v.label}</td>
         <td className="px-4 py-3 text-theme-text-muted text-xs">{v.plate}</td>
         <td className="text-center px-4 py-3">
@@ -235,13 +235,13 @@ export default function ReportsTab() {
           <span className="text-orange-400 font-semibold">{v.maintenanceDays}g</span>
         </td>
         <td className="text-center px-4 py-3">
-          <span className="text-gray-400">{v.idleDays}g</span>
+          <span className="text-theme-text-muted">{v.idleDays}g</span>
         </td>
         <td className="text-center px-4 py-3">
           <span className={`font-bold ${getUtilizationColor(v.utilizationRate)}`}>
             {formatPercent(v.utilizationRate)}
           </span>
-          <div className="w-full h-1.5 bg-gray-700 rounded-full mt-1">
+          <div className="w-full h-1.5 bg-theme-bg-tertiary rounded-full mt-1">
             <div
               className={`h-full rounded-full ${v.utilizationRate >= 0.7 ? 'bg-green-400' : v.utilizationRate >= 0.4 ? 'bg-yellow-400' : 'bg-red-400'}`}
               style={{ width: `${Math.round(v.utilizationRate * 100)}%` }}
@@ -262,7 +262,7 @@ export default function ReportsTab() {
       </div>
 
       {/* Controls */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-theme-border p-4">
+      <div className="bg-theme-bg-secondary/50 backdrop-blur-sm rounded-xl border border-theme-border p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
           {/* Report Type Toggle */}
           <div>
@@ -273,7 +273,7 @@ export default function ReportsTab() {
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                   activeReport === 'vehicles'
                     ? 'bg-dr7-gold text-black border-dr7-gold'
-                    : 'bg-transparent text-white border-white hover:bg-white hover:text-black'
+                    : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
                 }`}
               >
                 Veicoli
@@ -283,7 +283,7 @@ export default function ReportsTab() {
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                   activeReport === 'washes'
                     ? 'bg-dr7-gold text-black border-dr7-gold'
-                    : 'bg-transparent text-white border-white hover:bg-white hover:text-black'
+                    : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
                 }`}
               >
                 Lavaggi
@@ -298,7 +298,7 @@ export default function ReportsTab() {
               type="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-sm"
+              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
             />
           </div>
 
@@ -324,25 +324,25 @@ export default function ReportsTab() {
         <div className="space-y-4">
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Veicoli Attivi</p>
               <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.vehicleCount}</p>
             </div>
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Prenotazioni Trovate</p>
               <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.totalBookingsFound}</p>
             </div>
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Giorni nel Mese</p>
               <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.daysInMonth}</p>
             </div>
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Utilizzo Medio</p>
               <p className={`text-2xl font-bold ${getUtilizationColor(vehicleData.avgUtilizationRate)}`}>
                 {formatPercent(vehicleData.avgUtilizationRate)}
               </p>
             </div>
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Ricavo Totale Noleggi</p>
               <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRentalRevenue)}</p>
             </div>
@@ -355,7 +355,7 @@ export default function ReportsTab() {
               placeholder="Cerca per targa o nome..."
               value={plateSearch}
               onChange={(e) => setPlateSearch(e.target.value)}
-              className="px-4 py-2 bg-gray-700 border border-theme-border-light rounded-lg text-theme-text-primary text-sm placeholder-gray-500 w-full max-w-xs"
+              className="px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted w-full max-w-xs"
             />
             {plateSearch && (
               <span className="text-xs text-theme-text-muted">
@@ -410,15 +410,15 @@ export default function ReportsTab() {
         <div className="space-y-4">
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Lavaggi Fatturabili</p>
               <p className="text-2xl font-bold text-theme-text-primary">{washData.billableWashesCount}</p>
             </div>
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Ricavo Lavaggi</p>
               <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(washData.washRevenue)}</p>
             </div>
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Media Lavaggi / Giorno</p>
               <p className="text-2xl font-bold text-theme-text-primary">{washData.avgWashesPerDay}</p>
             </div>
@@ -426,14 +426,14 @@ export default function ReportsTab() {
 
           {/* Breakdown by Type */}
           {washData.byType.length > 0 && (
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border overflow-hidden">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
               <div className="px-4 py-3 border-b border-theme-border">
                 <h3 className="text-sm font-semibold text-theme-text-primary">Dettaglio per Tipo di Servizio</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-900/50 text-theme-text-muted">
+                    <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
                       <th className="text-left px-4 py-3">Servizio</th>
                       <th className="text-center px-4 py-3">Quantità</th>
                       <th className="text-right px-4 py-3">Ricavo</th>
@@ -442,7 +442,7 @@ export default function ReportsTab() {
                   </thead>
                   <tbody>
                     {washData.byType.map(item => (
-                      <tr key={item.type} className="border-t border-theme-border hover:bg-gray-700/30 transition-colors">
+                      <tr key={item.type} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
                         <td className="px-4 py-3 font-medium text-theme-text-primary">{item.type}</td>
                         <td className="text-center px-4 py-3 text-theme-text-primary">{item.count}</td>
                         <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(item.revenue)}</td>
@@ -453,7 +453,7 @@ export default function ReportsTab() {
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-dr7-gold/30 bg-gray-900/30">
+                    <tr className="border-t-2 border-dr7-gold/30 bg-theme-bg-primary/30">
                       <td className="px-4 py-3 font-bold text-theme-text-primary">Totale</td>
                       <td className="text-center px-4 py-3 font-bold text-theme-text-primary">{washData.billableWashesCount}</td>
                       <td className="text-right px-4 py-3 font-bold text-dr7-gold">{formatCurrency(washData.washRevenue)}</td>
@@ -466,14 +466,14 @@ export default function ReportsTab() {
           )}
 
           {washData.byType.length === 0 && (
-            <div className="bg-gray-800/50 rounded-xl border border-theme-border p-8 text-center">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-8 text-center">
               <p className="text-theme-text-muted">Nessun lavaggio fatturabile trovato per questo mese.</p>
             </div>
           )}
 
           {/* Internal Rientro Washes */}
           {washData.internalWashesCount != null && washData.internalWashesCount > 0 && (
-            <div className="bg-gray-800/50 rounded-xl border border-orange-500/30 overflow-hidden">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-orange-500/30 overflow-hidden">
               <div className="px-4 py-3 border-b border-orange-500/30 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-theme-text-primary">Lavaggi Rientro (Interni)</h3>
                 <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-full font-semibold">
@@ -483,21 +483,21 @@ export default function ReportsTab() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-900/50 text-theme-text-muted">
+                    <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
                       <th className="text-left px-4 py-3">Veicolo</th>
                       <th className="text-center px-4 py-3">Quantità</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(washData.internalByVehicle || []).map(item => (
-                      <tr key={item.vehicle} className="border-t border-theme-border hover:bg-gray-700/30 transition-colors">
+                      <tr key={item.vehicle} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
                         <td className="px-4 py-3 font-medium text-theme-text-primary">{item.vehicle}</td>
                         <td className="text-center px-4 py-3 text-theme-text-primary">{item.count}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-orange-500/30 bg-gray-900/30">
+                    <tr className="border-t-2 border-orange-500/30 bg-theme-bg-primary/30">
                       <td className="px-4 py-3 font-bold text-theme-text-primary">Totale Interni</td>
                       <td className="text-center px-4 py-3 font-bold text-theme-text-primary">{washData.internalWashesCount}</td>
                     </tr>
@@ -511,7 +511,7 @@ export default function ReportsTab() {
 
       {/* Empty state */}
       {!vehicleData && !washData && !loading && !error && (
-        <div className="bg-gray-800/50 rounded-xl border border-theme-border p-12 text-center">
+        <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-12 text-center">
           <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>

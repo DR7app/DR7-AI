@@ -71,7 +71,7 @@ export default function ScanJobCreator() {
                         </button>
                         <button
                             onClick={() => setCurrentJobId(null)}
-                            className="px-6 py-2 bg-gray-700 text-theme-text-primary font-bold rounded-full hover:bg-gray-600"
+                            className="px-6 py-2 bg-theme-bg-tertiary text-theme-text-primary font-bold rounded-full hover:bg-theme-bg-hover"
                         >
                             Nuova Scansione
                         </button>

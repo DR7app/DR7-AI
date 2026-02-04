@@ -142,7 +142,7 @@ export default function CheckInTab() {
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-800">
+                            <tbody className="divide-y divide-theme-border">
                                 {bookings.map((booking) => {
                                     const { nome, cognome } = parseCustomerName(booking.customer_name)
                                     const pickupTime = getPickupTime(booking)

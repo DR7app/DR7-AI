@@ -532,7 +532,7 @@ export default function CauzioniTab() {
                         placeholder="Cerca cliente, veicolo, targa..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="px-4 py-2 bg-theme-bg-primary border border-theme-border rounded-full text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+                        className="px-4 py-2 bg-theme-bg-primary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
                     />
                     <select
                         value={filterMetodo}
@@ -691,7 +691,7 @@ export default function CauzioniTab() {
                                                     </button>
                                                     <button
                                                         onClick={() => handleMarkSbloccataPreauth(cauzione)}
-                                                        className="px-3 py-1 bg-gray-600 text-white text-xs rounded-full hover:bg-gray-700 transition-colors"
+                                                        className="px-3 py-1 bg-theme-bg-hover text-theme-text-primary text-xs rounded-full hover:bg-theme-bg-tertiary transition-colors"
                                                     >
                                                         SBLOCCA PREAUTH
                                                     </button>

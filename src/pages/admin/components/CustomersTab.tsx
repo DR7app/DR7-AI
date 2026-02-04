@@ -1161,7 +1161,7 @@ export default function CustomersTab() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">Nessun pacchetto attivo</p>
+                  <p className="text-sm text-theme-text-muted">Nessun pacchetto attivo</p>
                 )}
               </div>
 
@@ -1338,7 +1338,7 @@ export default function CustomersTab() {
                       </div>
                     </div>
                     <div className="mt-2">
-                      <p className="text-xs text-gray-500 mb-1">Documento Identità:</p>
+                      <p className="text-xs text-theme-text-muted mb-1">Documento Identità:</p>
                       <p className="text-sm text-theme-text-primary">
                         {viewingCustomerDetails.metadata?.rappresentante?.documento?.tipo} n. {viewingCustomerDetails.metadata?.rappresentante?.documento?.numero}
                       </p>
@@ -1560,7 +1560,7 @@ export default function CustomersTab() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
+                          <p className="text-sm text-theme-text-muted italic mb-3">Nessun documento caricato</p>
                         )}
                         {/* Upload Section */}
                         {viewingDocuments.id && viewingDocuments.id.length > 10 && (
@@ -1581,7 +1581,7 @@ export default function CustomersTab() {
                                 id="license-upload"
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
-                                ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
+                                ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
@@ -1637,7 +1637,7 @@ export default function CustomersTab() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
+                          <p className="text-sm text-theme-text-muted italic mb-3">Nessun documento caricato</p>
                         )}
                         {/* Upload Section */}
                         {viewingDocuments.id && viewingDocuments.id.length > 10 && (
@@ -1658,7 +1658,7 @@ export default function CustomersTab() {
                                 id="id-upload"
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingId
-                                ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
+                                ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
@@ -1714,7 +1714,7 @@ export default function CustomersTab() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500 italic mb-3">Nessun documento caricato</p>
+                          <p className="text-sm text-theme-text-muted italic mb-3">Nessun documento caricato</p>
                         )}
                         {/* Upload Section */}
                         {viewingDocuments.id && viewingDocuments.id.length > 10 && (
@@ -1735,7 +1735,7 @@ export default function CustomersTab() {
                                 id="codice-fiscale-upload"
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
-                                ? 'bg-gray-700 text-theme-text-muted cursor-not-allowed'
+                                ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
@@ -1813,7 +1813,7 @@ export default function CustomersTab() {
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate(null)}
-                    className="px-3 py-2 rounded-full text-sm font-bold bg-gray-700 text-white hover:bg-gray-500 border border-gray-500 transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-bold bg-theme-bg-tertiary text-theme-text-primary hover:bg-gray-500 border border-gray-500 transition-all"
                     title="Rimuovi Status"
                   >
                     Rimuovi
@@ -1837,7 +1837,7 @@ export default function CustomersTab() {
             placeholder="Cerca cliente per nome, email o telefono..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-4 py-3 pl-10 text-theme-text-primary placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dr7-gold focus:border-transparent"
+            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-4 py-3 pl-10 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold focus:border-transparent"
           />
           <svg
             className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted"
@@ -1878,7 +1878,7 @@ export default function CustomersTab() {
                         setSelectedCustomerIds(new Set())
                       }
                     }}
-                    className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                    className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-dr7-gold"
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
@@ -1916,7 +1916,7 @@ export default function CustomersTab() {
                         }
                         setSelectedCustomerIds(newSet)
                       }}
-                      className="w-4 h-4 rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                      className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-dr7-gold"
                     />
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">
@@ -1955,7 +1955,7 @@ export default function CustomersTab() {
                         {customer.tipo_cliente === 'pubblica_amministrazione' && 'PA'}
                       </span>
                     ) : (
-                      <span className="text-gray-500">-</span>
+                      <span className="text-theme-text-muted">-</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.email || '-'}</td>
@@ -2024,7 +2024,7 @@ export default function CustomersTab() {
                         {customer.status && (
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                            className="px-2 py-1.5 rounded-full text-xs font-medium bg-gray-700/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
+                            className="px-2 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
                             title="Rimuovi Status"
                           >
                             ✕
@@ -2046,7 +2046,7 @@ export default function CustomersTab() {
               ))}
               {customers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-theme-text-muted">
                     {searchQuery ? `Nessun cliente trovato per "${searchQuery}"` : 'Nessun cliente trovato'}
                   </td>
                 </tr>

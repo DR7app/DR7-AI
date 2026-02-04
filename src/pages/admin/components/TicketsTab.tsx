@@ -115,9 +115,9 @@ export default function TicketsTab() {
     switch (status) {
       case 'active': return 'bg-green-900 text-green-200'
       case 'redeemed': return 'bg-blue-900 text-blue-200'
-      case 'expired': return 'bg-gray-700 text-theme-text-secondary'
+      case 'expired': return 'bg-theme-bg-tertiary text-theme-text-secondary'
       case 'cancelled': return 'bg-red-900 text-red-200'
-      default: return 'bg-gray-700 text-gray-200'
+      default: return 'bg-theme-bg-tertiary text-gray-200'
     }
   }
 
@@ -225,14 +225,14 @@ export default function TicketsTab() {
                         })}
                       </td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary">{ticket.quantity}</td>
-                      <td className="px-4 py-3 text-xs font-mono text-gray-500">
+                      <td className="px-4 py-3 text-xs font-mono text-theme-text-muted">
                         {ticket.uuid.substring(0, 8)}...
                       </td>
                     </tr>
                   ))}
                   {commercialTickets.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={7} className="px-4 py-8 text-center text-theme-text-muted">
                         Nessun biglietto venduto ancora
                       </td>
                     </tr>
@@ -343,7 +343,7 @@ export default function TicketsTab() {
                   ))}
                   {filteredCards.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">
                         {giftCards.length === 0
                           ? 'Nessun buono regalo emesso ancora'
                           : 'Nessun buono trovato con i filtri selezionati'

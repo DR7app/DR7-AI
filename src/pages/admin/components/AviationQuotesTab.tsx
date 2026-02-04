@@ -773,7 +773,7 @@ export default function AviationQuotesTab() {
                       quote.status === 'accepted' ? 'bg-green-900 text-green-300' :
                       quote.status === 'quoted' ? 'bg-blue-900 text-blue-300' :
                       quote.status === 'rejected' ? 'bg-red-900 text-red-300' :
-                      'bg-gray-700 text-theme-text-secondary'
+                      'bg-theme-bg-tertiary text-theme-text-secondary'
                     }`}>
                       {quote.status === 'pending' ? 'In Attesa' :
                        quote.status === 'quoted' ? 'Preventivato' :
@@ -787,7 +787,7 @@ export default function AviationQuotesTab() {
               ))}
               {quotes.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-theme-text-muted">
                     Nessun preventivo ancora
                   </td>
                 </tr>

@@ -45,7 +45,7 @@ export default function Login() {
 
       <div className="w-full max-w-xl relative z-10">
         {/* Main Card with Glassmorphism */}
-        <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl px-12 pt-12 pb-20 border border-gray-700/50 relative">
+        <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl px-12 pt-12 pb-20 border border-theme-border/50 relative">
 
 
           <div className="relative">
@@ -55,7 +55,7 @@ export default function Login() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                <label htmlFor="email" className="block text-sm font-medium text-theme-text-primary mb-2">
                   Email
                 </label>
                 <input
@@ -64,13 +64,13 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-theme-bg-secondary/50 border border-theme-border/50 rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="admin@dr7empire.com"
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-theme-text-primary mb-2">
                   Password
                 </label>
                 <input
@@ -79,7 +79,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-theme-bg-secondary/50 border border-theme-border/50 rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="••••••••"
                 />
               </div>
@@ -93,7 +93,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-black hover:bg-gray-900 text-white font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg border border-gray-700/50 hover:border-gray-600 tracking-wide uppercase text-sm"
+                className="w-full bg-black hover:bg-theme-bg-primary text-theme-text-primary font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg border border-theme-border/50 hover:border-theme-border tracking-wide uppercase text-sm"
               >
                 {loading ? 'Accesso in corso...' : 'Accedi'}
               </button>

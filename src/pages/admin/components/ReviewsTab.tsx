@@ -225,7 +225,7 @@ export default function ReviewsTab() {
                                             type="checkbox"
                                             checked={filteredBookings.length > 0 && selectedIds.size === filteredBookings.filter(b => !b.review_sent_at).length}
                                             onChange={handleSelectAll}
-                                            className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                            className="rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-offset-gray-900"
                                         />
                                     </th>
                                 )}
@@ -237,7 +237,7 @@ export default function ReviewsTab() {
                                 <th className="p-4 text-right">Azioni</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-theme-border">
                             {loading ? (
                                 <tr>
                                     <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-theme-text-muted">
@@ -260,7 +260,7 @@ export default function ReviewsTab() {
                                                         type="checkbox"
                                                         checked={selectedIds.has(b.id)}
                                                         onChange={() => toggleSelection(b.id)}
-                                                        className="rounded-full border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-offset-gray-900"
+                                                        className="rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-offset-gray-900"
                                                     />
                                                 ) : (
                                                     <span title="Recensione già richiesta" className="text-xs text-green-500">✅</span>
@@ -314,7 +314,7 @@ export default function ReviewsTab() {
                 </div>
             </div>
 
-            <div className="text-gray-500 text-xs text-center flex justify-between px-4">
+            <div className="text-theme-text-muted text-xs text-center flex justify-between px-4">
                 <span>Totale trovati: {bookings.length}</span>
                 <span>Mostrati: {filteredBookings.length}</span>
             </div>

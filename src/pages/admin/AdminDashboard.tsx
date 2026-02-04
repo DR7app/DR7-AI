@@ -84,7 +84,7 @@ export default function AdminDashboard() {
         backgroundSize: '40px 40px'
       }} />
 
-      <header className="bg-black backdrop-blur-md border-b border-gray-700/50">
+      <header className="bg-black backdrop-blur-md border-b border-theme-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-24">
             <div className="flex items-center gap-2 sm:gap-4">
@@ -157,10 +157,10 @@ export default function AdminDashboard() {
       {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
-          <div className="bg-gray-900/95 backdrop-blur-xl w-64 h-full shadow-2xl overflow-y-auto border-r border-gray-700/50" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-gray-700/50 flex justify-between items-center">
-              <h2 className="text-white font-semibold">Menu</h2>
-              <button onClick={() => setMobileMenuOpen(false)} className="text-gray-400 hover:text-white">
+          <div className="bg-theme-bg-primary/95 backdrop-blur-xl w-64 h-full shadow-2xl overflow-y-auto border-r border-theme-border/50" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-theme-border/50 flex justify-between items-center">
+              <h2 className="text-theme-text-primary font-semibold">Menu</h2>
+              <button onClick={() => setMobileMenuOpen(false)} className="text-theme-text-muted hover:text-theme-text-primary">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -354,38 +354,38 @@ export default function AdminDashboard() {
                   Noleggio
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                   <button
                     onClick={() => setActiveTab('reservations')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Calendario
                   </button>
                   <button
                     onClick={() => setActiveTab('cauzioni')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Cauzioni
                   </button>
                   <button
                     onClick={() => setActiveTab('contratto')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Contratti
                   </button>
                   <button
                     onClick={() => setActiveTab('cargos')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Cargos
@@ -404,17 +404,17 @@ export default function AdminDashboard() {
                   Lavaggio
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                   <button
                     onClick={() => setActiveTab('carwash')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('carwash-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Calendario
@@ -433,17 +433,17 @@ export default function AdminDashboard() {
                   Meccanica
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                   <button
                     onClick={() => setActiveTab('mechanical')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Prenotazioni
                   </button>
                   <button
                     onClick={() => setActiveTab('mechanical-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Calendario
@@ -462,17 +462,17 @@ export default function AdminDashboard() {
                   Flotta
                   <span className="text-xs">▼</span>
                 </button>
-                <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                   <button
                     onClick={() => setActiveTab('vehicles')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Veicoli
                   </button>
                   <button
                     onClick={() => setActiveTab('fleet')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-white'
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
                       }`}
                   >
                     Gestione Flotta

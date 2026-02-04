@@ -250,8 +250,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Prec</button>
-            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-white/90 hover:text-white">Succ</button>
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Prec</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Succ</button>
           </div>
         </div>
 
@@ -297,7 +297,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
           <input
             type="text"
             placeholder="Cerca veicolo o cliente..."
-            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-white placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
+            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -310,7 +310,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
         {/* A. Sticky Header Row */}
         <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-md min-w-max h-[42px] border-b border-white/5">
           {/* Header Spacer for Left Column */}
-          <div className="sticky left-0 w-[300px] z-[41] bg-[#0d0d0e] border-r border-white/5 flex items-center px-4 font-bold text-xs text-gray-400 uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+          <div className="sticky left-0 w-[300px] z-[41] bg-[#0d0d0e] border-r border-white/5 flex items-center px-4 font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
             Veicolo / Targa
           </div>
 
@@ -477,7 +477,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                         <div
                           key={evt.id}
                           className={`
-                                absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-white 
+                                absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-theme-text-primary 
                                 ${bgClass} ${borderClass} 
                                 hover:z-50 hover:shadow-xl hover:brightness-110 transition-all
                               `}
@@ -521,22 +521,22 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
 
                           {/* TOOLTIP ON HOVER */}
-                          <div className="hidden group-hover/evt:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 border border-theme-border text-white text-xs p-3 rounded shadow-2xl w-max z-[100] pointer-events-none min-w-[200px]">
+                          <div className="hidden group-hover/evt:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs p-3 rounded shadow-2xl w-max z-[100] pointer-events-none min-w-[200px]">
                             <div className="font-bold mb-1 text-base">{evt.booking.customer_name}</div>
-                            <div className="text-gray-400 mb-2">{evt.booking.vehicle_name} ({evt.booking.vehicle_plate})</div>
+                            <div className="text-theme-text-muted mb-2">{evt.booking.vehicle_name} ({evt.booking.vehicle_plate})</div>
 
                             <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
-                              <span className="text-gray-500">Ritiro:</span>
+                              <span className="text-theme-text-muted">Ritiro:</span>
                               <span className="font-mono">{formatRomeDate(evt.startLocal, { dateStyle: 'full', timeStyle: 'short' })}</span>
 
-                              <span className="text-gray-500">Rientro:</span>
+                              <span className="text-theme-text-muted">Rientro:</span>
                               <span className="font-mono">{formatRomeDate(evt.endLocal, { dateStyle: 'full', timeStyle: 'short' })}</span>
 
-                              <span className="text-gray-500">Stato:</span>
+                              <span className="text-theme-text-muted">Stato:</span>
                               <span className="uppercase font-bold tracking-wider text-[10px]">{evt.booking.status}</span>
                             </div>
 
-                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-theme-border"></div>
+                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-theme-bg-primary rotate-45 border-r border-b border-theme-border"></div>
                           </div>
 
                         </div>

@@ -259,7 +259,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                 min="0"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="w-full pl-8 pr-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                                className="w-full pl-8 pr-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                                 placeholder="0.00"
                                 disabled={isGenerating}
                                 required
@@ -276,7 +276,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             type="text"
                             value={motivo}
                             onChange={(e) => setMotivo(e.target.value)}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
                             placeholder="Es: Ritardo nella riconsegna"
                             disabled={isGenerating}
                         />
@@ -291,7 +291,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                             rows={3}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-dr7-gold resize-none"
+                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold resize-none"
                             placeholder="Note per uso interno..."
                             disabled={isGenerating}
                         />
@@ -319,7 +319,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             type="button"
                             onClick={handleClose}
                             disabled={isGenerating}
-                            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Annulla
                         </button>

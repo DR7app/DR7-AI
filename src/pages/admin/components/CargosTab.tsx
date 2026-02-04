@@ -396,7 +396,7 @@ export default function CargosTab() {
                         href="https://cargos.poliziadistato.it/Cargos_Portale/"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 bg-gray-700 text-theme-text-primary font-medium rounded-full hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
+                        className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary font-medium rounded-full hover:bg-theme-bg-hover transition-colors flex items-center gap-2 text-sm"
                     >
                         Apri Portale Cargos ↗
                     </a>
@@ -409,7 +409,7 @@ export default function CargosTab() {
                     <h3 className="text-lg font-bold text-theme-text-primary mb-4 border-b border-theme-border pb-2">⚙️ Configurazione API Cargos</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">Username (Utente Web Service)</label>
+                            <label className="block text-xs text-theme-text-muted mb-1">Username (Utente Web Service)</label>
                             <Input
                                 type="text"
                                 value={apiConfig.username}
@@ -418,7 +418,7 @@ export default function CargosTab() {
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">Password</label>
+                            <label className="block text-xs text-theme-text-muted mb-1">Password</label>
                             <Input
                                 type="password"
                                 value={apiConfig.password}
@@ -427,7 +427,7 @@ export default function CargosTab() {
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">Codice Agenzia</label>
+                            <label className="block text-xs text-theme-text-muted mb-1">Codice Agenzia</label>
                             <Input
                                 type="text"
                                 value={apiConfig.agencyCode}
@@ -436,7 +436,7 @@ export default function CargosTab() {
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">Endpoint WSDL</label>
+                            <label className="block text-xs text-theme-text-muted mb-1">Endpoint WSDL</label>
                             <Input
                                 type="text"
                                 value={apiConfig.wsUrl}
@@ -470,12 +470,12 @@ export default function CargosTab() {
                                 />
                             </div>
                             {/* Quick select from vehicles helper */}
-                            <div className="mt-2 text-xs text-gray-500 overflow-x-auto whitespace-nowrap pb-2 flex gap-2">
+                            <div className="mt-2 text-xs text-theme-text-muted overflow-x-auto whitespace-nowrap pb-2 flex gap-2">
                                 {vehicles.slice(0, 10).map(v => (
                                     <button
                                         key={v.id}
                                         onClick={() => setPlate(v.plate || v.targa || '')}
-                                        className="px-2 py-1 bg-gray-700 rounded-full hover:bg-gray-600"
+                                        className="px-2 py-1 bg-theme-bg-tertiary rounded-full hover:bg-theme-bg-hover"
                                     >
                                         {v.display_name}
                                     </button>
@@ -522,13 +522,13 @@ export default function CargosTab() {
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className="text-green-400 text-sm font-bold tracking-wider uppercase">Conducente Trovato</span>
-                                                <span className="text-gray-500 text-xs">•</span>
+                                                <span className="text-theme-text-muted text-xs">•</span>
                                                 <span className="text-theme-text-muted text-xs">Booking ID: {searchResult.id.slice(0, 8)}...</span>
                                             </div>
                                             <h3 className="text-2xl font-bold text-theme-text-primary mb-1">{searchResult.customer_name}</h3>
                                             <p className="text-theme-text-muted text-sm flex items-center gap-2">
                                                 <span>{searchResult.vehicle_name}</span>
-                                                <span className="px-2 py-0.5 bg-gray-700 rounded text-xs text-theme-text-primary font-mono">{searchResult.vehicle_plate || plate}</span>
+                                                <span className="px-2 py-0.5 bg-theme-bg-tertiary rounded text-xs text-theme-text-primary font-mono">{searchResult.vehicle_plate || plate}</span>
                                             </p>
                                         </div>
                                         {searchResult.contract_url && (
@@ -549,18 +549,18 @@ export default function CargosTab() {
                                         <h4 className="text-dr7-gold font-medium uppercase text-xs tracking-wider border-b border-theme-border pb-2">Dati Contatto</h4>
 
                                         <div>
-                                            <label className="text-xs text-gray-500">Email</label>
+                                            <label className="text-xs text-theme-text-muted">Email</label>
                                             <div className="text-gray-200 flex items-center gap-2">
                                                 {searchResult.customer_email || 'N/D'}
-                                                <button className="text-gray-500 hover:text-theme-text-primary" title="Copia" onClick={() => navigator.clipboard.writeText(searchResult.customer_email)}>📋</button>
+                                                <button className="text-theme-text-muted hover:text-theme-text-primary" title="Copia" onClick={() => navigator.clipboard.writeText(searchResult.customer_email)}>📋</button>
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="text-xs text-gray-500">Telefono</label>
+                                            <label className="text-xs text-theme-text-muted">Telefono</label>
                                             <div className="text-gray-200">{searchResult.customer_phone || 'N/D'}</div>
                                         </div>
                                         <div>
-                                            <label className="text-xs text-gray-500">Documento Guida</label>
+                                            <label className="text-xs text-theme-text-muted">Documento Guida</label>
                                             <div className="text-gray-200 font-mono bg-theme-bg-secondary/50 p-2 rounded border border-theme-border inline-block">
                                                 {searchResult.driver_license || 'Non registrato'}
                                             </div>
@@ -575,7 +575,7 @@ export default function CargosTab() {
 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="text-xs text-gray-500">Ritiro</label>
+                                                <label className="text-xs text-theme-text-muted">Ritiro</label>
                                                 <div className="text-theme-text-primary font-medium">
                                                     {new Date(searchResult.pickup_date).toLocaleDateString('it-IT')}
                                                 </div>
@@ -584,7 +584,7 @@ export default function CargosTab() {
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="text-xs text-gray-500">Restituzione</label>
+                                                <label className="text-xs text-theme-text-muted">Restituzione</label>
                                                 <div className="text-theme-text-primary font-medium">
                                                     {new Date(searchResult.dropoff_date).toLocaleDateString('it-IT')}
                                                 </div>
@@ -595,7 +595,7 @@ export default function CargosTab() {
                                         </div>
 
                                         <div>
-                                            <label className="text-xs text-gray-500">Indirizzo Residenza (da Booking)</label>
+                                            <label className="text-xs text-theme-text-muted">Indirizzo Residenza (da Booking)</label>
                                             <div className="text-theme-text-secondary text-sm mt-1 p-2 bg-theme-bg-secondary/30 rounded">
                                                 {searchResult.address || 'Indirizzo non presente nei metadati'}
                                             </div>
@@ -617,7 +617,7 @@ export default function CargosTab() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-lg border border-theme-border border-dashed text-gray-500">
+                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-lg border border-theme-border border-dashed text-theme-text-muted">
                                 <span className="text-4xl mb-4">👮‍♂️</span>
                                 <p className="text-lg font-medium">In attesa di ricerca</p>
                                 <p className="text-sm max-w-md text-center mt-2">
@@ -667,7 +667,7 @@ export default function CargosTab() {
 
                                 <div className="relative flex py-2 items-center">
                                     <div className="flex-grow border-t border-theme-border"></div>
-                                    <span className="flex-shrink-0 mx-4 text-gray-500 text-xs uppercase">Oppure Scarica File</span>
+                                    <span className="flex-shrink-0 mx-4 text-theme-text-muted text-xs uppercase">Oppure Scarica File</span>
                                     <div className="flex-grow border-t border-theme-border"></div>
                                 </div>
 

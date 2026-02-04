@@ -129,7 +129,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
           <select
             value={tipoCliente}
             onChange={(e) => setTipoCliente(e.target.value as any)}
-            className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+            className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
             required
           >
             <option value="">Seleziona tipo cliente...</option>
@@ -162,7 +162,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="denominazione"
                   value={formData.denominazione}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="Nome azienda"
                   required
                 />
@@ -186,7 +186,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="partitaIVA"
                   value={formData.partitaIVA}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="IT12345678901"
                   required
                 />
@@ -322,7 +322,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="codiceUnivoco"
                   value={formData.codiceUnivoco}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="XXXXXX"
                   required
                 />
@@ -346,7 +346,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="codiceFiscale"
                   value={formData.codiceFiscale}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="00000000000"
                   required
                 />
@@ -370,7 +370,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="enteUfficio"
                   value={formData.enteUfficio}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="Nome dell'ente o ufficio"
                   required
                 />
@@ -394,7 +394,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
                   name="citta"
                   value={formData.citta}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                  className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                   placeholder="Cagliari"
                   required
                 />

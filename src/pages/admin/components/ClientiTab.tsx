@@ -96,7 +96,7 @@ export default function ClientiTab() {
       case 'blacklist':
         return 'bg-red-500/20 text-red-400 border border-red-500/50'
       default:
-        return 'bg-gray-700 text-gray-400 border border-gray-600'
+        return 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border'
     }
   }
 
@@ -158,7 +158,7 @@ export default function ClientiTab() {
               onClick={() => setFilter('all')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'all'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+                  : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
               Tutti ({customers.length})
@@ -167,7 +167,7 @@ export default function ClientiTab() {
               onClick={() => setFilter('azienda')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'azienda'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+                  : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
               Aziende ({customers.filter(c => c.tipo_cliente === 'azienda').length})
@@ -176,7 +176,7 @@ export default function ClientiTab() {
               onClick={() => setFilter('persona_fisica')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'persona_fisica'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+                  : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
               Persone ({customers.filter(c => c.tipo_cliente === 'persona_fisica').length})
@@ -185,7 +185,7 @@ export default function ClientiTab() {
               onClick={() => setFilter('pubblica_amministrazione')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'pubblica_amministrazione'
                   ? 'bg-dr7-gold text-black font-semibold'
-                  : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+                  : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
               P.A. ({customers.filter(c => c.tipo_cliente === 'pubblica_amministrazione').length})
@@ -210,7 +210,7 @@ export default function ClientiTab() {
 
       {/* Customers Table */}
       {filteredCustomers.length === 0 ? (
-        <div className=" rounded-lg border border-theme-border p-8 text-center text-gray-500">
+        <div className=" rounded-lg border border-theme-border p-8 text-center text-theme-text-muted">
           Nessun cliente trovato
         </div>
       ) : (

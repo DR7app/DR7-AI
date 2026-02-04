@@ -29,7 +29,7 @@ export default function FleetManagementTab() {
                         onClick={() => setActiveTab('veicoli')}
                         className={`px-4 py-2 rounded-t-lg font-medium transition-colors ${
                             activeTab === 'veicoli'
-                                ? 'bg-theme-accent text-white'
+                                ? 'bg-theme-accent text-theme-text-primary'
                                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-white/5'
                         }`}
                     >
@@ -39,7 +39,7 @@ export default function FleetManagementTab() {
                         onClick={() => setActiveTab('magazzino')}
                         className={`px-4 py-2 rounded-t-lg font-medium transition-colors ${
                             activeTab === 'magazzino'
-                                ? 'bg-theme-accent text-white'
+                                ? 'bg-theme-accent text-theme-text-primary'
                                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-white/5'
                         }`}
                     >

@@ -122,21 +122,21 @@ export default function OverviewTab({ onTabChange }: OverviewTabProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <button
                         onClick={() => onTabChange('rentals')}
-                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-full transition-colors text-left"
+                        className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary p-4 rounded-full transition-colors text-left"
                     >
                         <div className="font-semibold">Gestisci Noleggi</div>
                         <div className="text-sm text-theme-text-secondary mt-1">Visualizza e modifica prenotazioni</div>
                     </button>
                     <button
                         onClick={() => onTabChange('customers')}
-                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-full transition-colors text-left"
+                        className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary p-4 rounded-full transition-colors text-left"
                     >
                         <div className="font-semibold">Gestisci Clienti</div>
                         <div className="text-sm text-theme-text-secondary mt-1">Aggiungi o modifica clienti</div>
                     </button>
                     <button
                         onClick={() => onTabChange('verify')}
-                        className="bg-gray-700 hover:bg-gray-600 text-theme-text-primary p-4 rounded-full transition-colors text-left"
+                        className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary p-4 rounded-full transition-colors text-left"
                     >
                         <div className="font-semibold">Verifiche Documenti</div>
                         <div className="text-sm text-theme-text-secondary mt-1">Approva richieste pendenti</div>

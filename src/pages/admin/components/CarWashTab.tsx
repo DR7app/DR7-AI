@@ -235,7 +235,7 @@ export default function CarWashTab() {
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
             filterTab === 'all'
               ? 'bg-dr7-gold text-black'
-              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+              : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
           }`}
         >
           TUTTI ({services.length})
@@ -245,7 +245,7 @@ export default function CarWashTab() {
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
             filterTab === 'lavaggio'
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+              : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
           }`}
         >
           LAVAGGIO ({services.filter(s => s.main_tab === 'lavaggio').length})
@@ -255,7 +255,7 @@ export default function CarWashTab() {
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
             filterTab === 'meccanica'
               ? 'bg-orange-600 text-white'
-              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+              : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
           }`}
         >
           MECCANICA ({services.filter(s => s.main_tab === 'meccanica').length})
@@ -467,13 +467,13 @@ export default function CarWashTab() {
                   }`}>
                     {service.main_tab?.toUpperCase() || 'LAVAGGIO'}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-600">
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-theme-bg-hover">
                     {service.category?.toUpperCase() || 'URBAN'}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-theme-text-primary">{service.name}</h3>
                 <p className="text-sm text-theme-text-muted">{service.name_en}</p>
-                <p className="text-xs text-gray-500 mt-1">ID: {service.id}</p>
+                <p className="text-xs text-theme-text-muted mt-1">ID: {service.id}</p>
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-theme-text-primary">€{service.price.toFixed(2)}</div>
@@ -495,7 +495,7 @@ export default function CarWashTab() {
                 </div>
               ))}
               {service.features.length > 3 && (
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-theme-text-muted">
                   +{service.features.length - 3} altre caratteristiche...
                 </div>
               )}
@@ -536,7 +536,7 @@ export default function CarWashTab() {
       </div>
 
       {services.length === 0 && (
-        <div className=" rounded-lg border border-theme-border p-8 text-center text-gray-500">
+        <div className=" rounded-lg border border-theme-border p-8 text-center text-theme-text-muted">
           Nessun servizio trovato. Crea il primo servizio!
         </div>
       )}

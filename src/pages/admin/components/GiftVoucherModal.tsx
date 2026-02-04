@@ -143,7 +143,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                 </span>
                             ))}
                             {selectedCustomers.length > 10 && (
-                                <span className="px-3 py-1 bg-gray-700 text-theme-text-secondary rounded-full text-sm">
+                                <span className="px-3 py-1 bg-theme-bg-tertiary text-theme-text-secondary rounded-full text-sm">
                                     +{selectedCustomers.length - 10} altri
                                 </span>
                             )}
@@ -227,7 +227,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                             placeholder="Scrivi il tuo messaggio..."
                         />
                         <p className="text-xs text-theme-text-muted mt-1">
-                            Usa <code className="bg-gray-700 px-1 rounded">{'{nome}'}</code> e <code className="bg-gray-700 px-1 rounded">{'{cognome}'}</code> per personalizzare
+                            Usa <code className="bg-theme-bg-tertiary px-1 rounded">{'{nome}'}</code> e <code className="bg-theme-bg-tertiary px-1 rounded">{'{cognome}'}</code> per personalizzare
                         </p>
                     </div>
 

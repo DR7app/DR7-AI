@@ -3384,7 +3384,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-lg mb-6 border border-gray-700/30">
+          <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-lg mb-6 border border-theme-border/30">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
               {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione'}
             </h3>
@@ -3397,14 +3397,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(false)}
-                    className={`px-4 py-2 rounded-full ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                    className={`px-4 py-2 rounded-full ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                   >
                     Seleziona Cliente
                   </button>
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(true)}
-                    className={`px-4 py-2 rounded-full ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                    className={`px-4 py-2 rounded-full ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                   >
                     Nuovo Cliente
                   </button>
@@ -3504,9 +3504,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         return (
                           <div className="mt-3 p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
                             <p className="text-green-400 font-medium mb-1">Cliente selezionato:</p>
-                            <p className="text-white font-bold">{selectedCustomer.full_name}</p>
-                            {selectedCustomer.email && <p className="text-gray-300 text-sm">{selectedCustomer.email}</p>}
-                            {selectedCustomer.phone && <p className="text-gray-300 text-sm">{selectedCustomer.phone}</p>}
+                            <p className="text-theme-text-primary font-bold">{selectedCustomer.full_name}</p>
+                            {selectedCustomer.email && <p className="text-theme-text-secondary text-sm">{selectedCustomer.email}</p>}
+                            {selectedCustomer.phone && <p className="text-theme-text-secondary text-sm">{selectedCustomer.phone}</p>}
                           </div>
                         )
                       }
@@ -3619,7 +3619,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         type="checkbox"
                         checked={showAllVehicles}
                         onChange={(e) => setShowAllVehicles(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-amber-500 focus:ring-amber-500"
+                        className="w-4 h-4 rounded border-theme-border bg-theme-bg-tertiary text-amber-500 focus:ring-amber-500"
                       />
                       <span className="text-sm text-amber-400">Mostra tutti i veicoli (ignora disponibilità)</span>
                     </label>
@@ -3641,7 +3641,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   id="has_second_driver"
                   checked={formData.has_second_driver}
                   onChange={(e) => setFormData({ ...formData, has_second_driver: e.target.checked })}
-                  className="w-4 h-4 text-dr7-gold bg-gray-700 border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                  className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
                 />
                 <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
                   Aggiungi Secondo Guidatore
@@ -3655,14 +3655,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(false)}
-                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                     >
                       Seleziona Cliente
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(true)}
-                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'}`}
+                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                     >
                       Nuovo Guidatore
                     </button>
@@ -3824,7 +3824,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Assicurazione</label>
-                  <div className="px-3 py-2 bg-gray-700 border border-theme-border rounded-lg text-theme-text-primary">
+                  <div className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary">
                     Kasko (inclusa)
                   </div>
                 </div>
@@ -3967,7 +3967,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   id="unlimited_km"
                   checked={formData.unlimited_km}
                   onChange={(e) => setFormData({ ...formData, unlimited_km: e.target.checked, km_overage_fee: e.target.checked ? '0' : formData.km_overage_fee })}
-                  className="w-4 h-4 text-blue-600 bg-gray-700 border-theme-border-light rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
                 />
                 <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
                   KM Illimitati
@@ -4015,7 +4015,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
             return customerName.includes(query)
           }).length === 0 && (
-              <div className="rounded-lg border border-gray-700/30 p-8 text-center text-gray-500">
+              <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
                 {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
               </div>
             )}
@@ -4032,7 +4032,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             return (
               <div
                 key={`booking-card-${booking.id}`}
-                className="rounded-full p-4 cursor-pointer hover:bg-white/5 transition-colors border border-gray-700/30"
+                className="rounded-full p-4 cursor-pointer hover:bg-white/5 transition-colors border border-theme-border/30"
                 onClick={() => setSelectedBooking(booking)}
               >
                 <div className="flex justify-between items-start mb-3">
@@ -4116,7 +4116,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
                           disabled={generatingInvoice}
-                          className={`px-3 py-1 ${generatingInvoice ? 'bg-gray-600 text-theme-text-secondary' : 'bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
+                          className={`px-3 py-1 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                           title="Fattura"
                         >
                           {generatingInvoice ? 'Generazione...' : 'Fattura'}
@@ -4126,7 +4126,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <button
                         onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
                         disabled={generatingContract}
-                        className={`px-3 py-1 ${generatingContract ? 'bg-gray-600 text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
+                        className={`px-3 py-1 ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                       >
                         {generatingContract ? 'Generazione...' : 'Contratto'}
                       </button>
@@ -4287,7 +4287,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   return customerName.includes(query)
                 }).length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">
                         {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
                       </td>
                     </tr>
@@ -4300,7 +4300,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
           <div className="fixed inset-0 bg-black backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-            <div className="w-full sm:max-w-2xl bg-[#1a1a1a] sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-700/30">
+            <div className="w-full sm:max-w-2xl bg-[#1a1a1a] sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-theme-border/30">
               {/* Modal Header */}
               <div className="flex-shrink-0  p-4 border-b border-theme-border flex justify-between items-center">
                 <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
@@ -4447,7 +4447,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   )}
                   <button
                     onClick={() => setSelectedBooking(null)}
-                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-theme-text-primary rounded-full transition-colors font-medium"
+                    className="flex-1 px-4 py-3 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors font-medium"
                   >
                     Chiudi
                   </button>
@@ -4550,17 +4550,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* ===== EXTEND BOOKING MODAL ===== */}
         {showExtendModal && extendingBooking && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowExtendModal(false)}>
-            <div className="bg-[#1a1a1a] rounded-lg p-6 max-w-md w-full shadow-xl border border-gray-700/50" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#1a1a1a] rounded-lg p-6 max-w-md w-full shadow-xl border border-theme-border/50" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-xl font-bold mb-4 text-purple-400">Estendi Prenotazione</h3>
 
               {/* Current Booking Info */}
-              <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
-                <div className="text-sm text-gray-400">Cliente</div>
-                <div className="text-white font-medium">{extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}</div>
-                <div className="text-sm text-gray-400 mt-2">Veicolo</div>
-                <div className="text-white font-medium">{extendingBooking.vehicle_name || 'N/A'}</div>
-                <div className="text-sm text-gray-400 mt-2">Riconsegna Attuale</div>
-                <div className="text-white font-medium">
+              <div className="bg-theme-bg-secondary/50 rounded-lg p-3 mb-4">
+                <div className="text-sm text-theme-text-muted">Cliente</div>
+                <div className="text-theme-text-primary font-medium">{extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}</div>
+                <div className="text-sm text-theme-text-muted mt-2">Veicolo</div>
+                <div className="text-theme-text-primary font-medium">{extendingBooking.vehicle_name || 'N/A'}</div>
+                <div className="text-sm text-theme-text-muted mt-2">Riconsegna Attuale</div>
+                <div className="text-theme-text-primary font-medium">
                   {new Date(extendingBooking.dropoff_date).toLocaleString('it-IT', {
                     day: '2-digit',
                     month: '2-digit',
@@ -4575,21 +4575,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               {/* Extension Form */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Nuova Data Riconsegna</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuova Data Riconsegna</label>
                   <input
                     type="date"
                     value={extendData.new_return_date}
                     onChange={(e) => setExtendData({ ...extendData, new_return_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Nuovo Orario Riconsegna</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuovo Orario Riconsegna</label>
                   <select
                     value={extendData.new_return_time}
                     onChange={(e) => setExtendData({ ...extendData, new_return_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                   >
                     {TIME_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -4598,24 +4598,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Importo Aggiuntivo (€)</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo Aggiuntivo (€)</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={extendData.additional_amount}
                     onChange={(e) => setExtendData({ ...extendData, additional_amount: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                     placeholder="0.00"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Stato Pagamento Estensione</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Pagamento Estensione</label>
                   <select
                     value={extendData.extension_payment_status}
                     onChange={(e) => setExtendData({ ...extendData, extension_payment_status: e.target.value as 'paid' | 'pending' })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                   >
                     <option value="pending">Da Saldare</option>
                     <option value="paid">Pagato</option>
@@ -4623,11 +4623,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Note (opzionale)</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>
                   <textarea
                     value={extendData.notes}
                     onChange={(e) => setExtendData({ ...extendData, notes: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 resize-none"
+                    className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500 resize-none"
                     rows={2}
                     placeholder="Motivo estensione..."
                   />
@@ -4639,7 +4639,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 <button
                   type="button"
                   onClick={() => { setShowExtendModal(false); setExtendingBooking(null); }}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  className="px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg transition-colors"
                 >
                   Annulla
                 </button>

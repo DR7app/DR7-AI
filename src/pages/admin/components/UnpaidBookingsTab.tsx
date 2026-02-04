@@ -617,7 +617,7 @@ export default function UnpaidBookingsTab() {
               ))}
               {filteredBookings.length === 0 && (
                 <tr>
-                  <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
                     {filterService === 'all'
                       ? 'Nessuna prenotazione da saldare!'
                       : `Nessuna prenotazione ${getServiceTypeLabel(filterService).toLowerCase()} da saldare`

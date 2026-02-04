@@ -117,7 +117,7 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-900 text-green-200',
   paid: 'bg-green-900 text-green-200',
   blocked: 'bg-blue-900 text-blue-200',
-  refunded: 'bg-gray-700 text-gray-300',
+  refunded: 'bg-theme-bg-tertiary text-theme-text-secondary',
   to_refund: 'bg-orange-900 text-orange-200',
   to_block: 'bg-red-900 text-red-200',
   collected: 'bg-green-900 text-green-200'
@@ -737,7 +737,7 @@ export default function ScadenzeTab() {
                         {scadenza.amount ? `${formatAmount(scadenza.amount)}` : '-'}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${STATUS_COLORS[scadenza.status] || 'bg-gray-700 text-gray-300'}`}>
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${STATUS_COLORS[scadenza.status] || 'bg-theme-bg-tertiary text-theme-text-secondary'}`}>
                           {STATUS_LABELS[scadenza.status] || scadenza.status}
                         </span>
                       </td>
@@ -773,7 +773,7 @@ export default function ScadenzeTab() {
                               {scadenza.status === 'to_refund' && (
                                 <button
                                   onClick={() => handleAction(scadenza, 'mark_refunded')}
-                                  className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs font-medium"
+                                  className="px-3 py-1 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded text-xs font-medium"
                                 >
                                   Segna rimborsata
                                 </button>
@@ -792,7 +792,7 @@ export default function ScadenzeTab() {
                               </button>
                               <button
                                 onClick={() => handleAction(scadenza, 'mark_paid')}
-                                className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs font-medium"
+                                className="px-3 py-1 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded text-xs font-medium"
                               >
                                 Segna pagata
                               </button>
@@ -868,7 +868,7 @@ export default function ScadenzeTab() {
                 <select
                   value={newScadenza.category}
                   onChange={(e) => setNewScadenza({ ...newScadenza, category: e.target.value, item_type: '' })}
-                  className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
                 >
                   {Object.entries(CATEGORIES).map(([key, cat]) => (
                     <option key={key} value={key}>{cat.label}</option>
@@ -881,7 +881,7 @@ export default function ScadenzeTab() {
                 <select
                   value={newScadenza.item_type}
                   onChange={(e) => setNewScadenza({ ...newScadenza, item_type: e.target.value })}
-                  className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
                 >
                   <option value="">Seleziona voce...</option>
                   {CATEGORIES[newScadenza.category as keyof typeof CATEGORIES]?.items.map(item => (
@@ -894,7 +894,7 @@ export default function ScadenzeTab() {
                     type="text"
                     placeholder="Nome voce personalizzata"
                     onChange={(e) => setNewScadenza({ ...newScadenza, item_type: e.target.value })}
-                    className="w-full mt-2 bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                    className="w-full mt-2 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
                   />
                 )}
               </div>
@@ -906,7 +906,7 @@ export default function ScadenzeTab() {
                   value={newScadenza.reference_name}
                   onChange={(e) => setNewScadenza({ ...newScadenza, reference_name: e.target.value })}
                   placeholder="es. Cliente / Veicolo / Fornitore"
-                  className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
                 />
               </div>
 
@@ -916,7 +916,7 @@ export default function ScadenzeTab() {
                   type="date"
                   value={newScadenza.due_date}
                   onChange={(e) => setNewScadenza({ ...newScadenza, due_date: e.target.value })}
-                  className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
                 />
               </div>
 
@@ -928,7 +928,7 @@ export default function ScadenzeTab() {
                   value={newScadenza.amount}
                   onChange={(e) => setNewScadenza({ ...newScadenza, amount: e.target.value })}
                   placeholder="0,00"
-                  className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
                 />
               </div>
 
@@ -939,7 +939,7 @@ export default function ScadenzeTab() {
                   value={newScadenza.description}
                   onChange={(e) => setNewScadenza({ ...newScadenza, description: e.target.value })}
                   placeholder="Note aggiuntive"
-                  className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
                 />
               </div>
             </div>
@@ -947,7 +947,7 @@ export default function ScadenzeTab() {
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
+                className="px-4 py-2 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded-lg"
               >
                 Annulla
               </button>

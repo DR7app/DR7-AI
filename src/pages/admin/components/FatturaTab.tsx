@@ -227,7 +227,7 @@ export default function FatturaTab() {
             }}
             className={`px-4 py-2 rounded-full font-medium transition-colors ${multiSelectMode
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              : 'bg-theme-bg-secondary text-theme-text-muted hover:bg-theme-bg-tertiary'
               }`}
           >
             {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
@@ -251,7 +251,7 @@ export default function FatturaTab() {
           placeholder="Cerca cliente..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-gray-400 focus:outline-none focus:border-dr7-gold transition-colors"
+          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
         />
       </div>
 
@@ -281,7 +281,7 @@ export default function FatturaTab() {
                         type="checkbox"
                         checked={selectedIds.includes(invoice.id)}
                         onChange={() => toggleSelect(invoice.id)}
-                        className="rounded-full border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                        className="rounded-full border-theme-border bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
                       />
                     )}
                     <h3 className="text-lg font-bold text-theme-text-primary">{invoice.numero_fattura}</h3>
@@ -296,7 +296,7 @@ export default function FatturaTab() {
                         invoice.sdi_status === 'sent' ? 'bg-blue-600 text-white' :
                           invoice.sdi_status === 'sending' ? 'bg-yellow-600 text-white' :
                             invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-600 text-white' :
-                              'bg-gray-600 text-white'
+                              'bg-theme-bg-hover text-theme-text-primary'
                         }`}>
                         {invoice.sdi_status === 'accepted' ? 'Accettata SDI' :
                           invoice.sdi_status === 'sent' ? 'Inviata SDI' :

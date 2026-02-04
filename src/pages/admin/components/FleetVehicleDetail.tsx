@@ -313,7 +313,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                         type="text"
                                         value={editedVehicle.plate || ''}
                                         onChange={(e) => updateField('plate', e.target.value.toUpperCase())}
-                                        className="w-full bg-gray-700 text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         placeholder="Inserisci targa"
                                     />
                                 </div>
@@ -323,7 +323,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                         type="text"
                                         value={editedVehicle.chassis_number || ''}
                                         onChange={(e) => updateField('chassis_number', e.target.value.toUpperCase())}
-                                        className="w-full bg-gray-700 text-theme-text-primary font-bold font-mono rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold font-mono rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         placeholder="es. WVWZZZ3CZWE123456"
                                     />
                                 </div>
@@ -335,7 +335,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             value={editedVehicle.current_km || 0}
                                             onChange={(e) => updateField('current_km', parseInt(e.target.value) || 0)}
                                             onFocus={(e) => e.target.select()}
-                                            className="w-full bg-gray-700 text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                         <span className="text-theme-text-muted">km</span>
                                     </div>
@@ -408,7 +408,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                     value={editedVehicle.current_km || 0}
                                     onChange={(e) => updateField('current_km', parseInt(e.target.value) || 0)}
                                     onFocus={(e) => e.target.select()}
-                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                 />
                             </div>
 
@@ -444,7 +444,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             value={editedVehicle.last_service_km || 0}
                                             onChange={(e) => updateField('last_service_km', parseInt(e.target.value) || 0)}
                                             onFocus={(e) => e.target.select()}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
@@ -454,7 +454,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             value={editedVehicle.maintenance_service_interval_km || 30000}
                                             onChange={(e) => updateField('maintenance_service_interval_km', parseInt(e.target.value) || 30000)}
                                             onFocus={(e) => e.target.select()}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                 </div>
@@ -494,7 +494,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                 </div>
 
                                 {/* Tire Specifications */}
-                                <div className="bg-gray-800 rounded-lg p-3 mb-4 border border-gray-600">
+                                <div className="bg-theme-bg-secondary rounded-lg p-3 mb-4 border border-theme-border">
                                     <h5 className="text-sm font-semibold text-theme-text-primary mb-3">Specifiche Gomme</h5>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
@@ -507,7 +507,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                     tire_specs: { ...editedVehicle.metadata?.tire_specs, front_size: e.target.value }
                                                 })}
                                                 placeholder="es. 205/55 R16"
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         <div>
@@ -520,7 +520,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                     tire_specs: { ...editedVehicle.metadata?.tire_specs, front_model: e.target.value }
                                                 })}
                                                 placeholder="es. Michelin Pilot Sport 4"
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         <div>
@@ -533,7 +533,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                     tire_specs: { ...editedVehicle.metadata?.tire_specs, rear_size: e.target.value }
                                                 })}
                                                 placeholder="es. 225/45 R17"
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         <div>
@@ -546,7 +546,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                     tire_specs: { ...editedVehicle.metadata?.tire_specs, rear_model: e.target.value }
                                                 })}
                                                 placeholder="es. Michelin Pilot Sport 4"
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                     </div>
@@ -563,7 +563,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.last_tire_change_front_km || 0}
                                                 onChange={(e) => updateField('last_tire_change_front_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         <div>
@@ -573,7 +573,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.maintenance_tires_front_interval_km || 30000}
                                                 onChange={(e) => updateField('maintenance_tires_front_interval_km', parseInt(e.target.value) || 30000)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         {editedVehicle.maintenance_tires_front_interval_km && (
@@ -592,7 +592,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.last_tire_change_rear_km || 0}
                                                 onChange={(e) => updateField('last_tire_change_rear_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         <div>
@@ -602,7 +602,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.maintenance_tires_rear_interval_km || 30000}
                                                 onChange={(e) => updateField('maintenance_tires_rear_interval_km', parseInt(e.target.value) || 30000)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         {editedVehicle.maintenance_tires_rear_interval_km && (
@@ -627,7 +627,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.last_brake_change_front_km || 0}
                                                 onChange={(e) => updateField('last_brake_change_front_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         <div>
@@ -637,7 +637,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.maintenance_brake_front_interval_km || 0}
                                                 onChange={(e) => updateField('maintenance_brake_front_interval_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                                 placeholder="0 = non monitorato"
                                             />
                                         </div>
@@ -657,7 +657,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.last_brake_change_rear_km || 0}
                                                 onChange={(e) => updateField('last_brake_change_rear_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                             />
                                         </div>
                                         <div>
@@ -667,7 +667,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 value={editedVehicle.maintenance_brake_rear_interval_km || 0}
                                                 onChange={(e) => updateField('maintenance_brake_rear_interval_km', parseInt(e.target.value) || 0)}
                                                 onFocus={(e) => e.target.select()}
-                                                className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                                 placeholder="0 = non monitorato"
                                             />
                                         </div>
@@ -698,7 +698,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="text"
                                             value={editedVehicle.display_name || ''}
                                             onChange={(e) => updateField('display_name', e.target.value)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
@@ -707,7 +707,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="text"
                                             value={editedVehicle.plate || ''}
                                             onChange={(e) => updateField('plate', e.target.value)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
@@ -716,7 +716,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="text"
                                             value={editedVehicle.chassis_number || ''}
                                             onChange={(e) => updateField('chassis_number', e.target.value.toUpperCase())}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none font-mono"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none font-mono"
                                             placeholder="es. WVWZZZ3CZWE123456"
                                         />
                                     </div>
@@ -725,7 +725,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                         <select
                                             value={editedVehicle.status || 'available'}
                                             onChange={(e) => updateField('status', e.target.value)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         >
                                             <option value="available">Disponibile</option>
                                             <option value="rented">Noleggiato</option>
@@ -739,7 +739,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="number"
                                             value={editedVehicle.daily_rate || 0}
                                             onChange={(e) => updateField('daily_rate', parseFloat(e.target.value) || 0)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                 </div>
@@ -755,7 +755,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="date"
                                             value={editedVehicle.insurance_expiry || ''}
                                             onChange={(e) => updateField('insurance_expiry', e.target.value)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
@@ -764,7 +764,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="date"
                                             value={editedVehicle.tax_expiry || ''}
                                             onChange={(e) => updateField('tax_expiry', e.target.value)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
@@ -773,7 +773,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="date"
                                             value={editedVehicle.inspection_expiry || ''}
                                             onChange={(e) => updateField('inspection_expiry', e.target.value)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
@@ -782,7 +782,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             type="date"
                                             value={editedVehicle.leasing_expiry || ''}
                                             onChange={(e) => updateField('leasing_expiry', e.target.value)}
-                                            className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                 </div>
@@ -795,7 +795,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                     <div>
                         <h3 className="text-xl text-theme-text-primary mb-4">Storico Interventi</h3>
                         <p className="text-theme-text-muted">Cronologia completa degli interventi di manutenzione...</p>
-                        <p className="text-gray-500 text-sm mt-2">(Da implementare: lista eventi da tabella vehicle_events)</p>
+                        <p className="text-theme-text-muted text-sm mt-2">(Da implementare: lista eventi da tabella vehicle_events)</p>
                     </div>
                 )}
             </div>

@@ -760,7 +760,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 onClick={() => setFormData({ ...formData, tipo_cliente: 'persona_fisica' })}
                 className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'persona_fisica'
                   ? 'bg-blue-600/20 border-blue-500 text-blue-400 ring-1 ring-blue-500'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-gray-750'
+                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
                   }`}
               >
                 <span className="font-semibold">Persona Fisica</span>
@@ -770,7 +770,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 onClick={() => setFormData({ ...formData, tipo_cliente: 'azienda' })}
                 className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'azienda'
                   ? 'bg-purple-600/20 border-purple-500 text-purple-400 ring-1 ring-purple-500'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-gray-750'
+                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
                   }`}
               >
                 <span className="font-semibold">Azienda</span>
@@ -780,7 +780,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 onClick={() => setFormData({ ...formData, tipo_cliente: 'pubblica_amministrazione' })}
                 className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'pubblica_amministrazione'
                   ? 'bg-green-600/20 border-green-500 text-green-400 ring-1 ring-green-500'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-gray-750'
+                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
                   }`}
               >
                 <span className="font-semibold">Pubblica Amm.</span>
@@ -1296,7 +1296,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               type="button"
               onClick={() => setShowDocumentSection(!showDocumentSection)}
-              className="w-full flex items-center justify-between p-4 bg-theme-bg-tertiary hover:bg-gray-750 rounded-full transition-colors"
+              className="w-full flex items-center justify-between p-4 bg-theme-bg-tertiary hover:bg-theme-bg-hover rounded-full transition-colors"
             >
               <div className="flex items-center gap-3">
                 <svg className="w-6 h-6 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1334,7 +1334,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <input
                         type="file"
                         onChange={(e) => setDriversLicenseFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1349,7 +1349,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <input
                         type="file"
                         onChange={(e) => setDriversLicenseBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1376,7 +1376,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <input
                         type="file"
                         onChange={(e) => setIdentityFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1391,7 +1391,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <input
                         type="file"
                         onChange={(e) => setIdentityBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1418,7 +1418,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <input
                         type="file"
                         onChange={(e) => setCodiceFiscaleFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"
@@ -1433,7 +1433,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <input
                         type="file"
                         onChange={(e) => setCodiceFiscaleBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-theme-border-light rounded text-theme-text-primary text-xs
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
                           hover:file:bg-yellow-500 file:cursor-pointer"

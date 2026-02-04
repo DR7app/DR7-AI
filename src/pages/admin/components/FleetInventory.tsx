@@ -217,7 +217,7 @@ export default function FleetInventory() {
                             placeholder="Ricerca auto per targa..."
                             value={plateSearch}
                             onChange={(e) => setPlateSearch(e.target.value)}
-                            className="w-full px-4 py-2 pl-10 bg-gray-700 border border-theme-border-light rounded-full text-theme-text-primary text-sm placeholder-theme-text-muted"
+                            className="w-full px-4 py-2 pl-10 bg-theme-bg-tertiary border border-theme-border-light rounded-full text-theme-text-primary text-sm placeholder-theme-text-muted"
                         />
                         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -269,7 +269,7 @@ export default function FleetInventory() {
                     return (
                         <div
                             key={vehicle.id}
-                            className={`rounded-lg border p-4 ${needsAttention ? 'border-red-500/50 bg-red-900/10' : 'border-gray-700/30 bg-theme-bg-card'}`}
+                            className={`rounded-lg border p-4 ${needsAttention ? 'border-red-500/50 bg-red-900/10' : 'border-theme-border/30 bg-theme-bg-card'}`}
                         >
                             {/* Vehicle Header */}
                             <div className="flex items-center justify-between mb-4">
@@ -296,9 +296,9 @@ export default function FleetInventory() {
 
                             {/* Editing Form */}
                             {editingVehicle === vehicle.id ? (
-                                <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+                                <div className="bg-theme-bg-secondary rounded-lg p-4 space-y-4">
                                     {/* Oil Section */}
-                                    <div className="border-b border-gray-700 pb-4">
+                                    <div className="border-b border-theme-border pb-4">
                                         <h4 className="font-semibold text-theme-text-primary mb-3">Olio Motore</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
@@ -308,7 +308,7 @@ export default function FleetInventory() {
                                                     value={editForm.oil_type || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, oil_type: e.target.value })}
                                                     placeholder="es. 5W30 Castrol Edge"
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -318,7 +318,7 @@ export default function FleetInventory() {
                                                     min="0"
                                                     value={editForm.oil_quantity || 0}
                                                     onChange={(e) => setEditForm({ ...editForm, oil_quantity: parseInt(e.target.value) || 0 })}
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -328,7 +328,7 @@ export default function FleetInventory() {
                                                     value={editForm.oil_supplier_phone || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, oil_supplier_phone: e.target.value })}
                                                     placeholder="es. 3331234567"
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -338,14 +338,14 @@ export default function FleetInventory() {
                                                     value={editForm.oil_supplier_url || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, oil_supplier_url: e.target.value })}
                                                     placeholder="https://..."
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Front Brake Pads Section */}
-                                    <div className="border-b border-gray-700 pb-4">
+                                    <div className="border-b border-theme-border pb-4">
                                         <h4 className="font-semibold text-theme-text-primary mb-3">Pastiglie Freno Anteriori</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
@@ -355,7 +355,7 @@ export default function FleetInventory() {
                                                     value={editForm.pastiglie_ant_model || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_model: e.target.value })}
                                                     placeholder="es. Brembo P50067"
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -365,7 +365,7 @@ export default function FleetInventory() {
                                                     min="0"
                                                     value={editForm.pastiglie_ant_quantity || 0}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_quantity: parseInt(e.target.value) || 0 })}
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -375,7 +375,7 @@ export default function FleetInventory() {
                                                     value={editForm.pastiglie_ant_supplier_phone || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_supplier_phone: e.target.value })}
                                                     placeholder="es. 3331234567"
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -385,7 +385,7 @@ export default function FleetInventory() {
                                                     value={editForm.pastiglie_ant_supplier_url || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_supplier_url: e.target.value })}
                                                     placeholder="https://..."
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                         </div>
@@ -402,7 +402,7 @@ export default function FleetInventory() {
                                                     value={editForm.pastiglie_post_model || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_post_model: e.target.value })}
                                                     placeholder="es. Brembo P50068"
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -412,7 +412,7 @@ export default function FleetInventory() {
                                                     min="0"
                                                     value={editForm.pastiglie_post_quantity || 0}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_post_quantity: parseInt(e.target.value) || 0 })}
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -422,7 +422,7 @@ export default function FleetInventory() {
                                                     value={editForm.pastiglie_post_supplier_phone || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_post_supplier_phone: e.target.value })}
                                                     placeholder="es. 3331234567"
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                             <div>
@@ -432,7 +432,7 @@ export default function FleetInventory() {
                                                     value={editForm.pastiglie_post_supplier_url || ''}
                                                     onChange={(e) => setEditForm({ ...editForm, pastiglie_post_supplier_url: e.target.value })}
                                                     placeholder="https://..."
-                                                    className="w-full bg-gray-700 text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
                                         </div>
@@ -442,7 +442,7 @@ export default function FleetInventory() {
                                     <div className="flex justify-end gap-3 pt-2">
                                         <button
                                             onClick={() => { setEditingVehicle(null); setEditForm({}) }}
-                                            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
+                                            className="px-4 py-2 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded-lg"
                                         >
                                             Annulla
                                         </button>
@@ -473,7 +473,7 @@ export default function FleetInventory() {
                                             className={`w-full py-2 rounded text-sm font-medium ${
                                                 oilQty === 0
                                                     ? 'bg-red-600 hover:bg-red-700 text-white'
-                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                                    : 'bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary'
                                             }`}
                                         >
                                             Ordina via WhatsApp
@@ -496,7 +496,7 @@ export default function FleetInventory() {
                                             className={`w-full py-2 rounded text-sm font-medium ${
                                                 pastiglieAntQty === 0
                                                     ? 'bg-red-600 hover:bg-red-700 text-white'
-                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                                    : 'bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary'
                                             }`}
                                         >
                                             Ordina via WhatsApp
@@ -519,7 +519,7 @@ export default function FleetInventory() {
                                             className={`w-full py-2 rounded text-sm font-medium ${
                                                 pastigliePostQty === 0
                                                     ? 'bg-red-600 hover:bg-red-700 text-white'
-                                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                                    : 'bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary'
                                             }`}
                                         >
                                             Ordina via WhatsApp
