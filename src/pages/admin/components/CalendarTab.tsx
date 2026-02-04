@@ -331,7 +331,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                 <div
                   key={day}
                   className={`
-                    flex flex-col items-center justify-center border-r border-white/[0.03] relative
+                    flex flex-col items-center justify-center border-r border-theme-border/10 relative
                     ${(isHol || isSun) ? 'bg-theme-text-primary/[0.02]' : ''}
                     ${isToday ? 'bg-dr7-gold/40' : ''}
                   `}
@@ -348,16 +348,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                     />
                   )}
 
-                  <span
-                    className="text-[10px]"
-                    style={{ color: 'rgba(255, 255, 255, 0.75)' }}
-                  >
+                  <span className="text-[10px] text-theme-text-primary/75">
                     {day}
                   </span>
-                  <span
-                    className="text-[8px] uppercase"
-                    style={{ color: 'rgba(255, 255, 255, 0.45)' }}
-                  >
+                  <span className="text-[8px] uppercase text-theme-text-muted/70">
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
                   </span>
                 </div>

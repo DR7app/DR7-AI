@@ -357,7 +357,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 <div
                   key={day}
                   className={`
-                    flex flex-col items-center justify-center border-r border-white/[0.08] relative transition-colors
+                    flex flex-col items-center justify-center border-r border-theme-border/30 relative transition-colors
                     ${(isHol || isSun) ? 'bg-red-950/20' : ''}
                     ${isToday ? 'bg-[#c9a84a]/30 border-l-2 border-r-2 border-[#c9a84a]' : ''}
                   `}
@@ -400,7 +400,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             return (
               <div
                 key={timeString}
-                className={`flex ${isFullHour ? 'border-t-2 border-theme-border/70' : 'border-t border-white/[0.05]'}`}
+                className={`flex ${isFullHour ? 'border-t-2 border-theme-border/70' : 'border-t border-theme-border/20'}`}
                 style={{ height: CELL_HEIGHT }}
               >
                 {/* Time Label Column (Sticky Left) */}
@@ -443,7 +443,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                       <div
                         key={`${day}-${timeString}`}
                         className={`
-                          relative border-r border-white/[0.05] transition-all
+                          relative border-r border-theme-border/20 transition-all
                           ${isToday ? 'bg-[#c9a84a]/20 border-l border-r border-[#c9a84a]/30' : ''}
                           ${!isToday && !slotBooking && !isRedDay ? 'bg-green-600/15 hover:bg-green-600/25 cursor-pointer' : ''}
                           ${!isToday && !slotBooking && isRedDay ? 'bg-red-950/10 hover:bg-red-950/20' : ''}
