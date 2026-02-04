@@ -323,6 +323,27 @@ export default function CauzioniTab() {
         }
     }
 
+    const handleSegnaDaIncassare = async (cauzione: Cauzione) => {
+        if (!confirm(`Riportare a "Da incassare" la cauzione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
+
+        try {
+            const { error } = await supabase
+                .from('cauzioni')
+                .update({
+                    data_incasso: null,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', cauzione.id)
+
+            if (error) throw error
+            alert('Cauzione riportata a Da incassare')
+            fetchCauzioni()
+        } catch (error: any) {
+            console.error('Error marking da incassare:', error)
+            alert(`Errore: ${error.message}`)
+        }
+    }
+
     const handleBlocca = async (cauzione: Cauzione) => {
         const note = prompt('Motivo del blocco (contestazione, verifica danni, ecc.):')
         if (note === null) return
@@ -551,6 +572,12 @@ export default function CauzioniTab() {
                                                 className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
                                             >
                                                 Modifica
+                                            </button>
+                                            <button
+                                                onClick={() => handleSegnaDaIncassare(cauzione)}
+                                                className="px-3 py-1 bg-yellow-600 text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                            >
+                                                DA INCASSARE
                                             </button>
                                             <button
                                                 onClick={() => handleBlocca(cauzione)}
