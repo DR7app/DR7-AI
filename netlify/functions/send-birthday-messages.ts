@@ -6,8 +6,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
-// Birthday message template - {nome} and {codice} will be replaced
-const BIRTHDAY_MESSAGE = `Ciao {nome} 👋🏻
+// Default birthday message template - {nome} and {codice} will be replaced
+const DEFAULT_BIRTHDAY_MESSAGE = `Ciao {nome} 👋🏻
 
 mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
 
@@ -64,6 +64,21 @@ const birthdayHandler: Handler = async (event) => {
   });
 
   try {
+    // Load custom message template from database (fallback to default)
+    let birthdayMessage = DEFAULT_BIRTHDAY_MESSAGE;
+    const { data: settingData } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'birthday_message_template')
+      .single();
+
+    if (settingData?.value) {
+      birthdayMessage = settingData.value;
+      console.log('[Birthday Auto] Using custom message template from database');
+    } else {
+      console.log('[Birthday Auto] Using default message template');
+    }
+
     const currentYear = new Date().getFullYear();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -169,7 +184,7 @@ const birthdayHandler: Handler = async (event) => {
         console.log(`[Birthday Auto] Generated code ${discountCode} for ${fullName}`);
 
         // Personalize message with name and code
-        const personalizedMessage = BIRTHDAY_MESSAGE
+        const personalizedMessage = birthdayMessage
           .replace('{nome}', firstName)
           .replace('{codice}', discountCode);
 

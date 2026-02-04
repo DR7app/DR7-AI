@@ -19,23 +19,7 @@ interface BirthdaySentRecord {
     sent_at: string
 }
 
-export default function BirthdaysTab() {
-    const [customers, setCustomers] = useState<CustomerBirthday[]>([])
-    const [, setSentRecords] = useState<BirthdaySentRecord[]>([])
-    const [loading, setLoading] = useState(true)
-    const [sending, setSending] = useState<string | null>(null)
-    const [bulkSending, setBulkSending] = useState(false)
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-
-    // Filters
-    const [daysRange, setDaysRange] = useState(10)
-    const [showOnlyWithConsent, setShowOnlyWithConsent] = useState(false)
-    const [showOnlyWithPhone, setShowOnlyWithPhone] = useState(true)
-    const [showOnlyNotSent, setShowOnlyNotSent] = useState(false)
-
-    // Birthday message template - {nome} and {codice} will be replaced
-    const currentYear = new Date().getFullYear()
-    const defaultMessage = `Ciao {nome} 👋🏻
+const DEFAULT_BIRTHDAY_MESSAGE = `Ciao {nome} 👋🏻
 
 mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
 
@@ -59,6 +43,51 @@ Con stima,
 Dubai Rent 7.0 S.p.A.
 Ogni compleanno merita uno stile all'altezza.`
 
+export default function BirthdaysTab() {
+    const [customers, setCustomers] = useState<CustomerBirthday[]>([])
+    const [, setSentRecords] = useState<BirthdaySentRecord[]>([])
+    const [loading, setLoading] = useState(true)
+    const [sending, setSending] = useState<string | null>(null)
+    const [bulkSending, setBulkSending] = useState(false)
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+    // Filters
+    const [daysRange, setDaysRange] = useState(10)
+    const [showOnlyWithConsent, setShowOnlyWithConsent] = useState(false)
+    const [showOnlyWithPhone, setShowOnlyWithPhone] = useState(true)
+    const [showOnlyNotSent, setShowOnlyNotSent] = useState(false)
+
+    // Editable birthday message template
+    const currentYear = new Date().getFullYear()
+    const [messageTemplate, setMessageTemplate] = useState(DEFAULT_BIRTHDAY_MESSAGE)
+    const [editingMessage, setEditingMessage] = useState(false)
+    const [draftMessage, setDraftMessage] = useState('')
+    const [savingMessage, setSavingMessage] = useState(false)
+
+    async function saveMessageTemplate() {
+        setSavingMessage(true)
+        try {
+            const { error } = await supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'birthday_message_template',
+                    value: draftMessage,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' })
+
+            if (error) throw error
+
+            setMessageTemplate(draftMessage)
+            setEditingMessage(false)
+            alert('Messaggio salvato!')
+        } catch (error: any) {
+            console.error('Error saving message template:', error)
+            alert(`Errore nel salvataggio: ${error.message}`)
+        } finally {
+            setSavingMessage(false)
+        }
+    }
+
     // Generate unique discount code
     function generateDiscountCode(): string {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -80,6 +109,17 @@ Ogni compleanno merita uno stile all'altezza.`
     async function loadData() {
         setLoading(true)
         try {
+            // Load saved birthday message template
+            const { data: settingData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'birthday_message_template')
+                .single()
+
+            if (settingData?.value) {
+                setMessageTemplate(settingData.value)
+            }
+
             // Load customers with birthdays
             const { data: customersData, error: customersError } = await supabase
                 .from('customers_extended')
@@ -287,7 +327,7 @@ Ogni compleanno merita uno stile all'altezza.`
                 }
 
                 const firstName = customer.full_name.split(' ')[0]
-                const personalizedMessage = defaultMessage
+                const personalizedMessage = messageTemplate
                     .replace('{nome}', firstName)
                     .replace('{codice}', discountCode)
 
@@ -391,7 +431,7 @@ Ogni compleanno merita uno stile all'altezza.`
 
             // Prepare personalized message with code
             const firstName = customer.full_name.split(' ')[0]
-            const personalizedMessage = defaultMessage
+            const personalizedMessage = messageTemplate
                 .replace('{nome}', firstName)
                 .replace('{codice}', discountCode)
 
@@ -571,13 +611,57 @@ Ogni compleanno merita uno stile all'altezza.`
                 </div>
             </div>
 
-            {/* Message Preview */}
+            {/* Editable Message Template */}
             <div className="bg-theme-bg-tertiary p-4 rounded-lg border border-theme-border">
-                <h3 className="text-theme-text-primary font-semibold mb-2">Messaggio Auguri</h3>
-                <pre className="text-theme-text-muted text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border">
-                    {defaultMessage.replace('{nome}', '[Nome Cliente]').replace('{codice}', 'BDAY-XXXX-XXXX')}
-                </pre>
-                <p className="text-xs text-green-400 mt-2">Il codice sconto viene generato automaticamente per ogni cliente</p>
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-theme-text-primary font-semibold">Messaggio Auguri</h3>
+                    {!editingMessage ? (
+                        <Button
+                            variant="secondary"
+                            onClick={() => { setDraftMessage(messageTemplate); setEditingMessage(true) }}
+                            className="!py-1.5 !px-3 !text-xs"
+                        >
+                            Modifica
+                        </Button>
+                    ) : (
+                        <div className="flex gap-2">
+                            <Button
+                                variant="secondary"
+                                onClick={() => setEditingMessage(false)}
+                                disabled={savingMessage}
+                                className="!py-1.5 !px-3 !text-xs"
+                            >
+                                Annulla
+                            </Button>
+                            <Button
+                                variant="primary"
+                                onClick={saveMessageTemplate}
+                                disabled={savingMessage}
+                                className="!py-1.5 !px-3 !text-xs"
+                            >
+                                {savingMessage ? 'Salvataggio...' : 'Salva'}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+                {editingMessage ? (
+                    <>
+                        <textarea
+                            value={draftMessage}
+                            onChange={(e) => setDraftMessage(e.target.value)}
+                            rows={18}
+                            className="w-full text-theme-text-primary text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border focus:outline-none focus:border-dr7-gold resize-y"
+                        />
+                        <p className="text-xs text-yellow-400 mt-2">Usa <code className="bg-theme-bg-secondary px-1 rounded">{'{nome}'}</code> per il nome del cliente e <code className="bg-theme-bg-secondary px-1 rounded">{'{codice}'}</code> per il codice sconto generato automaticamente.</p>
+                    </>
+                ) : (
+                    <>
+                        <pre className="text-theme-text-muted text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border">
+                            {messageTemplate.replace('{nome}', '[Nome Cliente]').replace('{codice}', 'BDAY-XXXX-XXXX')}
+                        </pre>
+                        <p className="text-xs text-green-400 mt-2">Il codice sconto viene generato automaticamente per ogni cliente</p>
+                    </>
+                )}
             </div>
 
             {/* Customers Table */}
