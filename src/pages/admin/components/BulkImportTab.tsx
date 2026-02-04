@@ -47,23 +47,85 @@ export default function BulkImportTab() {
   const [savedCount, setSavedCount] = useState(0)
   const [expandedRow, setExpandedRow] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef(false)
+
+  const isValidFile = (file: File) =>
+    file.type.startsWith('image/') || file.type === 'application/pdf'
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files).filter(f =>
-        f.type.startsWith('image/') || f.type === 'application/pdf'
-      )
+      const newFiles = Array.from(e.target.files).filter(isValidFile)
       setFiles(prev => [...prev, ...newFiles])
     }
   }
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  // Recursively read all files from a dropped directory entry
+  const readEntryFiles = (entry: FileSystemEntry): Promise<File[]> => {
+    return new Promise((resolve) => {
+      if (entry.isFile) {
+        (entry as FileSystemFileEntry).file(
+          (file) => resolve(isValidFile(file) ? [file] : []),
+          () => resolve([])
+        )
+      } else if (entry.isDirectory) {
+        const reader = (entry as FileSystemDirectoryEntry).createReader()
+        const allFiles: File[] = []
+
+        const readBatch = () => {
+          reader.readEntries(async (entries) => {
+            if (entries.length === 0) {
+              resolve(allFiles)
+              return
+            }
+            for (const child of entries) {
+              const childFiles = await readEntryFiles(child)
+              allFiles.push(...childFiles)
+            }
+            // readEntries may not return all at once, keep reading
+            readBatch()
+          }, () => resolve(allFiles))
+        }
+        readBatch()
+      } else {
+        resolve([])
+      }
+    })
+  }
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
-    const droppedFiles = Array.from(e.dataTransfer.files).filter(f =>
-      f.type.startsWith('image/') || f.type === 'application/pdf'
-    )
-    setFiles(prev => [...prev, ...droppedFiles])
+
+    const items = e.dataTransfer.items
+    if (!items) {
+      // Fallback: no items API, use files directly
+      const droppedFiles = Array.from(e.dataTransfer.files).filter(isValidFile)
+      setFiles(prev => [...prev, ...droppedFiles])
+      return
+    }
+
+    const collectedFiles: File[] = []
+
+    // Use webkitGetAsEntry to handle folders
+    const entries: FileSystemEntry[] = []
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry?.()
+      if (entry) entries.push(entry)
+    }
+
+    if (entries.length > 0) {
+      for (const entry of entries) {
+        const entryFiles = await readEntryFiles(entry)
+        collectedFiles.push(...entryFiles)
+      }
+    } else {
+      // Fallback if webkitGetAsEntry not supported
+      collectedFiles.push(...Array.from(e.dataTransfer.files).filter(isValidFile))
+    }
+
+    if (collectedFiles.length > 0) {
+      setFiles(prev => [...prev, ...collectedFiles])
+    }
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -357,23 +419,47 @@ export default function BulkImportTab() {
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-gray-600 rounded-xl p-12 text-center cursor-pointer hover:border-white/50 transition-colors bg-gray-800/30"
+          className="border-2 border-dashed border-gray-600 rounded-xl p-12 text-center hover:border-white/50 transition-colors bg-gray-800/30"
         >
           <svg className="w-16 h-16 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
           <p className="text-lg text-theme-text-primary font-semibold mb-2">
-            Trascina i documenti qui o clicca per selezionare
+            Trascina file o cartelle qui
           </p>
-          <p className="text-sm text-theme-text-muted">
+          <p className="text-sm text-theme-text-muted mb-4">
             Supporta JPG, PNG, PDF - Carte d'identita, patenti, tessere sanitarie
           </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-5 py-2 bg-white text-black rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors"
+            >
+              Seleziona File
+            </button>
+            <button
+              onClick={() => folderInputRef.current?.click()}
+              className="px-5 py-2 bg-gray-700 text-white rounded-lg font-semibold text-sm hover:bg-gray-600 transition-colors"
+            >
+              Seleziona Cartella
+            </button>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
             multiple
             accept="image/*,.pdf"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          {/* @ts-ignore - webkitdirectory is non-standard but widely supported */}
+          <input
+            ref={folderInputRef}
+            type="file"
+            // @ts-ignore
+            webkitdirectory=""
+            directory=""
+            multiple
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -390,7 +476,13 @@ export default function BulkImportTab() {
                 onClick={() => fileInputRef.current?.click()}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 transition-colors"
               >
-                + Aggiungi altri
+                + Aggiungi file
+              </button>
+              <button
+                onClick={() => folderInputRef.current?.click()}
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 transition-colors"
+              >
+                + Aggiungi cartella
               </button>
               <button
                 onClick={processFiles}
@@ -398,14 +490,6 @@ export default function BulkImportTab() {
               >
                 Avvia Estrazione AI
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,.pdf"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
             </div>
           </div>
 
