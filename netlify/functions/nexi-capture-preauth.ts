@@ -84,6 +84,7 @@ const handler: Handler = async (event) => {
             .from('cauzioni')
             .update({
                 stato: 'Incassata',
+                data_incasso: new Date().toISOString(),
                 note: `Incassato €${amount.toFixed(2)} - Nexi Op: ${responseData.operationId || transactionId}`,
                 updated_at: new Date().toISOString()
             })
