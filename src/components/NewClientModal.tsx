@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { SARDEGNA_PROVINCE, getComuniByProvincia } from '../data/sardegnaProvince'
+import { SARDEGNA_PROVINCE, getComuniByProvincia, getResidenceStatus } from '../data/sardegnaProvince'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -371,12 +371,16 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
     setIsSaving(true)
     try {
+      // Auto-detect residence status based on provincia/città di residenza
+      const residenceStatus = getResidenceStatus(formData.provincia_residenza, formData.citta_residenza)
+
       const customerData: any = {
         tipo_cliente: formData.tipo_cliente,
         email: formData.email,
         telefono: formData.telefono,
         nazione: formData.nazione,
-        source: 'admin'
+        source: 'admin',
+        residence_status: residenceStatus // 'residente' if CA/SU, 'non_residente' otherwise
       }
 
       // Only set created_at for new customers

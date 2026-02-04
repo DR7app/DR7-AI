@@ -83,3 +83,37 @@ export function getComuniByProvincia(code: string): string[] {
 
 // All province codes
 export const PROVINCE_CODES = SARDEGNA_PROVINCE.map(p => ({ code: p.code, name: p.name }))
+
+// Province codes considered "resident" for tax/reporting purposes
+export const RESIDENT_PROVINCE_CODES = ['CA', 'SU']
+
+// Check if a province code is resident (CA or SU)
+export function isResidentByProvincia(provinciaCode: string): boolean {
+  return RESIDENT_PROVINCE_CODES.includes(provinciaCode.toUpperCase())
+}
+
+// Check if a city name is in CA or SU (case-insensitive)
+export function isResidentByCity(cityName: string): boolean {
+  if (!cityName) return false
+  const normalizedCity = cityName.trim().toLowerCase()
+
+  for (const prov of SARDEGNA_PROVINCE) {
+    if (RESIDENT_PROVINCE_CODES.includes(prov.code)) {
+      if (prov.comuni.some(c => c.toLowerCase() === normalizedCity)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+// Get residence status based on province code or city
+export function getResidenceStatus(provinciaCode?: string, cityName?: string): 'residente' | 'non_residente' {
+  if (provinciaCode && isResidentByProvincia(provinciaCode)) {
+    return 'residente'
+  }
+  if (cityName && isResidentByCity(cityName)) {
+    return 'residente'
+  }
+  return 'non_residente'
+}
