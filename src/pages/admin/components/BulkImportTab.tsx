@@ -373,6 +373,58 @@ export default function BulkImportTab() {
     ))
   }
 
+  // Sanitize extracted data to fit DB column constraints
+  const sanitizeForDb = (d: ExtractedData): ExtractedData => {
+    const clean = { ...d }
+
+    // sesso: VARCHAR(1) - take only first character
+    if (clean.sesso) clean.sesso = clean.sesso.trim().charAt(0).toUpperCase()
+
+    // provincia: VARCHAR(2) - extract 2-letter code or take first 2 chars
+    const sanitizeProvincia = (val?: string): string | undefined => {
+      if (!val) return val
+      const trimmed = val.trim().toUpperCase()
+      // If already 2 chars, keep it
+      if (trimmed.length <= 2) return trimmed
+      // If it contains a 2-letter code in parentheses like "Cagliari (CA)", extract it
+      const match = trimmed.match(/\(([A-Z]{2})\)/)
+      if (match) return match[1]
+      // Otherwise truncate to 2
+      return trimmed.substring(0, 2)
+    }
+    clean.provincia_nascita = sanitizeProvincia(clean.provincia_nascita)
+    clean.provincia_residenza = sanitizeProvincia(clean.provincia_residenza)
+
+    // codice_postale: VARCHAR(5)
+    if (clean.codice_postale) clean.codice_postale = clean.codice_postale.trim().substring(0, 5)
+
+    // codice_fiscale: VARCHAR(16)
+    if (clean.codice_fiscale) clean.codice_fiscale = clean.codice_fiscale.trim().substring(0, 16)
+
+    // numero_civico: VARCHAR(10)
+    if (clean.numero_civico) clean.numero_civico = clean.numero_civico.trim().substring(0, 10)
+
+    // patente_tipo: VARCHAR(20)
+    if (clean.patente_tipo) clean.patente_tipo = clean.patente_tipo.trim().substring(0, 20)
+
+    // documento_numero: VARCHAR(20)
+    if (clean.documento_numero) clean.documento_numero = clean.documento_numero.trim().substring(0, 20)
+
+    // patente_numero: VARCHAR(20)
+    if (clean.patente_numero) clean.patente_numero = clean.patente_numero.trim().substring(0, 20)
+
+    // Truncate longer text fields to safe limits
+    if (clean.nome) clean.nome = clean.nome.trim().substring(0, 100)
+    if (clean.cognome) clean.cognome = clean.cognome.trim().substring(0, 100)
+    if (clean.luogo_nascita) clean.luogo_nascita = clean.luogo_nascita.trim().substring(0, 100)
+    if (clean.indirizzo) clean.indirizzo = clean.indirizzo.trim().substring(0, 200)
+    if (clean.citta_residenza) clean.citta_residenza = clean.citta_residenza.trim().substring(0, 100)
+    if (clean.documento_ente) clean.documento_ente = clean.documento_ente.trim().substring(0, 100)
+    if (clean.patente_ente) clean.patente_ente = clean.patente_ente.trim().substring(0, 100)
+
+    return clean
+  }
+
   // Determine storage bucket and document type based on extracted document_type
   const getDocStorageInfo = (docType?: string): { bucket: string; docType: string } => {
     switch (docType) {
@@ -400,7 +452,7 @@ export default function BulkImportTab() {
       const customer = mergedCustomers[mi]
       if (customer.saved || customer.error) continue
 
-      const d = customer.data
+      const d = sanitizeForDb(customer.data)
 
       try {
         // Check if customer already exists by codice_fiscale
