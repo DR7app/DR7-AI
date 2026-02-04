@@ -126,7 +126,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                 {/* Left: Document Viewer */}
                 <div className="w-1/2 h-full bg-theme-bg-tertiary p-4 border-r border-theme-border">
                     {fileUrl ? (
-                        <iframe src={fileUrl} className="w-full h-full rounded-full bg-white" title="PDF Viewer" />
+                        <iframe src={fileUrl} className="w-full h-full rounded-full bg-theme-text-primary" title="PDF Viewer" />
                     ) : (
                         <div className="flex items-center justify-center h-full text-theme-text-muted">Caricamento PDF...</div>
                     )}

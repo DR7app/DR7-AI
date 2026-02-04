@@ -234,7 +234,7 @@ export default function CarWashTab() {
           onClick={() => setFilterTab('all')}
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
             filterTab === 'all'
-              ? 'bg-dr7-gold text-black'
+              ? 'bg-dr7-gold text-theme-bg-primary'
               : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
           }`}
         >

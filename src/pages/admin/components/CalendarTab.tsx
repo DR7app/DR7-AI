@@ -241,17 +241,17 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
 
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-white/5 shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
 
       {/* 1. Control Bar */}
-      <div className="flex justify-between items-center p-4 bg-black/20 backdrop-blur-md border-b border-white/5 z-10 shadow-sm">
+      <div className="flex justify-between items-center p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Prec</button>
-            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Succ</button>
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Prec</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Succ</button>
           </div>
         </div>
 
@@ -297,7 +297,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
           <input
             type="text"
             placeholder="Cerca veicolo o cliente..."
-            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
+            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -308,9 +308,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
       <div className="flex-1 overflow-auto relative flex flex-col w-full" ref={gridRef}>
 
         {/* A. Sticky Header Row */}
-        <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-md min-w-max h-[42px] border-b border-white/5">
+        <div className="flex sticky top-0 z-[40] bg-theme-bg-primary shadow-md min-w-max h-[42px] border-b border-theme-border/30">
           {/* Header Spacer for Left Column */}
-          <div className="sticky left-0 w-[300px] z-[41] bg-[#0d0d0e] border-r border-white/5 flex items-center px-4 font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+          <div className="sticky left-0 w-[300px] z-[41] bg-theme-bg-primary border-r border-theme-border/30 flex items-center px-4 font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]">
             Veicolo / Targa
           </div>
 
@@ -332,7 +332,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                   key={day}
                   className={`
                     flex flex-col items-center justify-center border-r border-white/[0.03] relative
-                    ${(isHol || isSun) ? 'bg-white/[0.02]' : ''}
+                    ${(isHol || isSun) ? 'bg-theme-text-primary/[0.02]' : ''}
                     ${isToday ? 'bg-dr7-gold/40' : ''}
                   `}
                   style={{
@@ -376,11 +376,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
             return (
               <div
                 key={row.vehicle.id}
-                className="flex border-b border-white/50 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
+                className="flex border-b border-theme-border/50 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
-                <div className="sticky left-0 w-[300px] z-[30] bg-[#0d0d0e]/95 group-hover:bg-[#111112]/95 border-r border-white/5 flex items-center px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+                <div className="sticky left-0 w-[300px] z-[30] bg-theme-bg-primary/95 group-hover:bg-theme-bg-secondary/95 border-r border-theme-border/30 flex items-center px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]">
                   <div className="flex flex-col overflow-hidden">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
@@ -419,7 +419,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                           className={`
                                 border-r border-white/[0.02] h-full
                                 ${isToday ? 'bg-dr7-gold/40' : 'bg-green-500/[0.15]'}
-                                ${isRedDay && !isToday ? 'bg-white/[0.01]' : ''}
+                                ${isRedDay && !isToday ? 'bg-theme-text-primary/[0.01]' : ''}
                               `}
                           style={{
                             width: CELL_WIDTH,
@@ -435,7 +435,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                     {daysArray.map((day) => (
                       <div
                         key={day}
-                        className="h-full hover:bg-white/5 cursor-pointer transition-colors"
+                        className="h-full hover:bg-theme-text-primary/5 cursor-pointer transition-colors"
                         style={{ width: CELL_WIDTH }}
                         onClick={() => {
                           const date = new Date(currentRomeComponents.year, currentRomeComponents.month, day, 10, 0, 0)
@@ -515,9 +515,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                           </div>
 
                           {/* Left Edge Marker (Pickup) */}
-                          <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
+                          <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-theme-text-primary/50"></div>
                           {/* Right Edge Marker (Dropoff) */}
-                          <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/50"></div>
+                          <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-theme-text-primary/50"></div>
 
 
                           {/* TOOLTIP ON HOVER */}

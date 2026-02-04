@@ -68,14 +68,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   urban: 'border-blue-500/50 bg-blue-500/5',
   moto: 'border-purple-500/50 bg-purple-500/5',
   utilitaire: 'border-green-500/50 bg-green-500/5',
-  '-': 'border-gray-500/50 bg-gray-500/5'
+  '-': 'border-theme-border/50 bg-theme-bg-hover/5'
 }
 const CATEGORY_BADGE: Record<string, string> = {
   exotic: 'bg-yellow-500/20 text-yellow-400',
   urban: 'bg-blue-500/20 text-blue-400',
   moto: 'bg-purple-500/20 text-purple-400',
   utilitaire: 'bg-green-500/20 text-green-400',
-  '-': 'bg-gray-500/20 text-theme-text-muted'
+  '-': 'bg-theme-bg-hover/20 text-theme-text-muted'
 }
 
 export default function ReportsTab() {

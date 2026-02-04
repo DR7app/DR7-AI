@@ -325,7 +325,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             <div className="flex gap-4">
               {/* Preview */}
               {isImage(doc.mime_type) ? (
-                <div className="w-32 h-32 flex-shrink-0 bg-gray-950 rounded overflow-hidden">
+                <div className="w-32 h-32 flex-shrink-0 bg-theme-bg-primary rounded overflow-hidden">
                   <img
                     src={previewUrl}
                     alt={label}
@@ -333,7 +333,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
                   />
                 </div>
               ) : (
-                <div className="w-32 h-32 flex-shrink-0 bg-gray-950 rounded flex items-center justify-center">
+                <div className="w-32 h-32 flex-shrink-0 bg-theme-bg-primary rounded flex items-center justify-center">
                   <div className="text-center">
                     <svg className="w-12 h-12 mx-auto text-theme-text-muted mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -421,7 +421,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     return (
       <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50">
         <div className="bg-theme-bg-secondary border border-theme-border rounded-full p-8 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto mb-2"></div>
           <p className="text-theme-text-primary">Caricamento documenti...</p>
         </div>
       </div>

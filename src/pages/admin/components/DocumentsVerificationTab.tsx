@@ -332,7 +332,7 @@ export default function DocumentsVerificationTab() {
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
         <p className="text-theme-text-primary">Caricamento documenti...</p>
       </div>
     )
@@ -384,7 +384,7 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('all')}
             className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'all'
-              ? 'bg-dr7-gold text-black'
+              ? 'bg-dr7-gold text-theme-bg-primary'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}
           >
@@ -393,7 +393,7 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('pending_verification')}
             className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'pending_verification'
-              ? 'bg-dr7-gold text-black'
+              ? 'bg-dr7-gold text-theme-bg-primary'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}
           >
@@ -402,7 +402,7 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('verified')}
             className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'verified'
-              ? 'bg-dr7-gold text-black'
+              ? 'bg-dr7-gold text-theme-bg-primary'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}
           >
@@ -411,7 +411,7 @@ export default function DocumentsVerificationTab() {
           <button
             onClick={() => setFilterStatus('rejected')}
             className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'rejected'
-              ? 'bg-dr7-gold text-black'
+              ? 'bg-dr7-gold text-theme-bg-primary'
               : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
               }`}
           >
@@ -709,7 +709,7 @@ export default function DocumentsVerificationTab() {
 
       {/* Rejection Modal */}
       {showDocModal && selectedDoc && selectedDoc.status === 'pending_verification' && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-theme-text-primary mb-4">Rifiuta Documento</h3>
             <p className="text-theme-text-muted mb-4">

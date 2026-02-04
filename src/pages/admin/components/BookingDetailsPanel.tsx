@@ -46,17 +46,17 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const dropoffDate = new Date(booking.dropoff_date)
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-theme-overlay backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[#1a1a1a] border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
+        className="bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-[#1a1a1a] border-b border-theme-border p-6 flex justify-between items-center z-10">
+        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
           <h2 className="text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
           <button
             onClick={onClose}
-            className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-2 hover:bg-white/5 rounded"
+            className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-2 hover:bg-theme-text-primary/5 rounded"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -85,7 +85,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             <div className="flex items-center gap-3">
               <div className="text-lg font-bold text-theme-text-primary">{booking.vehicle_name}</div>
               {booking.vehicle_plate && (
-                <div className="px-2 py-1 bg-white/5 rounded font-mono text-sm text-theme-text-muted border border-white/10">
+                <div className="px-2 py-1 bg-theme-text-primary/5 rounded font-mono text-sm text-theme-text-muted border border-theme-border/50">
                   {booking.vehicle_plate}
                 </div>
               )}
@@ -168,7 +168,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             </div>
 
             {/* Financial Breakdown */}
-            <div className="bg-white/5 rounded-lg p-4 space-y-2 border border-white/10">
+            <div className="bg-theme-text-primary/5 rounded-lg p-4 space-y-2 border border-theme-border/50">
               <div className="flex justify-between items-center">
                 <span className="text-theme-text-muted">Totale</span>
                 <span className="font-mono text-theme-text-primary">{formatEUR(totalCents)}</span>
@@ -177,7 +177,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                 <span className="text-theme-text-muted">Acconto Pagato</span>
                 <span className="font-mono text-theme-text-primary">{formatEUR(paidCents)}</span>
               </div>
-              <div className="border-t border-white/10 pt-2 mt-2">
+              <div className="border-t border-theme-border/50 pt-2 mt-2">
                 <div className="flex justify-between items-center">
                   <span className={`font-bold ${remainingEur > 0 ? 'text-red-400' : 'text-green-400'}`}>
                     {remainingEur > 0 ? 'Da Saldare' : 'Saldato'}
@@ -195,7 +195,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           {booking.booking_details?.notes && (
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Note</h3>
-              <div className="text-sm text-theme-text-primary bg-white/5 p-3 rounded border border-white/10">
+              <div className="text-sm text-theme-text-primary bg-theme-text-primary/5 p-3 rounded border border-theme-border/50">
                 {booking.booking_details.notes}
               </div>
             </div>
@@ -212,7 +212,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             {booking.contract_url && (
               <button
                 onClick={() => window.open(booking.contract_url, '_blank')}
-                className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-primary rounded border border-white/10 font-medium transition-colors"
+                className="flex-1 px-4 py-2 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 text-theme-text-primary rounded border border-theme-border/50 font-medium transition-colors"
               >
                 Visualizza Contratto
               </button>

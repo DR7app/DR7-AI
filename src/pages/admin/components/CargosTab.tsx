@@ -550,18 +550,18 @@ export default function CargosTab() {
 
                                         <div>
                                             <label className="text-xs text-theme-text-muted">Email</label>
-                                            <div className="text-gray-200 flex items-center gap-2">
+                                            <div className="text-theme-text-secondary flex items-center gap-2">
                                                 {searchResult.customer_email || 'N/D'}
                                                 <button className="text-theme-text-muted hover:text-theme-text-primary" title="Copia" onClick={() => navigator.clipboard.writeText(searchResult.customer_email)}>📋</button>
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-xs text-theme-text-muted">Telefono</label>
-                                            <div className="text-gray-200">{searchResult.customer_phone || 'N/D'}</div>
+                                            <div className="text-theme-text-secondary">{searchResult.customer_phone || 'N/D'}</div>
                                         </div>
                                         <div>
                                             <label className="text-xs text-theme-text-muted">Documento Guida</label>
-                                            <div className="text-gray-200 font-mono bg-theme-bg-secondary/50 p-2 rounded border border-theme-border inline-block">
+                                            <div className="text-theme-text-secondary font-mono bg-theme-bg-secondary/50 p-2 rounded border border-theme-border inline-block">
                                                 {searchResult.driver_license || 'Non registrato'}
                                             </div>
                                             {!searchResult.driver_license && (

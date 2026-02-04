@@ -205,7 +205,7 @@ export default function MechanicalCalendarTab() {
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
         <p className="text-theme-text-primary">Caricamento calendario meccanica...</p>
       </div>
     )
@@ -530,7 +530,7 @@ export default function MechanicalCalendarTab() {
 
       {/* Editing Modal */}
       {editingBooking && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <MechanicalBookingForm
               initialData={editingBooking}

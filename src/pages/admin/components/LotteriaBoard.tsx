@@ -106,11 +106,11 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({ isOpen, onClose
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-96">
+      <div className="bg-theme-text-primary rounded-lg p-6 w-96">
         <h3 className="text-xl font-bold mb-4">
           Seleziona Metodo di Pagamento
         </h3>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-theme-text-muted mb-4">
           {ticketCount} bigliett{ticketCount > 1 ? 'i' : 'o'}
         </p>
 
@@ -144,8 +144,8 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({ isOpen, onClose
           </div>
         )}
         {discount === 0 && (
-          <div className="mb-4 p-3 bg-gray-100 rounded">
-            <p className="text-sm font-bold text-gray-900">
+          <div className="mb-4 p-3 bg-theme-bg-tertiary rounded">
+            <p className="text-sm font-bold text-theme-text-primary">
               Totale: €{totalPrice.toFixed(2)}
             </p>
           </div>
@@ -154,7 +154,7 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({ isOpen, onClose
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
+            className="px-4 py-2 bg-theme-bg-hover rounded-full hover:bg-theme-bg-hover"
           >
             Annulla
           </button>
@@ -389,7 +389,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-[600px] max-h-[80vh] overflow-y-auto">
+      <div className="bg-theme-text-primary rounded-lg p-6 w-[600px] max-h-[80vh] overflow-y-auto">
         <h3 className="text-xl font-bold mb-4">
           {isBulkSale
             ? `Vendita Multipla - ${tickets.length} Biglietti`
@@ -398,7 +398,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
         </h3>
 
         {isBulkSale && (
-          <div className="mb-4 p-3 bg-gray-100 rounded">
+          <div className="mb-4 p-3 bg-theme-bg-tertiary rounded">
             <p className="text-sm font-medium mb-2">Biglietti selezionati:</p>
             <div className="flex flex-wrap gap-2">
               {tickets.map(num => (
@@ -442,7 +442,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
                     >
                       <div className="font-medium">{customer.full_name}</div>
                       {customer.email && (
-                        <div className="text-sm text-gray-600">{customer.email}</div>
+                        <div className="text-sm text-theme-text-muted">{customer.email}</div>
                       )}
                       {customer.phone && (
                         <div className="text-xs text-theme-text-muted">{customer.phone}</div>
@@ -454,9 +454,9 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
             </div>
 
             <div className="flex items-center gap-2 mt-4">
-              <div className="flex-1 border-t border-gray-300"></div>
+              <div className="flex-1 border-t border-theme-border"></div>
               <span className="text-sm text-theme-text-muted">oppure</span>
-              <div className="flex-1 border-t border-gray-300"></div>
+              <div className="flex-1 border-t border-theme-border"></div>
             </div>
 
             <button
@@ -473,7 +473,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
             <button
               type="button"
               onClick={onClose}
-              className="w-full mt-2 px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
+              className="w-full mt-2 px-4 py-2 bg-theme-bg-hover rounded-full hover:bg-theme-bg-hover"
             >
               Annulla
             </button>
@@ -485,11 +485,11 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
           <div>
             <h4 className="text-lg font-semibold mb-3">Step 2: Metodo di Pagamento</h4>
 
-            <div className="mb-4 p-4 bg-gray-50 rounded border">
-              <div className="text-sm text-gray-600 mb-1">Cliente selezionato:</div>
+            <div className="mb-4 p-4 bg-theme-bg-tertiary rounded border">
+              <div className="text-sm text-theme-text-muted mb-1">Cliente selezionato:</div>
               <div className="font-medium">{fullName}</div>
-              <div className="text-sm text-gray-600">{email}</div>
-              <div className="text-sm text-gray-600">{phone}</div>
+              <div className="text-sm text-theme-text-muted">{email}</div>
+              <div className="text-sm text-theme-text-muted">{phone}</div>
               <button
                 type="button"
                 onClick={() => setShowClientSelector(true)}
@@ -529,8 +529,8 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
               </div>
             )}
             {discount === 0 && (
-              <div className="mb-4 p-3 bg-gray-100 rounded">
-                <p className="text-sm font-bold text-gray-900">
+              <div className="mb-4 p-3 bg-theme-bg-tertiary rounded">
+                <p className="text-sm font-bold text-theme-text-primary">
                   Totale: €{totalPrice.toFixed(2)}
                 </p>
               </div>
@@ -540,7 +540,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
+                className="px-4 py-2 bg-theme-bg-hover rounded-full hover:bg-theme-bg-hover"
               >
                 Annulla
               </button>
@@ -1364,19 +1364,19 @@ const LotteriaBoard: React.FC = () => {
         {canViewFinancials && !hideFinancials && (
           <div className="grid gap-4 mb-4 grid-cols-4">
             <div className="bg-blue-50 p-4 rounded-full">
-              <div className="text-sm text-gray-600">Totale Biglietti</div>
+              <div className="text-sm text-theme-text-muted">Totale Biglietti</div>
               <div className="text-2xl font-bold">{totalTickets}</div>
             </div>
             <div className="bg-red-50 p-4 rounded-full">
-              <div className="text-sm text-gray-600">Venduti</div>
+              <div className="text-sm text-theme-text-muted">Venduti</div>
               <div className="text-2xl font-bold text-red-600">{soldCount}</div>
             </div>
             <div className="bg-green-50 p-4 rounded-full">
-              <div className="text-sm text-gray-600">Disponibili</div>
+              <div className="text-sm text-theme-text-muted">Disponibili</div>
               <div className="text-2xl font-bold text-green-600">{availableCount}</div>
             </div>
             <div className="bg-yellow-50 p-4 rounded-full">
-              <div className="text-sm text-gray-600">Fatturato Totale</div>
+              <div className="text-sm text-theme-text-muted">Fatturato Totale</div>
               <div className="text-2xl font-bold text-yellow-600">
                 €{((soldCount * 2500) / 100).toFixed(2)}
               </div>
@@ -1698,10 +1698,10 @@ const LotteriaBoard: React.FC = () => {
 
       {generatingPdf && (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-full p-8 text-center">
+          <div className="bg-theme-text-primary rounded-full p-8 text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
             <h3 className="text-xl font-bold mb-2">Generazione PDF in corso...</h3>
-            <p className="text-gray-600">Invio email al cliente</p>
+            <p className="text-theme-text-muted">Invio email al cliente</p>
           </div>
         </div>
       )}
@@ -1709,7 +1709,7 @@ const LotteriaBoard: React.FC = () => {
       {/* Search Results Modal */}
       {showSearchModal && searchResults.length > 0 && (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-full p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="bg-theme-text-primary rounded-full p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">
                 Biglietti Trovati ({searchResults.length})
@@ -1720,7 +1720,7 @@ const LotteriaBoard: React.FC = () => {
                   setSearchResults([]);
                   setSearchEmail('');
                 }}
-                className="text-theme-text-muted hover:text-gray-700"
+                className="text-theme-text-muted hover:text-theme-text-secondary"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1730,7 +1730,7 @@ const LotteriaBoard: React.FC = () => {
 
             <div className="space-y-3">
               {searchResults.map((ticket) => (
-                <div key={ticket.ticket_number} className="border border-gray-300 rounded-full p-4 bg-gray-50">
+                <div key={ticket.ticket_number} className="border border-theme-border rounded-full p-4 bg-theme-bg-tertiary">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
@@ -1771,7 +1771,7 @@ const LotteriaBoard: React.FC = () => {
                   setSearchResults([]);
                   setSearchEmail('');
                 }}
-                className="px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400"
+                className="px-4 py-2 bg-theme-bg-hover rounded-full hover:bg-theme-bg-hover"
               >
                 Chiudi
               </button>
@@ -1783,9 +1783,9 @@ const LotteriaBoard: React.FC = () => {
       {/* Ticket Details Modal */}
       {showTicketDetailsModal && selectedTicketForDetails && (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-full p-6 max-w-md w-full">
+          <div className="bg-theme-text-primary rounded-full p-6 max-w-md w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">
+              <h3 className="text-xl font-bold text-theme-text-primary">
                 Biglietto #{String(selectedTicketForDetails.ticket_number).padStart(4, '0')}
               </h3>
               <button
@@ -1793,56 +1793,56 @@ const LotteriaBoard: React.FC = () => {
                   setShowTicketDetailsModal(false);
                   setSelectedTicketForDetails(null);
                 }}
-                className="text-theme-text-muted hover:text-gray-700 text-2xl"
+                className="text-theme-text-muted hover:text-theme-text-secondary text-2xl"
               >
                 ×
               </button>
             </div>
 
             <div className="space-y-3 mb-6">
-              <div className="bg-gray-50 p-3 rounded">
-                <div className="text-sm text-gray-600">Cliente</div>
-                <div className="font-semibold text-gray-900">{selectedTicketForDetails.full_name}</div>
+              <div className="bg-theme-bg-tertiary p-3 rounded">
+                <div className="text-sm text-theme-text-muted">Cliente</div>
+                <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.full_name}</div>
               </div>
-              <div className="bg-gray-50 p-3 rounded">
-                <div className="text-sm text-gray-600">Email</div>
-                <div className="font-semibold text-gray-900">{selectedTicketForDetails.email}</div>
+              <div className="bg-theme-bg-tertiary p-3 rounded">
+                <div className="text-sm text-theme-text-muted">Email</div>
+                <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.email}</div>
               </div>
               {selectedTicketForDetails.customer_phone && (
-                <div className="bg-gray-50 p-3 rounded">
-                  <div className="text-sm text-gray-600">Telefono</div>
-                  <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_phone}</div>
+                <div className="bg-theme-bg-tertiary p-3 rounded">
+                  <div className="text-sm text-theme-text-muted">Telefono</div>
+                  <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_phone}</div>
                 </div>
               )}
-              <div className="bg-gray-50 p-3 rounded">
-                <div className="text-sm text-gray-600">Data Acquisto</div>
-                <div className="font-semibold text-gray-900">
+              <div className="bg-theme-bg-tertiary p-3 rounded">
+                <div className="text-sm text-theme-text-muted">Data Acquisto</div>
+                <div className="font-semibold text-theme-text-primary">
                   {new Date(selectedTicketForDetails.purchase_date).toLocaleString('it-IT')}
                 </div>
               </div>
               {(selectedTicketForDetails as any).payment_method && (
-                <div className="bg-gray-50 p-3 rounded">
-                  <div className="text-sm text-gray-600">Metodo Pagamento</div>
-                  <div className="font-semibold text-gray-900">{(selectedTicketForDetails as any).payment_method}</div>
+                <div className="bg-theme-bg-tertiary p-3 rounded">
+                  <div className="text-sm text-theme-text-muted">Metodo Pagamento</div>
+                  <div className="font-semibold text-theme-text-primary">{(selectedTicketForDetails as any).payment_method}</div>
                 </div>
               )}
-              <div className="bg-gray-50 p-3 rounded">
-                <div className="text-sm text-gray-600">ID Pagamento</div>
-                <div className="font-mono text-xs text-gray-700">{selectedTicketForDetails.payment_intent_id}</div>
+              <div className="bg-theme-bg-tertiary p-3 rounded">
+                <div className="text-sm text-theme-text-muted">ID Pagamento</div>
+                <div className="font-mono text-xs text-theme-text-secondary">{selectedTicketForDetails.payment_intent_id}</div>
               </div>
             </div>
 
             {/* Extended Customer Data Section */}
             {selectedTicketForDetails.customer_data && (
               <div className="mb-6">
-                <h4 className="text-lg font-bold text-gray-900 mb-3 border-b pb-2">
+                <h4 className="text-lg font-bold text-theme-text-primary mb-3 border-b pb-2">
                   Dati Cliente Completi
                 </h4>
                 <div className="space-y-2">
                   {selectedTicketForDetails.customer_data.tipo_cliente && (
                     <div className="bg-blue-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Tipo Cliente</div>
-                      <div className="font-semibold text-gray-900 capitalize">
+                      <div className="text-sm text-theme-text-muted">Tipo Cliente</div>
+                      <div className="font-semibold text-theme-text-primary capitalize">
                         {selectedTicketForDetails.customer_data.tipo_cliente.replace('_', ' ')}
                       </div>
                     </div>
@@ -1850,99 +1850,99 @@ const LotteriaBoard: React.FC = () => {
 
                   {/* Personal Data */}
                   {selectedTicketForDetails.customer_data.nome && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Nome</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.nome}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Nome</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.nome}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.cognome && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Cognome</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.cognome}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Cognome</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.cognome}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.data_nascita && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Data di Nascita</div>
-                      <div className="font-semibold text-gray-900">
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Data di Nascita</div>
+                      <div className="font-semibold text-theme-text-primary">
                         {new Date(selectedTicketForDetails.customer_data.data_nascita).toLocaleDateString('it-IT')}
                       </div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.luogo_nascita && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Luogo di Nascita</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.luogo_nascita}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Luogo di Nascita</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.luogo_nascita}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.codice_fiscale && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Codice Fiscale</div>
-                      <div className="font-semibold text-gray-900 font-mono">{selectedTicketForDetails.customer_data.codice_fiscale}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Codice Fiscale</div>
+                      <div className="font-semibold text-theme-text-primary font-mono">{selectedTicketForDetails.customer_data.codice_fiscale}</div>
                     </div>
                   )}
 
                   {/* Address */}
                   {selectedTicketForDetails.customer_data.indirizzo && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Indirizzo</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.indirizzo}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Indirizzo</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.indirizzo}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.citta && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Città</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.citta}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Città</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.citta}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.cap && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">CAP</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.cap}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">CAP</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.cap}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.provincia && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Provincia</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.provincia}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Provincia</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.provincia}</div>
                     </div>
                   )}
 
                   {/* Business Data */}
                   {selectedTicketForDetails.customer_data.ragione_sociale && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Ragione Sociale</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.ragione_sociale}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Ragione Sociale</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.ragione_sociale}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.denominazione && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Denominazione</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.denominazione}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Denominazione</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.denominazione}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.partita_iva && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Partita IVA</div>
-                      <div className="font-semibold text-gray-900 font-mono">{selectedTicketForDetails.customer_data.partita_iva}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Partita IVA</div>
+                      <div className="font-semibold text-theme-text-primary font-mono">{selectedTicketForDetails.customer_data.partita_iva}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.pec && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">PEC</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.pec}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">PEC</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.pec}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.codice_sdi && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Codice SDI</div>
-                      <div className="font-semibold text-gray-900 font-mono">{selectedTicketForDetails.customer_data.codice_sdi}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Codice SDI</div>
+                      <div className="font-semibold text-theme-text-primary font-mono">{selectedTicketForDetails.customer_data.codice_sdi}</div>
                     </div>
                   )}
                   {selectedTicketForDetails.customer_data.ente_ufficio && (
-                    <div className="bg-gray-50 p-3 rounded">
-                      <div className="text-sm text-gray-600">Ente/Ufficio</div>
-                      <div className="font-semibold text-gray-900">{selectedTicketForDetails.customer_data.ente_ufficio}</div>
+                    <div className="bg-theme-bg-tertiary p-3 rounded">
+                      <div className="text-sm text-theme-text-muted">Ente/Ufficio</div>
+                      <div className="font-semibold text-theme-text-primary">{selectedTicketForDetails.customer_data.ente_ufficio}</div>
                     </div>
                   )}
                 </div>
@@ -1973,7 +1973,7 @@ const LotteriaBoard: React.FC = () => {
                   setShowTicketDetailsModal(false);
                   setSelectedTicketForDetails(null);
                 }}
-                className="flex-1 px-4 py-2 bg-gray-300 rounded-full hover:bg-gray-400 font-semibold"
+                className="flex-1 px-4 py-2 bg-theme-bg-hover rounded-full hover:bg-theme-bg-hover font-semibold"
               >
                 Chiudi
               </button>
@@ -1996,7 +1996,7 @@ const LotteriaBoard: React.FC = () => {
 
       {/* Email Template Editor Modal */}
       {showEmailEditorModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-theme-border flex justify-between items-center">
               <div>

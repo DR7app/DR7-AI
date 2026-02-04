@@ -596,17 +596,17 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg max-w-2xl w-full my-8 shadow-2xl">
+    <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-theme-text-primary rounded-lg max-w-2xl w-full my-8 shadow-2xl">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-6 border-b border-theme-border">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-2xl font-bold text-theme-text-primary">
               {editingId ? 'Modifica Cliente' : 'Nuovo Cliente'}
             </h2>
             <button
               onClick={handleClose}
-              className="text-theme-text-muted hover:text-gray-600 transition-colors text-3xl leading-none"
+              className="text-theme-text-muted hover:text-theme-text-muted transition-colors text-3xl leading-none"
             >
               ×
             </button>
@@ -617,7 +617,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         <div className="p-6 space-y-6">
           {/* Client Type Selection */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
+            <label className="block text-sm font-semibold text-theme-text-secondary mb-3">
               Tipo Cliente *
             </label>
             <div className="flex gap-4">
@@ -630,7 +630,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   onChange={(e) => setFormData({ ...formData, tipo_cliente: e.target.value as ClientType })}
                   className="mr-2 w-4 h-4 text-blue-600"
                 />
-                <span className="text-sm text-gray-700">Persona Fisica</span>
+                <span className="text-sm text-theme-text-secondary">Persona Fisica</span>
               </label>
               <label className="flex items-center cursor-pointer">
                 <input
@@ -641,7 +641,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   onChange={(e) => setFormData({ ...formData, tipo_cliente: e.target.value as ClientType })}
                   className="mr-2 w-4 h-4 text-blue-600"
                 />
-                <span className="text-sm text-gray-700">Azienda</span>
+                <span className="text-sm text-theme-text-secondary">Azienda</span>
               </label>
               <label className="flex items-center cursor-pointer">
                 <input
@@ -652,7 +652,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   onChange={(e) => setFormData({ ...formData, tipo_cliente: e.target.value as ClientType })}
                   className="mr-2 w-4 h-4 text-blue-600"
                 />
-                <span className="text-sm text-gray-700">Pubblica Amministrazione</span>
+                <span className="text-sm text-theme-text-secondary">Pubblica Amministrazione</span>
               </label>
             </div>
           </div>
@@ -662,26 +662,26 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Nome *
                   </label>
                   <input
                     type="text"
                     value={formData.nome}
                     onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {errors.nome && <p className="text-red-500 text-xs mt-1">{errors.nome}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Cognome *
                   </label>
                   <input
                     type="text"
                     value={formData.cognome}
                     onChange={(e) => setFormData({ ...formData, cognome: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {errors.cognome && <p className="text-red-500 text-xs mt-1">{errors.cognome}</p>}
                 </div>
@@ -689,7 +689,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Codice Fiscale {formData.nazione === 'Italia' ? '*' : '(opzionale)'}
                   </label>
                   <input
@@ -697,19 +697,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.codice_fiscale}
                     onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
                     maxLength={16}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                     placeholder="RSSMRA80A01H501U"
                   />
                   {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Sesso
                   </label>
                   <select
                     value={formData.sesso}
                     onChange={(e) => setFormData({ ...formData, sesso: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Seleziona</option>
                     <option value="M">Maschio</option>
@@ -720,30 +720,30 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Data di Nascita
                   </label>
                   <input
                     type="date"
                     value={formData.data_nascita}
                     onChange={(e) => setFormData({ ...formData, data_nascita: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Città di Nascita
                   </label>
                   <input
                     type="text"
                     value={formData.citta_nascita}
                     onChange={(e) => setFormData({ ...formData, citta_nascita: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Roma"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Provincia
                   </label>
                   <input
@@ -751,7 +751,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.provincia_nascita}
                     onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase() })}
                     maxLength={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                     placeholder="RM"
                   />
                 </div>
@@ -759,27 +759,27 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Indirizzo *
                   </label>
                   <input
                     type="text"
                     value={formData.indirizzo}
                     onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Via Roma"
                   />
                   {errors.indirizzo && <p className="text-red-500 text-xs mt-1">{errors.indirizzo}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Numero Civico
                   </label>
                   <input
                     type="text"
                     value={formData.numero_civico}
                     onChange={(e) => setFormData({ ...formData, numero_civico: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="123"
                   />
                 </div>
@@ -787,20 +787,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Città di Residenza *
                   </label>
                   <input
                     type="text"
                     value={formData.citta_residenza}
                     onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Milano"
                   />
                   {errors.citta_residenza && <p className="text-red-500 text-xs mt-1">{errors.citta_residenza}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     CAP *
                   </label>
                   <input
@@ -808,13 +808,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.codice_postale}
                     onChange={(e) => setFormData({ ...formData, codice_postale: e.target.value })}
                     maxLength={5}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="20100"
                   />
                   {errors.codice_postale && <p className="text-red-500 text-xs mt-1">{errors.codice_postale}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Provincia *
                   </label>
                   <input
@@ -822,7 +822,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.provincia_residenza}
                     onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
                     maxLength={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                     placeholder="MI"
                   />
                   {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
@@ -830,30 +830,30 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   PEC
                 </label>
                 <input
                   type="email"
                   value={formData.pec_persona}
                   onChange={(e) => setFormData({ ...formData, pec_persona: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               {/* Driving License Section */}
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-3">Patente di Guida</h4>
+              <div className="pt-4 border-t border-theme-border">
+                <h4 className="font-semibold text-theme-text-primary mb-3">Patente di Guida</h4>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Tipo Patente
                     </label>
                     <select
                       value={formData.tipo_patente}
                       onChange={(e) => setFormData({ ...formData, tipo_patente: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Seleziona</option>
                       <option value="AM">AM</option>
@@ -872,53 +872,53 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Numero Patente
                     </label>
                     <input
                       type="text"
                       value={formData.numero_patente}
                       onChange={(e) => setFormData({ ...formData, numero_patente: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                       placeholder="U1AB123456"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Emessa da
                   </label>
                   <input
                     type="text"
                     value={formData.emessa_da}
                     onChange={(e) => setFormData({ ...formData, emessa_da: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Motorizzazione Civile di Roma"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Data Rilascio
                     </label>
                     <input
                       type="date"
                       value={formData.data_rilascio_patente}
                       onChange={(e) => setFormData({ ...formData, data_rilascio_patente: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Scadenza
                     </label>
                     <input
                       type="date"
                       value={formData.scadenza_patente}
                       onChange={(e) => setFormData({ ...formData, scadenza_patente: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -930,21 +930,21 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           {formData.tipo_cliente === 'azienda' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Denominazione (Ragione Sociale) *
                 </label>
                 <input
                   type="text"
                   value={formData.denominazione}
                   onChange={(e) => setFormData({ ...formData, denominazione: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 {errors.denominazione && <p className="text-red-500 text-xs mt-1">{errors.denominazione}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Partita IVA *
                   </label>
                   <input
@@ -952,13 +952,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.partita_iva}
                     onChange={(e) => setFormData({ ...formData, partita_iva: e.target.value })}
                     maxLength={11}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="12345678901"
                   />
                   {errors.partita_iva && <p className="text-red-500 text-xs mt-1">{errors.partita_iva}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Codice Fiscale
                   </label>
                   <input
@@ -966,42 +966,42 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.cf_azienda}
                     onChange={(e) => setFormData({ ...formData, cf_azienda: e.target.value.toUpperCase() })}
                     maxLength={16}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                   />
                   {errors.cf_azienda && <p className="text-red-500 text-xs mt-1">{errors.cf_azienda}</p>}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Sede Legale *
                 </label>
                 <input
                   type="text"
                   value={formData.sede_legale}
                   onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Via Roma 123, 20100 Milano (MI)"
                 />
                 {errors.sede_legale && <p className="text-red-500 text-xs mt-1">{errors.sede_legale}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Sede Operativa (se diversa)
                 </label>
                 <input
                   type="text"
                   value={formData.sede_operativa}
                   onChange={(e) => setFormData({ ...formData, sede_operativa: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Via Torino 456, 20100 Milano (MI)"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Codice Destinatario / SDI
                   </label>
                   <input
@@ -1009,48 +1009,48 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.codice_destinatario}
                     onChange={(e) => setFormData({ ...formData, codice_destinatario: e.target.value.toUpperCase() })}
                     maxLength={7}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     PEC
                   </label>
                   <input
                     type="email"
                     value={formData.pec_azienda}
                     onChange={(e) => setFormData({ ...formData, pec_azienda: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
 
               {/* Legal Representative Section */}
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-3">Rappresentante Legale</h4>
+              <div className="pt-4 border-t border-theme-border">
+                <h4 className="font-semibold text-theme-text-primary mb-3">Rappresentante Legale</h4>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Nome *
                     </label>
                     <input
                       type="text"
                       value={formData.nome_rappresentante}
                       onChange={(e) => setFormData({ ...formData, nome_rappresentante: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     {errors.nome_rappresentante && <p className="text-red-500 text-xs mt-1">{errors.nome_rappresentante}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Cognome *
                     </label>
                     <input
                       type="text"
                       value={formData.cognome_rappresentante}
                       onChange={(e) => setFormData({ ...formData, cognome_rappresentante: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     {errors.cognome_rappresentante && <p className="text-red-500 text-xs mt-1">{errors.cognome_rappresentante}</p>}
                   </div>
@@ -1058,7 +1058,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Codice Fiscale *
                     </label>
                     <input
@@ -1066,20 +1066,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       value={formData.cf_rappresentante}
                       onChange={(e) => setFormData({ ...formData, cf_rappresentante: e.target.value.toUpperCase() })}
                       maxLength={16}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                       placeholder="RSSMRA80A01H501U"
                     />
                     {errors.cf_rappresentante && <p className="text-red-500 text-xs mt-1">{errors.cf_rappresentante}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Ruolo in Azienda
                     </label>
                     <input
                       type="text"
                       value={formData.ruolo_rappresentante}
                       onChange={(e) => setFormData({ ...formData, ruolo_rappresentante: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Amministratore Unico"
                     />
                   </div>
@@ -1087,13 +1087,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Tipo Documento
                     </label>
                     <select
                       value={formData.tipo_documento_rappresentante}
                       onChange={(e) => setFormData({ ...formData, tipo_documento_rappresentante: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Seleziona</option>
                       <option value="CI">Carta d'Identità</option>
@@ -1102,39 +1102,39 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Numero Documento
                     </label>
                     <input
                       type="text"
                       value={formData.numero_documento_rappresentante}
                       onChange={(e) => setFormData({ ...formData, numero_documento_rappresentante: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Data Rilascio
                     </label>
                     <input
                       type="date"
                       value={formData.data_rilascio_documento}
                       onChange={(e) => setFormData({ ...formData, data_rilascio_documento: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Luogo Rilascio
                     </label>
                     <input
                       type="text"
                       value={formData.luogo_rilascio_documento}
                       onChange={(e) => setFormData({ ...formData, luogo_rilascio_documento: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Comune di Roma"
                     />
                   </div>
@@ -1142,26 +1142,26 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Indirizzo per DDT
                 </label>
                 <input
                   type="text"
                   value={formData.indirizzo_ddt}
                   onChange={(e) => setFormData({ ...formData, indirizzo_ddt: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Contatti Cliente
                 </label>
                 <textarea
                   value={formData.contatti_cliente}
                   onChange={(e) => setFormData({ ...formData, contatti_cliente: e.target.value })}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -1171,14 +1171,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           {formData.tipo_cliente === 'pubblica_amministrazione' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Ente o Ufficio *
                 </label>
                 <input
                   type="text"
                   value={formData.ente_ufficio}
                   onChange={(e) => setFormData({ ...formData, ente_ufficio: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Es: Comune di Roma"
                 />
                 {errors.ente_ufficio && <p className="text-red-500 text-xs mt-1">{errors.ente_ufficio}</p>}
@@ -1186,7 +1186,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Codice Univoco *
                   </label>
                   <input
@@ -1194,13 +1194,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.codice_univoco}
                     onChange={(e) => setFormData({ ...formData, codice_univoco: e.target.value.toUpperCase() })}
                     maxLength={7}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                     placeholder="ABC1234"
                   />
                   {errors.codice_univoco && <p className="text-red-500 text-xs mt-1">{errors.codice_univoco}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Codice Fiscale *
                   </label>
                   <input
@@ -1208,27 +1208,27 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     value={formData.cf_pa}
                     onChange={(e) => setFormData({ ...formData, cf_pa: e.target.value.toUpperCase() })}
                     maxLength={16}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
                   />
                   {errors.cf_pa && <p className="text-red-500 text-xs mt-1">{errors.cf_pa}</p>}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Città *
                 </label>
                 <input
                   type="text"
                   value={formData.citta}
                   onChange={(e) => setFormData({ ...formData, citta: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 {errors.citta && <p className="text-red-500 text-xs mt-1">{errors.citta}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Partita IVA
                 </label>
                 <input
@@ -1236,36 +1236,36 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   value={formData.partita_iva_pa}
                   onChange={(e) => setFormData({ ...formData, partita_iva_pa: e.target.value })}
                   maxLength={11}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   PEC
                 </label>
                 <input
                   type="email"
                   value={formData.pec_pa}
                   onChange={(e) => setFormData({ ...formData, pec_pa: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
           )}
 
           {/* GLOBAL FIELDS - Always visible */}
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <h3 className="font-semibold text-gray-900">Informazioni di Contatto</h3>
+          <div className="space-y-4 pt-4 border-t border-theme-border">
+            <h3 className="font-semibold text-theme-text-primary">Informazioni di Contatto</h3>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Nazione *
               </label>
               <select
                 value={formData.nazione}
                 onChange={(e) => setFormData({ ...formData, nazione: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="Italia">Italia</option>
                 <option value="Francia">Francia</option>
@@ -1278,27 +1278,27 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Telefono *
                 </label>
                 <input
                   type="tel"
                   value={formData.telefono}
                   onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="+39 320 1234567"
                 />
                 {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Email *
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="cliente@example.com"
                 />
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
@@ -1308,11 +1308,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+        <div className="p-6 border-t border-theme-border bg-theme-bg-tertiary rounded-b-xl">
           <div className="flex justify-end gap-3">
             <button
               onClick={handleClose}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 transition-colors font-medium"
+              className="px-6 py-2 border border-theme-border text-theme-text-secondary rounded-full hover:bg-theme-bg-tertiary transition-colors font-medium"
             >
               Annulla
             </button>
@@ -1320,7 +1320,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               onClick={handleSave}
               disabled={isSaveDisabled() || isSaving}
               className={`px-6 py-2 rounded-full font-medium transition-colors ${isSaveDisabled() || isSaving
-                ? 'bg-gray-300 text-theme-text-muted cursor-not-allowed'
+                ? 'bg-theme-bg-hover text-theme-text-muted cursor-not-allowed'
                 : 'bg-blue-600 text-theme-text-primary hover:bg-blue-700'
                 }`}
             >

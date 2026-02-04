@@ -977,8 +977,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   type="button"
                   onClick={() => setNewCustomerMode(false)}
                   className={`px-4 py-2 rounded-full border ${!newCustomerMode
-                    ? 'bg-white text-black font-semibold border-white'
-                    : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
+                    ? 'bg-theme-text-primary text-theme-bg-primary font-semibold border-theme-text-primary'
+                    : 'bg-theme-bg-primary text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
                     }`}
                 >
                   Seleziona Cliente
@@ -987,8 +987,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   type="button"
                   onClick={() => setNewCustomerMode(true)}
                   className={`px-4 py-2 rounded-full border ${newCustomerMode
-                    ? 'bg-white text-black font-semibold border-white'
-                    : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
+                    ? 'bg-theme-text-primary text-theme-bg-primary font-semibold border-theme-text-primary'
+                    : 'bg-theme-bg-primary text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
                     }`}
                 >
                   Nuovo Cliente
@@ -1218,8 +1218,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   onClick={() => { setSelectedMainTab('lavaggio'); setSelectedCategory(''); setSelectedServiceId('') }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'lavaggio'
-                      ? 'bg-white text-black border-white'
-                      : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
+                      ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary'
+                      : 'bg-theme-bg-primary text-theme-text-primary border-white hover:bg-theme-text-primary hover:text-theme-bg-primary'
                   }`}
                 >
                   LAVAGGIO
@@ -1229,8 +1229,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   onClick={() => { setSelectedMainTab('meccanica'); setSelectedCategory(''); setSelectedServiceId('') }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'meccanica'
-                      ? 'bg-white text-black border-white'
-                      : 'bg-black text-theme-text-primary border-white hover:bg-white hover:text-black'
+                      ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary'
+                      : 'bg-theme-bg-primary text-theme-text-primary border-white hover:bg-theme-text-primary hover:text-theme-bg-primary'
                   }`}
                 >
                   MECCANICA
@@ -1306,7 +1306,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 key={opt.label}
                                 type="button"
                                 onClick={() => addToCart(service, opt)}
-                                className="px-4 py-2 text-sm bg-theme-bg-tertiary hover:bg-dr7-gold hover:text-black rounded-full transition-colors border border-theme-border"
+                                className="px-4 py-2 text-sm bg-theme-bg-tertiary hover:bg-dr7-gold hover:text-theme-bg-primary rounded-full transition-colors border border-theme-border"
                               >
                                 + {opt.label} — €{opt.price}
                               </button>
@@ -1504,7 +1504,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-black hover:bg-white hover:text-black text-theme-text-primary border border-white rounded-full transition-colors"
+                className="px-4 py-2 bg-theme-bg-primary hover:bg-theme-text-primary hover:text-theme-bg-primary text-theme-text-primary border border-theme-text-primary rounded-full transition-colors"
               >
                 Annulla
               </button>
@@ -1512,8 +1512,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 type="submit"
                 disabled={submitting}
                 className={`px-4 py-2 font-semibold rounded-full transition-colors ${submitting
-                  ? 'bg-gray-500 text-theme-text-secondary cursor-not-allowed'
-                  : 'bg-white hover:bg-black hover:text-theme-text-primary text-black border border-white'
+                  ? 'bg-theme-bg-hover text-theme-text-secondary cursor-not-allowed'
+                  : 'bg-white hover:bg-theme-bg-primary hover:text-theme-text-primary text-theme-bg-primary border border-theme-text-primary'
                   }`}
               >
                 {submitting ? 'Creazione in corso...' : 'Crea Prenotazione'}
@@ -1659,7 +1659,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       {/* Edit Booking Modal */}
       {
         editingBooking && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border">
               <div className="p-6 border-b border-theme-border">
                 <div className="flex justify-between items-start">

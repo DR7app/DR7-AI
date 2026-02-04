@@ -88,7 +88,7 @@ export default function AlarmNotification() {
 
     return (
         <div className={`fixed inset-0 z-[9999] flex items-center justify-center ${style.bg} animate-pulse`}>
-            <div className={`bg-white rounded-full shadow-2xl p-8 max-w-2xl w-full mx-4 border-4 ${style.border}`}>
+            <div className={`bg-theme-text-primary rounded-full shadow-2xl p-8 max-w-2xl w-full mx-4 border-4 ${style.border}`}>
                 <div className="flex flex-col items-center text-center gap-6">
                     {/* Icon */}
                     <div className={`${style.iconBg} p-6 rounded-full`}>

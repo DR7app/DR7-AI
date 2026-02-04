@@ -81,7 +81,7 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass }: Activit
             <div
                 className={`
                 inline-block px-2 py-0.5 rounded-full
-                bg-white/10
+                bg-theme-text-primary/10
                 text-xs font-semibold uppercase tracking-wide
                 mb-1.5
                 ${booking.type === 'check-out' ? 'text-yellow-400' : colorClass.replace('border-', 'text-')}
@@ -299,11 +299,11 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
             onClick={onClose}
         >
             <div
-                className="relative w-[95vw] max-w-6xl h-[90vh] bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col"
+                className="relative w-[95vw] max-w-6xl h-[90vh] bg-gradient-to-br from-theme-bg-primary/95 to-theme-bg-primary/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-theme-border/50 overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="sticky top-0 z-10 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-lg border-b border-white/10 px-6 py-4">
+                <div className="sticky top-0 z-10 bg-gradient-to-r from-theme-bg-primary/90 to-theme-bg-secondary/90 backdrop-blur-lg border-b border-theme-border/50 px-6 py-4">
                     <div className="flex justify-between items-center mb-3">
                         <h2 className="text-2xl font-light text-theme-text-primary">
                             {selectedDate.toLocaleDateString('it-IT', {
@@ -318,7 +318,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => navigateDay('prev')}
-                                    className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+                                    className="px-4 py-2 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
                                 >
                                     Prec
                                 </button>
@@ -330,7 +330,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                 </button>
                                 <button
                                     onClick={() => navigateDay('next')}
-                                    className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+                                    className="px-4 py-2 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
                                 >
                                     Succ
                                 </button>
@@ -338,7 +338,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
 
                             <button
                                 onClick={onClose}
-                                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-theme-text-primary text-xl"
+                                className="w-10 h-10 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-theme-text-primary text-xl"
                             >
                                 ✕
                             </button>

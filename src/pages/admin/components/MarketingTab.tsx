@@ -399,7 +399,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSection('customers')}
                     className={`px-4 py-2 rounded-t font-semibold transition-colors ${
                         activeSection === 'customers'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-theme-bg-primary'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -409,7 +409,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSection('consents')}
                     className={`px-4 py-2 rounded-t font-semibold transition-colors ${
                         activeSection === 'consents'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-theme-bg-primary'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -458,7 +458,7 @@ export default function MarketingTab() {
                             <button
                                 onClick={() => { setConsentFilter('all'); setConsentPage(1) }}
                                 className={`px-4 py-2 rounded font-medium transition-colors ${
-                                    consentFilter === 'all' ? 'bg-dr7-gold text-black' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
+                                    consentFilter === 'all' ? 'bg-dr7-gold text-theme-bg-primary' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
                                 }`}
                             >
                                 Tutti ({consents.length})

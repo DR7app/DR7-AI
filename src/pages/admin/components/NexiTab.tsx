@@ -65,7 +65,7 @@ export default function NexiTab() {
                 <h2 className="text-2xl font-bold text-theme-text-primary">Transazioni Nexi</h2>
                 <button
                     onClick={fetchTransactions}
-                    className="p-2 hover:bg-white/5 rounded-full transition-colors"
+                    className="p-2 hover:bg-theme-text-primary/5 rounded-full transition-colors"
                     title="Aggiorna"
                 >
                     <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,14 +86,14 @@ export default function NexiTab() {
                     <p className="text-theme-text-muted">Caricamento transazioni...</p>
                 </div>
             ) : transactions.length === 0 ? (
-                <div className="text-center py-12 bg-white/5 rounded-xl border border-white/10">
+                <div className="text-center py-12 bg-theme-text-primary/5 rounded-xl border border-theme-border/50">
                     <p className="text-theme-text-muted">Nessuna transazione trovata</p>
                 </div>
             ) : (
-                <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-black/20 text-xs uppercase text-theme-text-muted font-medium">
+                            <thead className="bg-theme-bg-primary/20 text-xs uppercase text-theme-text-muted font-medium">
                                 <tr>
                                     <th className="px-6 py-4">Data</th>
                                     <th className="px-6 py-4">Order ID</th>
@@ -105,7 +105,7 @@ export default function NexiTab() {
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {transactions.map((tx) => (
-                                    <tr key={tx.id} className="hover:bg-white/5 transition-colors">
+                                    <tr key={tx.id} className="hover:bg-theme-text-primary/5 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="text-theme-text-primary font-mono text-sm">
                                                 {formatRomeDate(new Date(tx.created_at), { dateStyle: 'short', timeStyle: 'short' })}

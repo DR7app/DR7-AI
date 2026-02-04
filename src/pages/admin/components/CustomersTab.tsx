@@ -1082,7 +1082,7 @@ export default function CustomersTab() {
     <div>
       {/* Customer Details Modal - For Fattura Generation */}
       {viewingCustomerDetails && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
               <h3 className="text-xl font-bold text-theme-text-primary">
@@ -1119,7 +1119,7 @@ export default function CustomersTab() {
                 <h4 className="text-sm font-semibold text-dr7-gold mb-3 border-b border-theme-border pb-2 flex justify-between items-center">
                   <span>Pacchetto Membership</span>
                   {(viewingCustomerDetails as any).active_membership && (
-                    <span className={`px-2 py-0.5 rounded text-xs text-black font-bold ${(viewingCustomerDetails as any).active_membership.package_name === 'Argento' ? 'bg-gray-400' :
+                    <span className={`px-2 py-0.5 rounded text-xs text-black font-bold ${(viewingCustomerDetails as any).active_membership.package_name === 'Argento' ? 'bg-theme-bg-hover' :
                       (viewingCustomerDetails as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500' :
                         (viewingCustomerDetails as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-theme-text-primary' : 'bg-blue-500 text-theme-text-primary'
                       }`}>
@@ -1479,7 +1479,7 @@ export default function CustomersTab() {
       {/* Documents Modal */}
       {
         viewingDocuments && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-theme-text-primary">
@@ -1813,7 +1813,7 @@ export default function CustomersTab() {
                   </button>
                   <button
                     onClick={() => handleBulkStatusUpdate(null)}
-                    className="px-3 py-2 rounded-full text-sm font-bold bg-theme-bg-tertiary text-theme-text-primary hover:bg-gray-500 border border-gray-500 transition-all"
+                    className="px-3 py-2 rounded-full text-sm font-bold bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border transition-all"
                     title="Rimuovi Status"
                   >
                     Rimuovi
@@ -1894,7 +1894,7 @@ export default function CustomersTab() {
               {customers.map((customer) => (
                 <tr
                   key={customer.id}
-                  className={`border-t border-theme-border hover:bg-white/5 transition-all duration-200 ${customer.status === 'blacklist'
+                  className={`border-t border-theme-border hover:bg-theme-text-primary/5 transition-all duration-200 ${customer.status === 'blacklist'
                     ? 'border-l-4 border-l-red-500 bg-red-900/30'
                     : customer.status === 'elite'
                       ? 'border-l-4 border-l-amber-500 bg-amber-500/20'
@@ -1927,7 +1927,7 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm">
                     {(customer as any).active_membership ? (
                       <div className="flex flex-col">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold inline-block w-fit mb-1 ${(customer as any).active_membership.package_name === 'Argento' ? 'bg-gray-400 text-black' :
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold inline-block w-fit mb-1 ${(customer as any).active_membership.package_name === 'Argento' ? 'bg-theme-bg-hover text-black' :
                           (customer as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500 text-black' :
                             (customer as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-theme-text-primary' :
                               'bg-blue-600 text-theme-text-primary'
@@ -1939,7 +1939,7 @@ export default function CustomersTab() {
                         </span>
                       </div>
                     ) : (
-                      <span className="text-gray-600 text-xs">Nessun pacchetto</span>
+                      <span className="text-theme-text-muted text-xs">Nessun pacchetto</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
@@ -2024,7 +2024,7 @@ export default function CustomersTab() {
                         {customer.status && (
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                            className="px-2 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-white/10 backdrop-blur-sm transition-all"
+                            className="px-2 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-theme-border/50 backdrop-blur-sm transition-all"
                             title="Rimuovi Status"
                           >
                             ✕

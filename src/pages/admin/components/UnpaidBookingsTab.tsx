@@ -375,7 +375,7 @@ export default function UnpaidBookingsTab() {
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
         <p className="text-theme-text-primary">Caricamento prenotazioni da saldare...</p>
       </div>
     )
@@ -428,7 +428,7 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('all')}
               className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'all'
-                ? 'bg-dr7-gold text-black'
+                ? 'bg-dr7-gold text-theme-bg-primary'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
@@ -437,7 +437,7 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('rental')}
               className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'rental'
-                ? 'bg-dr7-gold text-black'
+                ? 'bg-dr7-gold text-theme-bg-primary'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
@@ -446,7 +446,7 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('car_wash')}
               className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'car_wash'
-                ? 'bg-dr7-gold text-black'
+                ? 'bg-dr7-gold text-theme-bg-primary'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
@@ -455,7 +455,7 @@ export default function UnpaidBookingsTab() {
             <button
               onClick={() => setFilterService('mechanical_service')}
               className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'mechanical_service'
-                ? 'bg-dr7-gold text-black'
+                ? 'bg-dr7-gold text-theme-bg-primary'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >

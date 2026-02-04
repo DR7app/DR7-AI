@@ -107,7 +107,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                             <td className="px-4 py-3">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
-                                                    className="bg-transparent border border-white/20 text-theme-text-primary px-4 py-2 rounded-full text-xs font-medium hover:bg-white/10 transition-colors"
+                                                    className="bg-transparent border border-theme-border/70 text-theme-text-primary px-4 py-2 rounded-full text-xs font-medium hover:bg-theme-text-primary/10 transition-colors"
                                                 >
                                                     Apri Scheda
                                                 </button>
@@ -169,7 +169,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                             <td className="px-4 py-3">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
-                                                    className="bg-transparent border border-white/20 text-theme-text-primary px-4 py-2 rounded-full text-xs font-medium hover:bg-white/10 transition-colors"
+                                                    className="bg-transparent border border-theme-border/70 text-theme-text-primary px-4 py-2 rounded-full text-xs font-medium hover:bg-theme-text-primary/10 transition-colors"
                                                 >
                                                     Apri Scheda
                                                 </button>
@@ -231,7 +231,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                             <td className="px-4 py-3">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onOpenDetail(vehicle.id) }}
-                                                    className="bg-transparent border border-white/20 text-theme-text-primary px-4 py-2 rounded-full text-xs font-medium hover:bg-white/10 transition-colors"
+                                                    className="bg-transparent border border-theme-border/70 text-theme-text-primary px-4 py-2 rounded-full text-xs font-medium hover:bg-theme-text-primary/10 transition-colors"
                                                 >
                                                     Apri Scheda
                                                 </button>

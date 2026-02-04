@@ -234,7 +234,7 @@ export default function DailyCalendarTab() {
     if (loading) {
         return (
             <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
                 <p className="text-theme-text-primary">Caricamento calendario giornaliero...</p>
             </div>
         )
@@ -285,25 +285,25 @@ export default function DailyCalendarTab() {
                     <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-green-600 rounded"></div>
-                            <span className="text-gray-200">NOLEGGIO</span>
+                            <span className="text-theme-text-secondary">NOLEGGIO</span>
                         </div>
                     </div>
                     <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                            <span className="text-gray-200">LAVAGGIO</span>
+                            <span className="text-theme-text-secondary">LAVAGGIO</span>
                         </div>
                     </div>
                     <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-orange-600 rounded"></div>
-                            <span className="text-gray-200">MECCANICA</span>
+                            <span className="text-theme-text-secondary">MECCANICA</span>
                         </div>
                     </div>
                     <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
                         <div className="flex items-center justify-center gap-1.5">
                             <div className="w-3 h-3 bg-purple-600 rounded"></div>
-                            <span className="text-gray-200">VARIE</span>
+                            <span className="text-theme-text-secondary">VARIE</span>
                         </div>
                     </div>
                 </div>
@@ -322,7 +322,7 @@ export default function DailyCalendarTab() {
 
                         const renderBookings = (bookings: Booking[], bgColor: string) => {
                             if (bookings.length === 0) {
-                                return <span className="text-gray-700 text-xs">—</span>
+                                return <span className="text-theme-text-secondary text-xs">—</span>
                             }
                             return bookings.map((booking) => {
                                 const label =
@@ -336,7 +336,7 @@ export default function DailyCalendarTab() {
                                 const labelColor =
                                     booking.type === 'check-in' ? 'text-yellow-400' :
                                         booking.type === 'check-out' ? 'text-yellow-300' :
-                                            'text-gray-100'
+                                            'text-theme-text-primary'
 
                                 return (
                                     <div

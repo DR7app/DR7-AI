@@ -265,24 +265,24 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
         <p className="text-theme-text-primary">Caricamento calendario lavaggi...</p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-white/5 shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
 
       {/* 1. Control Bar */}
-      <div className="flex justify-between items-center p-4 bg-black/20 backdrop-blur-md border-b border-white/5 z-10 shadow-sm">
+      <div className="flex justify-between items-center p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">◄ Mese</button>
-            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Mese ►</button>
+            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">◄ Mese</button>
+            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Mese ►</button>
           </div>
 
         </div>
@@ -328,7 +328,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           <input
             type="text"
             placeholder="Cerca cliente o servizio..."
-            className="bg-black/20 border border-white/10 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-white/50 focus:outline-none focus:border-dr7-gold/50"
+            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -336,12 +336,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 2. Scrollable Calendar Area */}
-      <div className="flex-1 overflow-auto relative flex flex-col w-full bg-[#0a0b0d]">
+      <div className="flex-1 overflow-auto relative flex flex-col w-full bg-theme-bg-primary">
 
         {/* A. Sticky Header Row - Days */}
-        <div className="flex sticky top-0 z-[40] bg-[#0d0d0e] shadow-lg min-w-max border-b border-white/10">
+        <div className="flex sticky top-0 z-[40] bg-theme-bg-primary shadow-lg min-w-max border-b border-theme-border/50">
           {/* Header Spacer for Time Column */}
-          <div className="sticky left-0 w-[70px] z-[41] bg-[#0d0d0e] border-r border-white/10 flex items-center justify-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]" style={{ height: '50px' }}>
+          <div className="sticky left-0 w-[70px] z-[41] bg-theme-bg-primary border-r border-theme-border/50 flex items-center justify-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]" style={{ height: '50px' }}>
             Orario
           </div>
 
@@ -400,12 +400,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             return (
               <div
                 key={timeString}
-                className={`flex ${isFullHour ? 'border-t-2 border-white/20' : 'border-t border-white/[0.05]'}`}
+                className={`flex ${isFullHour ? 'border-t-2 border-theme-border/70' : 'border-t border-white/[0.05]'}`}
                 style={{ height: CELL_HEIGHT }}
               >
                 {/* Time Label Column (Sticky Left) */}
                 <div
-                  className={`sticky left-0 w-[70px] z-[30] bg-[#0d0d0e]/98 border-r border-white/10 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_rgba(0,0,0,0.4)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
+                  className={`sticky left-0 w-[70px] z-[30] bg-theme-bg-primary/98 border-r border-theme-border/50 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_var(--color-theme-shadow)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
                 >
                   <span className={`text-xs ${isFullHour ? 'text-theme-text-primary/95 text-sm' : 'text-theme-text-primary/60'}`}>
                     {timeString}
@@ -508,9 +508,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                             </div>
 
                             {/* Left accent bar */}
-                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/40" />
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-theme-text-primary/40" />
                             {/* Right accent bar */}
-                            <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/40" />
+                            <div className="absolute right-0 top-0 bottom-0 w-1 bg-theme-text-primary/40" />
 
                             {/* Tooltip on hover */}
                             <div className="hidden group-hover/booking:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs p-3 rounded-lg shadow-2xl w-max z-[100] pointer-events-none min-w-[220px]">
@@ -545,7 +545,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
           {eventsWithLanes.length === 0 && !loading && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center text-theme-text-muted bg-black/40 backdrop-blur-sm px-8 py-6 rounded-lg border border-white/10">
+              <div className="text-center text-theme-text-muted bg-theme-bg-primary/40 backdrop-blur-sm px-8 py-6 rounded-lg border border-theme-border/50">
                 <p className="text-lg">Nessun lavaggio prenotato questo mese.</p>
               </div>
             </div>
@@ -557,7 +557,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       {/* Booking Details Modal */}
       {selectedBooking && (
         <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedBooking(null)}
         >
           <div
@@ -656,7 +656,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
       {/* Edit Booking Modal */}
       {editingBooking && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border">
             <div className="p-6 border-b border-theme-border">
               <div className="flex justify-between items-start">

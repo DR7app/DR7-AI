@@ -707,7 +707,7 @@ export default function ScadenzeTab() {
                   const kmInfo = getKmRemaining(scadenza.due_km, scadenza.current_km)
 
                   return (
-                    <tr key={scadenza.id} className="border-b border-theme-border/50 hover:bg-white/5">
+                    <tr key={scadenza.id} className="border-b border-theme-border/50 hover:bg-theme-text-primary/5">
                       <td className="px-4 py-3">
                         {isKmBased ? (
                           <div>
@@ -858,7 +858,7 @@ export default function ScadenzeTab() {
 
       {/* Add Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50">
           <div className="bg-theme-bg-secondary rounded-lg p-6 w-full max-w-md border border-theme-border">
             <h3 className="text-xl font-bold text-theme-text-primary mb-4">Aggiungi Nuova Scadenza</h3>
 

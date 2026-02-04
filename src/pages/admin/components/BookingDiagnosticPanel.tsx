@@ -142,7 +142,7 @@ export default function BookingDiagnosticPanel() {
             case 'high': return 'bg-orange-900/30 border-orange-500'
             case 'medium': return 'bg-yellow-900/30 border-yellow-500'
             case 'low': return 'bg-blue-900/30 border-blue-500'
-            default: return 'bg-theme-bg-primary/30 border-gray-500'
+            default: return 'bg-theme-bg-primary/30 border-theme-border'
         }
     }
 
@@ -166,7 +166,7 @@ export default function BookingDiagnosticPanel() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl">
+            <div className="bg-gradient-to-br from-theme-bg-primary/95 to-theme-bg-primary/95 backdrop-blur-xl rounded-2xl border border-theme-border/50 p-6 shadow-2xl">
                 <div className="flex justify-between items-center">
                     <div>
                         <h2 className="text-2xl font-light text-theme-text-primary mb-2">Diagnostica Prenotazioni-Calendario</h2>
@@ -184,17 +184,17 @@ export default function BookingDiagnosticPanel() {
 
                 {/* Summary */}
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
                         <div className="text-3xl font-bold text-theme-text-primary">{issues.length}</div>
                         <div className="text-theme-text-muted text-sm">Problemi Totali</div>
                     </div>
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
                         <div className="text-3xl font-bold text-red-400">
                             {issues.filter(i => getIssueSeverity(i.issue_type) === 'critical' || getIssueSeverity(i.issue_type) === 'high').length}
                         </div>
                         <div className="text-theme-text-muted text-sm">Critici/Alti</div>
                     </div>
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
                         <div className="text-3xl font-bold text-yellow-400">
                             {issues.filter(i => getIssueSeverity(i.issue_type) === 'medium' || getIssueSeverity(i.issue_type) === 'low').length}
                         </div>
@@ -214,7 +214,7 @@ export default function BookingDiagnosticPanel() {
                 </div>
             ) : (
                 Object.entries(groupedIssues).map(([type, typeIssues]) => (
-                    <div key={type} className="bg-theme-bg-primary/50 rounded-lg border border-white/10 overflow-hidden">
+                    <div key={type} className="bg-theme-bg-primary/50 rounded-lg border border-theme-border/50 overflow-hidden">
                         <div className={`p-4 border-l-4 ${getSeverityColor(getIssueSeverity(type))}`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
@@ -238,7 +238,7 @@ export default function BookingDiagnosticPanel() {
 
                         <div className="divide-y divide-white/10">
                             {typeIssues.map((issue) => (
-                                <div key={issue.booking_id} className="p-4 hover:bg-white/5 transition-colors">
+                                <div key={issue.booking_id} className="p-4 hover:bg-theme-text-primary/5 transition-colors">
                                     <div className="flex justify-between items-start">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-2">

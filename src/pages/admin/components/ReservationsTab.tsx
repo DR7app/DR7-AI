@@ -3397,14 +3397,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(false)}
-                    className={`px-4 py-2 rounded-full ${!newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                    className={`px-4 py-2 rounded-full ${!newCustomerMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                   >
                     Seleziona Cliente
                   </button>
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(true)}
-                    className={`px-4 py-2 rounded-full ${newCustomerMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                    className={`px-4 py-2 rounded-full ${newCustomerMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                   >
                     Nuovo Cliente
                   </button>
@@ -3655,14 +3655,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(false)}
-                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                     >
                       Seleziona Cliente
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(true)}
-                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-white text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                     >
                       Nuovo Guidatore
                     </button>
@@ -3941,8 +3941,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <div
                       key={kmLimit}
                       className={`p-2 rounded-md border cursor-pointer transition-all flex flex-col items-center justify-center text-center ${parseInt(formData.km_limit) === kmLimit && !formData.unlimited_km
-                        ? 'border-white bg-white/5'
-                        : 'border-theme-border hover:border-gray-500'
+                        ? 'border-theme-text-primary bg-theme-text-primary/5'
+                        : 'border-theme-border hover:border-theme-border'
                         } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
                       onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: kmLimit.toString() }))}
                     >
@@ -4032,7 +4032,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             return (
               <div
                 key={`booking-card-${booking.id}`}
-                className="rounded-full p-4 cursor-pointer hover:bg-white/5 transition-colors border border-theme-border/30"
+                className="rounded-full p-4 cursor-pointer hover:bg-theme-text-primary/5 transition-colors border border-theme-border/30"
                 onClick={() => setSelectedBooking(booking)}
               >
                 <div className="flex justify-between items-start mb-3">
@@ -4299,8 +4299,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
-          <div className="fixed inset-0 bg-black backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-            <div className="w-full sm:max-w-2xl bg-[#1a1a1a] sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-theme-border/30">
+          <div className="fixed inset-0 bg-theme-bg-primary backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+            <div className="w-full sm:max-w-2xl bg-theme-bg-secondary sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-theme-border/30">
               {/* Modal Header */}
               <div className="flex-shrink-0  p-4 border-b border-theme-border flex justify-between items-center">
                 <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
@@ -4514,10 +4514,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
+            <div className="bg-theme-text-primary rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-xl font-bold mb-4 text-red-600">Elimina Definitivamente</h3>
-              <p className="text-gray-700 mb-6">
+              <p className="text-theme-text-secondary mb-6">
                 <strong className="text-red-600">ATTENZIONE:</strong> Vuoi eliminare definitivamente questa prenotazione dal database?
                 <br /><br />
                 <strong>Questa azione NON può essere annullata!</strong>
@@ -4549,8 +4549,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         {/* ===== EXTEND BOOKING MODAL ===== */}
         {showExtendModal && extendingBooking && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowExtendModal(false)}>
-            <div className="bg-[#1a1a1a] rounded-lg p-6 max-w-md w-full shadow-xl border border-theme-border/50" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowExtendModal(false)}>
+            <div className="bg-theme-bg-secondary rounded-lg p-6 max-w-md w-full shadow-xl border border-theme-border/50" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-xl font-bold mb-4 text-purple-400">Estendi Prenotazione</h3>
 
               {/* Current Booking Info */}

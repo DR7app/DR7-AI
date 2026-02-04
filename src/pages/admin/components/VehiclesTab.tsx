@@ -791,7 +791,7 @@ export default function VehiclesTab() {
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-theme-bg-tertiary text-gray-200'
+                              'bg-theme-bg-tertiary text-theme-text-secondary'
                         }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
                           vehicle.status === 'unavailable' ? 'Non Disponibile' :
@@ -889,7 +889,7 @@ export default function VehiclesTab() {
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-theme-bg-tertiary text-gray-200'
+                              'bg-theme-bg-tertiary text-theme-text-secondary'
                         }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
                           vehicle.status === 'unavailable' ? 'Non Disponibile' :
@@ -987,7 +987,7 @@ export default function VehiclesTab() {
                         vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
                           vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
                             vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-theme-bg-tertiary text-gray-200'
+                              'bg-theme-bg-tertiary text-theme-text-secondary'
                         }`}>
                         {vehicle.status === 'available' ? 'Disponibile' :
                           vehicle.status === 'unavailable' ? 'Non Disponibile' :

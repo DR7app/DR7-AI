@@ -693,7 +693,7 @@ export default function BirthdaysTab() {
                                                 disabled={bulkSending}
                                             />
                                         ) : (
-                                            <span className="text-gray-600">-</span>
+                                            <span className="text-theme-text-muted">-</span>
                                         )}
                                     </td>
                                     <td className="p-4 font-medium text-theme-text-primary">{customer.full_name}</td>

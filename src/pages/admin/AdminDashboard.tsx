@@ -76,7 +76,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Gradient Background - same as login page */}
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-800 -z-10" />
+      <div className="fixed inset-0 bg-gradient-to-br from-theme-bg-primary via-theme-bg-primary to-theme-bg-secondary -z-10" />
 
       {/* Subtle overlay pattern */}
       <div className="fixed inset-0 opacity-5 -z-10" style={{
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
         backgroundSize: '40px 40px'
       }} />
 
-      <header className="bg-black backdrop-blur-md border-b border-theme-border/50">
+      <header className="bg-theme-bg-primary backdrop-blur-md border-b border-theme-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-24">
             <div className="flex items-center gap-2 sm:gap-4">
@@ -156,7 +156,7 @@ export default function AdminDashboard() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
+        <div className="lg:hidden fixed inset-0 z-50 bg-theme-overlay backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
           <div className="bg-theme-bg-primary/95 backdrop-blur-xl w-64 h-full shadow-2xl overflow-y-auto border-r border-theme-border/50" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-theme-border/50 flex justify-between items-center">
               <h2 className="text-theme-text-primary font-semibold">Menu</h2>
@@ -293,7 +293,7 @@ export default function AdminDashboard() {
               >
                 <span>Compleanni</span>
                 {birthdayCount > 0 && (
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'birthdays' ? 'bg-black text-dr7-gold' : 'bg-dr7-gold text-black'}`}>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'birthdays' ? 'bg-theme-bg-primary text-dr7-gold' : 'bg-dr7-gold text-black'}`}>
                     {birthdayCount}
                   </span>
                 )}

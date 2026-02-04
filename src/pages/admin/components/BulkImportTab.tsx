@@ -628,7 +628,7 @@ export default function BulkImportTab() {
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          className="border-2 border-dashed border-theme-border rounded-xl p-12 text-center hover:border-white/50 transition-colors bg-theme-bg-secondary/30"
+          className="border-2 border-dashed border-theme-border rounded-xl p-12 text-center hover:border-theme-border transition-colors bg-theme-bg-secondary/30"
         >
           <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -642,7 +642,7 @@ export default function BulkImportTab() {
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-5 py-2 bg-white text-black rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors"
+              className="px-5 py-2 bg-theme-text-primary text-theme-bg-primary rounded-lg font-semibold text-sm hover:bg-theme-bg-hover transition-colors"
             >
               Seleziona File
             </button>
@@ -703,7 +703,7 @@ export default function BulkImportTab() {
               </button>
               <button
                 onClick={processFiles}
-                className="px-6 py-2 bg-white text-black rounded-lg font-bold text-sm hover:bg-gray-200 transition-colors"
+                className="px-6 py-2 bg-theme-text-primary text-theme-bg-primary rounded-lg font-bold text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 Avvia Estrazione AI
               </button>
@@ -753,7 +753,7 @@ export default function BulkImportTab() {
           </div>
           <div className="w-full bg-theme-bg-tertiary rounded-full h-2">
             <div
-              className="bg-white h-2 rounded-full transition-all duration-300"
+              className="bg-theme-text-primary h-2 rounded-full transition-all duration-300"
               style={{ width: `${(processedCount / files.length) * 100}%` }}
             />
           </div>
@@ -853,7 +853,7 @@ export default function BulkImportTab() {
                                 s.docType === 'carta_identita' ? 'bg-blue-500/20 text-blue-400' :
                                 s.docType === 'patente' ? 'bg-purple-500/20 text-purple-400' :
                                 s.docType === 'codice_fiscale' || s.docType === 'tessera_sanitaria' ? 'bg-green-500/20 text-green-400' :
-                                'bg-gray-500/20 text-theme-text-muted'
+                                'bg-theme-bg-hover/20 text-theme-text-muted'
                               }`}>
                                 {s.docType === 'carta_identita' ? 'CI' :
                                  s.docType === 'patente' ? 'Patente' :

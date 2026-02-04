@@ -117,7 +117,7 @@ export default function TicketsTab() {
       case 'redeemed': return 'bg-blue-900 text-blue-200'
       case 'expired': return 'bg-theme-bg-tertiary text-theme-text-secondary'
       case 'cancelled': return 'bg-red-900 text-red-200'
-      default: return 'bg-theme-bg-tertiary text-gray-200'
+      default: return 'bg-theme-bg-tertiary text-theme-text-secondary'
     }
   }
 
@@ -145,7 +145,7 @@ export default function TicketsTab() {
         <button
           onClick={() => setViewMode('commercial')}
           className={`px-4 py-2 rounded-full font-medium transition-colors ${viewMode === 'commercial'
-            ? 'bg-white text-black'
+            ? 'bg-theme-text-primary text-theme-bg-primary'
             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
             }`}
         >
@@ -154,7 +154,7 @@ export default function TicketsTab() {
         <button
           onClick={() => setViewMode('gift_cards')}
           className={`px-4 py-2 rounded-full font-medium transition-colors ${viewMode === 'gift_cards'
-            ? 'bg-white text-black'
+            ? 'bg-theme-text-primary text-theme-bg-primary'
             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
             }`}
         >

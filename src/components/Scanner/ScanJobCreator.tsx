@@ -48,7 +48,7 @@ export default function ScanJobCreator() {
                 </div>
             ) : (
                 <div className="flex flex-col items-center animate-fade-in">
-                    <div id="print-area" className="bg-white p-8 rounded-full mb-6 text-center max-w-sm w-full mx-auto">
+                    <div id="print-area" className="bg-theme-text-primary p-8 rounded-full mb-6 text-center max-w-sm w-full mx-auto">
                         <h1 className="text-2xl text-black font-bold mb-4">SCAN COVER SHEET</h1>
                         <p className="text-black mb-4 font-mono">{new Date().toLocaleString()}</p>
                         <div className="flex justify-center mb-4">
@@ -65,7 +65,7 @@ export default function ScanJobCreator() {
                     <div className="flex gap-4 print:hidden">
                         <button
                             onClick={handlePrint}
-                            className="px-6 py-2 bg-white text-black font-bold rounded-full hover:bg-gray-200"
+                            className="px-6 py-2 bg-theme-text-primary text-theme-bg-primary font-bold rounded-full hover:bg-theme-text-secondary"
                         >
                             Stampa Cover Sheet
                         </button>

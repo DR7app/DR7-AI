@@ -11,7 +11,7 @@ export default function RentalTabs() {
                 <button
                     onClick={() => setActiveSubTab('bookings')}
                     className={`px-4 py-2 font-medium transition-colors ${activeSubTab === 'bookings'
-                        ? 'text-theme-text-primary border-b-2 border-white'
+                        ? 'text-theme-text-primary border-b-2 border-theme-text-primary'
                         : 'text-theme-text-muted hover:text-theme-text-primary'
                         }`}
                 >
@@ -20,7 +20,7 @@ export default function RentalTabs() {
                 <button
                     onClick={() => setActiveSubTab('calendar')}
                     className={`px-4 py-2 font-medium transition-colors ${activeSubTab === 'calendar'
-                        ? 'text-theme-text-primary border-b-2 border-white'
+                        ? 'text-theme-text-primary border-b-2 border-theme-text-primary'
                         : 'text-theme-text-muted hover:text-theme-text-primary'
                         }`}
                 >

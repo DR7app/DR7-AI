@@ -384,16 +384,16 @@ export default function ScannerTab() {
 
                             {slot.preview ? (
                                 // Document uploaded
-                                <div className="relative aspect-[3/2] rounded-xl overflow-hidden border-2 border-green-500 bg-black">
+                                <div className="relative aspect-[3/2] rounded-xl overflow-hidden border-2 border-green-500 bg-theme-bg-primary">
                                     <img
                                         src={slot.preview}
                                         alt={slot.label}
                                         className="w-full h-full object-cover"
                                     />
                                     {slot.extracting && (
-                                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                                        <div className="absolute inset-0 bg-theme-overlay flex items-center justify-center">
                                             <div className="text-center">
-                                                <div className="animate-spin w-6 h-6 border-2 border-white border-t-transparent rounded-full mx-auto mb-2"></div>
+                                                <div className="animate-spin w-6 h-6 border-2 border-theme-text-primary border-t-transparent rounded-full mx-auto mb-2"></div>
                                                 <p className="text-theme-text-primary text-xs">Estrazione...</p>
                                             </div>
                                         </div>
@@ -409,7 +409,7 @@ export default function ScannerTab() {
                                     >
                                         ×
                                     </button>
-                                    <div className="absolute bottom-0 inset-x-0 bg-black/70 p-2">
+                                    <div className="absolute bottom-0 inset-x-0 bg-theme-overlay p-2">
                                         <p className="text-theme-text-primary text-xs text-center truncate">{slot.label}</p>
                                     </div>
                                 </div>
