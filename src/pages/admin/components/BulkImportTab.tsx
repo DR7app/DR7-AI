@@ -29,9 +29,15 @@ interface ExtractedData {
   notes?: string
 }
 
+interface TrackedFile {
+  file: File
+  folder: string | null  // parent folder name, null if flat file
+}
+
 interface ExtractedFile {
   fileIndex: number
   fileName: string
+  folder: string | null
   status: 'pending' | 'processing' | 'done' | 'error'
   error?: string
   data?: ExtractedData
@@ -49,7 +55,7 @@ interface MergedCustomer {
 const FUNCTIONS_BASE = import.meta.env.DEV ? 'http://localhost:8888' : ''
 
 export default function BulkImportTab() {
-  const [files, setFiles] = useState<File[]>([])
+  const [trackedFiles, setTrackedFiles] = useState<TrackedFile[]>([])
   const [extractedFiles, setExtractedFiles] = useState<ExtractedFile[]>([])
   const [mergedCustomers, setMergedCustomers] = useState<MergedCustomer[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -61,40 +67,63 @@ export default function BulkImportTab() {
   const folderInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef(false)
 
+  // Convenience: raw File array for base64/upload operations
+  const files = trackedFiles.map(t => t.file)
+
   const isValidFile = (file: File) =>
     file.type.startsWith('image/') || file.type === 'application/pdf'
 
+  // Extract parent folder name from webkitRelativePath (e.g. "ClienteA/fronte_ci.jpg" → "ClienteA")
+  const getFolderFromPath = (path: string): string | null => {
+    if (!path) return null
+    const parts = path.split('/')
+    // If path has at least 2 parts, the first meaningful folder is parts[0] for shallow
+    // or the second-to-last for deep nesting. We want the immediate parent folder.
+    if (parts.length >= 2) {
+      // For "RootFolder/ClienteA/file.jpg" → "ClienteA" (immediate parent)
+      // For "ClienteA/file.jpg" → "ClienteA"
+      return parts[parts.length - 2] || null
+    }
+    return null
+  }
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files).filter(isValidFile)
-      setFiles(prev => [...prev, ...newFiles])
+      const newTracked: TrackedFile[] = Array.from(e.target.files)
+        .filter(isValidFile)
+        .map(file => ({
+          file,
+          folder: getFolderFromPath((file as any).webkitRelativePath || '')
+        }))
+      setTrackedFiles(prev => [...prev, ...newTracked])
     }
   }
 
-  // Recursively read all files from a dropped directory entry
-  const readEntryFiles = (entry: FileSystemEntry): Promise<File[]> => {
+  // Recursively read all files from a dropped directory entry, tracking folder path
+  const readEntryFiles = (entry: FileSystemEntry, parentFolder: string | null): Promise<TrackedFile[]> => {
     return new Promise((resolve) => {
       if (entry.isFile) {
         (entry as FileSystemFileEntry).file(
-          (file) => resolve(isValidFile(file) ? [file] : []),
+          (file) => resolve(isValidFile(file) ? [{ file, folder: parentFolder }] : []),
           () => resolve([])
         )
       } else if (entry.isDirectory) {
         const reader = (entry as FileSystemDirectoryEntry).createReader()
-        const allFiles: File[] = []
+        const allTracked: TrackedFile[] = []
 
         const readBatch = () => {
           reader.readEntries(async (entries) => {
             if (entries.length === 0) {
-              resolve(allFiles)
+              resolve(allTracked)
               return
             }
             for (const child of entries) {
-              const childFiles = await readEntryFiles(child)
-              allFiles.push(...childFiles)
+              // Files directly inside this directory get this directory as their folder
+              const childTracked = await readEntryFiles(child, entry.name)
+              allTracked.push(...childTracked)
             }
             readBatch()
-          }, () => resolve(allFiles))
+          }, () => resolve(allTracked))
         }
         readBatch()
       } else {
@@ -108,12 +137,14 @@ export default function BulkImportTab() {
 
     const items = e.dataTransfer.items
     if (!items) {
-      const droppedFiles = Array.from(e.dataTransfer.files).filter(isValidFile)
-      setFiles(prev => [...prev, ...droppedFiles])
+      const droppedTracked = Array.from(e.dataTransfer.files)
+        .filter(isValidFile)
+        .map(file => ({ file, folder: null as string | null }))
+      setTrackedFiles(prev => [...prev, ...droppedTracked])
       return
     }
 
-    const collectedFiles: File[] = []
+    const collectedTracked: TrackedFile[] = []
     const entries: FileSystemEntry[] = []
     for (let i = 0; i < items.length; i++) {
       const entry = items[i].webkitGetAsEntry?.()
@@ -122,15 +153,20 @@ export default function BulkImportTab() {
 
     if (entries.length > 0) {
       for (const entry of entries) {
-        const entryFiles = await readEntryFiles(entry)
-        collectedFiles.push(...entryFiles)
+        // Top-level entry: if it's a directory, its children get that dir name as folder
+        // If it's a file at root, folder = null
+        const entryTracked = await readEntryFiles(entry, entry.isDirectory ? null : null)
+        collectedTracked.push(...entryTracked)
       }
     } else {
-      collectedFiles.push(...Array.from(e.dataTransfer.files).filter(isValidFile))
+      const fallback = Array.from(e.dataTransfer.files)
+        .filter(isValidFile)
+        .map(file => ({ file, folder: null as string | null }))
+      collectedTracked.push(...fallback)
     }
 
-    if (collectedFiles.length > 0) {
-      setFiles(prev => [...prev, ...collectedFiles])
+    if (collectedTracked.length > 0) {
+      setTrackedFiles(prev => [...prev, ...collectedTracked])
     }
   }, [])
 
@@ -139,7 +175,7 @@ export default function BulkImportTab() {
   }, [])
 
   const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index))
+    setTrackedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -165,26 +201,37 @@ export default function BulkImportTab() {
   const mergeExtractedFiles = (extracted: ExtractedFile[]): MergedCustomer[] => {
     const successful = extracted.filter(e => e.status === 'done' && e.data)
 
-    // Group by codice_fiscale first (strongest match), then by nome+cognome
+    // PRIMARY: Group by folder (all files in the same folder = same customer)
+    // FALLBACK: For files without a folder, group by codice_fiscale or nome+cognome
     const groups = new Map<string, ExtractedFile[]>()
 
     for (const entry of successful) {
+      // If file has a folder, that's the strongest grouping signal
+      if (entry.folder) {
+        const folderKey = `__folder_${entry.folder.trim().toLowerCase()}`
+        if (groups.has(folderKey)) {
+          groups.get(folderKey)!.push(entry)
+        } else {
+          groups.set(folderKey, [entry])
+        }
+        continue
+      }
+
+      // No folder - fall back to codice_fiscale / nome+cognome matching
       const cf = entry.data?.codice_fiscale?.trim().toUpperCase()
       const nameKey = normalizeKey(entry.data?.nome, entry.data?.cognome)
 
-      // Skip entries with no name at all
       if (nameKey === '|' && !cf) {
-        // Create standalone entry
         const soloKey = `__solo_${entry.fileIndex}`
         groups.set(soloKey, [entry])
         continue
       }
 
-      // Find existing group by CF or name
       let matchedKey: string | null = null
 
       if (cf) {
         for (const [key, members] of groups) {
+          if (key.startsWith('__folder_')) continue // Don't cross-match with folder groups
           const memberCf = members[0].data?.codice_fiscale?.trim().toUpperCase()
           if (memberCf && memberCf === cf) {
             matchedKey = key
@@ -195,6 +242,7 @@ export default function BulkImportTab() {
 
       if (!matchedKey && nameKey !== '|') {
         for (const [key, members] of groups) {
+          if (key.startsWith('__folder_')) continue
           const memberNameKey = normalizeKey(members[0].data?.nome, members[0].data?.cognome)
           if (memberNameKey !== '|' && memberNameKey === nameKey) {
             matchedKey = key
@@ -265,9 +313,10 @@ export default function BulkImportTab() {
     setMergedCustomers([])
     abortRef.current = false
 
-    const initialExtracted: ExtractedFile[] = files.map((file, index) => ({
+    const initialExtracted: ExtractedFile[] = trackedFiles.map((tf, index) => ({
       fileIndex: index,
-      fileName: file.name,
+      fileName: tf.file.name,
+      folder: tf.folder,
       status: 'pending'
     }))
     setExtractedFiles(initialExtracted)
@@ -575,10 +624,18 @@ export default function BulkImportTab() {
       )}
 
       {/* File List (before processing) */}
-      {files.length > 0 && mergedCustomers.length === 0 && extractedFiles.length === 0 && (
+      {trackedFiles.length > 0 && mergedCustomers.length === 0 && extractedFiles.length === 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-theme-text-primary font-semibold">{files.length} documenti selezionati</p>
+            <div>
+              <p className="text-theme-text-primary font-semibold">{trackedFiles.length} documenti selezionati</p>
+              {(() => {
+                const folders = new Set(trackedFiles.map(t => t.folder).filter(Boolean))
+                return folders.size > 0 ? (
+                  <p className="text-xs text-theme-text-muted mt-0.5">da {folders.size} cartelle</p>
+                ) : null
+              })()}
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -602,7 +659,7 @@ export default function BulkImportTab() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {files.map((file, i) => (
+            {trackedFiles.map((tf, i) => (
               <div key={i} className="relative bg-gray-800/50 rounded-lg border border-theme-border p-3 group">
                 <button
                   onClick={() => removeFile(i)}
@@ -614,7 +671,10 @@ export default function BulkImportTab() {
                   <svg className="w-8 h-8 mx-auto text-gray-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <p className="text-xs text-theme-text-muted truncate">{file.name}</p>
+                  {tf.folder && (
+                    <p className="text-[10px] text-dr7-gold truncate">{tf.folder}/</p>
+                  )}
+                  <p className="text-xs text-theme-text-muted truncate">{tf.file.name}</p>
                 </div>
               </div>
             ))}
@@ -668,7 +728,7 @@ export default function BulkImportTab() {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { setFiles([]); setExtractedFiles([]); setMergedCustomers([]); setProcessedCount(0); setSavedCount(0) }}
+                onClick={() => { setTrackedFiles([]); setExtractedFiles([]); setMergedCustomers([]); setProcessedCount(0); setSavedCount(0) }}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 transition-colors"
               >
                 Ricomincia
