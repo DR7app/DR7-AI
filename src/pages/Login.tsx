@@ -36,8 +36,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Gradient Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-theme-bg-primary via-theme-bg-primary to-theme-bg-secondary" />
+      {/* Gradient Background - always black */}
+      <div className="absolute inset-0 bg-black" />
 
       {/* Subtle overlay pattern */}
       <div className="absolute inset-0 opacity-5" style={{
