@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import { SARDEGNA_PROVINCE, getComuniByProvincia } from '../data/sardegnaProvince'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -732,28 +733,43 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Città di Nascita
+                    Provincia di Nascita
                   </label>
-                  <input
-                    type="text"
-                    value={formData.citta_nascita}
-                    onChange={(e) => setFormData({ ...formData, citta_nascita: e.target.value })}
+                  <select
+                    value={formData.provincia_nascita}
+                    onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value, citta_nascita: '' })}
                     className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Roma"
-                  />
+                  >
+                    <option value="">Seleziona provincia</option>
+                    {SARDEGNA_PROVINCE.map(prov => (
+                      <option key={prov.code} value={prov.code}>{prov.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Provincia
+                    Luogo di Nascita
                   </label>
-                  <input
-                    type="text"
-                    value={formData.provincia_nascita}
-                    onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase() })}
-                    maxLength={2}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                    placeholder="RM"
-                  />
+                  {getComuniByProvincia(formData.provincia_nascita).length > 0 ? (
+                    <select
+                      value={formData.citta_nascita}
+                      onChange={(e) => setFormData({ ...formData, citta_nascita: e.target.value })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleziona comune</option>
+                      {getComuniByProvincia(formData.provincia_nascita).map(comune => (
+                        <option key={comune} value={comune}>{comune}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData.citta_nascita}
+                      onChange={(e) => setFormData({ ...formData, citta_nascita: e.target.value })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Roma"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -788,15 +804,44 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Provincia di Residenza *
+                  </label>
+                  <select
+                    value={formData.provincia_residenza}
+                    onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value, citta_residenza: '' })}
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Seleziona provincia</option>
+                    {SARDEGNA_PROVINCE.map(prov => (
+                      <option key={prov.code} value={prov.code}>{prov.name}</option>
+                    ))}
+                  </select>
+                  {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Città di Residenza *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.citta_residenza}
-                    onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Milano"
-                  />
+                  {getComuniByProvincia(formData.provincia_residenza).length > 0 ? (
+                    <select
+                      value={formData.citta_residenza}
+                      onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleziona comune</option>
+                      {getComuniByProvincia(formData.provincia_residenza).map(comune => (
+                        <option key={comune} value={comune}>{comune}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData.citta_residenza}
+                      onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Milano"
+                    />
+                  )}
                   {errors.citta_residenza && <p className="text-red-500 text-xs mt-1">{errors.citta_residenza}</p>}
                 </div>
                 <div>
@@ -812,20 +857,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     placeholder="20100"
                   />
                   {errors.codice_postale && <p className="text-red-500 text-xs mt-1">{errors.codice_postale}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Provincia *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.provincia_residenza}
-                    onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
-                    maxLength={2}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                    placeholder="MI"
-                  />
-                  {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
                 </div>
               </div>
 

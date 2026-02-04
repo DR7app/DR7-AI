@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { SARDEGNA_PROVINCE, getComuniByProvincia } from '../../../data/sardegnaProvince'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -864,23 +865,39 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo Nascita</label>
-                      <input
-                        type="text"
-                        value={formData.luogo_nascita}
-                        onChange={(e) => setFormData({ ...formData, luogo_nascita: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
+                      {formData.provincia_nascita && getComuniByProvincia(formData.provincia_nascita).length > 0 ? (
+                        <select
+                          value={formData.luogo_nascita}
+                          onChange={(e) => setFormData({ ...formData, luogo_nascita: e.target.value })}
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                        >
+                          <option value="">Seleziona comune...</option>
+                          {getComuniByProvincia(formData.provincia_nascita).map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={formData.luogo_nascita}
+                          onChange={(e) => setFormData({ ...formData, luogo_nascita: e.target.value })}
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                          placeholder="Inserisci comune"
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia</label>
-                      <input
-                        type="text"
+                      <select
                         value={formData.provincia_nascita}
-                        onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase() })}
-                        maxLength={2}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
-                        placeholder="RM"
-                      />
+                        onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value, luogo_nascita: '' })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                      >
+                        <option value="">Seleziona...</option>
+                        {SARDEGNA_PROVINCE.map(p => (
+                          <option key={p.code} value={p.code}>{p.code} - {p.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -910,13 +927,40 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>
-                      <input
-                        type="text"
-                        value={formData.citta_residenza}
-                        onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia *</label>
+                      <select
+                        value={formData.provincia_residenza}
+                        onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value, citta_residenza: '' })}
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
+                      >
+                        <option value="">Seleziona...</option>
+                        {SARDEGNA_PROVINCE.map(p => (
+                          <option key={p.code} value={p.code}>{p.code} - {p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>
+                      {formData.provincia_residenza && getComuniByProvincia(formData.provincia_residenza).length > 0 ? (
+                        <select
+                          value={formData.citta_residenza}
+                          onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                        >
+                          <option value="">Seleziona comune...</option>
+                          {getComuniByProvincia(formData.provincia_residenza).map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={formData.citta_residenza}
+                          onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                          placeholder="Inserisci città"
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">CAP</label>
@@ -925,16 +969,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         value={formData.codice_postale}
                         onChange={(e) => setFormData({ ...formData, codice_postale: e.target.value })}
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia *</label>
-                      <input
-                        type="text"
-                        value={formData.provincia_residenza}
-                        onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
-                        maxLength={2}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
                       />
                     </div>
                   </div>
