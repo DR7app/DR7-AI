@@ -57,7 +57,7 @@ export default function Login() {
 
       <div className="w-full max-w-xl relative z-10">
         {/* Main Card */}
-        <div className="bg-black rounded-2xl shadow-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-gray-800/50 relative">
+        <div className="bg-theme-bg-primary rounded-2xl shadow-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border relative">
 
           <div className="relative">
             <div className="flex justify-center mb-4">

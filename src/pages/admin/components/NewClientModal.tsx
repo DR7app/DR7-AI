@@ -336,57 +336,17 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
 
-    // 1. Common validations
-    if (!formData.email) {
-      newErrors.email = 'Email obbligatoria'
-    } else if (!validateEmail(formData.email)) {
+    // Only validate format when a value is provided — no fields are mandatory
+    if (formData.email && !validateEmail(formData.email)) {
       newErrors.email = 'Formato email non valido'
     }
 
-    if (!formData.telefono) {
-      newErrors.telefono = 'Telefono obbligatorio'
+    if (formData.codice_fiscale && !validateCodiceFiscale(formData.codice_fiscale)) {
+      newErrors.codice_fiscale = 'Formato Codice Fiscale non valido'
     }
 
-    if (!formData.nazione) {
-      newErrors.nazione = 'Nazione obbligatoria'
-    }
-
-    // 2. Type-specific validations
-    if (formData.tipo_cliente === 'persona_fisica') {
-      if (!formData.nome) newErrors.nome = 'Nome obbligatorio'
-      if (!formData.cognome) newErrors.cognome = 'Cognome obbligatorio'
-
-      // CF mandatory for Italy
-      if (formData.nazione === 'Italia') {
-        if (!formData.codice_fiscale) {
-          newErrors.codice_fiscale = 'Codice Fiscale obbligatorio per Italia'
-        } else if (!validateCodiceFiscale(formData.codice_fiscale)) {
-          newErrors.codice_fiscale = 'Formato Codice Fiscale non valido'
-        }
-      }
-
-      if (!formData.indirizzo) newErrors.indirizzo = 'Indirizzo obbligatorio'
-      if (!formData.citta_residenza) newErrors.citta_residenza = 'Città obbligatoria'
-      // provincia_residenza is optional (auto-detected from city)
-
-    } else if (formData.tipo_cliente === 'azienda') {
-      if (!formData.denominazione) newErrors.denominazione = 'Ragione Sociale obbligatoria'
-      if (!formData.partita_iva) {
-        newErrors.partita_iva = 'P.IVA obbligatoria'
-      } else if (!validatePartitaIVA(formData.partita_iva)) {
-        newErrors.partita_iva = 'P.IVA non valida (11 cifre)'
-      }
-      if (!formData.sede_legale) newErrors.sede_legale = 'Sede legale obbligatoria'
-
-      // Rappresentante
-      if (!formData.rappresentante_nome) newErrors.rappresentante_nome = 'Nome rappresentante obbligatorio'
-      if (!formData.rappresentante_cognome) newErrors.rappresentante_cognome = 'Cognome rappresentante obbligatorio'
-      if (!formData.rappresentante_cf) newErrors.rappresentante_cf = 'CF rappresentante obbligatorio'
-
-    } else if (formData.tipo_cliente === 'pubblica_amministrazione') {
-      if (!formData.ente_ufficio) newErrors.ente_ufficio = 'Ente/Ufficio obbligatorio'
-      if (!formData.codice_univoco) newErrors.codice_univoco = 'Codice Univoco obbligatorio'
-      if (!formData.cf_pa) newErrors.cf_pa = 'CF o P.IVA obbligatorio'
+    if (formData.partita_iva && !validatePartitaIVA(formData.partita_iva)) {
+      newErrors.partita_iva = 'P.IVA non valida (11 cifre)'
     }
 
     setErrors(newErrors)
@@ -807,7 +767,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   {/* Nome & Cognome First */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome</label>
                       <input
                         type="text"
                         value={formData.nome}
@@ -818,7 +778,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       {errors.nome && <p className="text-red-500 text-xs mt-1">{errors.nome}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome</label>
                       <input
                         type="text"
                         value={formData.cognome}
@@ -832,7 +792,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale {formData.nazione === 'Italia' ? '*' : ''}</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
                       <input
                         type="text"
                         value={formData.codice_fiscale}
@@ -899,7 +859,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Residenza</h3>
                   <div className="flex gap-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Indirizzo *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Indirizzo</label>
                       <input
                         type="text"
                         value={formData.indirizzo}
@@ -920,7 +880,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Città</label>
                       <input
                         type="text"
                         value={formData.citta_residenza}
@@ -962,7 +922,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email</label>
                       <input
                         type="email"
                         value={formData.email}
@@ -972,7 +932,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono</label>
                       <input
                         type="text"
                         value={formData.telefono}
@@ -1056,7 +1016,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 <div>
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati Aziendali</h3>
                   <div>
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ragione Sociale *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ragione Sociale</label>
                     <input
                       type="text"
                       value={formData.denominazione}
@@ -1068,7 +1028,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Partita IVA *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Partita IVA</label>
                       <input
                         type="text"
                         value={formData.partita_iva}
@@ -1090,7 +1050,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
 
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Sede Legale *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Sede Legale</label>
                     <input
                       type="text"
                       value={formData.sede_legale}
@@ -1105,7 +1065,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti Azienda</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email</label>
                       <input
                         type="email"
                         value={formData.email}
@@ -1114,7 +1074,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono</label>
                       <input
                         type="text"
                         value={formData.telefono}
@@ -1129,7 +1089,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Rappresentante Legale</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome</label>
                       <input
                         type="text"
                         value={formData.rappresentante_nome}
@@ -1138,7 +1098,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome</label>
                       <input
                         type="text"
                         value={formData.rappresentante_cognome}
@@ -1148,7 +1108,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale Rappresentante *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale Rappresentante</label>
                     <input
                       type="text"
                       value={formData.rappresentante_cf}
@@ -1223,7 +1183,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 <div>
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati PA</h3>
                   <div>
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ente / Ufficio *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ente / Ufficio</label>
                     <input
                       type="text"
                       value={formData.ente_ufficio}
@@ -1234,7 +1194,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Univoco *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Univoco</label>
                       <input
                         type="text"
                         value={formData.codice_univoco}
@@ -1245,7 +1205,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       {errors.codice_univoco && <p className="text-red-500 text-xs mt-1">{errors.codice_univoco}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CF / P.IVA Ente *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CF / P.IVA Ente</label>
                       <input
                         type="text"
                         value={formData.cf_pa}
@@ -1256,7 +1216,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>
+                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Città</label>
                     <input
                       type="text"
                       value={formData.citta}
@@ -1271,7 +1231,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti PA</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email / PEC *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email / PEC</label>
                       <input
                         type="email"
                         value={formData.email}
@@ -1280,7 +1240,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono</label>
                       <input
                         type="text"
                         value={formData.telefono}
