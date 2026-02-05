@@ -35,15 +35,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Gradient Background - always black */}
-      <div className="absolute inset-0 bg-black" />
-
-      {/* Subtle overlay pattern */}
-      <div className="absolute inset-0 opacity-5" style={{
-        backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)',
-        backgroundSize: '40px 40px'
-      }} />
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden bg-theme-bg-primary">
 
       {/* Theme toggle - top right */}
       <button
@@ -65,7 +57,7 @@ export default function Login() {
 
       <div className="w-full max-w-xl relative z-10">
         {/* Main Card */}
-        <div className="bg-black backdrop-blur-xl rounded-2xl shadow-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-gray-800/50 relative">
+        <div className="bg-theme-bg-secondary rounded-2xl shadow-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border/50 relative">
 
           <div className="relative">
             <div className="flex justify-center mb-4">
@@ -83,7 +75,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-theme-bg-primary/50 border border-theme-border/50 rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="admin@dr7empire.com"
                 />
               </div>
@@ -98,13 +90,13 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-theme-bg-primary/50 border border-theme-border/50 rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                   placeholder="••••••••"
                 />
               </div>
 
               {error && (
-                <div className="bg-red-900/30 backdrop-blur-sm border border-red-700/50 text-red-200 px-4 py-3 rounded-full text-sm">
+                <div className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-3 rounded-full text-sm">
                   {error}
                 </div>
               )}
