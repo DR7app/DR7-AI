@@ -380,7 +380,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         telefono: formData.telefono,
         nazione: formData.nazione,
         source: 'admin',
-        residence_status: residenceStatus // 'residente' if CA/SU, 'non_residente' otherwise
+        residence_status: residenceStatus
       }
 
       // Only set created_at for new customers

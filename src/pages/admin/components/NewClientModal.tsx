@@ -409,7 +409,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         note: formData.note,
         source: 'admin',
         created_at: new Date().toISOString(),
-        residence_status: residenceStatus // 'residente' if CA/SU, 'non_residente' otherwise
+        residence_status: residenceStatus
       }
 
       // Populate data based on type
