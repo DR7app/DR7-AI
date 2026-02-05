@@ -920,18 +920,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia *</label>
-                      <input
-                        type="text"
-                        value={formData.provincia_residenza}
-                        onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
-                        maxLength={2}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
-                        placeholder="es. CA, TO, MI..."
-                      />
-                      {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
-                    </div>
-                    <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>
                       <input
                         type="text"
@@ -944,6 +932,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                         placeholder="es. Cagliari, Torino..."
                       />
+                      {errors.citta_residenza && <p className="text-red-500 text-xs mt-1">{errors.citta_residenza}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia *</label>
+                      <input
+                        type="text"
+                        value={formData.provincia_residenza}
+                        onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
+                        maxLength={2}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
+                        placeholder="es. CA, TO, MI..."
+                      />
+                      {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">CAP</label>

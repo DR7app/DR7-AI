@@ -797,20 +797,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Provincia di Residenza *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.provincia_residenza}
-                    onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
-                    maxLength={2}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                    placeholder="es. CA, TO, MI..."
-                  />
-                  {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Città di Residenza *
                   </label>
                   <input
@@ -825,6 +811,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     placeholder="es. Cagliari, Torino..."
                   />
                   {errors.citta_residenza && <p className="text-red-500 text-xs mt-1">{errors.citta_residenza}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Provincia di Residenza *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.provincia_residenza}
+                    onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
+                    maxLength={2}
+                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                    placeholder="es. CA, TO, MI..."
+                  />
+                  {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
