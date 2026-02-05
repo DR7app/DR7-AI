@@ -367,7 +367,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       if (!formData.indirizzo) newErrors.indirizzo = 'Indirizzo obbligatorio'
       if (!formData.citta_residenza) newErrors.citta_residenza = 'Città obbligatoria'
-      if (!formData.provincia_residenza) newErrors.provincia_residenza = 'Provincia obbligatoria'
+      if (!formData.provincia_residenza || formData.provincia_residenza === 'ALTRO') newErrors.provincia_residenza = 'Provincia obbligatoria'
 
     } else if (formData.tipo_cliente === 'azienda') {
       if (!formData.denominazione) newErrors.denominazione = 'Ragione Sociale obbligatoria'
@@ -892,16 +892,35 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia</label>
-                      <select
-                        value={formData.provincia_nascita}
-                        onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value, luogo_nascita: '' })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      >
-                        <option value="">Seleziona...</option>
-                        {SARDEGNA_PROVINCE.map(p => (
-                          <option key={p.code} value={p.code}>{p.code} - {p.name}</option>
-                        ))}
-                      </select>
+                      {formData.provincia_nascita === 'ALTRO' || (formData.provincia_nascita && !SARDEGNA_PROVINCE.find(p => p.code === formData.provincia_nascita) && formData.provincia_nascita !== '') ? (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={formData.provincia_nascita === 'ALTRO' ? '' : formData.provincia_nascita}
+                            onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase(), luogo_nascita: '' })}
+                            className="flex-1 bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
+                            placeholder="es. TO, MI, RM..."
+                            maxLength={2}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, provincia_nascita: '', luogo_nascita: '' })}
+                            className="px-3 py-1 text-xs bg-theme-bg-hover text-theme-text-muted rounded hover:text-theme-text-primary"
+                          >Sardegna</button>
+                        </div>
+                      ) : (
+                        <select
+                          value={formData.provincia_nascita}
+                          onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value, luogo_nascita: '' })}
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                        >
+                          <option value="">Seleziona...</option>
+                          {SARDEGNA_PROVINCE.map(p => (
+                            <option key={p.code} value={p.code}>{p.code} - {p.name}</option>
+                          ))}
+                          <option value="ALTRO">Altro (Fuori Sardegna)</option>
+                        </select>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -932,16 +951,36 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia *</label>
-                      <select
-                        value={formData.provincia_residenza}
-                        onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value, citta_residenza: '' })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      >
-                        <option value="">Seleziona...</option>
-                        {SARDEGNA_PROVINCE.map(p => (
-                          <option key={p.code} value={p.code}>{p.code} - {p.name}</option>
-                        ))}
-                      </select>
+                      {formData.provincia_residenza === 'ALTRO' || (formData.provincia_residenza && !SARDEGNA_PROVINCE.find(p => p.code === formData.provincia_residenza) && formData.provincia_residenza !== '') ? (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={formData.provincia_residenza === 'ALTRO' ? '' : formData.provincia_residenza}
+                            onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase(), citta_residenza: '' })}
+                            className="flex-1 bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
+                            placeholder="es. TO, MI, RM..."
+                            maxLength={2}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, provincia_residenza: '', citta_residenza: '' })}
+                            className="px-3 py-1 text-xs bg-theme-bg-hover text-theme-text-muted rounded hover:text-theme-text-primary"
+                          >Sardegna</button>
+                        </div>
+                      ) : (
+                        <select
+                          value={formData.provincia_residenza}
+                          onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value, citta_residenza: '' })}
+                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                        >
+                          <option value="">Seleziona...</option>
+                          {SARDEGNA_PROVINCE.map(p => (
+                            <option key={p.code} value={p.code}>{p.code} - {p.name}</option>
+                          ))}
+                          <option value="ALTRO">Altro (Fuori Sardegna)</option>
+                        </select>
+                      )}
+                      {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Città *</label>

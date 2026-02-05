@@ -739,16 +739,35 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Provincia di Nascita
                   </label>
-                  <select
-                    value={formData.provincia_nascita}
-                    onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value, citta_nascita: '' })}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Seleziona provincia</option>
-                    {SARDEGNA_PROVINCE.map(prov => (
-                      <option key={prov.code} value={prov.code}>{prov.name}</option>
-                    ))}
-                  </select>
+                  {formData.provincia_nascita === 'ALTRO' || (formData.provincia_nascita && !SARDEGNA_PROVINCE.find(p => p.code === formData.provincia_nascita)) ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={formData.provincia_nascita === 'ALTRO' ? '' : formData.provincia_nascita}
+                        onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase(), citta_nascita: '' })}
+                        className="flex-1 px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                        placeholder="es. TO, MI, RM..."
+                        maxLength={2}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, provincia_nascita: '', citta_nascita: '' })}
+                        className="px-2 py-1 text-xs bg-theme-bg-hover text-theme-text-muted rounded hover:text-theme-text-primary"
+                      >Sardegna</button>
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.provincia_nascita}
+                      onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value, citta_nascita: '' })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleziona provincia</option>
+                      {SARDEGNA_PROVINCE.map(prov => (
+                        <option key={prov.code} value={prov.code}>{prov.name}</option>
+                      ))}
+                      <option value="ALTRO">Altro (Fuori Sardegna)</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
@@ -810,16 +829,35 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Provincia di Residenza *
                   </label>
-                  <select
-                    value={formData.provincia_residenza}
-                    onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value, citta_residenza: '' })}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Seleziona provincia</option>
-                    {SARDEGNA_PROVINCE.map(prov => (
-                      <option key={prov.code} value={prov.code}>{prov.name}</option>
-                    ))}
-                  </select>
+                  {formData.provincia_residenza === 'ALTRO' || (formData.provincia_residenza && !SARDEGNA_PROVINCE.find(p => p.code === formData.provincia_residenza)) ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={formData.provincia_residenza === 'ALTRO' ? '' : formData.provincia_residenza}
+                        onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase(), citta_residenza: '' })}
+                        className="flex-1 px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                        placeholder="es. TO, MI, RM..."
+                        maxLength={2}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, provincia_residenza: '', citta_residenza: '' })}
+                        className="px-2 py-1 text-xs bg-theme-bg-hover text-theme-text-muted rounded hover:text-theme-text-primary"
+                      >Sardegna</button>
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.provincia_residenza}
+                      onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value, citta_residenza: '' })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleziona provincia</option>
+                      {SARDEGNA_PROVINCE.map(prov => (
+                        <option key={prov.code} value={prov.code}>{prov.name}</option>
+                      ))}
+                      <option value="ALTRO">Altro (Fuori Sardegna)</option>
+                    </select>
+                  )}
                   {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
                 </div>
                 <div>
