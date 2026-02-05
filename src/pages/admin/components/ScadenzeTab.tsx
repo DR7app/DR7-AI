@@ -126,6 +126,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function ScadenzeTab() {
   const [scadenze, setScadenze] = useState<Scadenza[]>([])
   const [loading, setLoading] = useState(true)
+  const [scadenzaSearch, setScadenzaSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [newScadenza, setNewScadenza] = useState<NewScadenzaForm>({
     category: 'affitti',
@@ -655,7 +656,14 @@ export default function ScadenzeTab() {
 
   function renderCategoryTable(categoryKey: string) {
     const category = CATEGORIES[categoryKey as keyof typeof CATEGORIES]
-    const categoryScadenze = getScadenzeByCategory(categoryKey)
+    const categoryScadenze = getScadenzeByCategory(categoryKey).filter(s => {
+      if (!scadenzaSearch.trim()) return true
+      const q = scadenzaSearch.trim().toLowerCase().replace(/\s/g, '')
+      const ref = (s.reference_name || '').toLowerCase().replace(/\s/g, '')
+      const desc = (s.description || '').toLowerCase().replace(/\s/g, '')
+      const itemType = (s.item_type || '').toLowerCase().replace(/\s/g, '')
+      return ref.includes(q) || desc.includes(q) || itemType.includes(q)
+    })
 
     const colorClasses: Record<string, string> = {
       blue: 'bg-blue-900/30 border-blue-700/50',
@@ -851,6 +859,17 @@ export default function ScadenzeTab() {
         >
           Aggiungi nuova scadenza
         </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-4">
+        <input
+          type="text"
+          value={scadenzaSearch}
+          onChange={(e) => setScadenzaSearch(e.target.value)}
+          placeholder="Cerca per targa, veicolo o descrizione..."
+          className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:border-dr7-gold focus:outline-none"
+        />
       </div>
 
       {/* Category Tables */}

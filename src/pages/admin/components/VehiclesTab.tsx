@@ -28,6 +28,8 @@ export default function VehiclesTab() {
   const [isAdjusting, setIsAdjusting] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<string>('all')
 
+  const [plateSearch, setPlateSearch] = useState('')
+
   // Multi-select state
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [selectedVehicles, setSelectedVehicles] = useState<Set<string>>(new Set())
@@ -474,9 +476,17 @@ export default function VehiclesTab() {
   }
 
   // Separate vehicles by category
-  const exoticVehicles = vehicles.filter(v => v.category === 'exotic')
-  const urbanVehicles = vehicles.filter(v => v.category === 'urban')
-  const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali')
+  const searchFilter = (v: Vehicle) => {
+    if (!plateSearch.trim()) return true
+    const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
+    const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
+    const name = v.display_name.toLowerCase()
+    return plate.includes(q) || name.includes(q)
+  }
+
+  const exoticVehicles = vehicles.filter(v => v.category === 'exotic').filter(searchFilter)
+  const urbanVehicles = vehicles.filter(v => v.category === 'urban').filter(searchFilter)
+  const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali').filter(searchFilter)
 
   const exoticCount = exoticVehicles.length
   const urbanCount = urbanVehicles.length
@@ -510,6 +520,16 @@ export default function VehiclesTab() {
             + Nuovo Veicolo
           </Button>
         </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-4">
+        <Input
+          label="Cerca per targa o nome veicolo"
+          placeholder="Cerca per targa o nome veicolo..."
+          value={plateSearch}
+          onChange={(e) => setPlateSearch(e.target.value)}
+        />
       </div>
 
       {multiSelectMode && selectedVehicles.size > 0 && (

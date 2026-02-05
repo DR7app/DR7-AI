@@ -3306,8 +3306,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Search Bar */}
         <div className="mb-4">
           <Input
-            label="Cerca per nome"
-            placeholder="Cerca prenotazione per nome cliente..."
+            label="Cerca per targa, veicolo o cliente"
+            placeholder="Cerca per targa, nome veicolo o nome cliente..."
             value={bookingSearchQuery}
             onChange={(e) => setBookingSearchQuery(e.target.value)}
           />
@@ -4011,9 +4011,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {bookings.filter(booking => {
             // Search filter
             if (!bookingSearchQuery) return true
-            const query = bookingSearchQuery.toLowerCase()
+            const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-            return customerName.includes(query)
+            const vehicleName = (booking.vehicle_name || '').toLowerCase()
+            const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
+            return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
           }).length === 0 && (
               <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
                 {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
@@ -4024,9 +4026,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {bookings.filter(booking => {
             // Search filter
             if (!bookingSearchQuery) return true
-            const query = bookingSearchQuery.toLowerCase()
+            const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-            return customerName.includes(query)
+            const vehicleName = (booking.vehicle_name || '').toLowerCase()
+            const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
+            return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
           }).map((booking) => {
             const isCarWash = booking.service_type === 'car_wash'
             return (
@@ -4167,9 +4171,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {bookings.filter(booking => {
                   // Search filter
                   if (!bookingSearchQuery) return true
-                  const query = bookingSearchQuery.toLowerCase()
+                  const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-                  return customerName.includes(query)
+                  const vehicleName = (booking.vehicle_name || '').toLowerCase()
+                  const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
+                  return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
@@ -4282,9 +4288,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {bookings.filter(booking => {
                   // Search filter
                   if (!bookingSearchQuery) return true
-                  const query = bookingSearchQuery.toLowerCase()
+                  const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-                  return customerName.includes(query)
+                  const vehicleName = (booking.vehicle_name || '').toLowerCase()
+                  const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
+                  return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
                 }).length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">

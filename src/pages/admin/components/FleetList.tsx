@@ -10,6 +10,7 @@ interface FleetListProps {
 export default function FleetList({ onOpenDetail }: FleetListProps) {
     const [vehicles, setVehicles] = useState<Vehicle[]>([])
     const [loading, setLoading] = useState(true)
+    const [plateSearch, setPlateSearch] = useState('')
 
     useEffect(() => {
         loadVehicles()
@@ -34,10 +35,18 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
         }
     }
 
-    // Separate vehicles by category
-    const exoticVehicles = vehicles.filter(v => v.category === 'exotic')
-    const urbanVehicles = vehicles.filter(v => v.category === 'urban')
-    const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali')
+    // Separate vehicles by category with search filter
+    const searchFilter = (v: Vehicle) => {
+        if (!plateSearch.trim()) return true
+        const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
+        const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
+        const name = v.display_name.toLowerCase()
+        return plate.includes(q) || name.includes(q)
+    }
+
+    const exoticVehicles = vehicles.filter(v => v.category === 'exotic').filter(searchFilter)
+    const urbanVehicles = vehicles.filter(v => v.category === 'urban').filter(searchFilter)
+    const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali').filter(searchFilter)
 
     const exoticCount = exoticVehicles.length
     const urbanCount = urbanVehicles.length
@@ -54,6 +63,17 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         Exotic: {exoticCount} | Urban: {urbanCount} | Aziendali: {aziendaliCount} | Totale: {vehicles.length}
                     </p>
                 </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-4">
+                <input
+                    type="text"
+                    value={plateSearch}
+                    onChange={(e) => setPlateSearch(e.target.value)}
+                    placeholder="Cerca per targa o nome veicolo..."
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:border-dr7-gold focus:outline-none"
+                />
             </div>
 
             {/* Three Column Layout: Exotic, Urban, and Aziendali */}
