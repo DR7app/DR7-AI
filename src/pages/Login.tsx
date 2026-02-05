@@ -61,7 +61,7 @@ export default function Login() {
 
           <div className="relative">
             <div className="flex justify-center mb-4">
-              <img src="/rentora.jpeg" alt="DR7 Empire" className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain drop-shadow-2xl" />
+              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain drop-shadow-2xl" />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
