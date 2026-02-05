@@ -367,7 +367,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       if (!formData.indirizzo) newErrors.indirizzo = 'Indirizzo obbligatorio'
       if (!formData.citta_residenza) newErrors.citta_residenza = 'Città obbligatoria'
-      if (!formData.provincia_residenza) newErrors.provincia_residenza = 'Provincia obbligatoria'
+      // provincia_residenza is optional (auto-detected from city)
 
     } else if (formData.tipo_cliente === 'azienda') {
       if (!formData.denominazione) newErrors.denominazione = 'Ragione Sociale obbligatoria'
@@ -935,7 +935,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       {errors.citta_residenza && <p className="text-red-500 text-xs mt-1">{errors.citta_residenza}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia *</label>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia</label>
                       <input
                         type="text"
                         value={formData.provincia_residenza}

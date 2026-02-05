@@ -316,7 +316,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       if (!formData.indirizzo) newErrors.indirizzo = 'Indirizzo obbligatorio'
       if (!formData.citta_residenza) newErrors.citta_residenza = 'Città obbligatoria'
       if (!formData.codice_postale) newErrors.codice_postale = 'CAP obbligatorio'
-      if (!formData.provincia_residenza) newErrors.provincia_residenza = 'Provincia obbligatoria'
+      // provincia_residenza is optional (auto-detected from city)
     }
 
     if (formData.tipo_cliente === 'azienda') {
@@ -814,7 +814,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Provincia di Residenza *
+                    Provincia di Residenza
                   </label>
                   <input
                     type="text"
