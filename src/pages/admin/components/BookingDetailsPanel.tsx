@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 
@@ -8,6 +9,9 @@ interface BookingDetailsPanelProps {
 }
 
 export default function BookingDetailsPanel({ booking, onClose, onEdit }: BookingDetailsPanelProps) {
+  const [generatingLink, setGeneratingLink] = useState(false)
+  const [paymentLink, setPaymentLink] = useState<string | null>(booking.payment_link || null)
+  const [linkCopied, setLinkCopied] = useState(false)
   // MONETARY UNIT CONTRACT: All price fields are stored in CENTS (integer)
   // Example: price_total = 60000 means €600.00
 
@@ -122,36 +126,72 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Pagamento</h3>
               {remainingEur > 0 && (
-                <button
-                  onClick={async () => {
-                    try {
-                      // Call backend to get payment link
-                      const res = await fetch('/.netlify/functions/nexi-create-payment', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                          bookingId: booking.id,
-                          amount: remainingEur,
-                          email: booking.customer_email,
-                          description: `Saldo Prenotazione ${booking.vehicle_name}`
-                        })
-                      });
-                      const data = await res.json();
-                      if (data.paymentUrl) {
-                        window.open(data.paymentUrl, '_blank');
-                      } else {
-                        alert('Errore generazione link: ' + (data.error || 'Unknown error'));
-                      }
-                    } catch (e) {
-                      alert('Errore di connessione');
-                    }
-                  }}
-                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
-                  Paga con Nexi
-                </button>
+                <div className="flex gap-2">
+                  {!paymentLink ? (
+                    <button
+                      onClick={async () => {
+                        setGeneratingLink(true)
+                        try {
+                          const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              bookingId: booking.id,
+                              amount: remainingEur,
+                              customerEmail: booking.customer_email,
+                              customerName: booking.customer_name,
+                              description: `Pagamento ${booking.vehicle_name} - ${booking.customer_name}`,
+                              expirationDays: 7
+                            })
+                          });
+                          const data = await res.json();
+                          if (data.paymentUrl) {
+                            setPaymentLink(data.paymentUrl)
+                            alert('Link di pagamento generato! Clicca "Copia Link" per inviarlo al cliente.')
+                          } else {
+                            alert('Errore: ' + (data.error || 'Errore sconosciuto'));
+                          }
+                        } catch (e) {
+                          alert('Errore di connessione');
+                        } finally {
+                          setGeneratingLink(false)
+                        }
+                      }}
+                      disabled={generatingLink}
+                      className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      {generatingLink ? 'Generando...' : 'Genera Link Pagamento'}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(paymentLink)
+                          setLinkCopied(true)
+                          setTimeout(() => setLinkCopied(false), 2000)
+                        }}
+                        className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        {linkCopied ? 'Copiato!' : 'Copia Link'}
+                      </button>
+                      <button
+                        onClick={() => window.open(paymentLink, '_blank')}
+                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        Apri Link
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
