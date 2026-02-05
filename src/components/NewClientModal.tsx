@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { getResidenceStatus } from '../data/sardegnaProvince'
+import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -755,7 +755,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <input
                     type="text"
                     value={formData.citta_nascita}
-                    onChange={(e) => setFormData({ ...formData, citta_nascita: e.target.value })}
+                    onChange={(e) => {
+                      const city = e.target.value
+                      const prov = getProvinciaByCity(city)
+                      setFormData({ ...formData, citta_nascita: city, ...(prov ? { provincia_nascita: prov } : {}) })
+                    }}
                     className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="es. Cagliari, Torino..."
                   />
@@ -812,7 +816,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <input
                     type="text"
                     value={formData.citta_residenza}
-                    onChange={(e) => setFormData({ ...formData, citta_residenza: e.target.value })}
+                    onChange={(e) => {
+                      const city = e.target.value
+                      const prov = getProvinciaByCity(city)
+                      setFormData({ ...formData, citta_residenza: city, ...(prov ? { provincia_residenza: prov } : {}) })
+                    }}
                     className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="es. Cagliari, Torino..."
                   />

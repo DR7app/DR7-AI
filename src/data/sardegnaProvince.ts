@@ -107,6 +107,18 @@ export function isResidentByCity(cityName: string): boolean {
   return false
 }
 
+// Reverse lookup: given a city name, return its province code (or null if not found)
+export function getProvinciaByCity(cityName?: string): string | null {
+  if (!cityName) return null
+  const normalized = cityName.trim().toLowerCase()
+  for (const prov of SARDEGNA_PROVINCE) {
+    if (prov.comuni.some(c => c.toLowerCase() === normalized)) {
+      return prov.code
+    }
+  }
+  return null
+}
+
 // Get residence status based on province code or city
 export function getResidenceStatus(provinciaCode?: string, cityName?: string): 'residente' | 'non_residente' {
   if (provinciaCode && isResidentByProvincia(provinciaCode)) {
