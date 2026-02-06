@@ -223,6 +223,51 @@ export default function ReportsTab() {
     </tr>
   )
 
+  // Mobile card view for a vehicle
+  function renderVehicleCard(v: VehicleReport) {
+    return (
+      <div key={v.vehicleId} className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
+        {/* Header with name and plate */}
+        <div className="flex justify-between items-start mb-3">
+          <div>
+            <p className="font-semibold text-theme-text-primary text-sm">{v.label}</p>
+            <p className="text-xs text-theme-text-muted">{v.plate}</p>
+          </div>
+          <span className={`text-lg font-bold ${getUtilizationColor(v.utilizationRate)}`}>
+            {formatPercent(v.utilizationRate)}
+          </span>
+        </div>
+        {/* Progress bar */}
+        <div className="w-full h-2 bg-theme-bg-tertiary rounded-full mb-3">
+          <div
+            className={`h-full rounded-full ${v.utilizationRate >= 0.7 ? 'bg-green-400' : v.utilizationRate >= 0.4 ? 'bg-yellow-400' : 'bg-red-400'}`}
+            style={{ width: `${Math.round(v.utilizationRate * 100)}%` }}
+          />
+        </div>
+        {/* Stats grid */}
+        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+          <div>
+            <p className="text-green-400 font-bold">{v.rentedDays}g</p>
+            <p className="text-theme-text-muted">Noleggio</p>
+          </div>
+          <div>
+            <p className="text-orange-400 font-bold">{v.maintenanceDays}g</p>
+            <p className="text-theme-text-muted">Manut.</p>
+          </div>
+          <div>
+            <p className="text-theme-text-primary font-bold">{v.bookingsCount}</p>
+            <p className="text-theme-text-muted">Pren.</p>
+          </div>
+          <div>
+            <p className="text-dr7-gold font-bold">{formatCurrency(v.rentalRevenue)}</p>
+            <p className="text-theme-text-muted">Ricavo</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Desktop table row for a vehicle
   function renderVehicleRow(v: VehicleReport) {
     return (
       <tr key={v.vehicleId} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
@@ -381,23 +426,27 @@ export default function ReportsTab() {
                     </span>
                     <span className="text-sm text-theme-text-muted">{summary.count} veicoli</span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs">
+                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-4 text-xs">
                     <span className="text-theme-text-muted">
-                      Utilizzo medio: <span className={`font-bold ${getUtilizationColor(summary.avgUtil)}`}>{formatPercent(summary.avgUtil)}</span>
+                      Utilizzo: <span className={`font-bold ${getUtilizationColor(summary.avgUtil)}`}>{formatPercent(summary.avgUtil)}</span>
                     </span>
                     <span className="text-theme-text-muted">
                       Ricavo: <span className="font-bold text-dr7-gold">{formatCurrency(summary.totalRevenue)}</span>
                     </span>
                   </div>
                 </div>
-                {/* Table */}
-                <div className="overflow-x-auto">
+                {/* Desktop Table - hidden on mobile */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>{tableHeader}</thead>
                     <tbody>
                       {group.vehicles.map(v => renderVehicleRow(v))}
                     </tbody>
                   </table>
+                </div>
+                {/* Mobile Cards - hidden on desktop */}
+                <div className="md:hidden p-3 space-y-3">
+                  {group.vehicles.map(v => renderVehicleCard(v))}
                 </div>
               </div>
             )
@@ -430,7 +479,8 @@ export default function ReportsTab() {
               <div className="px-4 py-3 border-b border-theme-border">
                 <h3 className="text-sm font-semibold text-theme-text-primary">Dettaglio per Tipo di Servizio</h3>
               </div>
-              <div className="overflow-x-auto">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
@@ -462,6 +512,43 @@ export default function ReportsTab() {
                   </tfoot>
                 </table>
               </div>
+              {/* Mobile Cards */}
+              <div className="md:hidden p-3 space-y-3">
+                {washData.byType.map(item => (
+                  <div key={item.type} className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
+                    <div className="flex justify-between items-start mb-2">
+                      <p className="font-semibold text-theme-text-primary text-sm">{item.type}</p>
+                      <span className="text-xs bg-theme-bg-tertiary px-2 py-1 rounded-full text-theme-text-muted">
+                        {washData.washRevenue > 0 ? Math.round((item.revenue / washData.washRevenue) * 100) : 0}%
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-center">
+                      <div>
+                        <p className="text-lg font-bold text-theme-text-primary">{item.count}</p>
+                        <p className="text-xs text-theme-text-muted">Quantità</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-dr7-gold">{formatCurrency(item.revenue)}</p>
+                        <p className="text-xs text-theme-text-muted">Ricavo</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {/* Mobile Total Card */}
+                <div className="bg-dr7-gold/10 rounded-lg p-4 border border-dr7-gold/30">
+                  <p className="font-bold text-theme-text-primary text-sm mb-2">Totale</p>
+                  <div className="grid grid-cols-2 gap-3 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-theme-text-primary">{washData.billableWashesCount}</p>
+                      <p className="text-xs text-theme-text-muted">Lavaggi</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-dr7-gold">{formatCurrency(washData.washRevenue)}</p>
+                      <p className="text-xs text-theme-text-muted">Ricavo</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -480,7 +567,8 @@ export default function ReportsTab() {
                   {washData.internalWashesCount} lavaggi
                 </span>
               </div>
-              <div className="overflow-x-auto">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
@@ -503,6 +591,20 @@ export default function ReportsTab() {
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+              {/* Mobile Cards */}
+              <div className="md:hidden p-3 space-y-2">
+                {(washData.internalByVehicle || []).map(item => (
+                  <div key={item.vehicle} className="bg-theme-bg-tertiary/30 rounded-lg p-3 border border-theme-border flex justify-between items-center">
+                    <p className="font-medium text-theme-text-primary text-sm">{item.vehicle}</p>
+                    <span className="text-orange-400 font-bold">{item.count}</span>
+                  </div>
+                ))}
+                {/* Mobile Total */}
+                <div className="bg-orange-500/10 rounded-lg p-3 border border-orange-500/30 flex justify-between items-center">
+                  <p className="font-bold text-theme-text-primary text-sm">Totale Interni</p>
+                  <span className="text-orange-400 font-bold text-lg">{washData.internalWashesCount}</span>
+                </div>
               </div>
             </div>
           )}
