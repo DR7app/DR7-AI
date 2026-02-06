@@ -210,13 +210,14 @@ async function generateVehicleReport(
       for (let d = startDay; d <= endDay; d++) {
         rentedDays.add(d)
       }
+
+      // Calculate overlap days for revenue calculation
+      const overlapDays = endDay - startDay + 1
+
       // Revenue: proportional to overlap days
-      const bookingStart = new Date(booking.pickup_date)
-      const bookingEnd = new Date(booking.dropoff_date)
-      bookingStart.setHours(0, 0, 0, 0)
-      bookingEnd.setHours(0, 0, 0, 0)
-      const totalBookingDays = Math.max(1, Math.round((bookingEnd.getTime() - bookingStart.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-      const overlapDays = days.size
+      const totalBookingDays = Math.max(1, Math.round(
+        (new Date(dropoffStr).getTime() - new Date(pickupStr).getTime()) / (1000 * 60 * 60 * 24)
+      ) + 1)
       const bookingRevenue = (booking.price_total || 0) / 100
       rentalRevenue += (bookingRevenue / totalBookingDays) * overlapDays
 
