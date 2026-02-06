@@ -290,6 +290,13 @@ async function generateVehicleReport(
       vehicleCount: cleanReports.length,
       totalBookingsFound: rentalBookings.length,
       unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
+      // Debug: show all booking plates found in data
+      _allBookingPlates: debug ? rentalBookings.map(b => ({
+        id: b.id,
+        vehicle_name: b.vehicle_name,
+        vehicle_plate: b.vehicle_plate,
+        booking_details_plate: b.booking_details?.vehicle_plate || b.booking_details?.plate || b.booking_details?.targa
+      })) : undefined,
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
