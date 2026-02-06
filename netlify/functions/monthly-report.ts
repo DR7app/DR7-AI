@@ -113,7 +113,7 @@ async function generateVehicleReport(
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
     .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date')
-    .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+    .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
 
   if (bookingsError) throw bookingsError
 
@@ -278,13 +278,20 @@ async function generateVehicleReport(
       vehicleCount: cleanReports.length,
       totalBookingsFound: rentalBookings.length,
       unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
-      // Debug: show all booking plates found in data
-      _allBookingPlates: debug ? rentalBookings.map(b => ({
-        id: b.id,
-        vehicle_name: b.vehicle_name,
-        vehicle_plate: b.vehicle_plate,
-        booking_details_plate: b.booking_details?.vehicle_plate || b.booking_details?.plate || b.booking_details?.targa
-      })) : undefined,
+      // Always show debug counts
+      _debug: {
+        totalBookingsFromDB: allBookings?.length || 0,
+        afterFiltering: rentalBookings.length,
+        sampleBookings: rentalBookings.slice(0, 5).map(b => ({
+          id: b.id,
+          vehicle_id: b.vehicle_id,
+          vehicle_name: b.vehicle_name,
+          vehicle_plate: b.vehicle_plate,
+          pickup: b.pickup_date,
+          dropoff: b.dropoff_date,
+          status: b.status
+        }))
+      },
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
