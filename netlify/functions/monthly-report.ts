@@ -179,8 +179,10 @@ async function generateVehicleReport(
 
     vehicleBookings.forEach(booking => {
       // Extract just the date part (YYYY-MM-DD)
-      const pickupDate = booking.pickup_date.substring(0, 10)
-      const dropoffDate = booking.dropoff_date.substring(0, 10)
+      const pickupDateRaw = booking.pickup_date
+      const dropoffDateRaw = booking.dropoff_date
+      const pickupDate = pickupDateRaw.substring(0, 10)
+      const dropoffDate = dropoffDateRaw.substring(0, 10)
 
       // Parse to numbers
       const pYear = parseInt(pickupDate.substring(0, 4))
@@ -190,6 +192,14 @@ async function generateVehicleReport(
       const dYear = parseInt(dropoffDate.substring(0, 4))
       const dMonth = parseInt(dropoffDate.substring(5, 7))
       const dDay = parseInt(dropoffDate.substring(8, 10))
+
+      // Debug log for specific vehicles
+      if (debug || vPlate === 'GT006DG') {
+        console.log(`[DEBUG] Vehicle ${vPlate}: booking ${booking.id}`)
+        console.log(`  Raw pickup: "${pickupDateRaw}" -> "${pickupDate}" -> Y:${pYear} M:${pMonth} D:${pDay}`)
+        console.log(`  Raw dropoff: "${dropoffDateRaw}" -> "${dropoffDate}" -> Y:${dYear} M:${dMonth} D:${dDay}`)
+        console.log(`  Report month: ${year}-${monthNum}, daysInMonth: ${daysInMonth}`)
+      }
 
       // Calculate which days of THIS month are covered
       // Month we're reporting on: year, monthNum (1-12)
@@ -204,6 +214,9 @@ async function generateVehicleReport(
         startDay = pDay
       } else {
         // Pickup is after this month - skip this booking
+        if (debug || vPlate === 'GT006DG') {
+          console.log(`  SKIPPED: pickup (${pYear}-${pMonth}) is after report month (${year}-${monthNum})`)
+        }
         return
       }
 
@@ -217,7 +230,14 @@ async function generateVehicleReport(
         endDay = dDay
       } else {
         // Dropoff was before this month - skip this booking
+        if (debug || vPlate === 'GT006DG') {
+          console.log(`  SKIPPED: dropoff (${dYear}-${dMonth}) is before report month (${year}-${monthNum})`)
+        }
         return
+      }
+
+      if (debug || vPlate === 'GT006DG') {
+        console.log(`  Calculated: startDay=${startDay}, endDay=${endDay}, adding days ${startDay}-${endDay}`)
       }
 
       // Add days to the set
@@ -241,14 +261,16 @@ async function generateVehicleReport(
           vehicle_name: booking.vehicle_name,
           vehicle_plate: booking.vehicle_plate,
           vehicle_id: booking.vehicle_id,
-          pickup_date: booking.pickup_date,
-          dropoff_date: booking.dropoff_date,
+          pickup_date_raw: pickupDateRaw,
+          dropoff_date_raw: dropoffDateRaw,
+          pickup_date_parsed: pickupDate,
+          dropoff_date_parsed: dropoffDate,
+          parsed: { pYear, pMonth, pDay, dYear, dMonth, dDay },
+          calculated: { startDay, endDay },
           service_type: booking.service_type,
           status: booking.status,
-          appointment_date: booking.appointment_date,
           overlapDays,
-          totalBookingDays,
-          matchMethod: 'targa'
+          totalBookingDays
         })
       }
     })
@@ -294,6 +316,17 @@ async function generateVehicleReport(
 
     if (debug) {
       report._matchedBookings = matchedBookingDetails
+      report._rentedDaysArray = Array.from(finalRentedDays).sort((a, b) => a - b)
+      report._rawRentedDays = Array.from(rentedDays).sort((a, b) => a - b)
+    }
+
+    // Debug log for specific vehicles
+    if (vPlate === 'GT006DG') {
+      console.log(`[DEBUG] Vehicle GT006DG final result:`)
+      console.log(`  Bookings matched: ${vehicleBookings.length}`)
+      console.log(`  Raw rented days: [${Array.from(rentedDays).sort((a, b) => a - b).join(', ')}]`)
+      console.log(`  Final rented days (after maintenance): [${Array.from(finalRentedDays).sort((a, b) => a - b).join(', ')}]`)
+      console.log(`  Rented count: ${rentedCount}`)
     }
 
     return report
