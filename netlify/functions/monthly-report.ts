@@ -154,18 +154,22 @@ async function generateVehicleReport(
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // Find bookings for this vehicle — SOLO TARGA (only plate matching)
+    // Find bookings for this vehicle
+    // Priority: plate matching first, then vehicle_id as fallback
     const vehicleBookings = rentalBookings.filter(b => {
-      if (!vPlate || vPlate.length < 4) return false
-
-      // Check vehicle_plate field
-      if (b.vehicle_plate) {
-        const bPlate = b.vehicle_plate.replace(/\s/g, '').toUpperCase()
-        if (bPlate === vPlate) return true
-      }
-      // Check booking_details.plate or booking_details.targa
+      // Get booking's plate from various fields
+      const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
       const detailsPlate = (b.booking_details?.plate || b.booking_details?.targa || b.booking_details?.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-      if (detailsPlate && detailsPlate === vPlate) return true
+      const bookingPlate = bPlate || detailsPlate
+
+      // If booking HAS a plate, match ONLY by plate (to avoid duplicate vehicles issue)
+      if (bookingPlate && bookingPlate.length >= 4) {
+        return vPlate && bookingPlate === vPlate
+      }
+
+      // If booking has NO plate, fall back to vehicle_id matching
+      if (b.vehicle_id && b.vehicle_id === vehicle.id) return true
+      if (b.booking_details?.vehicle_id && b.booking_details.vehicle_id === vehicle.id) return true
 
       return false
     })
@@ -206,8 +210,10 @@ async function generateVehicleReport(
           matchMethod: (() => {
             const bPlate = (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
             const detailsPlate = (booking.booking_details?.plate || booking.booking_details?.targa || booking.booking_details?.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-            if (vPlate && bPlate && bPlate === vPlate) return 'plate'
-            if (vPlate && detailsPlate && detailsPlate === vPlate) return 'booking_details.plate'
+            const bookingPlate = bPlate || detailsPlate
+            if (bookingPlate && vPlate && bookingPlate === vPlate) return 'plate'
+            if (booking.vehicle_id === vehicle.id) return 'vehicle_id'
+            if (booking.booking_details?.vehicle_id === vehicle.id) return 'booking_details.vehicle_id'
             return 'unknown'
           })()
         })
