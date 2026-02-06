@@ -73,10 +73,14 @@ export const handler: Handler = async (event) => {
       return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, month, debug)
     } else if (reportType === 'washes') {
       return await generateWashReport(monthStartISO, monthEndISO, month, daysInMonth)
+    } else if (reportType === 'diagnose') {
+      // Diagnostic mode - show raw data for a specific plate
+      const plate = params.plate?.toUpperCase().replace(/\s/g, '')
+      return await runDiagnostics(plate, monthStartISO, monthEndISO, month)
     } else {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Invalid report type. Use "vehicles" or "washes"' })
+        body: JSON.stringify({ error: 'Invalid report type. Use "vehicles", "washes", or "diagnose"' })
       }
     }
   } catch (error: any) {
@@ -370,6 +374,187 @@ async function generateVehicleReport(
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
     })
+  }
+}
+
+// Diagnostic function to understand data issues
+async function runDiagnostics(plate: string | undefined, monthStartISO: string, monthEndISO: string, month: string) {
+  const results: any = {
+    month,
+    diagnosticTime: new Date().toISOString(),
+    plate: plate || 'ALL',
+  }
+
+  // 1. Get all vehicles and their plates
+  const { data: vehicles, error: vErr } = await supabase
+    .from('vehicles')
+    .select('id, display_name, plate, status, category')
+    .order('display_name')
+
+  if (vErr) throw vErr
+
+  results.vehiclesCount = vehicles?.length || 0
+  results.vehiclesWithPlates = vehicles?.filter(v => v.plate).length || 0
+
+  if (plate) {
+    const matchedVehicle = vehicles?.find(v =>
+      v.plate && v.plate.replace(/\s/g, '').toUpperCase() === plate
+    )
+    results.matchedVehicle = matchedVehicle || 'NOT FOUND'
+  }
+
+  // 2. Get ALL bookings (no filter) to see what's there
+  const { data: allBookings, error: bErr } = await supabase
+    .from('bookings')
+    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, created_at')
+    .order('created_at', { ascending: false })
+    .limit(500)
+
+  if (bErr) throw bErr
+
+  results.totalBookingsInDB = allBookings?.length || 0
+
+  // 3. Analyze booking statuses
+  const statusCounts: Record<string, number> = {}
+  allBookings?.forEach(b => {
+    const st = b.status || 'NULL'
+    statusCounts[st] = (statusCounts[st] || 0) + 1
+  })
+  results.bookingStatusCounts = statusCounts
+
+  // 4. Analyze service types
+  const serviceTypeCounts: Record<string, number> = {}
+  allBookings?.forEach(b => {
+    const st = b.service_type || 'NULL/EMPTY'
+    serviceTypeCounts[st] = (serviceTypeCounts[st] || 0) + 1
+  })
+  results.serviceTypeCounts = serviceTypeCounts
+
+  // 5. Find bookings for the specific plate (if provided)
+  if (plate) {
+    const plateBookings = allBookings?.filter(b => {
+      // Check vehicle_plate
+      const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
+      if (bPlate === plate) return true
+
+      // Check booking_details
+      const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
+      if (detailsPlate === plate) return true
+
+      // Check vehicle_id match
+      const matchedVehicle = vehicles?.find(v =>
+        v.plate && v.plate.replace(/\s/g, '').toUpperCase() === plate
+      )
+      if (matchedVehicle && b.vehicle_id === matchedVehicle.id) return true
+
+      return false
+    })
+
+    results.bookingsForPlate = {
+      count: plateBookings?.length || 0,
+      bookings: plateBookings?.map(b => ({
+        id: b.id,
+        vehicle_id: b.vehicle_id,
+        vehicle_name: b.vehicle_name,
+        vehicle_plate: b.vehicle_plate,
+        pickup_date: b.pickup_date,
+        dropoff_date: b.dropoff_date,
+        status: b.status,
+        service_type: b.service_type,
+        price_total: b.price_total,
+        appointment_date: b.appointment_date,
+        created_at: b.created_at,
+        booking_details_plate: b.booking_details?.vehicle_plate || b.booking_details?.plate || null,
+        booking_details_internal: b.booking_details?.internal,
+        booking_details_createdBy: b.booking_details?.createdBy
+      }))
+    }
+
+    // 5b. Find bookings that SHOULD match but might be filtered out
+    const validStatuses = ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active']
+
+    const filteredBookings = plateBookings?.filter(b => {
+      // Must have pickup_date and dropoff_date
+      if (!b.pickup_date || !b.dropoff_date) return false
+
+      // Exclude car wash
+      const st = (b.service_type || '').trim().toLowerCase()
+      if (st === 'car_wash' || st === 'mechanical_service' || st === 'mechanical') return false
+
+      // Exclude internal
+      const details = b.booking_details || {}
+      if (details.internal === true) return false
+      if (details.createdBy === 'automatic_system') return false
+
+      // Must have valid status
+      if (!validStatuses.includes(b.status)) return false
+
+      // Must overlap with month
+      const pickupDate = b.pickup_date.substring(0, 10)
+      const dropoffDate = b.dropoff_date.substring(0, 10)
+      if (pickupDate > monthEndISO || dropoffDate < monthStartISO) return false
+
+      return true
+    })
+
+    results.filteredBookingsForPlate = {
+      count: filteredBookings?.length || 0,
+      bookings: filteredBookings?.map(b => ({
+        id: b.id,
+        pickup_date: b.pickup_date,
+        dropoff_date: b.dropoff_date,
+        pickup_date_extracted: b.pickup_date?.substring(0, 10),
+        dropoff_date_extracted: b.dropoff_date?.substring(0, 10),
+        status: b.status,
+        price_total: b.price_total
+      }))
+    }
+
+    // 5c. Show why some bookings were filtered out
+    const rejectedBookings = plateBookings?.filter(b => !filteredBookings?.includes(b))
+    results.rejectedBookingsForPlate = {
+      count: rejectedBookings?.length || 0,
+      reasons: rejectedBookings?.map(b => {
+        const reasons = []
+        if (!b.pickup_date) reasons.push('NO_PICKUP_DATE')
+        if (!b.dropoff_date) reasons.push('NO_DROPOFF_DATE')
+        const st = (b.service_type || '').trim().toLowerCase()
+        if (st === 'car_wash') reasons.push('IS_CAR_WASH')
+        if (st === 'mechanical_service' || st === 'mechanical') reasons.push('IS_MECHANICAL')
+        const details = b.booking_details || {}
+        if (details.internal === true) reasons.push('IS_INTERNAL')
+        if (details.createdBy === 'automatic_system') reasons.push('IS_AUTOMATIC')
+        if (!validStatuses.includes(b.status)) reasons.push(`INVALID_STATUS:${b.status}`)
+        if (b.pickup_date && b.dropoff_date) {
+          const pickupDate = b.pickup_date.substring(0, 10)
+          const dropoffDate = b.dropoff_date.substring(0, 10)
+          if (pickupDate > monthEndISO) reasons.push(`PICKUP_AFTER_MONTH:${pickupDate}>${monthEndISO}`)
+          if (dropoffDate < monthStartISO) reasons.push(`DROPOFF_BEFORE_MONTH:${dropoffDate}<${monthStartISO}`)
+        }
+        return {
+          id: b.id,
+          status: b.status,
+          service_type: b.service_type,
+          pickup_date: b.pickup_date,
+          dropoff_date: b.dropoff_date,
+          reasons
+        }
+      })
+    }
+  }
+
+  // 6. Sample of bookings with dates to check format
+  results.sampleBookingsWithDates = allBookings?.slice(0, 5).map(b => ({
+    id: b.id,
+    pickup_date_raw: b.pickup_date,
+    dropoff_date_raw: b.dropoff_date,
+    pickup_date_type: typeof b.pickup_date,
+    dropoff_date_type: typeof b.dropoff_date,
+  }))
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify(results, null, 2)
   }
 }
 
