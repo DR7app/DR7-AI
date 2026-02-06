@@ -224,13 +224,18 @@ async function generateVehicleReport(
       }
 
       // Find end day in this month
+      // NOTE: Dropoff day is NOT counted - car is returned that day, so it's available
       let endDay: number
       if (dYear > year || (dYear === year && dMonth > monthNum)) {
-        // Dropoff is after this month - ends on last day
+        // Dropoff is after this month - car is rented until end of month
         endDay = daysInMonth
       } else if (dYear === year && dMonth === monthNum) {
-        // Dropoff is in this month
-        endDay = dDay
+        // Dropoff is in this month - don't count the dropoff day itself
+        endDay = dDay - 1
+        // If same-day rental (pickup and dropoff same day), count at least that 1 day
+        if (endDay < startDay) {
+          endDay = startDay
+        }
       } else {
         // Dropoff was before this month - skip this booking
         if (debug || vPlate === 'GT006DG') {
@@ -584,12 +589,15 @@ async function runDiagnostics(plate: string | undefined, monthStartISO: string, 
         skipReason = `pickup ${pYear}-${pMonth} is after report month ${year}-${monthNum}`
       }
 
-      // Find end day
+      // Find end day (dropoff day is NOT counted - car is returned that day)
       if (!skipped) {
         if (dYear > year || (dYear === year && dMonth > monthNum)) {
           endDay = daysInMonth
         } else if (dYear === year && dMonth === monthNum) {
-          endDay = dDay
+          endDay = dDay - 1  // Don't count dropoff day
+          if (startDay !== null && endDay < startDay) {
+            endDay = startDay  // Same-day rental: count at least 1 day
+          }
         } else {
           skipped = true
           skipReason = `dropoff ${dYear}-${dMonth} is before report month ${year}-${monthNum}`
