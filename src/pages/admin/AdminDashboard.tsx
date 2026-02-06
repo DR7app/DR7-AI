@@ -102,7 +102,7 @@ export default function AdminDashboard() {
                 </svg>
               </button>
               <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className="h-16 sm:h-20" />
-              <h1 className="text-sm sm:text-base font-normal text-theme-text-primary tracking-widest">Management Platform</h1>
+              <h1 className="text-sm sm:text-base font-normal text-theme-text-primary tracking-widest">Operating Platform A.I.</h1>
             </div>
             <div className="flex items-center gap-3">
               {!alarmState.audioEnabled && (

@@ -57,11 +57,11 @@ export default function Login() {
 
       <div className="w-full max-w-xl relative z-10">
         {/* Main Card */}
-        <div className="bg-theme-bg-primary rounded-2xl shadow-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border relative">
+        <div className={`bg-theme-bg-primary rounded-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border relative ${theme === 'dark' ? 'shadow-2xl' : ''}`}>
 
           <div className="relative">
             <div className="flex justify-center mb-4">
-              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain drop-shadow-2xl" />
+              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className={`h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain ${theme === 'dark' ? 'drop-shadow-2xl' : 'mix-blend-multiply'}`} />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
