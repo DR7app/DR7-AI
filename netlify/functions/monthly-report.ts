@@ -158,20 +158,19 @@ async function generateVehicleReport(
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // Match bookings by vehicle_id OR by plate (targa)
+    // Match bookings ONLY by plate (targa) - SOLO TARGA as requested
+    // Do NOT match by vehicle_id because the same vehicle_id can have different plates over time
     const vehicleBookings = rentalBookings.filter(b => {
-      // Match by vehicle_id
-      if (b.vehicle_id && b.vehicle_id === vehicle.id) return true
+      // Skip if vehicle has no valid plate
+      if (!vPlate || vPlate.length < 4) return false
 
-      // Match by plate (targa) - normalize for comparison
-      if (vPlate && vPlate.length >= 4) {
-        const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-        if (bPlate === vPlate) return true
+      // Match by vehicle_plate field
+      const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
+      if (bPlate === vPlate) return true
 
-        // Also check booking_details
-        const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
-        if (detailsPlate === vPlate) return true
-      }
+      // Also check booking_details for plate
+      const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
+      if (detailsPlate === vPlate) return true
 
       return false
     })
