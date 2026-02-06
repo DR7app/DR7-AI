@@ -84,7 +84,8 @@ export default function AdminDashboard() {
         backgroundSize: '40px 40px'
       }} />
 
-      <header className="bg-theme-bg-primary backdrop-blur-md border-b border-theme-border/50">
+      <header className="bg-theme-bg-primary backdrop-blur-md relative">
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-theme-border/50 z-10"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-24">
             <div className="flex items-center gap-2 sm:gap-4">
