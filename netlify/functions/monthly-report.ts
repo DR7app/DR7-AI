@@ -154,7 +154,8 @@ async function generateVehicleReport(
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // Find bookings for this vehicle — PRIORITIZE PLATE (targa) matching for reliability
+    // Find bookings for this vehicle — ONLY by PLATE (targa) or vehicle_id
+    // NO name matching because multiple vehicles can have the same name (e.g., Fiat Panda Grey)
     const vehicleBookings = rentalBookings.filter(b => {
       // 1. Match by PLATE first (most reliable for past bookings)
       if (vPlate && vPlate.length >= 4) {
@@ -162,27 +163,15 @@ async function generateVehicleReport(
         if (b.vehicle_plate) {
           const bPlate = b.vehicle_plate.replace(/\s/g, '').toUpperCase()
           if (bPlate === vPlate) return true
-          // Also check if booking plate contains vehicle plate or vice versa
-          if (bPlate.includes(vPlate) || vPlate.includes(bPlate)) return true
         }
         // Check booking_details.plate or booking_details.targa
         const detailsPlate = (b.booking_details?.plate || b.booking_details?.targa || b.booking_details?.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-        if (detailsPlate && (detailsPlate === vPlate || detailsPlate.includes(vPlate) || vPlate.includes(detailsPlate))) return true
+        if (detailsPlate && detailsPlate === vPlate) return true
       }
       // 2. Match by vehicle_id
       if (b.vehicle_id && b.vehicle_id === vehicle.id) return true
       // 3. Match by booking_details.vehicle_id
       if (b.booking_details?.vehicle_id && b.booking_details.vehicle_id === vehicle.id) return true
-      // 4. Match by exact vehicle name — BUT only if the booking doesn't have an appointment_date
-      // (bookings with appointment_date are likely car wash, even if service_type is wrong)
-      if (vName && b.vehicle_name && !b.appointment_date) {
-        const bName = b.vehicle_name.trim().toLowerCase()
-        if (bName === vName) return true
-        // Also try matching without spaces and special chars
-        const normalizedVName = vName.replace(/[^a-z0-9]/g, '')
-        const normalizedBName = bName.replace(/[^a-z0-9]/g, '')
-        if (normalizedVName && normalizedBName && normalizedVName === normalizedBName) return true
-      }
       return false
     })
 
@@ -222,11 +211,11 @@ async function generateVehicleReport(
           matchMethod: (() => {
             const bPlate = (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
             const detailsPlate = (booking.booking_details?.plate || booking.booking_details?.targa || booking.booking_details?.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-            if (vPlate && bPlate && (bPlate === vPlate || bPlate.includes(vPlate) || vPlate.includes(bPlate))) return 'plate'
-            if (vPlate && detailsPlate && (detailsPlate === vPlate || detailsPlate.includes(vPlate) || vPlate.includes(detailsPlate))) return 'booking_details.plate'
+            if (vPlate && bPlate && bPlate === vPlate) return 'plate'
+            if (vPlate && detailsPlate && detailsPlate === vPlate) return 'booking_details.plate'
             if (booking.vehicle_id === vehicle.id) return 'vehicle_id'
             if (booking.booking_details?.vehicle_id === vehicle.id) return 'booking_details.vehicle_id'
-            return 'name'
+            return 'unknown'
           })()
         })
       }
