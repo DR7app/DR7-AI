@@ -154,22 +154,10 @@ async function generateVehicleReport(
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // SOLO TARGA - match ALL bookings by plate only
+    // Match bookings to this vehicle by vehicle_id (unique identifier)
+    // The targa/plate is displayed in the report but matching is by ID
     const vehicleBookings = rentalBookings.filter(b => {
-      if (!vPlate) return false
-
-      // Normalize plates for comparison (remove spaces, uppercase)
-      const normalize = (p: string) => (p || '').replace(/\s/g, '').toUpperCase()
-
-      // Check booking's vehicle_plate field
-      if (normalize(b.vehicle_plate) === vPlate) return true
-
-      // Check booking_details fields
-      if (normalize(b.booking_details?.vehicle_plate) === vPlate) return true
-      if (normalize(b.booking_details?.plate) === vPlate) return true
-      if (normalize(b.booking_details?.targa) === vPlate) return true
-
-      return false
+      return b.vehicle_id === vehicle.id
     })
 
     // Calculate rented days (union of all booking day ranges)
