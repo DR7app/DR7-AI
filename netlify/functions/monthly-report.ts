@@ -132,8 +132,8 @@ async function generateVehicleReport(
     if (details.createdBy === 'automatic_system') return false
 
     // Must overlap with the report month
-    const pickupDate = b.pickup_date.split('T')[0]
-    const dropoffDate = b.dropoff_date.split('T')[0]
+    const pickupDate = b.pickup_date.substring(0, 10)
+    const dropoffDate = b.dropoff_date.substring(0, 10)
     if (pickupDate > monthEndISO || dropoffDate < monthStartISO) return false
 
     return true
