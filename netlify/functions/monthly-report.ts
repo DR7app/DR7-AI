@@ -178,46 +178,60 @@ async function generateVehicleReport(
     const matchedBookingDetails: any[] = []
 
     vehicleBookings.forEach(booking => {
-      // Parse dates as YYYY-MM-DD to avoid timezone issues
-      const pickupStr = booking.pickup_date.split('T')[0].split(' ')[0]
-      const dropoffStr = booking.dropoff_date.split('T')[0].split(' ')[0]
+      // Extract just the date part (YYYY-MM-DD)
+      const pickupDate = booking.pickup_date.substring(0, 10)
+      const dropoffDate = booking.dropoff_date.substring(0, 10)
 
-      // Calculate overlap with the report month
-      const [pickupY, pickupM, pickupD] = pickupStr.split('-').map(Number)
-      const [dropoffY, dropoffM, dropoffD] = dropoffStr.split('-').map(Number)
+      // Parse to numbers
+      const pYear = parseInt(pickupDate.substring(0, 4))
+      const pMonth = parseInt(pickupDate.substring(5, 7))
+      const pDay = parseInt(pickupDate.substring(8, 10))
 
-      // Determine start and end day within the month
-      let startDay = 1
-      let endDay = daysInMonth
+      const dYear = parseInt(dropoffDate.substring(0, 4))
+      const dMonth = parseInt(dropoffDate.substring(5, 7))
+      const dDay = parseInt(dropoffDate.substring(8, 10))
 
-      // If pickup is in this month, start from pickup day
-      if (pickupY === year && pickupM === monthNum) {
-        startDay = pickupD
-      } else if (pickupY > year || (pickupY === year && pickupM > monthNum)) {
-        // Pickup is after this month - skip
+      // Calculate which days of THIS month are covered
+      // Month we're reporting on: year, monthNum (1-12)
+
+      // Find start day in this month
+      let startDay: number
+      if (pYear < year || (pYear === year && pMonth < monthNum)) {
+        // Pickup was before this month - starts on day 1
+        startDay = 1
+      } else if (pYear === year && pMonth === monthNum) {
+        // Pickup is in this month
+        startDay = pDay
+      } else {
+        // Pickup is after this month - skip this booking
         return
       }
 
-      // If dropoff is in this month, end at dropoff day
-      if (dropoffY === year && dropoffM === monthNum) {
-        endDay = dropoffD
-      } else if (dropoffY < year || (dropoffY === year && dropoffM < monthNum)) {
-        // Dropoff is before this month - skip
+      // Find end day in this month
+      let endDay: number
+      if (dYear > year || (dYear === year && dMonth > monthNum)) {
+        // Dropoff is after this month - ends on last day
+        endDay = daysInMonth
+      } else if (dYear === year && dMonth === monthNum) {
+        // Dropoff is in this month
+        endDay = dDay
+      } else {
+        // Dropoff was before this month - skip this booking
         return
       }
 
-      // Add all days in range
+      // Add days to the set
       for (let d = startDay; d <= endDay; d++) {
         rentedDays.add(d)
       }
 
-      // Calculate overlap days for revenue calculation
+      // Calculate overlap for revenue
       const overlapDays = endDay - startDay + 1
 
-      // Revenue: proportional to overlap days
-      const totalBookingDays = Math.max(1, Math.round(
-        (new Date(dropoffStr).getTime() - new Date(pickupStr).getTime()) / (1000 * 60 * 60 * 24)
-      ) + 1)
+      // Total booking days for revenue proration
+      const pickupMs = new Date(pYear, pMonth - 1, pDay).getTime()
+      const dropoffMs = new Date(dYear, dMonth - 1, dDay).getTime()
+      const totalBookingDays = Math.max(1, Math.round((dropoffMs - pickupMs) / (1000 * 60 * 60 * 24)) + 1)
       const bookingRevenue = (booking.price_total || 0) / 100
       rentalRevenue += (bookingRevenue / totalBookingDays) * overlapDays
 
