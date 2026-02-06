@@ -154,22 +154,20 @@ async function generateVehicleReport(
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // Find bookings for this vehicle
-    // Priority: plate matching first, then vehicle_id as fallback
+    // SOLO TARGA - match ALL bookings by plate only
     const vehicleBookings = rentalBookings.filter(b => {
-      // Get booking's plate from various fields
-      const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-      const detailsPlate = (b.booking_details?.plate || b.booking_details?.targa || b.booking_details?.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-      const bookingPlate = bPlate || detailsPlate
+      if (!vPlate) return false
 
-      // If booking HAS a plate, match ONLY by plate (to avoid duplicate vehicles issue)
-      if (bookingPlate && bookingPlate.length >= 4) {
-        return vPlate && bookingPlate === vPlate
-      }
+      // Normalize plates for comparison (remove spaces, uppercase)
+      const normalize = (p: string) => (p || '').replace(/\s/g, '').toUpperCase()
 
-      // If booking has NO plate, fall back to vehicle_id matching
-      if (b.vehicle_id && b.vehicle_id === vehicle.id) return true
-      if (b.booking_details?.vehicle_id && b.booking_details.vehicle_id === vehicle.id) return true
+      // Check booking's vehicle_plate field
+      if (normalize(b.vehicle_plate) === vPlate) return true
+
+      // Check booking_details fields
+      if (normalize(b.booking_details?.vehicle_plate) === vPlate) return true
+      if (normalize(b.booking_details?.plate) === vPlate) return true
+      if (normalize(b.booking_details?.targa) === vPlate) return true
 
       return false
     })
@@ -207,15 +205,7 @@ async function generateVehicleReport(
           appointment_date: booking.appointment_date,
           overlapDays,
           totalBookingDays,
-          matchMethod: (() => {
-            const bPlate = (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-            const detailsPlate = (booking.booking_details?.plate || booking.booking_details?.targa || booking.booking_details?.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-            const bookingPlate = bPlate || detailsPlate
-            if (bookingPlate && vPlate && bookingPlate === vPlate) return 'plate'
-            if (booking.vehicle_id === vehicle.id) return 'vehicle_id'
-            if (booking.booking_details?.vehicle_id === vehicle.id) return 'booking_details.vehicle_id'
-            return 'unknown'
-          })()
+          matchMethod: 'targa'
         })
       }
     })
