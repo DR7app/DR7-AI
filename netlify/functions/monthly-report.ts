@@ -178,10 +178,38 @@ async function generateVehicleReport(
     const matchedBookingDetails: any[] = []
 
     vehicleBookings.forEach(booking => {
-      const start = new Date(booking.pickup_date)
-      const end = new Date(booking.dropoff_date)
-      const days = getDaySet(start, end, monthStart, monthEnd)
-      days.forEach(d => rentedDays.add(d))
+      // Parse dates as YYYY-MM-DD to avoid timezone issues
+      const pickupStr = booking.pickup_date.split('T')[0].split(' ')[0]
+      const dropoffStr = booking.dropoff_date.split('T')[0].split(' ')[0]
+
+      // Calculate overlap with the report month
+      const [pickupY, pickupM, pickupD] = pickupStr.split('-').map(Number)
+      const [dropoffY, dropoffM, dropoffD] = dropoffStr.split('-').map(Number)
+
+      // Determine start and end day within the month
+      let startDay = 1
+      let endDay = daysInMonth
+
+      // If pickup is in this month, start from pickup day
+      if (pickupY === year && pickupM === monthNum) {
+        startDay = pickupD
+      } else if (pickupY > year || (pickupY === year && pickupM > monthNum)) {
+        // Pickup is after this month - skip
+        return
+      }
+
+      // If dropoff is in this month, end at dropoff day
+      if (dropoffY === year && dropoffM === monthNum) {
+        endDay = dropoffD
+      } else if (dropoffY < year || (dropoffY === year && dropoffM < monthNum)) {
+        // Dropoff is before this month - skip
+        return
+      }
+
+      // Add all days in range
+      for (let d = startDay; d <= endDay; d++) {
+        rentedDays.add(d)
+      }
       // Revenue: proportional to overlap days
       const bookingStart = new Date(booking.pickup_date)
       const bookingEnd = new Date(booking.dropoff_date)
@@ -290,20 +318,6 @@ async function generateVehicleReport(
       vehicleCount: cleanReports.length,
       totalBookingsFound: rentalBookings.length,
       unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
-      // Always show debug counts
-      _debug: {
-        totalBookingsFromDB: allBookings?.length || 0,
-        afterFiltering: rentalBookings.length,
-        sampleBookings: rentalBookings.slice(0, 5).map(b => ({
-          id: b.id,
-          vehicle_id: b.vehicle_id,
-          vehicle_name: b.vehicle_name,
-          vehicle_plate: b.vehicle_plate,
-          pickup: b.pickup_date,
-          dropoff: b.dropoff_date,
-          status: b.status
-        }))
-      },
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
