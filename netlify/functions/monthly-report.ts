@@ -431,6 +431,7 @@ async function runDiagnostics(plate: string | undefined, monthStartISO: string, 
 
   // 5. Find bookings for the specific plate (if provided)
   if (plate) {
+    // SOLO TARGA matching - only by plate, NOT by vehicle_id
     const plateBookings = allBookings?.filter(b => {
       // Check vehicle_plate
       const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
@@ -440,12 +441,7 @@ async function runDiagnostics(plate: string | undefined, monthStartISO: string, 
       const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
       if (detailsPlate === plate) return true
 
-      // Check vehicle_id match
-      const matchedVehicle = vehicles?.find(v =>
-        v.plate && v.plate.replace(/\s/g, '').toUpperCase() === plate
-      )
-      if (matchedVehicle && b.vehicle_id === matchedVehicle.id) return true
-
+      // NO vehicle_id matching - SOLO TARGA
       return false
     })
 
@@ -550,6 +546,88 @@ async function runDiagnostics(plate: string | undefined, monthStartISO: string, 
     pickup_date_type: typeof b.pickup_date,
     dropoff_date_type: typeof b.dropoff_date,
   }))
+
+  // 7. SIMULATE REPORT CALCULATION for this plate
+  if (plate && results.filteredBookingsForPlate?.bookings) {
+    const [yearStr, monthStr] = month.split('-')
+    const year = parseInt(yearStr)
+    const monthNum = parseInt(monthStr)
+    const daysInMonth = new Date(year, monthNum, 0).getDate()
+
+    const rentedDays = new Set<number>()
+    const dayCalculations: any[] = []
+
+    results.filteredBookingsForPlate.bookings.forEach((booking: any) => {
+      const pickupDate = booking.pickup_date_extracted
+      const dropoffDate = booking.dropoff_date_extracted
+
+      const pYear = parseInt(pickupDate.substring(0, 4))
+      const pMonth = parseInt(pickupDate.substring(5, 7))
+      const pDay = parseInt(pickupDate.substring(8, 10))
+
+      const dYear = parseInt(dropoffDate.substring(0, 4))
+      const dMonth = parseInt(dropoffDate.substring(5, 7))
+      const dDay = parseInt(dropoffDate.substring(8, 10))
+
+      let startDay: number | null = null
+      let endDay: number | null = null
+      let skipped = false
+      let skipReason = ''
+
+      // Find start day
+      if (pYear < year || (pYear === year && pMonth < monthNum)) {
+        startDay = 1
+      } else if (pYear === year && pMonth === monthNum) {
+        startDay = pDay
+      } else {
+        skipped = true
+        skipReason = `pickup ${pYear}-${pMonth} is after report month ${year}-${monthNum}`
+      }
+
+      // Find end day
+      if (!skipped) {
+        if (dYear > year || (dYear === year && dMonth > monthNum)) {
+          endDay = daysInMonth
+        } else if (dYear === year && dMonth === monthNum) {
+          endDay = dDay
+        } else {
+          skipped = true
+          skipReason = `dropoff ${dYear}-${dMonth} is before report month ${year}-${monthNum}`
+        }
+      }
+
+      const daysAdded: number[] = []
+      if (!skipped && startDay !== null && endDay !== null) {
+        for (let d = startDay; d <= endDay; d++) {
+          rentedDays.add(d)
+          daysAdded.push(d)
+        }
+      }
+
+      dayCalculations.push({
+        booking_id: booking.id,
+        pickup: pickupDate,
+        dropoff: dropoffDate,
+        parsed: { pYear, pMonth, pDay, dYear, dMonth, dDay },
+        startDay,
+        endDay,
+        skipped,
+        skipReason: skipReason || undefined,
+        daysAdded: daysAdded.length > 0 ? `${daysAdded[0]}-${daysAdded[daysAdded.length - 1]}` : 'none',
+        daysCount: daysAdded.length
+      })
+    })
+
+    results.REPORT_SIMULATION = {
+      reportMonth: `${year}-${monthNum}`,
+      daysInMonth,
+      bookingsProcessed: dayCalculations.length,
+      calculations: dayCalculations,
+      totalUniqueDays: rentedDays.size,
+      rentedDaysArray: Array.from(rentedDays).sort((a, b) => a - b),
+      utilizationRate: Math.round((rentedDays.size / daysInMonth) * 100)
+    }
+  }
 
   return {
     statusCode: 200,
