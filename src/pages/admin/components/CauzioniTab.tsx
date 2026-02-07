@@ -42,7 +42,8 @@ export default function CauzioniTab() {
         bloccate: 0,
         da_incassare: 0,
         scadute: 0,
-        totale_importo: 0
+        totale_incassate: 0,
+        totale_da_incassare: 0
     })
 
     useEffect(() => {
@@ -108,13 +109,16 @@ export default function CauzioniTab() {
 
     const calculateStats = () => {
         const visible = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata')
-        const incassate = visible.filter(c => c.data_incasso && c.stato !== 'Bloccata').length
+        const incassateList = visible.filter(c => c.data_incasso && c.stato !== 'Bloccata')
+        const daIncassareList = visible.filter(c => !c.data_incasso && c.stato !== 'Bloccata')
+        const incassate = incassateList.length
         const bloccate = visible.filter(c => c.stato === 'Bloccata').length
-        const da_incassare = visible.filter(c => !c.data_incasso && c.stato !== 'Bloccata').length
+        const da_incassare = daIncassareList.length
         const scadute = visible.filter(c => c.is_overdue).length
-        const totale_importo = visible.reduce((sum, c) => sum + Number(c.importo), 0)
+        const totale_incassate = incassateList.reduce((sum, c) => sum + Number(c.importo), 0)
+        const totale_da_incassare = daIncassareList.reduce((sum, c) => sum + Number(c.importo), 0)
 
-        setStats({ incassate, bloccate, da_incassare, scadute, totale_importo })
+        setStats({ incassate, bloccate, da_incassare, scadute, totale_incassate, totale_da_incassare })
     }
 
     // --- Section Filters ---
@@ -501,26 +505,33 @@ export default function CauzioniTab() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
                     <div className="text-sm text-theme-text-secondary">Incassate</div>
                     <div className="text-3xl font-bold text-green-500">{stats.incassate}</div>
-                </div>
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Bloccate</div>
-                    <div className="text-3xl font-bold text-orange-500">{stats.bloccate}</div>
                 </div>
                 <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
                     <div className="text-sm text-theme-text-secondary">Da Incassare</div>
                     <div className="text-3xl font-bold text-yellow-500">{stats.da_incassare}</div>
                 </div>
                 <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Scadute</div>
-                    <div className="text-3xl font-bold text-red-500">{stats.scadute}</div>
+                    <div className="text-sm text-theme-text-secondary">Bloccate</div>
+                    <div className="text-3xl font-bold text-orange-500">{stats.bloccate}</div>
+                </div>
+            </div>
+            {/* Totali Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-theme-bg-tertiary border border-green-500/30 rounded-3xl p-4">
+                    <div className="text-sm text-theme-text-secondary">Totale Incassate</div>
+                    <div className="text-3xl font-bold text-green-500">€{stats.totale_incassate.toFixed(2)}</div>
+                </div>
+                <div className="bg-theme-bg-tertiary border border-yellow-500/30 rounded-3xl p-4">
+                    <div className="text-sm text-theme-text-secondary">Totale Da Incassare</div>
+                    <div className="text-3xl font-bold text-yellow-500">€{stats.totale_da_incassare.toFixed(2)}</div>
                 </div>
                 <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Totale</div>
-                    <div className="text-3xl font-bold text-dr7-gold">€{stats.totale_importo.toFixed(2)}</div>
+                    <div className="text-sm text-theme-text-secondary">Scadute</div>
+                    <div className="text-3xl font-bold text-red-500">{stats.scadute}</div>
                 </div>
             </div>
 
