@@ -4527,13 +4527,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             <div className="bg-theme-text-primary rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-xl font-bold mb-4 text-red-600">Cancella Prenotazione</h3>
               <p className="text-theme-text-secondary mb-6">
-                <strong className="text-red-600">ATTENZIONE:</strong> Vuoi cancellare questa prenotazione?
-                <br /><br />
-                La prenotazione verrà:
-                <br />• Eliminata dal database
-                <br />• Rimossa dal calendario
-                <br /><br />
-                <strong>Questa azione NON può essere annullata!</strong>
+                Vuoi cancellare questa prenotazione?
               </p>
               <div className="flex gap-3 justify-end">
                 <Button
@@ -4544,7 +4538,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     setPendingDeleteId(null)
                   }}
                 >
-                  No, Torna Indietro
+                  No
                 </Button>
                 <Button
                   type="button"
