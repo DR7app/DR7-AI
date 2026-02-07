@@ -3096,10 +3096,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Send WhatsApp notification for car rental
       if (!editingId) { // Only for new bookings
         try {
-          // Use the actual inserted booking data (which has correct timezone from database)
-          // This ensures notification shows exactly what's in the database
           const paymentStatus = formData.payment_status || 'pending'
 
+          // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
+          // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3111,12 +3111,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 customer_email: customerInfo?.email || '',
                 customer_phone: customerInfo?.phone || '',
                 vehicle_name: vehicle?.display_name || '',
-                // Use database values which have correct timezone (+01 for Italy)
-                pickup_date: insertedBooking?.pickup_date || `${formData.pickup_date}T${formData.pickup_time}:00+01:00`,
-                dropoff_date: insertedBooking?.dropoff_date || `${formData.return_date}T${formData.return_time}:00+01:00`,
+                // Use the pre-computed datetime strings with correct Italy offset
+                pickup_date: pickupDateTime,
+                dropoff_date: returnDateTime,
                 pickup_location: pickupLocationLabel,
                 insurance_option: 'KASKO_BASE', // Always Kasko included
-                // Use database price_total to ensure consistency
                 price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
                 payment_status: paymentStatus,
                 booking_details: {
