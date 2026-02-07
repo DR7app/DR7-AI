@@ -3096,10 +3096,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Send WhatsApp notification for car rental
       if (!editingId) { // Only for new bookings
         try {
-          // Calculate amount paid for notification
-          const totalCents = Math.round(parseFloat(formData.total_amount) * 100)
+          // Use the actual inserted booking data (which has correct timezone from database)
+          // This ensures notification shows exactly what's in the database
           const paymentStatus = formData.payment_status || 'pending'
-          const amountPaid = paymentStatus === 'paid' ? totalCents : 0
 
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
@@ -3112,14 +3111,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 customer_email: customerInfo?.email || '',
                 customer_phone: customerInfo?.phone || '',
                 vehicle_name: vehicle?.display_name || '',
-                pickup_date: `${formData.pickup_date}T${formData.pickup_time}:00`,
-                dropoff_date: `${formData.return_date}T${formData.return_time}:00`,
+                // Use database values which have correct timezone (+01 for Italy)
+                pickup_date: insertedBooking?.pickup_date || `${formData.pickup_date}T${formData.pickup_time}:00+01:00`,
+                dropoff_date: insertedBooking?.dropoff_date || `${formData.return_date}T${formData.return_time}:00+01:00`,
                 pickup_location: pickupLocationLabel,
                 insurance_option: 'KASKO_BASE', // Always Kasko included
-                price_total: totalCents,
+                // Use database price_total to ensure consistency
+                price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
                 payment_status: paymentStatus,
                 booking_details: {
-                  amountPaid: amountPaid,
+                  amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
                   insuranceOption: 'KASKO_BASE'
                 }
               }
