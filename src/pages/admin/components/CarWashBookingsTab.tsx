@@ -69,8 +69,18 @@ function parseDurationToMinutes(duration: string): number {
 }
 
 // Helper to get allowed time ranges based on duration
-function getAllowedTimeRanges(durationMinutes: number): { start: string; end: string }[] {
-  // Calculate the latest possible start time so service ends by 13:00 or 19:00
+// Saturday: continuous 9:00-17:00, Weekdays: 9:00-13:00 + 15:00-19:00
+function getAllowedTimeRanges(durationMinutes: number, isSaturday: boolean = false): { start: string; end: string }[] {
+  if (isSaturday) {
+    const satEnd = 17 * 60 - durationMinutes // Must finish by 17:00
+    const satEndHour = Math.floor(satEnd / 60)
+    const satEndMin = satEnd % 60
+    return [
+      { start: '09:00', end: `${satEndHour.toString().padStart(2, '0')}:${satEndMin.toString().padStart(2, '0')}` }
+    ]
+  }
+
+  // Weekdays: split schedule
   const morningEnd = 13 * 60 - durationMinutes // Must finish by 13:00
   const afternoonEnd = 19 * 60 - durationMinutes // Must finish by 19:00
 
@@ -86,32 +96,44 @@ function getAllowedTimeRanges(durationMinutes: number): { start: string; end: st
 }
 
 
-// Generate time slots for car wash: 9h-13h and 15h-19h, every 15 minutes
-const generateTimeSlots = () => {
+// Generate time slots for car wash, every 15 minutes
+// Weekdays: 9h-13h and 15h-18h | Saturday: 9h-17h continuous
+const generateTimeSlots = (isSaturday: boolean = false) => {
   const slots: string[] = []
 
-  // Morning slots: 9h-13h
-  for (let hour = 9; hour < 13; hour++) {
-    for (let minute = 0; minute < 60; minute += 15) {
-      const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-      slots.push(time)
+  if (isSaturday) {
+    // Saturday: continuous 9:00-17:00
+    for (let hour = 9; hour <= 17; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        if (hour === 17 && minute > 0) break // Stop at 17:00
+        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+        slots.push(time)
+      }
     }
-  }
+  } else {
+    // Weekdays: Morning 9h-13h
+    for (let hour = 9; hour < 13; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+        slots.push(time)
+      }
+    }
 
-  // Afternoon slots: 15h-18h (18:00 is the maximum/last slot)
-  for (let hour = 15; hour < 19; hour++) {
-    for (let minute = 0; minute < 60; minute += 15) {
-      const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-      // Stop at 18:00 - no slots after
-      if (hour === 18 && minute > 0) break
-      slots.push(time)
+    // Weekdays: Afternoon 15h-18h (18:00 is the maximum/last slot)
+    for (let hour = 15; hour < 19; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+        if (hour === 18 && minute > 0) break
+        slots.push(time)
+      }
     }
   }
 
   return slots
 }
 
-const CAR_WASH_TIME_SLOTS = generateTimeSlots()
+const CAR_WASH_TIME_SLOTS = generateTimeSlots(false)
+const CAR_WASH_TIME_SLOTS_SATURDAY = generateTimeSlots(true)
 
 interface CarWashBookingsTabProps {
   initialData?: { appointmentDate?: string, appointmentTime?: string } | null
@@ -1406,8 +1428,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     >
                       <option value="">Seleziona orario</option>
                       {(() => {
-                        const morningSlots = CAR_WASH_TIME_SLOTS.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
-                        const afternoonSlots = CAR_WASH_TIME_SLOTS.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
+                        const selectedDay = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00').getDay() : -1
+                        const isSat = selectedDay === 6
+                        const slots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+                        const morningSlots = slots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
+                        const afternoonSlots = isSat
+                          ? slots.filter(t => t.startsWith('13') || t.startsWith('14') || t.startsWith('15') || t.startsWith('16') || t.startsWith('17'))
+                          : slots.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
 
                         return (
                           <>
