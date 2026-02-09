@@ -37,7 +37,7 @@ const LateReturnAlarm: React.FC = () => {
             try {
                 const { data: bookings, error } = await supabase
                     .from('bookings')
-                    .select('id, vehicle_name, customer_name, customer_phone, dropoff_date, status')
+                    .select('id, vehicle_name, customer_name, customer_phone, dropoff_date, status, booking_details')
                     .eq('service_type', 'car_rental')
                     .neq('status', 'returned')
                     .not('dropoff_date', 'is', null);
