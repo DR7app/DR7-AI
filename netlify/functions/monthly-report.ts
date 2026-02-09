@@ -36,6 +36,80 @@ function getDaySet(
   return days
 }
 
+/**
+ * Compute billable days for a booking.
+ * Business rule: start day inclusive, checkout (end) day exclusive.
+ * Feb 6 → Feb 7 = 1 day. Same-day bookings (Feb 6 → Feb 6) = 1 day minimum.
+ * Uses UTC to avoid DST issues.
+ */
+function computeBillableDays(startDateStr: string, endDateStr: string): number {
+  const start = startDateStr.substring(0, 10)
+  const end = endDateStr.substring(0, 10)
+  const [sY, sM, sD] = start.split('-').map(Number)
+  const [eY, eM, eD] = end.split('-').map(Number)
+  const startMs = Date.UTC(sY, sM - 1, sD)
+  const endMs = Date.UTC(eY, eM - 1, eD)
+  const diffDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
+  return Math.max(1, diffDays)
+}
+
+/**
+ * Returns occupied day-of-month numbers for a booking within a specific month.
+ * Start day inclusive, checkout (end) day exclusive.
+ * Returns empty set if no occupied days in the given month.
+ *
+ * Key fix: a booking from a prior month whose checkout falls on day 1 of this
+ * month (e.g. Jan 31 → Feb 1) produces 0 occupied days in this month,
+ * NOT 1. The checkout day is when the car is returned — it's available.
+ */
+function getOccupiedDaysInMonth(
+  startDateStr: string,
+  endDateStr: string,
+  year: number,
+  monthNum: number,
+  daysInMonth: number
+): Set<number> {
+  const days = new Set<number>()
+  const pickup = startDateStr.substring(0, 10)
+  const dropoff = endDateStr.substring(0, 10)
+  const [pY, pM, pD] = pickup.split('-').map(Number)
+  const [dY, dM, dD] = dropoff.split('-').map(Number)
+
+  // First occupied day in this month
+  let firstDay: number
+  if (pY < year || (pY === year && pM < monthNum)) {
+    firstDay = 1 // booking started before this month
+  } else if (pY === year && pM === monthNum) {
+    firstDay = pD // booking starts in this month
+  } else {
+    return days // booking starts after this month
+  }
+
+  // Last occupied day in this month (checkout day excluded)
+  let lastDay: number
+  if (dY > year || (dY === year && dM > monthNum)) {
+    lastDay = daysInMonth // booking extends past this month
+  } else if (dY === year && dM === monthNum) {
+    lastDay = dD - 1 // checkout in this month: exclude checkout day
+    if (lastDay < firstDay) {
+      if (pY === year && pM === monthNum) {
+        // Same-day booking within this month: count 1 day
+        lastDay = firstDay
+      } else {
+        // Booking from prior month, checkout early in this month: 0 days here
+        return days
+      }
+    }
+  } else {
+    return days // booking ended before this month
+  }
+
+  for (let d = firstDay; d <= lastDay; d++) {
+    days.add(d)
+  }
+  return days
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
     return {
@@ -184,6 +258,7 @@ async function generateVehicleReport(
     const rentedDays = new Set<number>()
     let rentalRevenue = 0
     const matchedBookingDetails: any[] = []
+    const bookingDetailsList: any[] = []
 
     vehicleBookings.forEach(booking => {
       // Extract just the date part (YYYY-MM-DD)
@@ -237,9 +312,17 @@ async function generateVehicleReport(
       } else if (dYear === year && dMonth === monthNum) {
         // Dropoff is in this month - don't count the dropoff day itself
         endDay = dDay - 1
-        // If same-day rental (pickup and dropoff same day), count at least that 1 day
+        // Same-day booking in this month: count 1 day
+        // Cross-month checkout (pickup was before this month): 0 days in this month
         if (endDay < startDay) {
-          endDay = startDay
+          if (pYear === year && pMonth === monthNum) {
+            endDay = startDay
+          } else {
+            if (debug || vPlate === 'GT006DG') {
+              console.log(`  SKIPPED: cross-month checkout, no occupied days in ${year}-${monthNum}`)
+            }
+            return
+          }
         }
       } else {
         // Dropoff was before this month - skip this booking
@@ -261,13 +344,22 @@ async function generateVehicleReport(
       // Calculate overlap for revenue
       const overlapDays = endDay - startDay + 1
 
-      // Total booking days for revenue proration
-      // Don't add +1: pickup 6th to dropoff 7th = 1 day, not 2
-      const pickupMs = new Date(pYear, pMonth - 1, pDay).getTime()
-      const dropoffMs = new Date(dYear, dMonth - 1, dDay).getTime()
-      const totalBookingDays = Math.max(1, Math.round((dropoffMs - pickupMs) / (1000 * 60 * 60 * 24)))
+      // Total booking days for revenue proration (shared function, UTC-safe)
+      const totalBookingDays = computeBillableDays(pickupDateRaw, dropoffDateRaw)
       const bookingRevenue = (booking.price_total || 0) / 100
       rentalRevenue += (bookingRevenue / totalBookingDays) * overlapDays
+
+      // Per-booking detail (always included in output)
+      bookingDetailsList.push({
+        booking_id: booking.id,
+        targa: vPlate || (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase() || '-',
+        start_at: pickupDateRaw,
+        end_at: dropoffDateRaw,
+        billable_days: totalBookingDays,
+        days_in_month: overlapDays,
+        total_price: bookingRevenue,
+        revenue_per_day: totalBookingDays > 0 ? Math.round((bookingRevenue / totalBookingDays) * 100) / 100 : 0,
+      })
 
       if (debug) {
         matchedBookingDetails.push({
@@ -325,6 +417,7 @@ async function generateVehicleReport(
       idleRate: Math.round((Math.max(0, idleCount) / daysInMonth) * 100) / 100,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
+      bookings: bookingDetailsList,
       _bookingIds: vehicleBookings.map(b => b.id)
     }
 
@@ -572,61 +665,18 @@ async function runDiagnostics(plate: string | undefined, monthStartISO: string, 
       const pickupDate = booking.pickup_date_extracted
       const dropoffDate = booking.dropoff_date_extracted
 
-      const pYear = parseInt(pickupDate.substring(0, 4))
-      const pMonth = parseInt(pickupDate.substring(5, 7))
-      const pDay = parseInt(pickupDate.substring(8, 10))
-
-      const dYear = parseInt(dropoffDate.substring(0, 4))
-      const dMonth = parseInt(dropoffDate.substring(5, 7))
-      const dDay = parseInt(dropoffDate.substring(8, 10))
-
-      let startDay: number | null = null
-      let endDay: number | null = null
-      let skipped = false
-      let skipReason = ''
-
-      // Find start day
-      if (pYear < year || (pYear === year && pMonth < monthNum)) {
-        startDay = 1
-      } else if (pYear === year && pMonth === monthNum) {
-        startDay = pDay
-      } else {
-        skipped = true
-        skipReason = `pickup ${pYear}-${pMonth} is after report month ${year}-${monthNum}`
-      }
-
-      // Find end day (dropoff day is NOT counted - car is returned that day)
-      if (!skipped) {
-        if (dYear > year || (dYear === year && dMonth > monthNum)) {
-          endDay = daysInMonth
-        } else if (dYear === year && dMonth === monthNum) {
-          endDay = dDay - 1  // Don't count dropoff day
-          if (startDay !== null && endDay < startDay) {
-            endDay = startDay  // Same-day rental: count at least 1 day
-          }
-        } else {
-          skipped = true
-          skipReason = `dropoff ${dYear}-${dMonth} is before report month ${year}-${monthNum}`
-        }
-      }
-
-      const daysAdded: number[] = []
-      if (!skipped && startDay !== null && endDay !== null) {
-        for (let d = startDay; d <= endDay; d++) {
-          rentedDays.add(d)
-          daysAdded.push(d)
-        }
-      }
+      // Use shared functions for consistency with actual report
+      const occupiedDays = getOccupiedDaysInMonth(pickupDate, dropoffDate, year, monthNum, daysInMonth)
+      const billableDays = computeBillableDays(pickupDate, dropoffDate)
+      const daysAdded: number[] = Array.from(occupiedDays).sort((a, b) => a - b)
+      daysAdded.forEach(d => rentedDays.add(d))
 
       dayCalculations.push({
         booking_id: booking.id,
         pickup: pickupDate,
         dropoff: dropoffDate,
-        parsed: { pYear, pMonth, pDay, dYear, dMonth, dDay },
-        startDay,
-        endDay,
-        skipped,
-        skipReason: skipReason || undefined,
+        billable_days: billableDays,
+        days_in_month: daysAdded.length,
         daysAdded: daysAdded.length > 0 ? `${daysAdded[0]}-${daysAdded[daysAdded.length - 1]}` : 'none',
         daysCount: daysAdded.length
       })
