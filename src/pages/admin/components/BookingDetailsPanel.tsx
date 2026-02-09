@@ -138,9 +138,9 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                             body: JSON.stringify({
                               bookingId: booking.id,
                               amount: remainingEur,
-                              customerEmail: booking.customer_email,
-                              customerName: booking.customer_name,
-                              description: `Pagamento ${booking.vehicle_name} - ${booking.customer_name}`,
+                              customerEmail: booking.customer_email || booking.booking_details?.customer?.email || '',
+                              customerName: booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente',
+                              description: `Pagamento ${booking.vehicle_name} - ${booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'}`,
                               expirationDays: 7
                             })
                           });

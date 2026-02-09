@@ -539,9 +539,9 @@ export default function UnpaidBookingsTab() {
                     <span className="text-theme-text-primary font-medium">{getServiceLabel(booking)}</span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="text-theme-text-primary font-semibold">{booking.customer_name}</div>
-                    <div className="text-theme-text-muted text-xs">{booking.customer_email}</div>
-                    <div className="text-theme-text-muted text-xs">{booking.customer_phone}</div>
+                    <div className="text-theme-text-primary font-semibold">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
+                    <div className="text-theme-text-muted text-xs">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
+                    <div className="text-theme-text-muted text-xs">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {booking.service_type === 'rental' ? (

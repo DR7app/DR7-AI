@@ -310,8 +310,8 @@ export default function MechanicalBookingTab() {
             }).map(booking => (
               <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/50">
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
-                  <div>{booking.customer_name}</div>
-                  <div className="text-theme-text-muted text-xs">{booking.customer_phone}</div>
+                  <div>{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
+                  <div className="text-theme-text-muted text-xs">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                 </td>
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
                   {booking.booking_details?.vehicleInfo || '-'}
@@ -333,9 +333,9 @@ export default function MechanicalBookingTab() {
                   €{(booking.price_total / 100).toFixed(2)}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'paid' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
                     }`}>
-                    {booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
+                    {booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded' ? 'Pagato' : 'Non Pagato'}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm">

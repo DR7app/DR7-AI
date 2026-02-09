@@ -619,12 +619,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     <span className="text-theme-text-muted">Stato Pagamento:</span>
                     <span className={`font-medium ${selectedBooking.payment_status === 'paid' ||
                       selectedBooking.payment_status === 'completed' ||
+                      selectedBooking.payment_status === 'succeeded' ||
                       (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                       ? 'text-green-400'
                       : 'text-red-400'
                       }`}>
                       {selectedBooking.payment_status === 'paid' ||
                         selectedBooking.payment_status === 'completed' ||
+                        selectedBooking.payment_status === 'succeeded' ||
                         (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                         ? 'Pagato'
                         : 'Non Pagato'}

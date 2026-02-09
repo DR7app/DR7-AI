@@ -455,14 +455,14 @@ export default function MechanicalCalendarTab() {
                         }`}>
                         {booking.status}
                       </span>
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'paid' ||
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded' ||
                         (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                         ? 'bg-green-600 text-theme-text-primary'
                         : booking.payment_status === 'pending'
                           ? 'bg-yellow-600 text-black'
                           : 'bg-red-600 text-theme-text-primary'
                         }`}>
-                        {booking.payment_status === 'paid' ||
+                        {booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded' ||
                           (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                           ? 'Pagato'
                           : booking.payment_status}

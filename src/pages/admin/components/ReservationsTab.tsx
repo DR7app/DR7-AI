@@ -4222,12 +4222,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                           booking.payment_status === 'paid' ||
+                          booking.payment_status === 'succeeded' ||
                           (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                           ? 'bg-green-900 text-green-300'
                           : 'bg-red-900 text-red-300'
                           }`}>
                           {booking.payment_status === 'completed' ||
                             booking.payment_status === 'paid' ||
+                            booking.payment_status === 'succeeded' ||
                             (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                             ? 'Pagato'
                             : 'Non Pagato'}

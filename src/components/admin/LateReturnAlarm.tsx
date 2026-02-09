@@ -59,8 +59,8 @@ const LateReturnAlarm: React.FC = () => {
                         late.push({
                             id: booking.id,
                             vehicle_name: booking.vehicle_name,
-                            customer_name: booking.customer_name,
-                            customer_phone: booking.customer_phone,
+                            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A',
+                            customer_phone: booking.customer_phone || booking.booking_details?.customer?.phone || '-',
                             dropoff_date: booking.dropoff_date,
                             minutesLate,
                         });

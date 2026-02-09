@@ -1597,9 +1597,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           </>
                         ) : (
                           <>
-                            <div className="font-medium">{booking.customer_name}</div>
-                            <div className="text-xs text-theme-text-muted">{booking.customer_email}</div>
-                            <div className="text-xs text-theme-text-muted">{booking.customer_phone}</div>
+                            <div className="font-medium">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
+                            <div className="text-xs text-theme-text-muted">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
+                            <div className="text-xs text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                           </>
                         )}
                       </td>
@@ -1631,12 +1631,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid'
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
                             ? 'bg-green-900 text-green-300'
                             : 'bg-red-900 text-red-300'
                             }`}
                         >
-                          {booking.payment_status === 'completed' || booking.payment_status === 'paid' ? 'Pagato' : 'Non Pagato'}
+                          {booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded' ? 'Pagato' : 'Non Pagato'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
