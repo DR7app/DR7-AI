@@ -1,5 +1,5 @@
 import { CATEGORIES, CATEGORY_KEYS, DOT_COLORS } from './scadenzeConfig'
-import { ScadenzeStats } from './useScadenze'
+import type { ScadenzeStats } from './useScadenze'
 
 interface ScadenzeSidebarProps {
   activeView: string

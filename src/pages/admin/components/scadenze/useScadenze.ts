@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../../../supabaseClient'
-import { Scadenza, NewScadenzaForm, CATEGORIES, CATEGORY_KEYS } from './scadenzeConfig'
+import type { Scadenza, NewScadenzaForm } from './scadenzeConfig'
+import { CATEGORIES, CATEGORY_KEYS } from './scadenzeConfig'
 
 export interface ScadenzeStats {
   totalActive: number
