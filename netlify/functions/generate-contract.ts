@@ -85,7 +85,12 @@ export const handler: Handler = async (event) => {
         let customer = null
         let matchedBy = 'none'
 
-        console.log(`[generate-contract] Fetching customer. booking_details.customer.customerId: ${booking.booking_details?.customer?.customerId}, booking_details.customer.id: ${booking.booking_details?.customer?.id}, user_id: ${booking.user_id}, resolved ID: ${customerId}, Email: ${booking.customer_email}, Phone: ${booking.customer_phone}`)
+        // Resolve email/phone from booking or booking_details.customer (fallback for older bookings missing top-level fields)
+        const resolvedEmail = booking.customer_email || booking.booking_details?.customer?.email
+        const resolvedPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+        const resolvedName = booking.customer_name || booking.booking_details?.customer?.fullName
+
+        console.log(`[generate-contract] Fetching customer. booking_details.customer.customerId: ${booking.booking_details?.customer?.customerId}, booking_details.customer.id: ${booking.booking_details?.customer?.id}, user_id: ${booking.user_id}, resolved ID: ${customerId}, Email: ${resolvedEmail}, Phone: ${resolvedPhone}`)
 
         // 1. Try by customer ID (most reliable)
         if (customerId) {
@@ -99,9 +104,9 @@ export const handler: Handler = async (event) => {
         }
 
         // 2. Fallback: Try by email (use maybeSingle to handle duplicates)
-        if (!customer && booking.customer_email) {
+        if (!customer && resolvedEmail) {
             console.log('[generate-contract] Fallback: Fetching by email from customers_extended...')
-            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', resolvedEmail).order('updated_at', { ascending: false }).limit(1).maybeSingle()
             if (cError) console.error('[generate-contract] Error fetching by email:', cError)
             if (cData) {
                 console.log('[generate-contract] Found customer by Email:', cData.id, cData.nome, cData.cognome)
@@ -111,9 +116,9 @@ export const handler: Handler = async (event) => {
         }
 
         // 3. Fallback: Try by phone number
-        if (!customer && booking.customer_phone) {
+        if (!customer && resolvedPhone) {
             console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...')
-            const phone = booking.customer_phone.replace(/\s+/g, '')
+            const phone = resolvedPhone.replace(/\s+/g, '')
             const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', phone).order('updated_at', { ascending: false }).limit(1).maybeSingle()
             if (cData) {
                 console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome)
@@ -123,9 +128,9 @@ export const handler: Handler = async (event) => {
         }
 
         // 4. Fallback: Try by customer name in customers_extended
-        if (!customer && booking.customer_name) {
+        if (!customer && resolvedName) {
             console.log('[generate-contract] Fallback: Fetching by name from customers_extended...')
-            const nameParts = booking.customer_name.trim().split(/\s+/)
+            const nameParts = resolvedName.trim().split(/\s+/)
             if (nameParts.length >= 2) {
                 const { data: cData } = await supabase.from('customers_extended').select('*')
                     .or(`and(nome.ilike.%${nameParts[0]}%,cognome.ilike.%${nameParts[nameParts.length - 1]}%),and(nome.ilike.%${nameParts[nameParts.length - 1]}%,cognome.ilike.%${nameParts[0]}%)`)
@@ -139,9 +144,9 @@ export const handler: Handler = async (event) => {
         }
 
         // 5. Last resort: Try basic customers table
-        if (!customer && booking.customer_email) {
+        if (!customer && resolvedEmail) {
             console.log('[generate-contract] Fallback: Fetching by email from basic customers...')
-            const { data: cData } = await supabase.from('customers').select('*').eq('email', booking.customer_email).limit(1).maybeSingle()
+            const { data: cData } = await supabase.from('customers').select('*').eq('email', resolvedEmail).limit(1).maybeSingle()
             if (cData) {
                 console.log('[generate-contract] Found customer by Email (basic):', cData.id, cData.full_name)
                 customer = { ...cData, tipo_cliente: 'persona_fisica', nome: cData.full_name?.split(' ')[0] || '', cognome: cData.full_name?.split(' ').slice(1).join(' ') || '', indirizzo: cData.notes }
@@ -169,13 +174,13 @@ export const handler: Handler = async (event) => {
         // Final fallback: Use booking data directly if no customer record exists
         if (!customer) {
             console.warn('[generate-contract] WARNING: No customer record found by any method! Using booking data as fallback.')
-            const nameParts = (booking.customer_name || '').split(' ')
+            const nameParts = (resolvedName || '').split(' ')
             customer = {
                 tipo_cliente: 'persona_fisica',
                 nome: nameParts[0] || '',
                 cognome: nameParts.slice(1).join(' ') || '',
-                email: booking.customer_email || '',
-                telefono: booking.customer_phone || '',
+                email: resolvedEmail || '',
+                telefono: resolvedPhone || '',
                 indirizzo: booking.booking_details?.customer?.address || '',
                 codice_fiscale: booking.booking_details?.customer?.taxCode || '',
                 patente: booking.booking_details?.customer?.driverLicense || '',

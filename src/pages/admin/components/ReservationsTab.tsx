@@ -1148,17 +1148,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
     }
 
+    // Resolve email/phone from booking or booking_details.customer (fallback for older bookings)
+    const resolvedEmail = booking.customer_email || booking.booking_details?.customer?.email
+    const resolvedPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+
     // Fallback: Try by email if no customer found yet
-    if (!customer && booking.customer_email) {
+    if (!customer && resolvedEmail) {
       console.log('[validateCustomerData] Fallback: Fetching by email from customers_extended...')
       const { data: cData, error } = await supabase
         .from('customers_extended')
         .select('*')
-        .eq('email', booking.customer_email)
+        .eq('email', resolvedEmail)
         .maybeSingle()
 
       if (cData) {
-        console.log('[validateCustomerData] ✅ Found customer by email:', booking.customer_email)
+        console.log('[validateCustomerData] ✅ Found customer by email:', resolvedEmail)
         customer = cData
       } else if (error) {
         console.error('[validateCustomerData] Error fetching by email:', error)
@@ -1166,16 +1170,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
 
     // Fallback: Try by phone if still no customer found
-    if (!customer && booking.customer_phone) {
+    if (!customer && resolvedPhone) {
       console.log('[validateCustomerData] Fallback: Fetching by phone from customers_extended...')
       const { data: cData, error } = await supabase
         .from('customers_extended')
         .select('*')
-        .eq('telefono', booking.customer_phone)
+        .eq('telefono', resolvedPhone)
         .maybeSingle()
 
       if (cData) {
-        console.log('[validateCustomerData] ✅ Found customer by phone:', booking.customer_phone)
+        console.log('[validateCustomerData] ✅ Found customer by phone:', resolvedPhone)
         customer = cData
       } else if (error) {
         console.error('[validateCustomerData] Error fetching by phone:', error)
@@ -1190,11 +1194,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!booking.customer_name && !booking.booking_details?.customer?.fullName) {
         missing.push('nome', 'cognome')
       }
-      if (!booking.customer_email) missing.push('email')
-      if (!booking.customer_phone) missing.push('telefono')
+      if (!resolvedEmail) missing.push('email')
+      if (!resolvedPhone) missing.push('telefono')
 
       // If we have basic contact info, let the backend handle it (it has the same fallback logic)
-      if (booking.customer_email || booking.customer_phone) {
+      if (resolvedEmail || resolvedPhone) {
         console.log('[validateCustomerData] No customer record found, but booking has contact info. Backend will handle fallback.')
         return []
       }
