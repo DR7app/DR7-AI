@@ -1,5 +1,16 @@
 import { useState } from 'react'
 
+interface BookingDetail {
+  booking_id: string
+  targa: string
+  start_at: string
+  end_at: string
+  billable_days: number
+  days_in_month: number
+  total_price: number
+  revenue_per_day: number
+}
+
 interface VehicleReport {
   vehicleId: string
   label: string
@@ -13,6 +24,7 @@ interface VehicleReport {
   idleRate: number
   bookingsCount: number
   rentalRevenue: number
+  bookings?: BookingDetail[]
 }
 
 interface UnmatchedBooking {
