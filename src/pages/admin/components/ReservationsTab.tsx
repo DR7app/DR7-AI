@@ -186,6 +186,7 @@ interface Booking {
   service_name?: string
   appointment_date?: string
   appointment_time?: string
+  deposit_amount?: number | null
   contract_url?: string
   km_overage_fee?: number
   contracts?: {
