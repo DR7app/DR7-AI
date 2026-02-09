@@ -4375,7 +4375,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
                         <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_location || '-'}</span></div>
                         <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{selectedBooking.booking_details?.insuranceOption || 'N/A'}</span></div>
-                        <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.deposit ? `€${selectedBooking.booking_details.deposit}` : 'N/A'}</span></div>
+                        <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{
+                          selectedBooking.booking_details?.depositOption === 'no_deposit'
+                            ? `Senza cauzione (+30% = €${selectedBooking.booking_details?.noDepositSurcharge?.toFixed(2) || '0.00'})`
+                            : (selectedBooking.deposit_amount || selectedBooking.booking_details?.deposit)
+                              ? `€${selectedBooking.deposit_amount || selectedBooking.booking_details?.deposit}`
+                              : 'N/A'
+                        }</span></div>
                         <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
                       </>
                     )}

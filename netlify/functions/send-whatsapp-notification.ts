@@ -236,6 +236,17 @@ const handler: Handler = async (event) => {
       message += `*Luogo Ritiro:* ${pickupLocation}\n`;
       message += `*Assicurazione:* ${insuranceOption}\n`;
       message += `*Totale:* €${totalPrice}\n`;
+
+      // Cauzione (deposit) info
+      const depositAmount = booking.deposit_amount || booking.booking_details?.deposit || 0;
+      const depositOption = booking.booking_details?.depositOption;
+      if (depositOption === 'no_deposit') {
+        const surcharge = booking.booking_details?.noDepositSurcharge || 0;
+        message += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`;
+      } else if (depositAmount > 0) {
+        message += `*Cauzione:* €${depositAmount}\n`;
+      }
+
       message += `*Pagamento:* ${paymentInfo}`;
     }
   } else {
