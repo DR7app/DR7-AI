@@ -7,14 +7,6 @@ interface ScadenzeSidebarProps {
   stats: ScadenzeStats
 }
 
-const MENU_ITEMS = [
-  { key: 'panoramica', label: 'Panoramica', icon: '◉' },
-  ...CATEGORY_KEYS.map(key => ({
-    key,
-    label: CATEGORIES[key].label.replace('Scadenze ', ''),
-    color: CATEGORIES[key].color
-  }))
-]
 
 export default function ScadenzeSidebar({ activeView, onNavigate, stats }: ScadenzeSidebarProps) {
   return (

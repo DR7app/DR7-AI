@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CATEGORIES, CATEGORY_KEYS } from './scadenze/scadenzeConfig'
+import { CATEGORY_KEYS } from './scadenze/scadenzeConfig'
 import { useScadenze } from './scadenze/useScadenze'
 import ScadenzeSidebar from './scadenze/ScadenzeSidebar'
 import ScadenzePanoramica from './scadenze/ScadenzePanoramica'
