@@ -176,10 +176,11 @@ export const handler: Handler = async (event) => {
         const form = pdfDoc.getForm()
 
         // Insurance mapping
-        const insuranceOptionId = booking.booking_details?.insuranceOption || 'RCA'
+        const insuranceOptionId = booking.booking_details?.insuranceOption || 'KASKO_BASE'
         const insuranceLabels: Record<string, string> = {
-            'RCA': 'RCA',
-            'KASKO_BASE': 'Kasko Base',
+            'RCA': 'Kasko',
+            'KASKO': 'Kasko',
+            'KASKO_BASE': 'Kasko',
             'KASKO_BLACK': 'Kasko Black',
             'KASKO_SIGNATURE': 'Kasko Signature',
             'DR7': 'Kasko DR7'

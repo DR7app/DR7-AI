@@ -18,34 +18,30 @@ import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 
 // --- Kasko Constants & Types ---
-type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
+type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
-// SUPERCARS (Exotic) - RCA + existing KASKO options + Kasko DR7
+// SUPERCARS (Exotic) - KASKO options + Kasko DR7
 export const INSURANCE_OPTIONS = [
-  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 100 },
   { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 150 },
   { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 200 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 300 },
 ];
 
-// URBAN - RCA + Kasko Base + Kasko DR7
+// URBAN - Kasko Base + Kasko DR7
 export const URBAN_INSURANCE_OPTIONS = [
-  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
 ];
 
-// UTILITAIRE - RCA + Kasko Base + Kasko DR7 (same as Ducato/Vito)
+// UTILITAIRE - Kasko Base + Kasko DR7 (same as Ducato/Vito)
 export const UTILITAIRE_INSURANCE_OPTIONS = [
-  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
-// FURGONE (Ducato/Vito/Tourer) - RCA + Kasko Base + Kasko DR7
+// FURGONE (Ducato/Vito/Tourer) - Kasko Base + Kasko DR7
 export const FURGONE_INSURANCE_OPTIONS = [
-  { id: 'RCA', label: 'RCA', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
@@ -58,7 +54,6 @@ export const DEPOSIT_AMOUNTS = {
 };
 
 export const INSURANCE_ELIGIBILITY = {
-  RCA: { minAge: 18, minLicenseYears: 1 },
   KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
@@ -66,7 +61,6 @@ export const INSURANCE_ELIGIBILITY = {
 };
 
 export const URBAN_INSURANCE_ELIGIBILITY = {
-  RCA: { minAge: 18, minLicenseYears: 1 },
   KASKO_BASE: { minAge: 18, minLicenseYears: 3 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
@@ -3122,9 +3116,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 insurance_option: 'KASKO_BASE', // Always Kasko included
                 price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
                 payment_status: paymentStatus,
+                deposit_amount: parseFloat(formData.deposit) || 0,
                 booking_details: {
                   amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
-                  insuranceOption: 'KASKO_BASE'
+                  insuranceOption: 'KASKO_BASE',
+                  deposit: parseFloat(formData.deposit) || 0
                 }
               }
             })

@@ -473,21 +473,17 @@ export const handler: Handler = async (event) => {
         if (vehicleCategory === 'supercar' || vehicleCategory === 'luxury') {
             insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - SUPERCAR:
 
-Copertura assicurativa RCA (BASE): Paga qualsiasi danno subito al 100% del valore. Furto (solo in caso di restituzione chiave) - incendio - distruzione totale: da risarcire il 100% del valore del veicolo.
+KASKO: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 30% del danno.
 
-KASKO: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 30% del danno.
+KASKO BLACK: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 10% del danno.
 
-KASKO BLACK: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 10% del danno.
-
-KASKO SIGNATURE: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000.
+KASKO SIGNATURE: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000.
 
 LA KASKO NON È ATTIVABILE SE AL MOMENTO DEL DANNO IL CLIENTE ERA SOTTO EFFETTO DI STUPEFACENTI O IN STATO DI EBREZZA.`
         } else if (vehicleCategory === 'urban' || vehicleCategory === 'economy') {
             insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - UTILITARIE E AZIENDALI:
 
-Copertura assicurativa RCA (BASE): Paga qualsiasi danno subito al 100% del valore. Furto (solo in caso di restituzione chiave) - incendio - distruzione totale: da risarcire il 100% del valore del veicolo.
-
-Copertura assicurativa KASKO: RCA - Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - distruzione totale: da risarcire €2.000 + 30% del valore del danno è attivabile per qualsiasi danno recato alla vettura anche con oggetti non identificabili per mezzo di targa, previo preventivo in officina ufficiale.
+Copertura assicurativa KASKO: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - distruzione totale: da risarcire €2.000 + 30% del valore del danno è attivabile per qualsiasi danno recato alla vettura anche con oggetti non identificabili per mezzo di targa, previo preventivo in officina ufficiale.
 
 LA KASKO NON È ATTIVABILE SE AL MOMENTO DEL DANNO IL CLIENTE ERA SOTTO EFFETTO DI STUPEFACENTI O IN STATO DI EBREZZA.`
         } else {
@@ -615,15 +611,16 @@ DEPOSITO CAUZIONALE:
 - Trattenuto in caso di danni, multe o violazioni
 
 ASSICURAZIONE:
-Il veicolo è coperto da assicurazione RCA. Il cliente è responsabile per tutti i danni fino alla franchigia indicata. La sottoscrizione della Kasko riduce la franchigia.`
+Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tutti i danni fino alla franchigia indicata.`
         }
 
         console.log(`[generate-contract] Using additional terms for category: ${vehicleCategory}`)
 
         // Map insurance option ID to readable label
-        const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'RCA'
+        const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'KASKO_BASE'
         const insuranceLabels: Record<string, string> = {
-            'RCA': 'RCA',
+            'RCA': 'Kasko',
+            'KASKO': 'Kasko',
             'KASKO_BASE': 'Kasko',
             'KASKO_BLACK': 'Kasko Black',
             'KASKO_SIGNATURE': 'Kasko Signature',

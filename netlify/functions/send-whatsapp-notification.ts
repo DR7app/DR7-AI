@@ -197,8 +197,9 @@ const handler: Handler = async (event) => {
       // Map insurance option to display name - default to Kasko instead of Nessuna
       const insuranceRaw = booking.insurance_option || booking.booking_details?.insuranceOption || 'KASKO_BASE';
       const insuranceMap: Record<string, string> = {
-        'RCA': 'RCA',
+        'RCA': 'Kasko',
         'KASKO_BASE': 'Kasko',
+        'KASKO': 'Kasko',
         'KASKO_BLACK': 'Kasko Black',
         'KASKO_SIGNATURE': 'Kasko Signature',
         'DR7': 'Kasko DR7'
