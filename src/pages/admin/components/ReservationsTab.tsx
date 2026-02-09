@@ -4048,12 +4048,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                     booking.payment_status === 'paid' ||
+                    booking.payment_status === 'succeeded' ||
                     (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                     ? 'bg-green-900 text-green-300'
                     : 'bg-red-900 text-red-300'
                     }`}>
                     {booking.payment_status === 'completed' ||
                       booking.payment_status === 'paid' ||
+                      booking.payment_status === 'succeeded' ||
                       (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                       ? 'Pagato'
                       : 'Non Pagato'}
@@ -4400,6 +4402,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <span className="text-theme-text-muted">Stato:</span>
                       <span className={`px-3 py-1.5 rounded text-sm font-medium ${selectedBooking.payment_status === 'completed' ||
                         selectedBooking.payment_status === 'paid' ||
+                        selectedBooking.payment_status === 'succeeded' ||
                         (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                         ? 'bg-green-900 text-green-300'
                         : selectedBooking.payment_status === 'pending'
@@ -4408,6 +4411,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         }`}>
                         {selectedBooking.payment_status === 'completed' ||
                           selectedBooking.payment_status === 'paid' ||
+                          selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                           ? 'Pagato'
                           : selectedBooking.payment_status === 'pending'

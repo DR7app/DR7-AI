@@ -366,7 +366,7 @@ export const handler: Handler = async (event) => {
             numero_fattura: invoiceNumber,
             data_emissione: italyDate,
             importo_totale: total,
-            stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'paid' :
+            stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded' ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
             customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || bookingCustomer.fullName || customerData?.nome || 'Cliente',
             customer_address: fullAddress || '',

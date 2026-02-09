@@ -142,27 +142,18 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
 
     vehicles.forEach(vehicle => {
       const vehicleBookings = bookings.filter(b => {
-        // STRICT PLATE-ONLY MATCHING (Non-negotiable)
-        // A booking belongs to ONE physical car identified by license plate
-
-        // Normalize plates for comparison (remove spaces, uppercase)
+        // Match by license plate first (most reliable)
         const vPlate = vehicle.plate?.replace(/\s/g, '').toUpperCase()
         const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
 
-        // Data integrity check: flag bookings with missing plate
-        if (!bPlate) {
-          console.warn(`⚠️ MISSING PLATE: Booking ${b.id} for customer "${b.customer_name}" has no license plate. Skipping.`)
-          return false
-        }
+        // Plate match
+        if (bPlate && vPlate && vPlate === bPlate) return true
 
-        if (!vPlate) {
-          console.warn(`⚠️ MISSING PLATE: Vehicle "${vehicle.display_name}" has no license plate. Cannot match bookings.`)
-          return false
-        }
+        // Fallback: match by vehicle_id (website bookings don't store plate)
+        const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
+        if (bVehicleId && bVehicleId === vehicle.id) return true
 
-        // STRICT EQUALITY: booking.license_plate === vehicle.license_plate
-        // Forbidden: matching by model name, display name, or any fuzzy matching
-        return vPlate === bPlate
+        return false
       })
 
       // Normalize

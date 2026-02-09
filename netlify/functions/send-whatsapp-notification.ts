@@ -116,7 +116,7 @@ const handler: Handler = async (event) => {
       const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
 
       let paymentInfo = '';
-      if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+      if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
         paymentInfo = `Pagato`;
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
@@ -166,7 +166,7 @@ const handler: Handler = async (event) => {
       const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
 
       let paymentInfo = '';
-      if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+      if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
         paymentInfo = `Pagato`;
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
@@ -218,7 +218,7 @@ const handler: Handler = async (event) => {
       const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
 
       let paymentInfo = '';
-      if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+      if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
         paymentInfo = `Pagato`;
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
