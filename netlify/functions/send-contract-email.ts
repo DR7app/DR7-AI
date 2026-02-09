@@ -44,7 +44,7 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Booking not found: ' + bookingError?.message }) }
         }
 
-        const recipientEmail = emailOverride || booking.customer_email
+        const recipientEmail = emailOverride || booking.customer_email || booking.booking_details?.customer?.email
         if (!recipientEmail) {
             console.error('[send-contract-email] No customer email found for booking:', bookingId)
             return { statusCode: 400, body: JSON.stringify({ error: 'No customer email found' }) }
@@ -97,7 +97,7 @@ export const handler: Handler = async (event) => {
             from: '"DR7 Empire" <info@dr7.app>',
             to: recipientEmail,
             subject: `Contratto Noleggio DR7 - ${booking.vehicle_name}`,
-            text: `Gentile ${booking.customer_name},\n\nIn allegato trovi il contratto di noleggio per il veicolo ${booking.vehicle_name}.\n\nGrazie per aver scelto DR7 Empire.\n\nCordiali saluti,\nDR7 Empire Team`,
+            text: `Gentile ${booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'},\n\nIn allegato trovi il contratto di noleggio per il veicolo ${booking.vehicle_name}.\n\nGrazie per aver scelto DR7 Empire.\n\nCordiali saluti,\nDR7 Empire Team`,
             attachments: [
                 {
                     filename: `Contratto_${booking.vehicle_name.replace(/\s+/g, '_')}.pdf`,

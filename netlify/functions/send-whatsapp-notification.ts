@@ -79,9 +79,9 @@ const handler: Handler = async (event) => {
   // Handle booking notifications
   else if (booking) {
     const serviceType = booking.service_type;
-    const customerName = booking.customer_name || 'Cliente';
-    const customerEmail = booking.customer_email;
-    const customerPhone = booking.customer_phone;
+    const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
+    const customerEmail = booking.customer_email || booking.booking_details?.customer?.email;
+    const customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
     const bookingId = booking.id.substring(0, 8).toUpperCase();
     const totalPrice = (booking.price_total / 100).toFixed(2);
 

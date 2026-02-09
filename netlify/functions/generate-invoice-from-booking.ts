@@ -73,13 +73,17 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Resolve customer info from booking or booking_details fallback
+        const resolvedEmail = booking.customer_email || booking.booking_details?.customer?.email
+        const resolvedPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+
         // 2. Fallback: Try by email in customers_extended
-        if (!customerData && booking.customer_email) {
+        if (!customerData && resolvedEmail) {
             console.log('Fallback: Fetching by email from customers_extended...')
             const { data, error } = await supabase
                 .from('customers_extended')
                 .select('*')
-                .eq('email', booking.customer_email)
+                .eq('email', resolvedEmail)
                 .single()
 
             if (data) {
@@ -89,12 +93,12 @@ export const handler: Handler = async (event) => {
         }
 
         // 3. Fallback: Try basic customers table
-        if (!customerData && booking.customer_email) {
+        if (!customerData && resolvedEmail) {
             console.log('Fallback: Fetching by email from basic customers...')
             const { data } = await supabase
                 .from('customers')
                 .select('*')
-                .eq('email', booking.customer_email)
+                .eq('email', resolvedEmail)
                 .single()
 
             if (data) {
@@ -364,10 +368,10 @@ export const handler: Handler = async (event) => {
             importo_totale: total,
             stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
-            customer_name: booking.customer_name || customerData?.fullName || bookingCustomer.fullName || customerData?.nome || 'Cliente',
+            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || bookingCustomer.fullName || customerData?.nome || 'Cliente',
             customer_address: fullAddress || '',
-            customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || booking.customer_phone || '',
-            customer_email: customerData?.email || bookingCustomer.email || booking.customer_email || '',
+            customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || resolvedPhone || '',
+            customer_email: customerData?.email || bookingCustomer.email || resolvedEmail || '',
             customer_tax_code: taxCode,
             customer_vat: vatNumber,
             booking_id: bookingId,

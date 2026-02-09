@@ -75,18 +75,23 @@ export const handler: Handler = async (event) => {
             if (cData) customer = cData
         }
 
-        if (!customer && booking.customer_email) {
-            const { data: cData } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).single()
+        const resolvedEmail = booking.customer_email || booking.booking_details?.customer?.email
+        const resolvedPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+        const resolvedName = booking.customer_name || booking.booking_details?.customer?.fullName
+
+        if (!customer && resolvedEmail) {
+            const { data: cData } = await supabase.from('customers_extended').select('*').eq('email', resolvedEmail).single()
             if (cData) customer = cData
         }
 
         if (!customer) {
+            const nameParts = (resolvedName || '').split(' ')
             customer = {
                 tipo_cliente: 'persona_fisica',
-                nome: booking.customer_name || '',
-                cognome: '',
-                email: booking.customer_email || '',
-                telefono: booking.customer_phone || '',
+                nome: nameParts[0] || '',
+                cognome: nameParts.slice(1).join(' ') || '',
+                email: resolvedEmail || '',
+                telefono: resolvedPhone || '',
                 indirizzo: booking.booking_details?.customer?.address || '',
                 codice_fiscale: booking.booking_details?.customer?.taxCode || '',
             }
@@ -101,7 +106,7 @@ export const handler: Handler = async (event) => {
 
         // 4. Prepare Data
         const clientName = customer?.tipo_cliente === 'azienda' ? customer.denominazione :
-            (customer?.nome ? `${customer.nome} ${customer.cognome}` : booking.customer_name)
+            (customer?.nome ? `${customer.nome} ${customer.cognome}` : resolvedName)
         const clientAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
         const clientVat = customer?.tipo_cliente === 'azienda' ? customer.partita_iva : customer?.codice_fiscale
         const driverLicense = customer?.numero_patente || customer?.patente || ''
@@ -202,10 +207,10 @@ export const handler: Handler = async (event) => {
             'CustomerVAT': clientVat || '',
             'CodiceFiscale': clientVat || '',
             'PartitaIVA': clientVat || '',
-            'CustomerPhone': booking.customer_phone || '',
-            'Telefono': booking.customer_phone || '',
-            'CustomerEmail': booking.customer_email || '',
-            'Email': booking.customer_email || '',
+            'CustomerPhone': resolvedPhone || '',
+            'Telefono': resolvedPhone || '',
+            'CustomerEmail': resolvedEmail || '',
+            'Email': resolvedEmail || '',
             'CustomerAddress': clientAddress || '',
             'Indirizzo': clientAddress || '',
             'CustomerCity': customer?.citta_residenza || '',
