@@ -24,9 +24,14 @@ function getDaySet(
   cursor.setHours(0, 0, 0, 0)
   const endDay = new Date(overlapEnd)
   endDay.setHours(0, 0, 0, 0)
-  while (cursor <= endDay) {
+  // Exclude the last day (dropoff day = return day, not a rental day)
+  while (cursor < endDay) {
     days.add(cursor.getDate())
     cursor.setDate(cursor.getDate() + 1)
+  }
+  // If start == end (same-day booking), count at least 1 day
+  if (days.size === 0) {
+    days.add(overlapStart.getDate())
   }
   return days
 }
@@ -257,9 +262,10 @@ async function generateVehicleReport(
       const overlapDays = endDay - startDay + 1
 
       // Total booking days for revenue proration
+      // Don't add +1: pickup 6th to dropoff 7th = 1 day, not 2
       const pickupMs = new Date(pYear, pMonth - 1, pDay).getTime()
       const dropoffMs = new Date(dYear, dMonth - 1, dDay).getTime()
-      const totalBookingDays = Math.max(1, Math.round((dropoffMs - pickupMs) / (1000 * 60 * 60 * 24)) + 1)
+      const totalBookingDays = Math.max(1, Math.round((dropoffMs - pickupMs) / (1000 * 60 * 60 * 24)))
       const bookingRevenue = (booking.price_total || 0) / 100
       rentalRevenue += (bookingRevenue / totalBookingDays) * overlapDays
 
