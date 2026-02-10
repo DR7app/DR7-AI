@@ -1025,7 +1025,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setSelectedService(service)
                     setSelectedPriceOption(null)
                   }}
-                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 border border-theme-border focus:border-dr7-gold focus:outline-none"
+                  className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                 >
                   <option value="">Seleziona servizio...</option>
                   {Object.entries(servicesByCategory).map(([category, services]) => (
@@ -1050,7 +1050,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       const opt = selectedService.price_options!.find(o => o.label === e.target.value) || null
                       setSelectedPriceOption(opt)
                     }}
-                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 border border-theme-border focus:border-dr7-gold focus:outline-none"
+                    className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="">Seleziona opzione...</option>
                     {selectedService.price_options.map(opt => (
@@ -1279,7 +1279,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <select
                     value={formData.appointment_time}
                     onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                    className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="">Seleziona orario</option>
                     {(() => {
@@ -1326,7 +1326,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       const newAmountPaid = newStatus === 'paid' ? total.toString() : '0'
                       setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid })
                     }}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                    className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="paid">Pagato</option>
                     <option value="pending">Da Saldare</option>
@@ -1601,7 +1601,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <select
                       value={editingBooking.status}
                       onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                     >
                       <option value="pending">In Attesa</option>
                       <option value="confirmed">Confermata</option>
@@ -1614,7 +1614,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <select
                       value={editingBooking.payment_status}
                       onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                     >
                       <option value="pending">In Attesa</option>
                       <option value="paid">Pagato</option>
