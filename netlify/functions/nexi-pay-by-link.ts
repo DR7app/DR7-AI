@@ -34,6 +34,15 @@ const handler: Handler = async (event) => {
             expirationDays = 7 // Link valid for 7 days by default
         } = JSON.parse(event.body || '{}');
 
+        if (!NEXI_API_KEY) {
+            console.error('NEXI_API_KEY environment variable is not set');
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: 'Configurazione Nexi mancante (API key)' })
+            };
+        }
+
         if (!amount || amount <= 0) {
             return {
                 statusCode: 400,
@@ -72,8 +81,7 @@ const handler: Handler = async (event) => {
                 language: 'ita',
                 resultUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`,
-                expirationDate: expirationDate.toISOString()
+                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`
             }
         };
 
@@ -88,7 +96,18 @@ const handler: Handler = async (event) => {
             body: JSON.stringify(payload)
         });
 
-        const responseData = await response.json();
+        const responseText = await response.text();
+        let responseData: any;
+        try {
+            responseData = JSON.parse(responseText);
+        } catch {
+            console.error('Nexi returned non-JSON response:', response.status, responseText.substring(0, 500));
+            return {
+                statusCode: 502,
+                headers,
+                body: JSON.stringify({ error: `Nexi API error (${response.status}): risposta non valida` })
+            };
+        }
 
         if (!response.ok) {
             console.error('Nexi Pay by Link error:', responseData);
