@@ -201,12 +201,12 @@ export default function FleetInventory() {
             message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
         } else if (itemType === 'sensori_ant') {
             phone = inv?.sensori_ant_supplier_phone || ''
-            const model = inv?.sensori_ant_model || 'Sensori parcheggio anteriori'
-            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Parcheggio Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+            const model = inv?.sensori_ant_model || 'Sensori anteriori'
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
         } else if (itemType === 'sensori_post') {
             phone = inv?.sensori_post_supplier_phone || ''
-            const model = inv?.sensori_post_model || 'Sensori parcheggio posteriori'
-            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Parcheggio Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+            const model = inv?.sensori_post_model || 'Sensori posteriori'
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
         }
 
         if (!phone) {
@@ -489,7 +489,7 @@ export default function FleetInventory() {
 
                                     {/* Front Parking Sensors Section */}
                                     <div className="border-b border-theme-border pb-4">
-                                        <h4 className="font-semibold text-theme-text-primary mb-3">Sensori Parcheggio Anteriori</h4>
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Sensori Anteriori</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
@@ -536,7 +536,7 @@ export default function FleetInventory() {
 
                                     {/* Rear Parking Sensors Section */}
                                     <div className="pb-2">
-                                        <h4 className="font-semibold text-theme-text-primary mb-3">Sensori Parcheggio Posteriori</h4>
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Sensori Posteriori</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
