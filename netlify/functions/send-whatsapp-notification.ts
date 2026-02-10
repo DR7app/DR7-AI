@@ -238,16 +238,16 @@ const handler: Handler = async (event) => {
       message += `*Assicurazione:* ${insuranceOption}\n`;
       message += `*Totale:* €${totalPrice}\n`;
 
-      // Cauzione (deposit) info - always show this field
-      const depositAmount = booking.deposit_amount || booking.booking_details?.deposit || 0;
+      // Cauzione (deposit) info — always show, default to €0
+      const depositAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
       const depositOption = booking.booking_details?.depositOption;
       if (depositOption === 'no_deposit') {
         const surcharge = booking.booking_details?.noDepositSurcharge || 0;
-        message += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`;
+        message += `*Cauzione:* Senza cauzione (+30% = €${Number(surcharge).toFixed(2)})\n`;
       } else if (depositAmount > 0) {
         message += `*Cauzione:* €${depositAmount}\n`;
       } else {
-        message += `*Cauzione:* N/A\n`;
+        message += `*Cauzione:* €0\n`;
       }
 
       message += `*Pagamento:* ${paymentInfo}`;

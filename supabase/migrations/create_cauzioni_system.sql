@@ -62,8 +62,8 @@ DECLARE
     day_of_week INTEGER;
     is_holiday BOOLEAN;
 BEGIN
-    -- Start from the NEXT day after start_date
-    check_date := start_date + INTERVAL '1 day';
+    -- Start from the return date itself
+    check_date := start_date;
     
     WHILE business_days_counted < days_to_add LOOP
         -- Get day of week (0=Sunday, 6=Saturday)
