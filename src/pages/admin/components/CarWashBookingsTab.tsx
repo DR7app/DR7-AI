@@ -247,7 +247,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   const filteredByTab = carWashServices.filter(s => s.main_tab === selectedMainTab)
-  const mainServices = filteredByTab.filter(s => s.category !== 'extra')
+  const mainServices = filteredByTab.filter(s => s.category !== 'extra' && s.category !== 'experience')
   const extraServices = filteredByTab.filter(s => s.category === 'extra' || s.category === 'experience')
 
   const servicesByCategory = mainServices.reduce<Record<string, CarWashService[]>>((acc, s) => {
