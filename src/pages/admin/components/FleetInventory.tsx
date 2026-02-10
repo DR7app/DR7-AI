@@ -134,9 +134,9 @@ export default function FleetInventory() {
             setEditingVehicle(null)
             setEditForm({})
             await loadVehiclesWithInventory()
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving inventory:', error)
-            alert('Errore nel salvataggio')
+            alert('Errore nel salvataggio: ' + (error?.message || error?.details || JSON.stringify(error)))
         } finally {
             setSaving(false)
         }
