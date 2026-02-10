@@ -2034,6 +2034,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
         extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
+        // Cauzione info
+        const depositAmt = parseFloat(extendingBooking.booking_details?.deposit) || extendingBooking.deposit_amount || 0
+        const depositOpt = extendingBooking.booking_details?.depositOption
+        const depositSts = extendingBooking.booking_details?.deposit_status
+        if (depositOpt === 'no_deposit') {
+          const surcharge = extendingBooking.booking_details?.noDepositSurcharge || 0
+          extensionMsg += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`
+        } else if (depositAmt > 0) {
+          const cauzioneLabel = depositSts === 'incassata' ? '✅ Pagata' : '⏳ Da saldare'
+          extensionMsg += `*Cauzione:* €${depositAmt} - ${cauzioneLabel}\n`
+        }
         extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da Saldare'}`
         if (extendData.notes) extensionMsg += `\n*Note:* ${extendData.notes}`
 
