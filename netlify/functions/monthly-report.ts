@@ -391,12 +391,13 @@ async function generateVehicleReport(
       days.forEach(d => maintenanceDays.add(d))
     }
 
-    // Apply priority: MAINTENANCE > RENTAL > IDLE
-    const finalMaintenanceDays = new Set(maintenanceDays)
-    const finalRentedDays = new Set<number>()
-    rentedDays.forEach(d => {
-      if (!finalMaintenanceDays.has(d)) {
-        finalRentedDays.add(d)
+    // Apply priority: RENTAL > MAINTENANCE > IDLE
+    // If a day has an active rental, it counts as rented even if maintenance is scheduled
+    const finalRentedDays = new Set(rentedDays)
+    const finalMaintenanceDays = new Set<number>()
+    maintenanceDays.forEach(d => {
+      if (!finalRentedDays.has(d)) {
+        finalMaintenanceDays.add(d)
       }
     })
 
