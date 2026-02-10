@@ -264,11 +264,39 @@ export const handler: Handler = async (event) => {
             'VehicleSeats': parsedSeats,
             'Posti': parsedSeats,
 
-            // EXTENSION DATES - Previous dropoff becomes pickup, new dropoff is the end
-            'PickupLocation': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'SedeRitiro': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'DropoffLocation': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'SedeRiconsegna': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            // EXTENSION DATES - Use delivery address when domicilio is enabled
+            'PickupLocation': (() => {
+                const deliveryEnabled = booking.delivery_enabled || booking.booking_details?.delivery_enabled
+                const deliveryAddr = booking.delivery_address || booking.booking_details?.delivery_address
+                if (deliveryEnabled && deliveryAddr) {
+                    return [deliveryAddr.street, deliveryAddr.zip, deliveryAddr.city, deliveryAddr.province].filter(Boolean).join(', ')
+                }
+                return booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100'
+            })(),
+            'SedeRitiro': (() => {
+                const deliveryEnabled = booking.delivery_enabled || booking.booking_details?.delivery_enabled
+                const deliveryAddr = booking.delivery_address || booking.booking_details?.delivery_address
+                if (deliveryEnabled && deliveryAddr) {
+                    return [deliveryAddr.street, deliveryAddr.zip, deliveryAddr.city, deliveryAddr.province].filter(Boolean).join(', ')
+                }
+                return booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100'
+            })(),
+            'DropoffLocation': (() => {
+                const pickupEnabled = booking.pickup_enabled || booking.booking_details?.pickup_enabled
+                const pickupAddr = booking.pickup_address || booking.booking_details?.pickup_address
+                if (pickupEnabled && pickupAddr) {
+                    return [pickupAddr.street, pickupAddr.zip, pickupAddr.city, pickupAddr.province].filter(Boolean).join(', ')
+                }
+                return booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100'
+            })(),
+            'SedeRiconsegna': (() => {
+                const pickupEnabled = booking.pickup_enabled || booking.booking_details?.pickup_enabled
+                const pickupAddr = booking.pickup_address || booking.booking_details?.pickup_address
+                if (pickupEnabled && pickupAddr) {
+                    return [pickupAddr.street, pickupAddr.zip, pickupAddr.city, pickupAddr.province].filter(Boolean).join(', ')
+                }
+                return booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100'
+            })(),
             // Start date = previous return date (extension starts where original ended)
             'PickupDate': formatDateRome(previousDropoffDate),
             'DataInizio': formatDateRome(previousDropoffDate),

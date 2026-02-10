@@ -189,6 +189,13 @@ interface Booking {
   deposit_amount?: number | null
   contract_url?: string
   km_overage_fee?: number
+  // Home delivery & pickup
+  delivery_enabled?: boolean
+  delivery_address?: { street: string; city: string; zip: string; province: string; notes: string } | null
+  delivery_fee?: number
+  pickup_enabled?: boolean
+  pickup_address?: { street: string; city: string; zip: string; province: string; notes: string } | null
+  pickup_fee?: number
   contracts?: {
     yousign_status: string | null
     signed_pdf_url: string | null
@@ -269,7 +276,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
-export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleName?: string; pickupDate?: Date; bookingId?: string } | null; onDataConsumed?: () => void }) {
+export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -381,6 +388,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     km_overage_fee: '0',
     unlimited_km: false,
     km_limit: '0', // Default KM limit when not unlimited
+    // Home Delivery & Pickup
+    delivery_enabled: false,
+    delivery_street: '',
+    delivery_city: '',
+    delivery_zip: '',
+    delivery_province: '',
+    delivery_notes: '',
+    delivery_fee: '0',
+    pickup_enabled: false,
+    pickup_street: '',
+    pickup_city: '',
+    pickup_zip: '',
+    pickup_province: '',
+    pickup_notes: '',
+    pickup_fee: '0',
   })
 
   // Auto-populate second driver fields when customer is selected
@@ -445,7 +467,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Handle initial data from Calendar click
   useEffect(() => {
     if (initialData && vehicles.length > 0) {
-      const { vehicleName, pickupDate, bookingId } = initialData
+      const { vehicleId, pickupDate, bookingId } = initialData
 
       // If bookingId is provided, load that booking in edit mode
       if (bookingId) {
@@ -460,8 +482,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Otherwise, create new booking with prefilled data
-      // Find vehicle by name (rough match)
-      const vehicle = vehicles.find(v => v.display_name === vehicleName)
+      // Find vehicle by ID (not by name — names can collide)
+      const vehicle = vehicles.find(v => v.id === vehicleId)
 
       if (vehicle) {
         // Format date as YYYY-MM-DD
@@ -1806,49 +1828,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
     }
 
-    // Method 5: Exact name match (top-level)
-    if (!vehicle && booking.vehicle_name) {
-      vehicle = vehicles.find(v => v.display_name === booking.vehicle_name)
-      if (vehicle) {
-        matchMethod = 'vehicle_name (exact)'
-        console.log('[handleEditBooking] ✅ Found by exact name:', vehicle.display_name)
-      }
-    }
-
-    // Method 6: Exact name match (booking_details)
-    if (!vehicle && booking.booking_details?.vehicle_name) {
-      vehicle = vehicles.find(v => v.display_name === (booking.booking_details?.vehicle_name || ''))
-      if (vehicle) {
-        matchMethod = 'booking_details.vehicle_name (exact)'
-        console.log('[handleEditBooking] ✅ Found by booking_details.vehicle_name:', vehicle.display_name)
-      }
-    }
-
-    // Method 7: Partial name match (top-level)
-    if (!vehicle && booking.vehicle_name) {
-      const bookingNameLower = booking.vehicle_name.toLowerCase().trim()
-      vehicle = vehicles.find(v => {
-        const vNameLower = v.display_name.toLowerCase().trim()
-        return vNameLower.includes(bookingNameLower) || bookingNameLower.includes(vNameLower)
-      })
-      if (vehicle) {
-        matchMethod = 'vehicle_name (partial)'
-        console.log('[handleEditBooking] ✅ Found by partial name match:', vehicle.display_name)
-      }
-    }
-
-    // Method 8: Partial name match (booking_details)
-    if (!vehicle && booking.booking_details?.vehicle_name) {
-      const bookingNameLower = (booking.booking_details?.vehicle_name || '').toLowerCase().trim()
-      vehicle = vehicles.find(v => {
-        const vNameLower = v.display_name.toLowerCase().trim()
-        return vNameLower.includes(bookingNameLower) || bookingNameLower.includes(vNameLower)
-      })
-      if (vehicle) {
-        matchMethod = 'booking_details.vehicle_name (partial)'
-        console.log('[handleEditBooking] ✅ Found by booking_details partial name:', vehicle.display_name)
-      }
-    }
+    // NOTE: Name-based matching (Methods 5-8) intentionally removed.
+    // Matching by vehicle name is dangerous when multiple vehicles share the same model name
+    // (e.g. "Renault Clio Orange" and "Renault Clio Blue"). Always match by plate or vehicle_id.
 
     // FINAL RESULT
     if (!vehicle) {
@@ -1913,7 +1895,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_location: pickupLoc,
       dropoff_location: dropoffLoc,
       status: booking.status,
-      total_amount: (booking.price_total / 100).toString(),
+      payment_status: booking.payment_status || 'paid',
+      payment_method: booking.payment_method || 'Contanti',
+      amount_paid: booking.booking_details?.amountPaid ? (booking.booking_details.amountPaid / 100).toString() : '0',
+      // Subtract delivery/pickup fees to get BASE rental amount only
+      // (fees are re-added on save at price_total calculation)
+      // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
+      total_amount: ((booking.price_total
+        - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
+        - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
+      ) / 100).toString(),
       currency: booking.currency.toUpperCase(),
       source: 'admin',
       // 2nd Driver
@@ -1940,7 +1931,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
       deposit: booking.booking_details?.deposit || '0',
       deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
-      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0'
+      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0',
+      unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
+      km_limit: booking.booking_details?.km_limit === 'Illimitati' ? '0' : (booking.booking_details?.km_limit || '0'),
+      // Home Delivery & Pickup
+      delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
+      delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
+      delivery_city: booking.delivery_address?.city || booking.booking_details?.delivery_address?.city || '',
+      delivery_zip: booking.delivery_address?.zip || booking.booking_details?.delivery_address?.zip || '',
+      delivery_province: booking.delivery_address?.province || booking.booking_details?.delivery_address?.province || '',
+      delivery_notes: booking.delivery_address?.notes || booking.booking_details?.delivery_address?.notes || '',
+      delivery_fee: booking.delivery_fee != null ? (booking.delivery_fee / 100).toString() : (booking.booking_details?.delivery_fee || '0'),
+      pickup_enabled: booking.pickup_enabled || booking.booking_details?.pickup_enabled || false,
+      pickup_street: booking.pickup_address?.street || booking.booking_details?.pickup_address?.street || '',
+      pickup_city: booking.pickup_address?.city || booking.booking_details?.pickup_address?.city || '',
+      pickup_zip: booking.pickup_address?.zip || booking.booking_details?.pickup_address?.zip || '',
+      pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
+      pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
+      pickup_fee: booking.pickup_fee != null ? (booking.pickup_fee / 100).toString() : (booking.booking_details?.pickup_fee || '0'),
     })
 
     setEditingId(booking.id)
@@ -2014,7 +2022,70 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       console.log('[handleConfirmExtend] ✅ Booking extended successfully')
 
-      // Close modal first
+      // Send WhatsApp notification for extension
+      try {
+        const prevDropoff = new Date(extendingBooking.dropoff_date)
+        const prevDropoffStr = prevDropoff.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+        const prevTimeStr = prevDropoff.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+        const newDropoffStr = newDropoffDateTime.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+        const newTimeStr = newDropoffDateTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+        const bookingIdShort = extendingBooking.id.substring(0, 8).toUpperCase()
+
+        let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
+        extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
+        extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
+        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
+        extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+        extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
+        extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
+        // Cauzione info
+        const depositAmt = parseFloat(extendingBooking.booking_details?.deposit) || extendingBooking.deposit_amount || 0
+        const depositOpt = extendingBooking.booking_details?.depositOption
+        const depositSts = extendingBooking.booking_details?.deposit_status
+        if (depositOpt === 'no_deposit') {
+          const surcharge = parseFloat(extendingBooking.booking_details?.noDepositSurcharge || 0)
+          extensionMsg += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`
+        } else if (depositAmt > 0) {
+          const cauzioneLabel = depositSts === 'incassata' ? 'Pagata' : 'Da saldare'
+          extensionMsg += `*Cauzione:* €${depositAmt.toFixed(2)} - ${cauzioneLabel}\n`
+        }
+        extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da saldare'}`
+        if (extendData.notes) extensionMsg += `\n*Note:* ${extendData.notes}`
+
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customMessage: extensionMsg })
+        })
+        console.log('[handleConfirmExtend] ✅ WhatsApp notification sent')
+      } catch (whatsappError) {
+        console.error('[handleConfirmExtend] ⚠️ WhatsApp notification failed:', whatsappError)
+      }
+
+      // Sync cauzione with new return date
+      try {
+        const depositAmount = parseFloat(extendingBooking.booking_details?.deposit) || extendingBooking.deposit_amount || 0
+        await fetch('/.netlify/functions/sync-booking-cauzione', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: extendingBooking.id,
+            customerId: extendingBooking.user_id,
+            vehicleId: extendingBooking.vehicle_id,
+            returnDate: newDropoffDateTime.toISOString(),
+            depositAmount: depositAmount,
+            paymentMethod: extendingBooking.payment_method || 'carta',
+            depositPaid: extendingBooking.booking_details?.deposit_status === 'incassata',
+            depositStatus: extendingBooking.booking_details?.deposit_status || 'da_incassare'
+          })
+        })
+        console.log('[handleConfirmExtend] ✅ Cauzione synced with new return date')
+      } catch (cauzioneError) {
+        console.error('[handleConfirmExtend] ⚠️ Cauzione sync failed:', cauzioneError)
+      }
+
+      // Close modal
       const bookingId = extendingBooking.id
       setShowExtendModal(false)
       setExtendingBooking(null)
@@ -2398,6 +2469,48 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
+      // ===== VALIDATION: Home Delivery fields =====
+      if (formData.delivery_enabled) {
+        const deliveryMissing: string[] = []
+        if (!formData.delivery_street.trim()) deliveryMissing.push('Via e numero (consegna)')
+        if (!formData.delivery_city.trim()) deliveryMissing.push('Città (consegna)')
+        if (!formData.delivery_zip.trim()) deliveryMissing.push('CAP (consegna)')
+        if (!formData.delivery_province.trim()) deliveryMissing.push('Provincia (consegna)')
+        if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
+        if (deliveryMissing.length > 0) {
+          setTimeout(() => {
+            alert(
+              'CONSEGNA A DOMICILIO - CAMPI MANCANTI\n\n' +
+              'Compila i seguenti campi:\n\n' +
+              deliveryMissing.map(f => `- ${f}`).join('\n')
+            )
+          }, 100)
+          setIsSubmitting(false)
+          return
+        }
+      }
+
+      // ===== VALIDATION: Home Pickup fields =====
+      if (formData.pickup_enabled) {
+        const pickupMissing: string[] = []
+        if (!formData.pickup_street.trim()) pickupMissing.push('Via e numero (ritiro)')
+        if (!formData.pickup_city.trim()) pickupMissing.push('Città (ritiro)')
+        if (!formData.pickup_zip.trim()) pickupMissing.push('CAP (ritiro)')
+        if (!formData.pickup_province.trim()) pickupMissing.push('Provincia (ritiro)')
+        if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
+        if (pickupMissing.length > 0) {
+          setTimeout(() => {
+            alert(
+              'RITIRO A DOMICILIO - CAMPI MANCANTI\n\n' +
+              'Compila i seguenti campi:\n\n' +
+              pickupMissing.map(f => `- ${f}`).join('\n')
+            )
+          }, 100)
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       // ===== AVAILABILITY ENGINE VALIDATION =====
       // Check if the selected vehicle is actually available for the selected dates/times
       // SKIP this check when EDITING an existing booking - admin knows what they're doing
@@ -2523,13 +2636,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const pickupWithBuffer = new Date(pickupDateTime.getTime() - BUFFER_MINUTES * 60 * 1000)
 
         // First, check if the vehicle is currently in the car wash
-        const { data: carWashBookings, error: carWashError } = await supabase
+        const carWashPlate = vehicle?.plate || vehicle?.targa || ''
+        let carWashQuery = supabase
           .from('bookings')
           .select('id, service_type, service_name, vehicle_name, appointment_date, appointment_time, pickup_date, dropoff_date')
           .eq('service_type', 'car_wash')
           .neq('status', 'cancelled')
-          .or(`vehicle_name.ilike.%${vehicle?.display_name}%`)
           .or(`and(pickup_date.lte.${pickupDateTime.toISOString()},dropoff_date.gte.${pickupDateTime.toISOString()})`)
+        if (carWashPlate) {
+          carWashQuery = carWashQuery.eq('vehicle_plate', carWashPlate)
+        } else if (vehicle?.id) {
+          carWashQuery = carWashQuery.eq('vehicle_id', vehicle.id)
+        }
+        const { data: carWashBookings, error: carWashError } = await carWashQuery
 
         if (!carWashError && carWashBookings && carWashBookings.length > 0) {
           // Check if any car wash booking overlaps with the pickup time
@@ -2575,11 +2694,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           .or(`and(pickup_date.lte.${returnDateTime.toISOString()},dropoff_date.gte.${pickupWithBuffer.toISOString()})`)
 
         if (vehicle?.plate || vehicle?.targa) {
-          // If vehicle has a plate, check availability specifically for that plate
           query = query.eq('vehicle_plate', vehicle.plate || vehicle.targa)
-        } else {
-          // Fallback to name if no plate is available (legacy behavior)
-          query = query.eq('vehicle_name', vehicle?.display_name)
+        } else if (vehicle?.id) {
+          query = query.eq('vehicle_id', vehicle.id)
         }
 
         const { data: existingBookings, error: checkError } = await query
@@ -2610,7 +2727,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             if (isOverlap) {
               // Complete overlap - show double booking warning
-              const vehicleTarga = vehicle?.plate || conflictingBooking.vehicle_name
+              const vehicleTarga = vehicle?.plate || conflictingBooking.vehicle_plate || 'N/A'
               const confirmed = confirm(
                 `ATTENZIONE: VEICOLO GIÀ PRENOTATO!\n\n` +
                 `Veicolo: ${conflictingBooking.vehicle_name}\n` +
@@ -2940,7 +3057,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
-        price_total: Math.round(parseFloat(formData.total_amount) * 100), // Convert to cents
+        price_total: Math.round(parseFloat(formData.total_amount) * 100) // Convert to cents (base rental)
+          + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
+          + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
@@ -2951,7 +3070,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customer_phone: customerInfo?.phone || null,
         booked_at: editingId ? undefined : new Date().toISOString(), // Don't update booked_at on edit
         booking_source: 'admin', // Mark as admin booking
+        // Home Delivery & Pickup (top-level DB columns)
+        delivery_enabled: formData.delivery_enabled,
+        delivery_address: formData.delivery_enabled ? {
+          street: formData.delivery_street,
+          city: formData.delivery_city,
+          zip: formData.delivery_zip,
+          province: formData.delivery_province,
+          notes: formData.delivery_notes
+        } : null,
+        delivery_fee: formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0,
+        pickup_enabled: formData.pickup_enabled,
+        pickup_address: formData.pickup_enabled ? {
+          street: formData.pickup_street,
+          city: formData.pickup_city,
+          zip: formData.pickup_zip,
+          province: formData.pickup_province,
+          notes: formData.pickup_notes
+        } : null,
+        pickup_fee: formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0,
         booking_details: {
+          // When editing, preserve metadata that the form doesn't manage
+          // (extension history, contracts, deposit options, etc.)
+          ...(editingId ? (() => {
+            const existingBooking = bookings.find(b => b.id === editingId)
+            return existingBooking?.booking_details ? {
+              extension_history: existingBooking.booking_details.extension_history,
+              extension_contracts: existingBooking.booking_details.extension_contracts,
+              contract_generated_at: existingBooking.booking_details.contract_generated_at,
+              depositOption: existingBooking.booking_details.depositOption,
+              noDepositSurcharge: existingBooking.booking_details.noDepositSurcharge,
+            } : {}
+          })() : {}),
           customer: {
             fullName: customerInfo?.full_name || '',
             email: customerInfo?.email || '',
@@ -2991,7 +3141,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             license_issued_by: formData.second_driver_license_issued_by,
             license_issue_date: formData.second_driver_license_issue_date,
             license_expiry: formData.second_driver_license_expiry
-          } : null
+          } : null,
+          // Home Delivery & Pickup (backup in booking_details JSONB)
+          delivery_enabled: formData.delivery_enabled,
+          delivery_address: formData.delivery_enabled ? {
+            street: formData.delivery_street,
+            city: formData.delivery_city,
+            zip: formData.delivery_zip,
+            province: formData.delivery_province,
+            notes: formData.delivery_notes
+          } : null,
+          delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+          pickup_enabled: formData.pickup_enabled,
+          pickup_address: formData.pickup_enabled ? {
+            street: formData.pickup_street,
+            city: formData.pickup_city,
+            zip: formData.pickup_zip,
+            province: formData.pickup_province,
+            notes: formData.pickup_notes
+          } : null,
+          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0'
         }
       }
 
@@ -3070,15 +3239,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               customerName: customerInfo?.full_name || '',
               customerEmail: customerInfo?.email || '',
               customerPhone: customerInfo?.phone || '',
-              items: [{
-                description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
-                quantity: 1,
-                unitPrice: Math.round(parseFloat(formData.total_amount) * 100),
-                total: Math.round(parseFloat(formData.total_amount) * 100)
-              }],
-              subtotal: Math.round(parseFloat(formData.total_amount) * 100),
+              items: [
+                {
+                  description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
+                  quantity: 1,
+                  unitPrice: Math.round(parseFloat(formData.total_amount) * 100),
+                  total: Math.round(parseFloat(formData.total_amount) * 100)
+                },
+                ...(formData.delivery_enabled ? [{
+                  description: 'Consegna a domicilio',
+                  quantity: 1,
+                  unitPrice: Math.round(parseFloat(formData.delivery_fee) * 100),
+                  total: Math.round(parseFloat(formData.delivery_fee) * 100)
+                }] : []),
+                ...(formData.pickup_enabled ? [{
+                  description: 'Ritiro a domicilio',
+                  quantity: 1,
+                  unitPrice: Math.round(parseFloat(formData.pickup_fee) * 100),
+                  total: Math.round(parseFloat(formData.pickup_fee) * 100)
+                }] : [])
+              ],
+              subtotal: Math.round(parseFloat(formData.total_amount) * 100)
+                + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
+                + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
               tax: 0,
-              total: Math.round(parseFloat(formData.total_amount) * 100),
+              total: Math.round(parseFloat(formData.total_amount) * 100)
+                + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
+                + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
               paymentStatus: formData.payment_status || 'pending',
               bookingDate: new Date().toISOString(),
               serviceDate: `${formData.pickup_date}T${formData.pickup_time}:00`,
@@ -3092,85 +3279,105 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Send WhatsApp notification for car rental
-      if (!editingId) { // Only for new bookings
-        try {
-          const paymentStatus = formData.payment_status || 'pending'
+      // Send WhatsApp notification for car rental (new and edited bookings)
+      try {
+        const paymentStatus = formData.payment_status || 'pending'
 
-          // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
-          // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              booking: {
-                id: insertedBooking?.id || '',
-                service_type: 'car_rental',
-                customer_name: customerInfo?.full_name || '',
-                customer_email: customerInfo?.email || '',
-                customer_phone: customerInfo?.phone || '',
-                vehicle_name: vehicle?.display_name || '',
-                // Use the pre-computed datetime strings with correct Italy offset
-                pickup_date: pickupDateTime,
-                dropoff_date: returnDateTime,
-                pickup_location: pickupLocationLabel,
-                insurance_option: 'KASKO_BASE', // Always Kasko included
-                price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
-                payment_status: paymentStatus,
-                deposit_amount: parseFloat(formData.deposit) || 0,
-                booking_details: {
-                  amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
-                  insuranceOption: 'KASKO_BASE',
-                  deposit: parseFloat(formData.deposit) || 0
-                }
+        // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
+        // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            booking: {
+              id: insertedBooking?.id || '',
+              service_type: 'car_rental',
+              isEdit: !!editingId,
+              customer_name: customerInfo?.full_name || '',
+              customer_email: customerInfo?.email || '',
+              customer_phone: customerInfo?.phone || '',
+              vehicle_name: vehicle?.display_name || '',
+              // Use the pre-computed datetime strings with correct Italy offset
+              pickup_date: pickupDateTime,
+              dropoff_date: returnDateTime,
+              pickup_location: pickupLocationLabel,
+              insurance_option: 'KASKO_BASE', // Always Kasko included
+              price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
+              payment_status: paymentStatus,
+              deposit_amount: parseFloat(formData.deposit) || 0,
+              booking_details: {
+                amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
+                insuranceOption: 'KASKO_BASE',
+                deposit: parseFloat(formData.deposit) || 0,
+                deposit_status: formData.deposit_status,
+                delivery_enabled: formData.delivery_enabled,
+                delivery_address: formData.delivery_enabled ? {
+                  street: formData.delivery_street,
+                  city: formData.delivery_city,
+                  zip: formData.delivery_zip,
+                  province: formData.delivery_province
+                } : null,
+                delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+                pickup_enabled: formData.pickup_enabled,
+                pickup_address: formData.pickup_enabled ? {
+                  street: formData.pickup_street,
+                  city: formData.pickup_city,
+                  zip: formData.pickup_zip,
+                  province: formData.pickup_province
+                } : null,
+                pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+                depositOption: insertedBooking?.booking_details?.depositOption,
+                noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
               }
-            })
+            }
           })
-          console.log('✅ WhatsApp notification sent')
-        } catch (whatsappError) {
-          console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
-          // Don't fail the whole booking if WhatsApp fails
-        }
+        })
+        console.log('✅ WhatsApp notification sent')
+      } catch (whatsappError) {
+        console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
+        // Don't fail the whole booking if WhatsApp fails
+      }
 
-        // Sync cauzione (security deposit) record
-        try {
-          console.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
+      // Sync cauzione (security deposit) record
+      try {
+        console.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
 
-          const depositAmount = parseFloat(formData.deposit) || 0
-          const depositPaid = formData.payment_status === 'paid'
+        const depositAmount = parseFloat(formData.deposit) || 0
+        const depositPaid = formData.deposit_status === 'incassata'
 
-          await fetch('/.netlify/functions/sync-booking-cauzione', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: insertedBooking.id,
-              customerId: formData.customer_id,
-              vehicleId: formData.vehicle_id,
-              returnDate: formData.return_date,
-              depositAmount: depositAmount,
-              paymentMethod: formData.payment_method || 'carta',
-              depositPaid: depositPaid,
-              depositStatus: formData.deposit_status
-            })
+        await fetch('/.netlify/functions/sync-booking-cauzione', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: insertedBooking.id,
+            customerId: insertedBooking.user_id || formData.customer_id,
+            vehicleId: insertedBooking.vehicle_id || formData.vehicle_id,
+            returnDate: insertedBooking.dropoff_date || formData.return_date,
+            depositAmount: depositAmount,
+            paymentMethod: formData.payment_method || 'carta',
+            depositPaid: depositPaid,
+            depositStatus: formData.deposit_status
           })
+        })
 
-          // Directly update data_incasso on existing cauzione to ensure status sync
-          // (DB triggers may interfere with the sync function's null value)
-          if (editingId) {
-            const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
-            await supabase
-              .from('cauzioni')
-              .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
-              .eq('riferimento_contratto_id', insertedBooking.id)
-            console.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
-          }
-          console.log('✅ Cauzione synced successfully')
-        } catch (cauzioneError) {
-          console.error('⚠️ Failed to sync cauzione:', cauzioneError)
-          // Don't fail the whole booking if cauzione sync fails
+        // Directly update data_incasso on existing cauzione to ensure status sync
+        // (DB triggers may interfere with the sync function's null value)
+        if (editingId) {
+          const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
+          await supabase
+            .from('cauzioni')
+            .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
+            .eq('riferimento_contratto_id', insertedBooking.id)
+          console.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
         }
+        console.log('✅ Cauzione synced successfully')
+      } catch (cauzioneError) {
+        console.error('⚠️ Failed to sync cauzione:', cauzioneError)
+        // Don't fail the whole booking if cauzione sync fails
+      }
 
-        // Generate Contract PDF automatically
+      // Generate Contract PDF automatically (only for new bookings)
+      if (!editingId) {
         try {
           console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, new Date().toISOString())
           await handleGenerateContract(insertedBooking, false)
@@ -3254,7 +3461,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
       unlimited_km: false,
-      km_limit: '0'
+      km_limit: '0',
+      // Home Delivery & Pickup
+      delivery_enabled: false,
+      delivery_street: '',
+      delivery_city: '',
+      delivery_zip: '',
+      delivery_province: '',
+      delivery_notes: '',
+      delivery_fee: '0',
+      pickup_enabled: false,
+      pickup_street: '',
+      pickup_city: '',
+      pickup_zip: '',
+      pickup_province: '',
+      pickup_notes: '',
+      pickup_fee: '0',
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
@@ -3847,6 +4069,170 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               </div>
             </div>
 
+            {/* Home Delivery Section */}
+            <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+              <div className="flex items-center mb-4">
+                <input
+                  type="checkbox"
+                  id="delivery_enabled"
+                  checked={formData.delivery_enabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFormData(prev => ({
+                      ...prev,
+                      delivery_enabled: checked,
+                      ...(!checked && {
+                        delivery_street: '', delivery_city: '', delivery_zip: '',
+                        delivery_province: '', delivery_notes: '', delivery_fee: '0'
+                      })
+                    }))
+                  }}
+                  className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                />
+                <label htmlFor="delivery_enabled" className="ml-2 text-sm font-medium text-theme-text-secondary">
+                  Consegna a domicilio
+                </label>
+              </div>
+
+              {formData.delivery_enabled && (
+                <div className="space-y-4 animate-fadeIn">
+                  <h4 className="text-theme-text-primary font-semibold text-sm">Indirizzo di consegna</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input
+                      label="Via e numero civico *"
+                      required
+                      value={formData.delivery_street}
+                      onChange={(e) => setFormData({ ...formData, delivery_street: e.target.value })}
+                      placeholder="es. Via Roma, 15"
+                    />
+                    <Input
+                      label="Città *"
+                      required
+                      value={formData.delivery_city}
+                      onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })}
+                      placeholder="es. Cagliari"
+                    />
+                    <Input
+                      label="CAP *"
+                      required
+                      value={formData.delivery_zip}
+                      onChange={(e) => setFormData({ ...formData, delivery_zip: e.target.value })}
+                      placeholder="es. 09131"
+                      maxLength={5}
+                    />
+                    <Input
+                      label="Provincia *"
+                      required
+                      value={formData.delivery_province}
+                      onChange={(e) => setFormData({ ...formData, delivery_province: e.target.value.toUpperCase() })}
+                      placeholder="es. CA"
+                      maxLength={2}
+                    />
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Note / istruzioni"
+                        value={formData.delivery_notes}
+                        onChange={(e) => setFormData({ ...formData, delivery_notes: e.target.value })}
+                        placeholder="es. Citofono 3, secondo piano"
+                      />
+                    </div>
+                  </div>
+                  <Input
+                    label="Costo consegna (€) *"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={formData.delivery_fee}
+                    onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Home Pickup Section */}
+            <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+              <div className="flex items-center mb-4">
+                <input
+                  type="checkbox"
+                  id="pickup_enabled"
+                  checked={formData.pickup_enabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFormData(prev => ({
+                      ...prev,
+                      pickup_enabled: checked,
+                      ...(!checked && {
+                        pickup_street: '', pickup_city: '', pickup_zip: '',
+                        pickup_province: '', pickup_notes: '', pickup_fee: '0'
+                      })
+                    }))
+                  }}
+                  className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                />
+                <label htmlFor="pickup_enabled" className="ml-2 text-sm font-medium text-theme-text-secondary">
+                  Ritiro a domicilio (check-out)
+                </label>
+              </div>
+
+              {formData.pickup_enabled && (
+                <div className="space-y-4 animate-fadeIn">
+                  <h4 className="text-theme-text-primary font-semibold text-sm">Indirizzo di ritiro</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input
+                      label="Via e numero civico *"
+                      required
+                      value={formData.pickup_street}
+                      onChange={(e) => setFormData({ ...formData, pickup_street: e.target.value })}
+                      placeholder="es. Via Roma, 15"
+                    />
+                    <Input
+                      label="Città *"
+                      required
+                      value={formData.pickup_city}
+                      onChange={(e) => setFormData({ ...formData, pickup_city: e.target.value })}
+                      placeholder="es. Cagliari"
+                    />
+                    <Input
+                      label="CAP *"
+                      required
+                      value={formData.pickup_zip}
+                      onChange={(e) => setFormData({ ...formData, pickup_zip: e.target.value })}
+                      placeholder="es. 09131"
+                      maxLength={5}
+                    />
+                    <Input
+                      label="Provincia *"
+                      required
+                      value={formData.pickup_province}
+                      onChange={(e) => setFormData({ ...formData, pickup_province: e.target.value.toUpperCase() })}
+                      placeholder="es. CA"
+                      maxLength={2}
+                    />
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Note / istruzioni"
+                        value={formData.pickup_notes}
+                        onChange={(e) => setFormData({ ...formData, pickup_notes: e.target.value })}
+                        placeholder="es. Citofono 3, secondo piano"
+                      />
+                    </div>
+                  </div>
+                  <Input
+                    label="Costo ritiro (€) *"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={formData.pickup_fee}
+                    onChange={(e) => setFormData({ ...formData, pickup_fee: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
                 label="Stato Pagamento"
@@ -3858,7 +4244,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   // Auto-update amount_paid based on status
                   if (newStatus === 'paid') {
-                    newAmountPaid = formData.total_amount // Full payment
+                    // Full payment = base + delivery fee + pickup fee
+                    const fullTotal = parseFloat(formData.total_amount || '0')
+                      + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+                      + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                    newAmountPaid = fullTotal.toFixed(2)
                   } else if (newStatus === 'unpaid') {
                     newAmountPaid = '0' // No payment
                   }
@@ -3921,8 +4311,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 value={formData.total_amount}
                 onChange={(e) => {
                   const newTotal = e.target.value
-                  // If currently paid, update paid amount to match new total
-                  const newPaid = formData.payment_status === 'paid' ? newTotal : formData.amount_paid
+                  // If currently paid, update paid amount to match new total (including delivery/pickup fees)
+                  const fullTotal = parseFloat(newTotal || '0')
+                    + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+                    + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                  const newPaid = formData.payment_status === 'paid' ? fullTotal.toFixed(2) : formData.amount_paid
                   setFormData({ ...formData, total_amount: newTotal, amount_paid: newPaid })
                 }}
               />
@@ -3995,6 +4388,43 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
               />
             </div>
+
+            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees */}
+            {(formData.delivery_enabled || formData.pickup_enabled) && (
+              <div className="md:col-span-2 bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
+                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Totale</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-theme-text-muted">Noleggio base</span>
+                    <span className="font-mono text-theme-text-primary">€{parseFloat(formData.total_amount || '0').toFixed(2)}</span>
+                  </div>
+                  {formData.delivery_enabled && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-theme-text-muted">Consegna a domicilio</span>
+                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.delivery_fee || '0').toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.pickup_enabled && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-theme-text-muted">Ritiro a domicilio</span>
+                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.pickup_fee || '0').toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-theme-border/50 pt-2 mt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-dr7-gold">Totale da saldare</span>
+                      <span className="font-mono text-xl font-bold text-dr7-gold">
+                        €{(
+                          parseFloat(formData.total_amount || '0') +
+                          (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0) +
+                          (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3 mt-4">
               <Button type="submit">
@@ -4384,6 +4814,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               : 'N/A'
                         }</span></div>
                         <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
+                        {(selectedBooking.delivery_enabled || selectedBooking.booking_details?.delivery_enabled) && (
+                          <div className="mt-2 pt-2 border-t border-theme-border/30">
+                            <span className="text-theme-text-muted">Consegna a domicilio:</span>
+                            <span className="text-theme-text-primary ml-1">
+                              {(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address)
+                                ? `${(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address).street}, ${(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address).city}`
+                                : 'Si'}
+                              {' '}(€{((selectedBooking.delivery_fee || 0) / 100).toFixed(2)})
+                            </span>
+                          </div>
+                        )}
+                        {(selectedBooking.pickup_enabled || selectedBooking.booking_details?.pickup_enabled) && (
+                          <div>
+                            <span className="text-theme-text-muted">Ritiro a domicilio:</span>
+                            <span className="text-theme-text-primary ml-1">
+                              {(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address)
+                                ? `${(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address).street}, ${(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address).city}`
+                                : 'Si'}
+                              {' '}(€{((selectedBooking.pickup_fee || 0) / 100).toFixed(2)})
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>

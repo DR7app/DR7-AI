@@ -318,9 +318,11 @@ export function isVehicleAvailable(
             const editingBooking = existingBookings.find(b => b.id === excludeBookingId)
             console.log('[CAR WASH CHECK] Editing booking:', editingBooking?.id, 'customer:', editingBooking?.customer_name)
 
-            // Check if this car wash is for the same vehicle
-            const sameVehicle = booking.vehicle_plate === editingBooking?.vehicle_plate ||
-                booking.vehicle_name === editingBooking?.vehicle_name
+            // Check if this car wash is for the same vehicle (by plate or vehicle_id only, NEVER by name)
+            const bPlate = normalizePlate(booking.vehicle_plate)
+            const ePlate = normalizePlate(editingBooking?.vehicle_plate)
+            const sameVehicle = (bPlate && ePlate && bPlate === ePlate) ||
+                (booking.vehicle_id && editingBooking?.vehicle_id && booking.vehicle_id === editingBooking.vehicle_id)
 
             if (editingBooking && sameVehicle) {
                 console.log('[CAR WASH CHECK] ✅ EXCLUDING car wash booking for same vehicle', booking.id)

@@ -365,41 +365,45 @@ export default function CargosTab() {
         <div className="space-y-6">
             <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
                 <div>
-                    <h2 className="text-xl font-bold text-theme-text-primary">Gestione Multe & Cargos</h2>
-                    <p className="text-theme-text-muted text-sm">Portale Polizia di Stato</p>
+                    <h2 className="text-xl font-bold text-theme-text-primary">Cargos</h2>
+                    <p className="text-theme-text-muted text-sm">
+                        {activeSubTab === 'fines' ? 'Ricerca conducente per data infrazione' : 'Invio telematico - Portale Polizia di Stato'}
+                    </p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="flex bg-theme-bg-tertiary rounded-lg p-1 border border-theme-border">
+                    <div className="flex bg-theme-bg-tertiary rounded-full border border-theme-border overflow-hidden">
                         <button
                             onClick={() => setActiveSubTab('fines')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black shadow-sm' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                         >
-                            🔍 Gestione Multe
+                            Multe
                         </button>
                         <button
                             onClick={() => setActiveSubTab('export')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black shadow-sm' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                         >
-                            📤 Invio Telematico
+                            Invio Telematico
                         </button>
                     </div>
-
-                    <button
-                        onClick={() => setShowSettings(!showSettings)}
-                        className="px-3 py-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-full border border-theme-border transition-colors"
-                        title="Impostazioni API"
-                    >
-                        ⚙️
-                    </button>
-
-                    <a
-                        href="https://cargos.poliziadistato.it/Cargos_Portale/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary font-medium rounded-full hover:bg-theme-bg-hover transition-colors flex items-center gap-2 text-sm"
-                    >
-                        Apri Portale Cargos ↗
-                    </a>
+                    {activeSubTab === 'export' && (
+                        <>
+                            <button
+                                onClick={() => setShowSettings(!showSettings)}
+                                className="px-3 py-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-full border border-theme-border transition-colors"
+                                title="Impostazioni API"
+                            >
+                                ⚙️
+                            </button>
+                            <a
+                                href="https://cargos.poliziadistato.it/Cargos_Portale/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary font-medium rounded-full hover:bg-theme-bg-hover transition-colors flex items-center gap-2 text-sm"
+                            >
+                                Apri Portale Cargos
+                            </a>
+                        </>
+                    )}
                 </div>
             </div>
 

@@ -54,8 +54,8 @@ export function useScadenze() {
 
       const { data: cauzioni } = await supabase
         .from('cauzioni')
-        .select('*, bookings(customer_name, vehicle_name, dropoff_date)')
-        .in('status', ['pending', 'blocked', 'to_refund'])
+        .select('*, customers_extended!cliente_id(nome, cognome, denominazione, tipo_cliente), vehicles!veicolo_id(display_name)')
+        .not('stato', 'in', '("Restituita","Sbloccata")')
 
       const { data: vehicles } = await supabase
         .from('vehicles')
@@ -89,26 +89,40 @@ export function useScadenze() {
       })
 
       // Cauzioni
-      cauzioni?.forEach(cauzione => {
-        const statusMap: Record<string, Scadenza['status']> = {
-          pending: 'to_block',
-          blocked: 'blocked',
-          to_refund: 'to_refund',
-          refunded: 'refunded'
+      cauzioni?.forEach((cauzione: any) => {
+        // Build customer name from customers_extended join
+        const custData = cauzione.customers_extended
+        let customerName = 'Cliente'
+        if (custData) {
+          if (custData.tipo_cliente === 'azienda' && custData.denominazione) {
+            customerName = custData.denominazione
+          } else if (custData.nome || custData.cognome) {
+            customerName = `${custData.nome || ''} ${custData.cognome || ''}`.trim()
+          }
         }
+        const vehicleName = cauzione.vehicles?.display_name || 'Veicolo'
+
+        // Map DB stato (Italian) to scadenze status
+        const statoMap: Record<string, Scadenza['status']> = {
+          'Attiva': 'to_block',
+          'In scadenza': 'to_block',
+          'Bloccata': 'blocked',
+          'Incassata': 'blocked',
+        }
+
         autoScadenze.push({
           id: `cauzione-${cauzione.id}`,
           category: 'cauzioni',
           item_type: 'Cauzione noleggio',
-          description: `${cauzione.bookings?.customer_name || 'Cliente'} - ${cauzione.bookings?.vehicle_name || 'Veicolo'}`,
+          description: `${customerName} - ${vehicleName}`,
           reference_id: cauzione.id,
           reference_type: 'cauzione',
-          reference_name: cauzione.bookings?.customer_name,
-          due_date: cauzione.bookings?.dropoff_date || null,
+          reference_name: customerName,
+          due_date: cauzione.scadenza_cauzione || null,
           due_km: null,
           current_km: null,
-          amount: cauzione.amount,
-          status: statusMap[cauzione.status] || 'pending',
+          amount: Math.round(Number(cauzione.importo) * 100),
+          status: statoMap[cauzione.stato] || 'to_block',
           advance_days: 1,
           advance_km: null,
           is_recurring: false,
@@ -378,7 +392,7 @@ export function useScadenze() {
       } else if (action === 'block' && scadenza.reference_type === 'cauzione') {
         await supabase
           .from('cauzioni')
-          .update({ status: 'blocked', blocked_at: new Date().toISOString() })
+          .update({ stato: 'Bloccata', note: 'Bloccata da Scadenze', updated_at: new Date().toISOString() })
           .eq('id', scadenza.reference_id)
         setScadenze(prev => prev.map(s =>
           s.id === scadenza.id ? { ...s, status: 'blocked' } : s
@@ -386,24 +400,21 @@ export function useScadenze() {
       } else if (action === 'collect' && scadenza.reference_type === 'cauzione') {
         await supabase
           .from('cauzioni')
-          .update({ status: 'collected', collected_at: new Date().toISOString() })
+          .update({ data_incasso: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq('id', scadenza.reference_id)
         setScadenze(prev => prev.map(s =>
           s.id === scadenza.id ? { ...s, status: 'collected' as any } : s
         ))
       } else if (action === 'refund' && scadenza.reference_type === 'cauzione') {
-        await supabase
-          .from('cauzioni')
-          .update({ status: 'to_refund' })
-          .eq('id', scadenza.reference_id)
+        // Local state only — confirm step before actual refund
         setScadenze(prev => prev.map(s =>
           s.id === scadenza.id ? { ...s, status: 'to_refund' } : s
         ))
       } else if (action === 'mark_refunded' && scadenza.reference_type === 'cauzione') {
-        await supabase
-          .from('cauzioni')
-          .update({ status: 'refunded', refunded_at: new Date().toISOString() })
-          .eq('id', scadenza.reference_id)
+        await supabase.rpc('mark_cauzione_restituita', {
+          cauzione_id: scadenza.reference_id,
+          return_note: 'Restituita da Scadenze'
+        })
         setScadenze(prev => prev.filter(s => s.id !== scadenza.id))
       } else if (action === 'delete' && scadenza.is_manual) {
         await supabase

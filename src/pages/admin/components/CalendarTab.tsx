@@ -41,7 +41,7 @@ interface Booking {
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
 
-export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
+export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleId: string, date: Date) => void }) {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
 
@@ -140,21 +140,34 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
   const processedRows = useMemo(() => {
     const rows: { vehicle: Vehicle, events: CalendarEvent[], laneCount: number }[] = []
 
+    // PRE-ASSIGN: Each booking belongs to exactly ONE vehicle (no duplicates)
+    // Priority: 1) plate match, 2) vehicle_id match. First match wins.
+    const bookingToVehicleId = new Map<string, string>()
+    bookings.forEach(b => {
+      if (b.status === 'cancelled') return
+      const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
+      const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
+
+      // Try plate match first (most reliable - unique per physical car)
+      if (bPlate) {
+        const plateMatch = vehicles.find(v => v.plate?.replace(/\s/g, '').toUpperCase() === bPlate)
+        if (plateMatch) {
+          bookingToVehicleId.set(b.id, plateMatch.id)
+          return
+        }
+      }
+      // Fallback: vehicle_id match
+      if (bVehicleId) {
+        const idMatch = vehicles.find(v => v.id === bVehicleId)
+        if (idMatch) {
+          bookingToVehicleId.set(b.id, idMatch.id)
+          return
+        }
+      }
+    })
+
     vehicles.forEach(vehicle => {
-      const vehicleBookings = bookings.filter(b => {
-        // Match by license plate first (most reliable)
-        const vPlate = vehicle.plate?.replace(/\s/g, '').toUpperCase()
-        const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
-
-        // Plate match
-        if (bPlate && vPlate && vPlate === bPlate) return true
-
-        // Fallback: match by vehicle_id (website bookings don't store plate)
-        const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
-        if (bVehicleId && bVehicleId === vehicle.id) return true
-
-        return false
-      })
+      const vehicleBookings = bookings.filter(b => bookingToVehicleId.get(b.id) === vehicle.id)
 
       // Normalize
       const events: CalendarEvent[] = []
@@ -424,7 +437,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                         style={{ width: CELL_WIDTH }}
                         onClick={() => {
                           const date = new Date(currentRomeComponents.year, currentRomeComponents.month, day, 10, 0, 0)
-                          if (onNewBooking) onNewBooking(row.vehicle.display_name, date)
+                          if (onNewBooking) onNewBooking(row.vehicle.id, date)
                         }}
                         title={`Nuova prenotazione: ${day}/${currentRomeComponents.month + 1}`}
                       />
@@ -551,7 +564,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
             window.dispatchEvent(new CustomEvent('openBookingForm', {
               detail: {
                 bookingId,
-                vehicleName: selectedBooking.vehicle_name,
+                vehicleId: selectedBooking.vehicle_id,
                 date: new Date(selectedBooking.pickup_date)
               }
             }))

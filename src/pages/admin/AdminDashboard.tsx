@@ -37,7 +37,7 @@ export default function AdminDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   // State to pass data from Calendar to Reservations tab
-  const [initialReservationData, setInitialReservationData] = useState<{ vehicleName?: string, pickupDate?: Date, bookingId?: string } | null>(null)
+  const [initialReservationData, setInitialReservationData] = useState<{ vehicleId?: string, pickupDate?: Date, bookingId?: string } | null>(null)
   // State to pass data from Car Wash Calendar to Car Wash Bookings tab
   const [initialCarWashData, setInitialCarWashData] = useState<{ appointmentDate?: string, appointmentTime?: string } | null>(null)
 
@@ -51,8 +51,8 @@ export default function AdminDashboard() {
     navigate('/login')
   }
 
-  function handleCalendarBooking(vehicleName: string, date: Date, bookingId?: string) {
-    setInitialReservationData({ vehicleName, pickupDate: date, bookingId })
+  function handleCalendarBooking(vehicleId: string, date: Date, bookingId?: string) {
+    setInitialReservationData({ vehicleId, pickupDate: date, bookingId })
     setActiveTab('reservations')
   }
 
@@ -63,8 +63,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const handleOpenBookingForm = (event: CustomEvent) => {
-      const { vehicleName, date, bookingId } = event.detail
-      handleCalendarBooking(vehicleName, date, bookingId)
+      const { vehicleId, date, bookingId } = event.detail
+      handleCalendarBooking(vehicleId, date, bookingId)
     }
 
     window.addEventListener('openBookingForm', handleOpenBookingForm as EventListener)
