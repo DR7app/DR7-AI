@@ -248,7 +248,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   const filteredByTab = carWashServices.filter(s => s.main_tab === selectedMainTab)
   const mainServices = filteredByTab.filter(s => s.category !== 'extra')
-  const extraServices = filteredByTab.filter(s => s.category === 'extra')
+  const extraServices = filteredByTab.filter(s => s.category === 'extra' || s.category === 'experience')
 
   const servicesByCategory = mainServices.reduce<Record<string, CarWashService[]>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = []
@@ -1098,7 +1098,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3">
-                  {extraServices.map(extra => {
+                  {extraServices.filter(e => e.id !== selectedService?.id).map(extra => {
                     const isToggled = selectedExtras.some(e => e.id === extra.id)
                     const hasPriceOptions = extra.price_options && extra.price_options.length > 0
                     const currentExtraOption = extraPriceOptions[extra.id]
