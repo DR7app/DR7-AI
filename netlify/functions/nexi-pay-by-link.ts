@@ -97,6 +97,8 @@ const handler: Handler = async (event) => {
         });
 
         const responseText = await response.text();
+        console.log('Nexi response status:', response.status, 'body:', responseText.substring(0, 1000));
+
         let responseData: any;
         try {
             responseData = JSON.parse(responseText);
@@ -105,7 +107,7 @@ const handler: Handler = async (event) => {
             return {
                 statusCode: 502,
                 headers,
-                body: JSON.stringify({ error: `Nexi API error (${response.status}): risposta non valida` })
+                body: JSON.stringify({ error: `Nexi API error (${response.status}): ${responseText.substring(0, 200) || 'risposta vuota'}` })
             };
         }
 
