@@ -121,7 +121,7 @@ const handler: Handler = async (event) => {
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
       } else {
-        paymentInfo = `NON pagato`;
+        paymentInfo = `Da saldare`;
       }
 
       const isEditCarWash = booking.isEdit;
@@ -172,7 +172,7 @@ const handler: Handler = async (event) => {
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
       } else {
-        paymentInfo = `NON pagato`;
+        paymentInfo = `Da saldare`;
       }
 
       const isEditMech = booking.isEdit;
@@ -225,7 +225,7 @@ const handler: Handler = async (event) => {
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
       } else {
-        paymentInfo = `NON pagato`;
+        paymentInfo = `Da saldare`;
       }
 
       const isEdit = booking.isEdit;
