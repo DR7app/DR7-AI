@@ -2042,7 +2042,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const surcharge = extendingBooking.booking_details?.noDepositSurcharge || 0
           extensionMsg += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`
         } else if (depositAmt > 0) {
-          const cauzioneLabel = depositSts === 'incassata' ? '✅ Pagata' : '⏳ Da saldare'
+          const cauzioneLabel = depositSts === 'incassata' ? 'Pagata' : 'Da saldare'
           extensionMsg += `*Cauzione:* €${depositAmt} - ${cauzioneLabel}\n`
         }
         extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da Saldare'}`

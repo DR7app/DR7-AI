@@ -273,7 +273,7 @@ const handler: Handler = async (event) => {
         const surcharge = booking.booking_details?.noDepositSurcharge || 0;
         message += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`;
       } else if (depositAmount > 0) {
-        const statusLabel = depositStatus === 'incassata' ? '✅ Pagata' : '⏳ Da saldare';
+        const statusLabel = depositStatus === 'incassata' ? 'Pagata' : 'Da saldare';
         message += `*Cauzione:* €${depositAmount} - ${statusLabel}\n`;
       } else {
         message += `*Cauzione:* N/A\n`;
