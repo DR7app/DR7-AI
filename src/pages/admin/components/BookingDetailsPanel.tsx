@@ -45,6 +45,17 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   console.log('Payment status:', isPaid ? 'PAID' : 'UNPAID')
   console.groupEnd()
 
+  // Delivery & Pickup fees (in cents)
+  const deliveryEnabled = booking.delivery_enabled || booking.booking_details?.delivery_enabled || false
+  const deliveryFeeCents = deliveryEnabled ? (booking.delivery_fee || 0) : 0
+  const pickupHomeEnabled = booking.pickup_enabled || booking.booking_details?.pickup_enabled || false
+  const pickupHomeFeeCents = pickupHomeEnabled ? (booking.pickup_fee || 0) : 0
+  const deliveryAddress = booking.delivery_address || booking.booking_details?.delivery_address || null
+  const pickupHomeAddress = booking.pickup_address || booking.booking_details?.pickup_address || null
+
+  // Base rental = total minus delivery/pickup fees
+  const baseRentalCents = totalCents - deliveryFeeCents - pickupHomeFeeCents
+
   // Format dates
   const pickupDate = new Date(booking.pickup_date)
   const dropoffDate = new Date(booking.dropoff_date)
@@ -209,10 +220,37 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
 
             {/* Financial Breakdown */}
             <div className="bg-theme-text-primary/5 rounded-lg p-4 space-y-2 border border-theme-border/50">
-              <div className="flex justify-between items-center">
-                <span className="text-theme-text-muted">Totale</span>
-                <span className="font-mono text-theme-text-primary">{formatEUR(totalCents)}</span>
-              </div>
+              {(deliveryEnabled || pickupHomeEnabled) ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-theme-text-muted">Noleggio</span>
+                    <span className="font-mono text-theme-text-primary">{formatEUR(baseRentalCents)}</span>
+                  </div>
+                  {deliveryEnabled && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-theme-text-muted">Consegna a domicilio</span>
+                      <span className="font-mono text-theme-text-primary">{formatEUR(deliveryFeeCents)}</span>
+                    </div>
+                  )}
+                  {pickupHomeEnabled && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-theme-text-muted">Ritiro a domicilio</span>
+                      <span className="font-mono text-theme-text-primary">{formatEUR(pickupHomeFeeCents)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-theme-border/50 pt-2 mt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-theme-text-muted font-semibold">Totale</span>
+                      <span className="font-mono text-theme-text-primary font-semibold">{formatEUR(totalCents)}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between items-center">
+                  <span className="text-theme-text-muted">Totale</span>
+                  <span className="font-mono text-theme-text-primary">{formatEUR(totalCents)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-theme-text-muted">Acconto Pagato</span>
                 <span className="font-mono text-theme-text-primary">{formatEUR(paidCents)}</span>
@@ -230,6 +268,34 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             </div>
           </div>
 
+          {/* Delivery & Pickup Addresses */}
+          {(deliveryEnabled || pickupHomeEnabled) && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Servizi a Domicilio</h3>
+              {deliveryEnabled && deliveryAddress && (
+                <div className="bg-theme-text-primary/5 p-3 rounded border border-theme-border/50 space-y-1">
+                  <div className="text-sm font-semibold text-theme-text-primary">Consegna a domicilio</div>
+                  <div className="text-sm text-theme-text-muted">
+                    {deliveryAddress.street}, {deliveryAddress.zip} {deliveryAddress.city} ({deliveryAddress.province})
+                  </div>
+                  {deliveryAddress.notes && (
+                    <div className="text-xs text-theme-text-muted italic">Note: {deliveryAddress.notes}</div>
+                  )}
+                </div>
+              )}
+              {pickupHomeEnabled && pickupHomeAddress && (
+                <div className="bg-theme-text-primary/5 p-3 rounded border border-theme-border/50 space-y-1">
+                  <div className="text-sm font-semibold text-theme-text-primary">Ritiro a domicilio</div>
+                  <div className="text-sm text-theme-text-muted">
+                    {pickupHomeAddress.street}, {pickupHomeAddress.zip} {pickupHomeAddress.city} ({pickupHomeAddress.province})
+                  </div>
+                  {pickupHomeAddress.notes && (
+                    <div className="text-xs text-theme-text-muted italic">Note: {pickupHomeAddress.notes}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Notes/Extras */}
           {booking.booking_details?.notes && (

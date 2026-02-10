@@ -189,6 +189,13 @@ interface Booking {
   deposit_amount?: number | null
   contract_url?: string
   km_overage_fee?: number
+  // Home delivery & pickup
+  delivery_enabled?: boolean
+  delivery_address?: { street: string; city: string; zip: string; province: string; notes: string } | null
+  delivery_fee?: number
+  pickup_enabled?: boolean
+  pickup_address?: { street: string; city: string; zip: string; province: string; notes: string } | null
+  pickup_fee?: number
   contracts?: {
     yousign_status: string | null
     signed_pdf_url: string | null
@@ -381,6 +388,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     km_overage_fee: '0',
     unlimited_km: false,
     km_limit: '0', // Default KM limit when not unlimited
+    // Home Delivery & Pickup
+    delivery_enabled: false,
+    delivery_street: '',
+    delivery_city: '',
+    delivery_zip: '',
+    delivery_province: '',
+    delivery_notes: '',
+    delivery_fee: '0',
+    pickup_enabled: false,
+    pickup_street: '',
+    pickup_city: '',
+    pickup_zip: '',
+    pickup_province: '',
+    pickup_notes: '',
+    pickup_fee: '0',
   })
 
   // Auto-populate second driver fields when customer is selected
@@ -1940,7 +1962,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
       deposit: booking.booking_details?.deposit || '0',
       deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
-      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0'
+      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0',
+      // Home Delivery & Pickup
+      delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
+      delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
+      delivery_city: booking.delivery_address?.city || booking.booking_details?.delivery_address?.city || '',
+      delivery_zip: booking.delivery_address?.zip || booking.booking_details?.delivery_address?.zip || '',
+      delivery_province: booking.delivery_address?.province || booking.booking_details?.delivery_address?.province || '',
+      delivery_notes: booking.delivery_address?.notes || booking.booking_details?.delivery_address?.notes || '',
+      delivery_fee: booking.delivery_fee != null ? (booking.delivery_fee / 100).toString() : (booking.booking_details?.delivery_fee || '0'),
+      pickup_enabled: booking.pickup_enabled || booking.booking_details?.pickup_enabled || false,
+      pickup_street: booking.pickup_address?.street || booking.booking_details?.pickup_address?.street || '',
+      pickup_city: booking.pickup_address?.city || booking.booking_details?.pickup_address?.city || '',
+      pickup_zip: booking.pickup_address?.zip || booking.booking_details?.pickup_address?.zip || '',
+      pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
+      pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
+      pickup_fee: booking.pickup_fee != null ? (booking.pickup_fee / 100).toString() : (booking.booking_details?.pickup_fee || '0'),
     })
 
     setEditingId(booking.id)
@@ -2396,6 +2433,48 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }, 100)
         setIsSubmitting(false)
         return
+      }
+
+      // ===== VALIDATION: Home Delivery fields =====
+      if (formData.delivery_enabled) {
+        const deliveryMissing: string[] = []
+        if (!formData.delivery_street.trim()) deliveryMissing.push('Via e numero (consegna)')
+        if (!formData.delivery_city.trim()) deliveryMissing.push('Città (consegna)')
+        if (!formData.delivery_zip.trim()) deliveryMissing.push('CAP (consegna)')
+        if (!formData.delivery_province.trim()) deliveryMissing.push('Provincia (consegna)')
+        if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
+        if (deliveryMissing.length > 0) {
+          setTimeout(() => {
+            alert(
+              'CONSEGNA A DOMICILIO - CAMPI MANCANTI\n\n' +
+              'Compila i seguenti campi:\n\n' +
+              deliveryMissing.map(f => `- ${f}`).join('\n')
+            )
+          }, 100)
+          setIsSubmitting(false)
+          return
+        }
+      }
+
+      // ===== VALIDATION: Home Pickup fields =====
+      if (formData.pickup_enabled) {
+        const pickupMissing: string[] = []
+        if (!formData.pickup_street.trim()) pickupMissing.push('Via e numero (ritiro)')
+        if (!formData.pickup_city.trim()) pickupMissing.push('Città (ritiro)')
+        if (!formData.pickup_zip.trim()) pickupMissing.push('CAP (ritiro)')
+        if (!formData.pickup_province.trim()) pickupMissing.push('Provincia (ritiro)')
+        if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
+        if (pickupMissing.length > 0) {
+          setTimeout(() => {
+            alert(
+              'RITIRO A DOMICILIO - CAMPI MANCANTI\n\n' +
+              'Compila i seguenti campi:\n\n' +
+              pickupMissing.map(f => `- ${f}`).join('\n')
+            )
+          }, 100)
+          setIsSubmitting(false)
+          return
+        }
       }
 
       // ===== AVAILABILITY ENGINE VALIDATION =====
@@ -2940,7 +3019,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
-        price_total: Math.round(parseFloat(formData.total_amount) * 100), // Convert to cents
+        price_total: Math.round(parseFloat(formData.total_amount) * 100) // Convert to cents (base rental)
+          + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
+          + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
@@ -2951,6 +3032,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customer_phone: customerInfo?.phone || null,
         booked_at: editingId ? undefined : new Date().toISOString(), // Don't update booked_at on edit
         booking_source: 'admin', // Mark as admin booking
+        // Home Delivery & Pickup (top-level DB columns)
+        delivery_enabled: formData.delivery_enabled,
+        delivery_address: formData.delivery_enabled ? {
+          street: formData.delivery_street,
+          city: formData.delivery_city,
+          zip: formData.delivery_zip,
+          province: formData.delivery_province,
+          notes: formData.delivery_notes
+        } : null,
+        delivery_fee: formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0,
+        pickup_enabled: formData.pickup_enabled,
+        pickup_address: formData.pickup_enabled ? {
+          street: formData.pickup_street,
+          city: formData.pickup_city,
+          zip: formData.pickup_zip,
+          province: formData.pickup_province,
+          notes: formData.pickup_notes
+        } : null,
+        pickup_fee: formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0,
         booking_details: {
           customer: {
             fullName: customerInfo?.full_name || '',
@@ -2991,7 +3091,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             license_issued_by: formData.second_driver_license_issued_by,
             license_issue_date: formData.second_driver_license_issue_date,
             license_expiry: formData.second_driver_license_expiry
-          } : null
+          } : null,
+          // Home Delivery & Pickup (backup in booking_details JSONB)
+          delivery_enabled: formData.delivery_enabled,
+          delivery_address: formData.delivery_enabled ? {
+            street: formData.delivery_street,
+            city: formData.delivery_city,
+            zip: formData.delivery_zip,
+            province: formData.delivery_province,
+            notes: formData.delivery_notes
+          } : null,
+          delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+          pickup_enabled: formData.pickup_enabled,
+          pickup_address: formData.pickup_enabled ? {
+            street: formData.pickup_street,
+            city: formData.pickup_city,
+            zip: formData.pickup_zip,
+            province: formData.pickup_province,
+            notes: formData.pickup_notes
+          } : null,
+          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0'
         }
       }
 
@@ -3070,15 +3189,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               customerName: customerInfo?.full_name || '',
               customerEmail: customerInfo?.email || '',
               customerPhone: customerInfo?.phone || '',
-              items: [{
-                description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
-                quantity: 1,
-                unitPrice: Math.round(parseFloat(formData.total_amount) * 100),
-                total: Math.round(parseFloat(formData.total_amount) * 100)
-              }],
-              subtotal: Math.round(parseFloat(formData.total_amount) * 100),
+              items: [
+                {
+                  description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
+                  quantity: 1,
+                  unitPrice: Math.round(parseFloat(formData.total_amount) * 100),
+                  total: Math.round(parseFloat(formData.total_amount) * 100)
+                },
+                ...(formData.delivery_enabled ? [{
+                  description: 'Consegna a domicilio',
+                  quantity: 1,
+                  unitPrice: Math.round(parseFloat(formData.delivery_fee) * 100),
+                  total: Math.round(parseFloat(formData.delivery_fee) * 100)
+                }] : []),
+                ...(formData.pickup_enabled ? [{
+                  description: 'Ritiro a domicilio',
+                  quantity: 1,
+                  unitPrice: Math.round(parseFloat(formData.pickup_fee) * 100),
+                  total: Math.round(parseFloat(formData.pickup_fee) * 100)
+                }] : [])
+              ],
+              subtotal: Math.round(parseFloat(formData.total_amount) * 100)
+                + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
+                + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
               tax: 0,
-              total: Math.round(parseFloat(formData.total_amount) * 100),
+              total: Math.round(parseFloat(formData.total_amount) * 100)
+                + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
+                + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
               paymentStatus: formData.payment_status || 'pending',
               bookingDate: new Date().toISOString(),
               serviceDate: `${formData.pickup_date}T${formData.pickup_time}:00`,
@@ -3121,7 +3258,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 booking_details: {
                   amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
                   insuranceOption: 'KASKO_BASE',
-                  deposit: parseFloat(formData.deposit) || 0
+                  deposit: parseFloat(formData.deposit) || 0,
+                  delivery_enabled: formData.delivery_enabled,
+                  delivery_address: formData.delivery_enabled ? {
+                    street: formData.delivery_street,
+                    city: formData.delivery_city,
+                    zip: formData.delivery_zip,
+                    province: formData.delivery_province
+                  } : null,
+                  delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+                  pickup_enabled: formData.pickup_enabled,
+                  pickup_address: formData.pickup_enabled ? {
+                    street: formData.pickup_street,
+                    city: formData.pickup_city,
+                    zip: formData.pickup_zip,
+                    province: formData.pickup_province
+                  } : null,
+                  pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0'
                 }
               }
             })
@@ -3254,7 +3407,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
       unlimited_km: false,
-      km_limit: '0'
+      km_limit: '0',
+      // Home Delivery & Pickup
+      delivery_enabled: false,
+      delivery_street: '',
+      delivery_city: '',
+      delivery_zip: '',
+      delivery_province: '',
+      delivery_notes: '',
+      delivery_fee: '0',
+      pickup_enabled: false,
+      pickup_street: '',
+      pickup_city: '',
+      pickup_zip: '',
+      pickup_province: '',
+      pickup_notes: '',
+      pickup_fee: '0',
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
@@ -3847,6 +4015,170 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               </div>
             </div>
 
+            {/* Home Delivery Section */}
+            <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+              <div className="flex items-center mb-4">
+                <input
+                  type="checkbox"
+                  id="delivery_enabled"
+                  checked={formData.delivery_enabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFormData(prev => ({
+                      ...prev,
+                      delivery_enabled: checked,
+                      ...(!checked && {
+                        delivery_street: '', delivery_city: '', delivery_zip: '',
+                        delivery_province: '', delivery_notes: '', delivery_fee: '0'
+                      })
+                    }))
+                  }}
+                  className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                />
+                <label htmlFor="delivery_enabled" className="ml-2 text-sm font-medium text-theme-text-secondary">
+                  Consegna a domicilio
+                </label>
+              </div>
+
+              {formData.delivery_enabled && (
+                <div className="space-y-4 animate-fadeIn">
+                  <h4 className="text-theme-text-primary font-semibold text-sm">Indirizzo di consegna</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input
+                      label="Via e numero civico *"
+                      required
+                      value={formData.delivery_street}
+                      onChange={(e) => setFormData({ ...formData, delivery_street: e.target.value })}
+                      placeholder="es. Via Roma, 15"
+                    />
+                    <Input
+                      label="Città *"
+                      required
+                      value={formData.delivery_city}
+                      onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })}
+                      placeholder="es. Cagliari"
+                    />
+                    <Input
+                      label="CAP *"
+                      required
+                      value={formData.delivery_zip}
+                      onChange={(e) => setFormData({ ...formData, delivery_zip: e.target.value })}
+                      placeholder="es. 09131"
+                      maxLength={5}
+                    />
+                    <Input
+                      label="Provincia *"
+                      required
+                      value={formData.delivery_province}
+                      onChange={(e) => setFormData({ ...formData, delivery_province: e.target.value.toUpperCase() })}
+                      placeholder="es. CA"
+                      maxLength={2}
+                    />
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Note / istruzioni"
+                        value={formData.delivery_notes}
+                        onChange={(e) => setFormData({ ...formData, delivery_notes: e.target.value })}
+                        placeholder="es. Citofono 3, secondo piano"
+                      />
+                    </div>
+                  </div>
+                  <Input
+                    label="Costo consegna (€) *"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={formData.delivery_fee}
+                    onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Home Pickup Section */}
+            <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+              <div className="flex items-center mb-4">
+                <input
+                  type="checkbox"
+                  id="pickup_enabled"
+                  checked={formData.pickup_enabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFormData(prev => ({
+                      ...prev,
+                      pickup_enabled: checked,
+                      ...(!checked && {
+                        pickup_street: '', pickup_city: '', pickup_zip: '',
+                        pickup_province: '', pickup_notes: '', pickup_fee: '0'
+                      })
+                    }))
+                  }}
+                  className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                />
+                <label htmlFor="pickup_enabled" className="ml-2 text-sm font-medium text-theme-text-secondary">
+                  Ritiro a domicilio (check-out)
+                </label>
+              </div>
+
+              {formData.pickup_enabled && (
+                <div className="space-y-4 animate-fadeIn">
+                  <h4 className="text-theme-text-primary font-semibold text-sm">Indirizzo di ritiro</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input
+                      label="Via e numero civico *"
+                      required
+                      value={formData.pickup_street}
+                      onChange={(e) => setFormData({ ...formData, pickup_street: e.target.value })}
+                      placeholder="es. Via Roma, 15"
+                    />
+                    <Input
+                      label="Città *"
+                      required
+                      value={formData.pickup_city}
+                      onChange={(e) => setFormData({ ...formData, pickup_city: e.target.value })}
+                      placeholder="es. Cagliari"
+                    />
+                    <Input
+                      label="CAP *"
+                      required
+                      value={formData.pickup_zip}
+                      onChange={(e) => setFormData({ ...formData, pickup_zip: e.target.value })}
+                      placeholder="es. 09131"
+                      maxLength={5}
+                    />
+                    <Input
+                      label="Provincia *"
+                      required
+                      value={formData.pickup_province}
+                      onChange={(e) => setFormData({ ...formData, pickup_province: e.target.value.toUpperCase() })}
+                      placeholder="es. CA"
+                      maxLength={2}
+                    />
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Note / istruzioni"
+                        value={formData.pickup_notes}
+                        onChange={(e) => setFormData({ ...formData, pickup_notes: e.target.value })}
+                        placeholder="es. Citofono 3, secondo piano"
+                      />
+                    </div>
+                  </div>
+                  <Input
+                    label="Costo ritiro (€) *"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={formData.pickup_fee}
+                    onChange={(e) => setFormData({ ...formData, pickup_fee: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
                 label="Stato Pagamento"
@@ -3858,7 +4190,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   // Auto-update amount_paid based on status
                   if (newStatus === 'paid') {
-                    newAmountPaid = formData.total_amount // Full payment
+                    // Full payment = base + delivery fee + pickup fee
+                    const fullTotal = parseFloat(formData.total_amount || '0')
+                      + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+                      + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                    newAmountPaid = fullTotal.toFixed(2)
                   } else if (newStatus === 'unpaid') {
                     newAmountPaid = '0' // No payment
                   }
@@ -3921,8 +4257,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 value={formData.total_amount}
                 onChange={(e) => {
                   const newTotal = e.target.value
-                  // If currently paid, update paid amount to match new total
-                  const newPaid = formData.payment_status === 'paid' ? newTotal : formData.amount_paid
+                  // If currently paid, update paid amount to match new total (including delivery/pickup fees)
+                  const fullTotal = parseFloat(newTotal || '0')
+                    + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+                    + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                  const newPaid = formData.payment_status === 'paid' ? fullTotal.toFixed(2) : formData.amount_paid
                   setFormData({ ...formData, total_amount: newTotal, amount_paid: newPaid })
                 }}
               />
@@ -3995,6 +4334,43 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
               />
             </div>
+
+            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees */}
+            {(formData.delivery_enabled || formData.pickup_enabled) && (
+              <div className="md:col-span-2 bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
+                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Totale</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-theme-text-muted">Noleggio base</span>
+                    <span className="font-mono text-theme-text-primary">€{parseFloat(formData.total_amount || '0').toFixed(2)}</span>
+                  </div>
+                  {formData.delivery_enabled && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-theme-text-muted">Consegna a domicilio</span>
+                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.delivery_fee || '0').toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.pickup_enabled && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-theme-text-muted">Ritiro a domicilio</span>
+                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.pickup_fee || '0').toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-theme-border/50 pt-2 mt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-dr7-gold">Totale da saldare</span>
+                      <span className="font-mono text-xl font-bold text-dr7-gold">
+                        €{(
+                          parseFloat(formData.total_amount || '0') +
+                          (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0) +
+                          (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3 mt-4">
               <Button type="submit">
@@ -4384,6 +4760,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               : 'N/A'
                         }</span></div>
                         <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
+                        {(selectedBooking.delivery_enabled || selectedBooking.booking_details?.delivery_enabled) && (
+                          <div className="mt-2 pt-2 border-t border-theme-border/30">
+                            <span className="text-theme-text-muted">Consegna a domicilio:</span>
+                            <span className="text-theme-text-primary ml-1">
+                              {(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address)
+                                ? `${(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address).street}, ${(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address).city}`
+                                : 'Si'}
+                              {' '}(€{((selectedBooking.delivery_fee || 0) / 100).toFixed(2)})
+                            </span>
+                          </div>
+                        )}
+                        {(selectedBooking.pickup_enabled || selectedBooking.booking_details?.pickup_enabled) && (
+                          <div>
+                            <span className="text-theme-text-muted">Ritiro a domicilio:</span>
+                            <span className="text-theme-text-primary ml-1">
+                              {(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address)
+                                ? `${(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address).street}, ${(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address).city}`
+                                : 'Si'}
+                              {' '}(€{((selectedBooking.pickup_fee || 0) / 100).toFixed(2)})
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
