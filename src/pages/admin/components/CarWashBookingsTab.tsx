@@ -1014,67 +1014,53 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
               </div>
 
-              {/* Service Cards by Category */}
-              {Object.entries(servicesByCategory).map(([category, services]) => (
-                <div key={category}>
-                  <h4 className="text-sm font-semibold text-theme-text-secondary tracking-wider mb-2">
-                    {categoryLabels[category] || category.toUpperCase()}
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {services.map(service => {
-                      const isSelected = selectedService?.id === service.id
-                      const hasPriceOptions = service.price_options && service.price_options.length > 0
+              {/* Service Dropdown Selector */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Servizio</label>
+                <select
+                  value={selectedService?.id || ''}
+                  onChange={(e) => {
+                    const allServices = Object.values(servicesByCategory).flat()
+                    const service = allServices.find(s => s.id === e.target.value) || null
+                    setSelectedService(service)
+                    setSelectedPriceOption(null)
+                  }}
+                  className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 border border-theme-border focus:border-dr7-gold focus:outline-none"
+                >
+                  <option value="">Seleziona servizio...</option>
+                  {Object.entries(servicesByCategory).map(([category, services]) => (
+                    <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                      {services.map(service => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
 
-                      return (
-                        <div
-                          key={service.id}
-                          onClick={() => {
-                            if (!hasPriceOptions) {
-                              setSelectedService(service)
-                              setSelectedPriceOption(null)
-                            } else if (!isSelected) {
-                              setSelectedService(service)
-                              setSelectedPriceOption(null)
-                            }
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-dr7-gold bg-dr7-gold/10'
-                              : 'border-theme-border hover:border-theme-border-light bg-theme-bg-tertiary/50'
-                          }`}
-                        >
-                          <div className="font-medium text-theme-text-primary text-sm">{service.name}</div>
-                          <div className="text-xs text-theme-text-muted mt-1">{service.duration}</div>
-                          {!hasPriceOptions ? (
-                            <div className="text-dr7-gold font-bold mt-2">EUR {service.price.toFixed(2)}</div>
-                          ) : (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {service.price_options!.map(opt => (
-                                <button
-                                  key={opt.label}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setSelectedService(service)
-                                    setSelectedPriceOption(opt)
-                                  }}
-                                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                                    isSelected && selectedPriceOption?.label === opt.label
-                                      ? 'bg-dr7-gold text-black border-dr7-gold font-bold'
-                                      : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold hover:text-dr7-gold'
-                                  }`}
-                                >
-                                  {opt.label} EUR {opt.price}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+              {/* Price options (if service has variants) */}
+              {selectedService?.price_options && selectedService.price_options.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Opzione prezzo</label>
+                  <select
+                    value={selectedPriceOption?.label || ''}
+                    onChange={(e) => {
+                      const opt = selectedService.price_options!.find(o => o.label === e.target.value) || null
+                      setSelectedPriceOption(opt)
+                    }}
+                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 border border-theme-border focus:border-dr7-gold focus:outline-none"
+                  >
+                    <option value="">Seleziona opzione...</option>
+                    {selectedService.price_options.map(opt => (
+                      <option key={opt.label} value={opt.label}>
+                        {opt.label} - EUR {opt.price.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ))}
+              )}
 
               {/* Avanti button */}
               <div className="flex justify-between items-center pt-4 border-t border-theme-border">
