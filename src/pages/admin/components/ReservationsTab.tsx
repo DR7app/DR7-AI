@@ -1895,6 +1895,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_location: pickupLoc,
       dropoff_location: dropoffLoc,
       status: booking.status,
+      payment_status: booking.payment_status || 'paid',
+      payment_method: booking.payment_method || 'Contanti',
+      amount_paid: booking.booking_details?.amountPaid ? (booking.booking_details.amountPaid / 100).toString() : '0',
       // Subtract delivery/pickup fees to get BASE rental amount only
       // (fees are re-added on save at price_total calculation)
       // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
@@ -1929,6 +1932,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit: booking.booking_details?.deposit || '0',
       deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0',
+      unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
+      km_limit: booking.booking_details?.km_limit === 'Illimitati' ? '0' : (booking.booking_details?.km_limit || '0'),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
@@ -2039,13 +2044,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const depositOpt = extendingBooking.booking_details?.depositOption
         const depositSts = extendingBooking.booking_details?.deposit_status
         if (depositOpt === 'no_deposit') {
-          const surcharge = extendingBooking.booking_details?.noDepositSurcharge || 0
+          const surcharge = parseFloat(extendingBooking.booking_details?.noDepositSurcharge || 0)
           extensionMsg += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`
         } else if (depositAmt > 0) {
           const cauzioneLabel = depositSts === 'incassata' ? 'Pagata' : 'Da saldare'
-          extensionMsg += `*Cauzione:* €${depositAmt} - ${cauzioneLabel}\n`
+          extensionMsg += `*Cauzione:* €${depositAmt.toFixed(2)} - ${cauzioneLabel}\n`
         }
-        extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da Saldare'}`
+        extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da saldare'}`
         if (extendData.notes) extensionMsg += `\n*Note:* ${extendData.notes}`
 
         await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -2631,13 +2636,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const pickupWithBuffer = new Date(pickupDateTime.getTime() - BUFFER_MINUTES * 60 * 1000)
 
         // First, check if the vehicle is currently in the car wash
-        const { data: carWashBookings, error: carWashError } = await supabase
+        const carWashPlate = vehicle?.plate || vehicle?.targa || ''
+        let carWashQuery = supabase
           .from('bookings')
           .select('id, service_type, service_name, vehicle_name, appointment_date, appointment_time, pickup_date, dropoff_date')
           .eq('service_type', 'car_wash')
           .neq('status', 'cancelled')
-          .or(`vehicle_name.ilike.%${vehicle?.display_name}%`)
           .or(`and(pickup_date.lte.${pickupDateTime.toISOString()},dropoff_date.gte.${pickupDateTime.toISOString()})`)
+        if (carWashPlate) {
+          carWashQuery = carWashQuery.eq('vehicle_plate', carWashPlate)
+        } else if (vehicle?.id) {
+          carWashQuery = carWashQuery.eq('vehicle_id', vehicle.id)
+        }
+        const { data: carWashBookings, error: carWashError } = await carWashQuery
 
         if (!carWashError && carWashBookings && carWashBookings.length > 0) {
           // Check if any car wash booking overlaps with the pickup time
@@ -2683,11 +2694,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           .or(`and(pickup_date.lte.${returnDateTime.toISOString()},dropoff_date.gte.${pickupWithBuffer.toISOString()})`)
 
         if (vehicle?.plate || vehicle?.targa) {
-          // If vehicle has a plate, check availability specifically for that plate
           query = query.eq('vehicle_plate', vehicle.plate || vehicle.targa)
-        } else {
-          // Fallback to name if no plate is available (legacy behavior)
-          query = query.eq('vehicle_name', vehicle?.display_name)
+        } else if (vehicle?.id) {
+          query = query.eq('vehicle_id', vehicle.id)
         }
 
         const { data: existingBookings, error: checkError } = await query
@@ -2718,7 +2727,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             if (isOverlap) {
               // Complete overlap - show double booking warning
-              const vehicleTarga = vehicle?.plate || conflictingBooking.vehicle_name
+              const vehicleTarga = vehicle?.plate || conflictingBooking.vehicle_plate || 'N/A'
               const confirmed = confirm(
                 `ATTENZIONE: VEICOLO GIÀ PRENOTATO!\n\n` +
                 `Veicolo: ${conflictingBooking.vehicle_name}\n` +
@@ -3334,7 +3343,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
 
         const depositAmount = parseFloat(formData.deposit) || 0
-        const depositPaid = formData.payment_status === 'paid'
+        const depositPaid = formData.deposit_status === 'incassata'
 
         await fetch('/.netlify/functions/sync-booking-cauzione', {
           method: 'POST',

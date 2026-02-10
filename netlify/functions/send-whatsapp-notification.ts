@@ -266,15 +266,15 @@ const handler: Handler = async (event) => {
       message += `*Totale:* €${totalPrice}\n`;
 
       // Cauzione (deposit) info with status
-      const depositAmount = booking.deposit_amount || booking.booking_details?.deposit || 0;
+      const depositAmount = parseFloat(booking.deposit_amount || booking.booking_details?.deposit || 0);
       const depositOption = booking.booking_details?.depositOption;
       const depositStatus = booking.booking_details?.deposit_status;
       if (depositOption === 'no_deposit') {
-        const surcharge = booking.booking_details?.noDepositSurcharge || 0;
+        const surcharge = parseFloat(booking.booking_details?.noDepositSurcharge || 0);
         message += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`;
       } else if (depositAmount > 0) {
         const statusLabel = depositStatus === 'incassata' ? 'Pagata' : 'Da saldare';
-        message += `*Cauzione:* €${depositAmount} - ${statusLabel}\n`;
+        message += `*Cauzione:* €${depositAmount.toFixed(2)} - ${statusLabel}\n`;
       } else {
         message += `*Cauzione:* N/A\n`;
       }
