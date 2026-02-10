@@ -24,6 +24,14 @@ interface VehicleInventory {
     pastiglie_post_quantity: number
     pastiglie_post_supplier_url: string | null
     pastiglie_post_supplier_phone: string | null
+    sensori_ant_model: string | null
+    sensori_ant_quantity: number
+    sensori_ant_supplier_url: string | null
+    sensori_ant_supplier_phone: string | null
+    sensori_post_model: string | null
+    sensori_post_quantity: number
+    sensori_post_supplier_url: string | null
+    sensori_post_supplier_phone: string | null
     updated_at: string
 }
 
@@ -37,6 +45,7 @@ export default function FleetInventory() {
     const [editingVehicle, setEditingVehicle] = useState<string | null>(null)
     const [editForm, setEditForm] = useState<Partial<VehicleInventory>>({})
     const [plateSearch, setPlateSearch] = useState('')
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
         loadVehiclesWithInventory()
@@ -79,49 +88,57 @@ export default function FleetInventory() {
     }
 
     async function saveInventory(vehicleId: string) {
+        if (saving) return
+        setSaving(true)
         try {
             const existingInventory = vehicles.find(v => v.id === vehicleId)?.inventory
 
+            const inventoryFields = {
+                oil_type: editForm.oil_type || null,
+                oil_quantity: editForm.oil_quantity || 0,
+                oil_supplier_url: editForm.oil_supplier_url || null,
+                oil_supplier_phone: editForm.oil_supplier_phone || null,
+                pastiglie_ant_model: editForm.pastiglie_ant_model || null,
+                pastiglie_ant_quantity: editForm.pastiglie_ant_quantity || 0,
+                pastiglie_ant_supplier_url: editForm.pastiglie_ant_supplier_url || null,
+                pastiglie_ant_supplier_phone: editForm.pastiglie_ant_supplier_phone || null,
+                pastiglie_post_model: editForm.pastiglie_post_model || null,
+                pastiglie_post_quantity: editForm.pastiglie_post_quantity || 0,
+                pastiglie_post_supplier_url: editForm.pastiglie_post_supplier_url || null,
+                pastiglie_post_supplier_phone: editForm.pastiglie_post_supplier_phone || null,
+                sensori_ant_model: editForm.sensori_ant_model || null,
+                sensori_ant_quantity: editForm.sensori_ant_quantity || 0,
+                sensori_ant_supplier_url: editForm.sensori_ant_supplier_url || null,
+                sensori_ant_supplier_phone: editForm.sensori_ant_supplier_phone || null,
+                sensori_post_model: editForm.sensori_post_model || null,
+                sensori_post_quantity: editForm.sensori_post_quantity || 0,
+                sensori_post_supplier_url: editForm.sensori_post_supplier_url || null,
+                sensori_post_supplier_phone: editForm.sensori_post_supplier_phone || null
+            }
+
             if (existingInventory) {
-                // Update existing
                 const { error } = await supabase
                     .from('fleet_vehicle_inventory')
-                    .update({
-                        ...editForm,
-                        updated_at: new Date().toISOString()
-                    })
+                    .update({ ...inventoryFields, updated_at: new Date().toISOString() })
                     .eq('vehicle_id', vehicleId)
 
                 if (error) throw error
             } else {
-                // Insert new
                 const { error } = await supabase
                     .from('fleet_vehicle_inventory')
-                    .insert({
-                        vehicle_id: vehicleId,
-                        oil_type: editForm.oil_type || null,
-                        oil_quantity: editForm.oil_quantity || 0,
-                        oil_supplier_url: editForm.oil_supplier_url || null,
-                        oil_supplier_phone: editForm.oil_supplier_phone || null,
-                        pastiglie_ant_model: editForm.pastiglie_ant_model || null,
-                        pastiglie_ant_quantity: editForm.pastiglie_ant_quantity || 0,
-                        pastiglie_ant_supplier_url: editForm.pastiglie_ant_supplier_url || null,
-                        pastiglie_ant_supplier_phone: editForm.pastiglie_ant_supplier_phone || null,
-                        pastiglie_post_model: editForm.pastiglie_post_model || null,
-                        pastiglie_post_quantity: editForm.pastiglie_post_quantity || 0,
-                        pastiglie_post_supplier_url: editForm.pastiglie_post_supplier_url || null,
-                        pastiglie_post_supplier_phone: editForm.pastiglie_post_supplier_phone || null
-                    })
+                    .insert({ vehicle_id: vehicleId, ...inventoryFields })
 
                 if (error) throw error
             }
 
             setEditingVehicle(null)
             setEditForm({})
-            loadVehiclesWithInventory()
+            await loadVehiclesWithInventory()
         } catch (error) {
             console.error('Error saving inventory:', error)
             alert('Errore nel salvataggio')
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -139,7 +156,15 @@ export default function FleetInventory() {
             pastiglie_post_model: vehicle.inventory?.pastiglie_post_model || '',
             pastiglie_post_quantity: vehicle.inventory?.pastiglie_post_quantity || 0,
             pastiglie_post_supplier_url: vehicle.inventory?.pastiglie_post_supplier_url || '',
-            pastiglie_post_supplier_phone: vehicle.inventory?.pastiglie_post_supplier_phone || ''
+            pastiglie_post_supplier_phone: vehicle.inventory?.pastiglie_post_supplier_phone || '',
+            sensori_ant_model: vehicle.inventory?.sensori_ant_model || '',
+            sensori_ant_quantity: vehicle.inventory?.sensori_ant_quantity || 0,
+            sensori_ant_supplier_url: vehicle.inventory?.sensori_ant_supplier_url || '',
+            sensori_ant_supplier_phone: vehicle.inventory?.sensori_ant_supplier_phone || '',
+            sensori_post_model: vehicle.inventory?.sensori_post_model || '',
+            sensori_post_quantity: vehicle.inventory?.sensori_post_quantity || 0,
+            sensori_post_supplier_url: vehicle.inventory?.sensori_post_supplier_url || '',
+            sensori_post_supplier_phone: vehicle.inventory?.sensori_post_supplier_phone || ''
         })
     }
 
@@ -157,7 +182,7 @@ export default function FleetInventory() {
         return cleaned
     }
 
-    function sendWhatsAppOrder(vehicle: VehicleWithInventory, itemType: 'oil' | 'pastiglie_ant' | 'pastiglie_post') {
+    function sendWhatsAppOrder(vehicle: VehicleWithInventory, itemType: 'oil' | 'pastiglie_ant' | 'pastiglie_post' | 'sensori_ant' | 'sensori_post') {
         const inv = vehicle.inventory
         let phone = ''
         let message = ''
@@ -174,6 +199,14 @@ export default function FleetInventory() {
             phone = inv?.pastiglie_post_supplier_phone || ''
             const model = inv?.pastiglie_post_model || 'Pastiglie freno posteriori'
             message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+        } else if (itemType === 'sensori_ant') {
+            phone = inv?.sensori_ant_supplier_phone || ''
+            const model = inv?.sensori_ant_model || 'Sensori parcheggio anteriori'
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Parcheggio Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+        } else if (itemType === 'sensori_post') {
+            phone = inv?.sensori_post_supplier_phone || ''
+            const model = inv?.sensori_post_model || 'Sensori parcheggio posteriori'
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Parcheggio Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
         }
 
         if (!phone) {
@@ -203,6 +236,8 @@ export default function FleetInventory() {
     const vehiclesNeedingOil = vehicles.filter(v => (v.inventory?.oil_quantity || 0) === 0).length
     const vehiclesNeedingPastiglieAnt = vehicles.filter(v => (v.inventory?.pastiglie_ant_quantity || 0) === 0).length
     const vehiclesNeedingPastigliePost = vehicles.filter(v => (v.inventory?.pastiglie_post_quantity || 0) === 0).length
+    const vehiclesNeedingSensoriAnt = vehicles.filter(v => (v.inventory?.sensori_ant_quantity || 0) === 0).length
+    const vehiclesNeedingSensoriPost = vehicles.filter(v => (v.inventory?.sensori_post_quantity || 0) === 0).length
 
     if (loading) return <div className="text-theme-text-muted">Caricamento magazzino...</div>
 
@@ -225,29 +260,41 @@ export default function FleetInventory() {
                     </div>
                 </div>
                 <p className="text-sm text-theme-text-muted mt-1">
-                    Gestione scorte olio e pastiglie per ogni veicolo
+                    Gestione scorte olio, pastiglie e sensori per ogni veicolo
                 </p>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <div className={`rounded-lg p-4 border ${vehiclesNeedingOil > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className="text-3xl font-bold mb-1 ${vehiclesNeedingOil > 0 ? 'text-red-400' : 'text-green-400'}">
+                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingOil > 0 ? 'text-red-400' : 'text-green-400'}`}>
                         {vehiclesNeedingOil}
                     </div>
                     <div className="text-sm text-theme-text-muted">Veicoli senza olio</div>
                 </div>
                 <div className={`rounded-lg p-4 border ${vehiclesNeedingPastiglieAnt > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className="text-3xl font-bold mb-1">
+                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingPastiglieAnt > 0 ? 'text-red-400' : 'text-green-400'}`}>
                         {vehiclesNeedingPastiglieAnt}
                     </div>
                     <div className="text-sm text-theme-text-muted">Veicoli senza pastiglie ant.</div>
                 </div>
                 <div className={`rounded-lg p-4 border ${vehiclesNeedingPastigliePost > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className="text-3xl font-bold mb-1">
+                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingPastigliePost > 0 ? 'text-red-400' : 'text-green-400'}`}>
                         {vehiclesNeedingPastigliePost}
                     </div>
                     <div className="text-sm text-theme-text-muted">Veicoli senza pastiglie post.</div>
+                </div>
+                <div className={`rounded-lg p-4 border ${vehiclesNeedingSensoriAnt > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
+                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingSensoriAnt > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {vehiclesNeedingSensoriAnt}
+                    </div>
+                    <div className="text-sm text-theme-text-muted">Veicoli senza sensori ant.</div>
+                </div>
+                <div className={`rounded-lg p-4 border ${vehiclesNeedingSensoriPost > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
+                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingSensoriPost > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {vehiclesNeedingSensoriPost}
+                    </div>
+                    <div className="text-sm text-theme-text-muted">Veicoli senza sensori post.</div>
                 </div>
             </div>
 
@@ -264,7 +311,9 @@ export default function FleetInventory() {
                     const oilQty = inv?.oil_quantity || 0
                     const pastiglieAntQty = inv?.pastiglie_ant_quantity || 0
                     const pastigliePostQty = inv?.pastiglie_post_quantity || 0
-                    const needsAttention = oilQty === 0 || pastiglieAntQty === 0 || pastigliePostQty === 0
+                    const sensoriAntQty = inv?.sensori_ant_quantity || 0
+                    const sensoriPostQty = inv?.sensori_post_quantity || 0
+                    const needsAttention = oilQty === 0 || pastiglieAntQty === 0 || pastigliePostQty === 0 || sensoriAntQty === 0 || sensoriPostQty === 0
 
                     return (
                         <div
@@ -306,7 +355,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="text"
                                                     value={editForm.oil_type || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, oil_type: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, oil_type: e.target.value }))}
                                                     placeholder="es. 5W30 Castrol Edge"
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -317,7 +366,7 @@ export default function FleetInventory() {
                                                     type="number"
                                                     min="0"
                                                     value={editForm.oil_quantity || 0}
-                                                    onChange={(e) => setEditForm({ ...editForm, oil_quantity: parseInt(e.target.value) || 0 })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, oil_quantity: Math.max(0, parseInt(e.target.value) || 0) }))}
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
@@ -326,7 +375,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="tel"
                                                     value={editForm.oil_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, oil_supplier_phone: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, oil_supplier_phone: e.target.value }))}
                                                     placeholder="es. 3331234567"
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -336,7 +385,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="url"
                                                     value={editForm.oil_supplier_url || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, oil_supplier_url: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, oil_supplier_url: e.target.value }))}
                                                     placeholder="https://..."
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -353,7 +402,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="text"
                                                     value={editForm.pastiglie_ant_model || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_model: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_ant_model: e.target.value }))}
                                                     placeholder="es. Brembo P50067"
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -364,7 +413,7 @@ export default function FleetInventory() {
                                                     type="number"
                                                     min="0"
                                                     value={editForm.pastiglie_ant_quantity || 0}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_quantity: parseInt(e.target.value) || 0 })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_ant_quantity: Math.max(0, parseInt(e.target.value) || 0) }))}
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
@@ -373,7 +422,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="tel"
                                                     value={editForm.pastiglie_ant_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_supplier_phone: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_ant_supplier_phone: e.target.value }))}
                                                     placeholder="es. 3331234567"
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -383,7 +432,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="url"
                                                     value={editForm.pastiglie_ant_supplier_url || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_ant_supplier_url: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_ant_supplier_url: e.target.value }))}
                                                     placeholder="https://..."
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -392,7 +441,7 @@ export default function FleetInventory() {
                                     </div>
 
                                     {/* Rear Brake Pads Section */}
-                                    <div className="pb-2">
+                                    <div className="border-b border-theme-border pb-4">
                                         <h4 className="font-semibold text-theme-text-primary mb-3">Pastiglie Freno Posteriori</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                             <div>
@@ -400,7 +449,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="text"
                                                     value={editForm.pastiglie_post_model || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_model: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_post_model: e.target.value }))}
                                                     placeholder="es. Brembo P50068"
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -411,7 +460,7 @@ export default function FleetInventory() {
                                                     type="number"
                                                     min="0"
                                                     value={editForm.pastiglie_post_quantity || 0}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_quantity: parseInt(e.target.value) || 0 })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_post_quantity: Math.max(0, parseInt(e.target.value) || 0) }))}
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
                                             </div>
@@ -420,7 +469,7 @@ export default function FleetInventory() {
                                                 <input
                                                     type="tel"
                                                     value={editForm.pastiglie_post_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_supplier_phone: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_post_supplier_phone: e.target.value }))}
                                                     placeholder="es. 3331234567"
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -430,7 +479,101 @@ export default function FleetInventory() {
                                                 <input
                                                     type="url"
                                                     value={editForm.pastiglie_post_supplier_url || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, pastiglie_post_supplier_url: e.target.value })}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_post_supplier_url: e.target.value }))}
+                                                    placeholder="https://..."
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Front Parking Sensors Section */}
+                                    <div className="border-b border-theme-border pb-4">
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Sensori Parcheggio Anteriori</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
+                                                <input
+                                                    type="text"
+                                                    value={editForm.sensori_ant_model || ''}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_ant_model: e.target.value }))}
+                                                    placeholder="es. Bosch 0263009637"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Pezzi Disponibili</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editForm.sensori_ant_quantity || 0}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_ant_quantity: Math.max(0, parseInt(e.target.value) || 0) }))}
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
+                                                <input
+                                                    type="tel"
+                                                    value={editForm.sensori_ant_supplier_phone || ''}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_ant_supplier_phone: e.target.value }))}
+                                                    placeholder="es. 3331234567"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore (opz.)</label>
+                                                <input
+                                                    type="url"
+                                                    value={editForm.sensori_ant_supplier_url || ''}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_ant_supplier_url: e.target.value }))}
+                                                    placeholder="https://..."
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Rear Parking Sensors Section */}
+                                    <div className="pb-2">
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Sensori Parcheggio Posteriori</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
+                                                <input
+                                                    type="text"
+                                                    value={editForm.sensori_post_model || ''}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_post_model: e.target.value }))}
+                                                    placeholder="es. Bosch 0263009638"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Pezzi Disponibili</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editForm.sensori_post_quantity || 0}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_post_quantity: Math.max(0, parseInt(e.target.value) || 0) }))}
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
+                                                <input
+                                                    type="tel"
+                                                    value={editForm.sensori_post_supplier_phone || ''}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_post_supplier_phone: e.target.value }))}
+                                                    placeholder="es. 3331234567"
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-theme-text-muted mb-1">Link Fornitore (opz.)</label>
+                                                <input
+                                                    type="url"
+                                                    value={editForm.sensori_post_supplier_url || ''}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_post_supplier_url: e.target.value }))}
                                                     placeholder="https://..."
                                                     className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
                                                 />
@@ -448,15 +591,16 @@ export default function FleetInventory() {
                                         </button>
                                         <button
                                             onClick={() => saveInventory(vehicle.id)}
-                                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+                                            disabled={saving}
+                                            className={`px-4 py-2 text-white rounded-lg ${saving ? 'bg-green-800 cursor-not-allowed opacity-60' : 'bg-green-600 hover:bg-green-700'}`}
                                         >
-                                            Salva
+                                            {saving ? 'Salvataggio...' : 'Salva'}
                                         </button>
                                     </div>
                                 </div>
                             ) : (
                                 /* Display Mode */
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                     {/* Oil */}
                                     <div className={`rounded-lg p-3 border ${getStatusColor(oilQty)}`}>
                                         <div className="flex items-center justify-between mb-2">
@@ -518,6 +662,52 @@ export default function FleetInventory() {
                                             onClick={() => sendWhatsAppOrder(vehicle, 'pastiglie_post')}
                                             className={`w-full py-2 rounded text-sm font-medium ${
                                                 pastigliePostQty === 0
+                                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                                    : 'bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary'
+                                            }`}
+                                        >
+                                            Ordina via WhatsApp
+                                        </button>
+                                    </div>
+
+                                    {/* Front Parking Sensors */}
+                                    <div className={`rounded-lg p-3 border ${getStatusColor(sensoriAntQty)}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium text-theme-text-secondary">Sensori Ant.</span>
+                                            <span className={`text-xl font-bold ${getQuantityColor(sensoriAntQty)}`}>
+                                                {sensoriAntQty} pz
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-theme-text-muted mb-2 truncate">
+                                            {inv?.sensori_ant_model || 'Modello non specificato'}
+                                        </p>
+                                        <button
+                                            onClick={() => sendWhatsAppOrder(vehicle, 'sensori_ant')}
+                                            className={`w-full py-2 rounded text-sm font-medium ${
+                                                sensoriAntQty === 0
+                                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                                    : 'bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary'
+                                            }`}
+                                        >
+                                            Ordina via WhatsApp
+                                        </button>
+                                    </div>
+
+                                    {/* Rear Parking Sensors */}
+                                    <div className={`rounded-lg p-3 border ${getStatusColor(sensoriPostQty)}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium text-theme-text-secondary">Sensori Post.</span>
+                                            <span className={`text-xl font-bold ${getQuantityColor(sensoriPostQty)}`}>
+                                                {sensoriPostQty} pz
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-theme-text-muted mb-2 truncate">
+                                            {inv?.sensori_post_model || 'Modello non specificato'}
+                                        </p>
+                                        <button
+                                            onClick={() => sendWhatsAppOrder(vehicle, 'sensori_post')}
+                                            className={`w-full py-2 rounded text-sm font-medium ${
+                                                sensoriPostQty === 0
                                                     ? 'bg-red-600 hover:bg-red-700 text-white'
                                                     : 'bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary'
                                             }`}

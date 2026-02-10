@@ -1935,7 +1935,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_location: pickupLoc,
       dropoff_location: dropoffLoc,
       status: booking.status,
-      total_amount: (booking.price_total / 100).toString(),
+      // Subtract delivery/pickup fees to get BASE rental amount only
+      // (fees are re-added on save at price_total calculation)
+      // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
+      total_amount: ((booking.price_total
+        - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
+        - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
+      ) / 100).toString(),
       currency: booking.currency.toUpperCase(),
       source: 'admin',
       // 2nd Driver
@@ -2051,7 +2057,59 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       console.log('[handleConfirmExtend] ✅ Booking extended successfully')
 
-      // Close modal first
+      // Send WhatsApp notification for extension
+      try {
+        const prevDropoff = new Date(extendingBooking.dropoff_date)
+        const prevDropoffStr = prevDropoff.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+        const prevTimeStr = prevDropoff.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+        const newDropoffStr = newDropoffDateTime.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+        const newTimeStr = newDropoffDateTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+        const bookingIdShort = extendingBooking.id.substring(0, 8).toUpperCase()
+
+        let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
+        extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
+        extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
+        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
+        extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+        extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
+        extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
+        extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da Saldare'}`
+        if (extendData.notes) extensionMsg += `\n*Note:* ${extendData.notes}`
+
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customMessage: extensionMsg })
+        })
+        console.log('[handleConfirmExtend] ✅ WhatsApp notification sent')
+      } catch (whatsappError) {
+        console.error('[handleConfirmExtend] ⚠️ WhatsApp notification failed:', whatsappError)
+      }
+
+      // Sync cauzione with new return date
+      try {
+        const depositAmount = parseFloat(extendingBooking.booking_details?.deposit) || extendingBooking.deposit_amount || 0
+        await fetch('/.netlify/functions/sync-booking-cauzione', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: extendingBooking.id,
+            customerId: extendingBooking.user_id,
+            vehicleId: extendingBooking.vehicle_id,
+            returnDate: newDropoffDateTime.toISOString(),
+            depositAmount: depositAmount,
+            paymentMethod: extendingBooking.payment_method || 'carta',
+            depositPaid: extendingBooking.booking_details?.deposit_status === 'incassata',
+            depositStatus: extendingBooking.booking_details?.deposit_status || 'da_incassare'
+          })
+        })
+        console.log('[handleConfirmExtend] ✅ Cauzione synced with new return date')
+      } catch (cauzioneError) {
+        console.error('[handleConfirmExtend] ⚠️ Cauzione sync failed:', cauzioneError)
+      }
+
+      // Close modal
       const bookingId = extendingBooking.id
       setShowExtendModal(false)
       setExtendingBooking(null)
@@ -3052,6 +3110,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         } : null,
         pickup_fee: formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0,
         booking_details: {
+          // When editing, preserve metadata that the form doesn't manage
+          // (extension history, contracts, deposit options, etc.)
+          ...(editingId ? (() => {
+            const existingBooking = bookings.find(b => b.id === editingId)
+            return existingBooking?.booking_details ? {
+              extension_history: existingBooking.booking_details.extension_history,
+              extension_contracts: existingBooking.booking_details.extension_contracts,
+              contract_generated_at: existingBooking.booking_details.contract_generated_at,
+              depositOption: existingBooking.booking_details.depositOption,
+              noDepositSurcharge: existingBooking.booking_details.noDepositSurcharge,
+            } : {}
+          })() : {}),
           customer: {
             fullName: customerInfo?.full_name || '',
             email: customerInfo?.email || '',
@@ -3229,101 +3299,105 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Send WhatsApp notification for car rental
-      if (!editingId) { // Only for new bookings
-        try {
-          const paymentStatus = formData.payment_status || 'pending'
+      // Send WhatsApp notification for car rental (new and edited bookings)
+      try {
+        const paymentStatus = formData.payment_status || 'pending'
 
-          // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
-          // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              booking: {
-                id: insertedBooking?.id || '',
-                service_type: 'car_rental',
-                customer_name: customerInfo?.full_name || '',
-                customer_email: customerInfo?.email || '',
-                customer_phone: customerInfo?.phone || '',
-                vehicle_name: vehicle?.display_name || '',
-                // Use the pre-computed datetime strings with correct Italy offset
-                pickup_date: pickupDateTime,
-                dropoff_date: returnDateTime,
-                pickup_location: pickupLocationLabel,
-                insurance_option: 'KASKO_BASE', // Always Kasko included
-                price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
-                payment_status: paymentStatus,
-                deposit_amount: parseFloat(formData.deposit) || 0,
-                booking_details: {
-                  amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
-                  insuranceOption: 'KASKO_BASE',
-                  deposit: parseFloat(formData.deposit) || 0,
-                  delivery_enabled: formData.delivery_enabled,
-                  delivery_address: formData.delivery_enabled ? {
-                    street: formData.delivery_street,
-                    city: formData.delivery_city,
-                    zip: formData.delivery_zip,
-                    province: formData.delivery_province
-                  } : null,
-                  delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
-                  pickup_enabled: formData.pickup_enabled,
-                  pickup_address: formData.pickup_enabled ? {
-                    street: formData.pickup_street,
-                    city: formData.pickup_city,
-                    zip: formData.pickup_zip,
-                    province: formData.pickup_province
-                  } : null,
-                  pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0'
-                }
+        // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
+        // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            booking: {
+              id: insertedBooking?.id || '',
+              service_type: 'car_rental',
+              isEdit: !!editingId,
+              customer_name: customerInfo?.full_name || '',
+              customer_email: customerInfo?.email || '',
+              customer_phone: customerInfo?.phone || '',
+              vehicle_name: vehicle?.display_name || '',
+              // Use the pre-computed datetime strings with correct Italy offset
+              pickup_date: pickupDateTime,
+              dropoff_date: returnDateTime,
+              pickup_location: pickupLocationLabel,
+              insurance_option: 'KASKO_BASE', // Always Kasko included
+              price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
+              payment_status: paymentStatus,
+              deposit_amount: parseFloat(formData.deposit) || 0,
+              booking_details: {
+                amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
+                insuranceOption: 'KASKO_BASE',
+                deposit: parseFloat(formData.deposit) || 0,
+                deposit_status: formData.deposit_status,
+                delivery_enabled: formData.delivery_enabled,
+                delivery_address: formData.delivery_enabled ? {
+                  street: formData.delivery_street,
+                  city: formData.delivery_city,
+                  zip: formData.delivery_zip,
+                  province: formData.delivery_province
+                } : null,
+                delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+                pickup_enabled: formData.pickup_enabled,
+                pickup_address: formData.pickup_enabled ? {
+                  street: formData.pickup_street,
+                  city: formData.pickup_city,
+                  zip: formData.pickup_zip,
+                  province: formData.pickup_province
+                } : null,
+                pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+                depositOption: insertedBooking?.booking_details?.depositOption,
+                noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
               }
-            })
+            }
           })
-          console.log('✅ WhatsApp notification sent')
-        } catch (whatsappError) {
-          console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
-          // Don't fail the whole booking if WhatsApp fails
-        }
+        })
+        console.log('✅ WhatsApp notification sent')
+      } catch (whatsappError) {
+        console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
+        // Don't fail the whole booking if WhatsApp fails
+      }
 
-        // Sync cauzione (security deposit) record
-        try {
-          console.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
+      // Sync cauzione (security deposit) record
+      try {
+        console.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
 
-          const depositAmount = parseFloat(formData.deposit) || 0
-          const depositPaid = formData.payment_status === 'paid'
+        const depositAmount = parseFloat(formData.deposit) || 0
+        const depositPaid = formData.payment_status === 'paid'
 
-          await fetch('/.netlify/functions/sync-booking-cauzione', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: insertedBooking.id,
-              customerId: formData.customer_id,
-              vehicleId: formData.vehicle_id,
-              returnDate: formData.return_date,
-              depositAmount: depositAmount,
-              paymentMethod: formData.payment_method || 'carta',
-              depositPaid: depositPaid,
-              depositStatus: formData.deposit_status
-            })
+        await fetch('/.netlify/functions/sync-booking-cauzione', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: insertedBooking.id,
+            customerId: insertedBooking.user_id || formData.customer_id,
+            vehicleId: insertedBooking.vehicle_id || formData.vehicle_id,
+            returnDate: insertedBooking.dropoff_date || formData.return_date,
+            depositAmount: depositAmount,
+            paymentMethod: formData.payment_method || 'carta',
+            depositPaid: depositPaid,
+            depositStatus: formData.deposit_status
           })
+        })
 
-          // Directly update data_incasso on existing cauzione to ensure status sync
-          // (DB triggers may interfere with the sync function's null value)
-          if (editingId) {
-            const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
-            await supabase
-              .from('cauzioni')
-              .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
-              .eq('riferimento_contratto_id', insertedBooking.id)
-            console.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
-          }
-          console.log('✅ Cauzione synced successfully')
-        } catch (cauzioneError) {
-          console.error('⚠️ Failed to sync cauzione:', cauzioneError)
-          // Don't fail the whole booking if cauzione sync fails
+        // Directly update data_incasso on existing cauzione to ensure status sync
+        // (DB triggers may interfere with the sync function's null value)
+        if (editingId) {
+          const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
+          await supabase
+            .from('cauzioni')
+            .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
+            .eq('riferimento_contratto_id', insertedBooking.id)
+          console.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
         }
+        console.log('✅ Cauzione synced successfully')
+      } catch (cauzioneError) {
+        console.error('⚠️ Failed to sync cauzione:', cauzioneError)
+        // Don't fail the whole booking if cauzione sync fails
+      }
 
-        // Generate Contract PDF automatically
+      // Generate Contract PDF automatically (only for new bookings)
+      if (!editingId) {
         try {
           console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, new Date().toISOString())
           await handleGenerateContract(insertedBooking, false)
