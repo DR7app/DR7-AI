@@ -276,7 +276,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
-export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleName?: string; pickupDate?: Date; bookingId?: string } | null; onDataConsumed?: () => void }) {
+export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -467,7 +467,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Handle initial data from Calendar click
   useEffect(() => {
     if (initialData && vehicles.length > 0) {
-      const { vehicleName, pickupDate, bookingId } = initialData
+      const { vehicleId, pickupDate, bookingId } = initialData
 
       // If bookingId is provided, load that booking in edit mode
       if (bookingId) {
@@ -482,8 +482,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Otherwise, create new booking with prefilled data
-      // Find vehicle by name (rough match)
-      const vehicle = vehicles.find(v => v.display_name === vehicleName)
+      // Find vehicle by ID (not by name — names can collide)
+      const vehicle = vehicles.find(v => v.id === vehicleId)
 
       if (vehicle) {
         // Format date as YYYY-MM-DD
@@ -1828,49 +1828,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
     }
 
-    // Method 5: Exact name match (top-level)
-    if (!vehicle && booking.vehicle_name) {
-      vehicle = vehicles.find(v => v.display_name === booking.vehicle_name)
-      if (vehicle) {
-        matchMethod = 'vehicle_name (exact)'
-        console.log('[handleEditBooking] ✅ Found by exact name:', vehicle.display_name)
-      }
-    }
-
-    // Method 6: Exact name match (booking_details)
-    if (!vehicle && booking.booking_details?.vehicle_name) {
-      vehicle = vehicles.find(v => v.display_name === (booking.booking_details?.vehicle_name || ''))
-      if (vehicle) {
-        matchMethod = 'booking_details.vehicle_name (exact)'
-        console.log('[handleEditBooking] ✅ Found by booking_details.vehicle_name:', vehicle.display_name)
-      }
-    }
-
-    // Method 7: Partial name match (top-level)
-    if (!vehicle && booking.vehicle_name) {
-      const bookingNameLower = booking.vehicle_name.toLowerCase().trim()
-      vehicle = vehicles.find(v => {
-        const vNameLower = v.display_name.toLowerCase().trim()
-        return vNameLower.includes(bookingNameLower) || bookingNameLower.includes(vNameLower)
-      })
-      if (vehicle) {
-        matchMethod = 'vehicle_name (partial)'
-        console.log('[handleEditBooking] ✅ Found by partial name match:', vehicle.display_name)
-      }
-    }
-
-    // Method 8: Partial name match (booking_details)
-    if (!vehicle && booking.booking_details?.vehicle_name) {
-      const bookingNameLower = (booking.booking_details?.vehicle_name || '').toLowerCase().trim()
-      vehicle = vehicles.find(v => {
-        const vNameLower = v.display_name.toLowerCase().trim()
-        return vNameLower.includes(bookingNameLower) || bookingNameLower.includes(vNameLower)
-      })
-      if (vehicle) {
-        matchMethod = 'booking_details.vehicle_name (partial)'
-        console.log('[handleEditBooking] ✅ Found by booking_details partial name:', vehicle.display_name)
-      }
-    }
+    // NOTE: Name-based matching (Methods 5-8) intentionally removed.
+    // Matching by vehicle name is dangerous when multiple vehicles share the same model name
+    // (e.g. "Renault Clio Orange" and "Renault Clio Blue"). Always match by plate or vehicle_id.
 
     // FINAL RESULT
     if (!vehicle) {

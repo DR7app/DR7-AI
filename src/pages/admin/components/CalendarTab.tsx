@@ -41,7 +41,7 @@ interface Booking {
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
 
-export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleName: string, date: Date) => void }) {
+export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleId: string, date: Date) => void }) {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
 
@@ -437,7 +437,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
                         style={{ width: CELL_WIDTH }}
                         onClick={() => {
                           const date = new Date(currentRomeComponents.year, currentRomeComponents.month, day, 10, 0, 0)
-                          if (onNewBooking) onNewBooking(row.vehicle.display_name, date)
+                          if (onNewBooking) onNewBooking(row.vehicle.id, date)
                         }}
                         title={`Nuova prenotazione: ${day}/${currentRomeComponents.month + 1}`}
                       />
@@ -564,7 +564,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleN
             window.dispatchEvent(new CustomEvent('openBookingForm', {
               detail: {
                 bookingId,
-                vehicleName: selectedBooking.vehicle_name,
+                vehicleId: selectedBooking.vehicle_id,
                 date: new Date(selectedBooking.pickup_date)
               }
             }))
