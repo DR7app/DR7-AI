@@ -29,12 +29,8 @@ interface BookingResult {
     province?: string
 }
 
-interface CargosTabProps {
-    mode?: 'fines' | 'export'
-}
-
-export default function CargosTab({ mode = 'fines' }: CargosTabProps) {
-    const activeSubTab = mode
+export default function CargosTab() {
+    const [activeSubTab, setActiveSubTab] = useState<'fines' | 'export'>('fines')
     const [vehicles, setVehicles] = useState<Vehicle[]>([])
 
     // Search State
@@ -369,14 +365,26 @@ export default function CargosTab({ mode = 'fines' }: CargosTabProps) {
         <div className="space-y-6">
             <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
                 <div>
-                    <h2 className="text-xl font-bold text-theme-text-primary">
-                        {activeSubTab === 'fines' ? 'Gestione Multe' : 'Cargos - Invio Telematico'}
-                    </h2>
+                    <h2 className="text-xl font-bold text-theme-text-primary">Cargos</h2>
                     <p className="text-theme-text-muted text-sm">
-                        {activeSubTab === 'fines' ? 'Ricerca conducente per data infrazione' : 'Portale Polizia di Stato'}
+                        {activeSubTab === 'fines' ? 'Ricerca conducente per data infrazione' : 'Invio telematico - Portale Polizia di Stato'}
                     </p>
                 </div>
                 <div className="flex items-center gap-4">
+                    <div className="flex bg-theme-bg-tertiary rounded-full border border-theme-border overflow-hidden">
+                        <button
+                            onClick={() => setActiveSubTab('fines')}
+                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                        >
+                            Multe
+                        </button>
+                        <button
+                            onClick={() => setActiveSubTab('export')}
+                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                        >
+                            Invio Telematico
+                        </button>
+                    </div>
                     {activeSubTab === 'export' && (
                         <>
                             <button

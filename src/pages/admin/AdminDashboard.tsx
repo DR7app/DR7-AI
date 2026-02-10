@@ -30,7 +30,7 @@ import ScadenzeTab from './components/ScadenzeTab'
 import ReportsTab from './components/ReportsTab'
 import BulkImportTab from './components/BulkImportTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'multe' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -274,13 +274,6 @@ export default function AdminDashboard() {
                 Contratti
               </button>
               <button
-                onClick={() => { setActiveTab('multe'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'multe' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Multe
-              </button>
-              <button
                 onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
                   }`}
@@ -354,7 +347,7 @@ export default function AdminDashboard() {
               {/* Noleggio Dropdown */}
               <div className="relative group">
                 <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar' || activeTab === 'cauzioni' || activeTab === 'contratto' || activeTab === 'multe' || activeTab === 'cargos'
+                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar' || activeTab === 'cauzioni' || activeTab === 'contratto' || activeTab === 'cargos'
                     ? 'text-theme-text-primary'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
                     }`}
@@ -390,13 +383,6 @@ export default function AdminDashboard() {
                       }`}
                   >
                     Contratti
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('multe')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'multe' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Multe
                   </button>
                   <button
                     onClick={() => setActiveTab('cargos')}
@@ -638,7 +624,6 @@ export default function AdminDashboard() {
             {activeTab === 'lotteria' && 'Biglietti Lotteria'}
             {activeTab === 'fattura' && 'Fatture'}
             {activeTab === 'contratto' && 'Contratti'}
-            {activeTab === 'multe' && 'Multe'}
             {activeTab === 'cargos' && 'Cargos'}
             {activeTab === 'cauzioni' && 'Cauzioni'}
             {activeTab === 'marketing' && 'Marketing'}
@@ -684,8 +669,7 @@ export default function AdminDashboard() {
           {activeTab === 'lotteria' && <LotteriaBoard />}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
-          {activeTab === 'multe' && <CargosTab mode="fines" />}
-          {activeTab === 'cargos' && <CargosTab mode="export" />}
+          {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'cauzioni' && <CauzioniTab />}
           {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'birthdays' && <BirthdaysTab />}
