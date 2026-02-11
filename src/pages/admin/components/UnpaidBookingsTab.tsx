@@ -305,23 +305,20 @@ export default function UnpaidBookingsTab() {
     let remaining = 0
 
     // Check main booking payment
+    // price_total already includes extension amounts, so don't double-count
     if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
       const total = booking.price_total || 0
       const paid = booking.booking_details?.amountPaid || 0
-      if (paid === 0 || paid === total) {
-        remaining += total
-      } else {
-        remaining += Math.max(0, total - paid)
-      }
+      remaining += Math.max(0, total - paid)
+    } else {
+      // Main booking is paid — only count pending extension payments separately
+      const extensions = booking.booking_details?.extension_history || []
+      extensions.forEach((ext: any) => {
+        if (ext.payment_status === 'pending' && ext.additional_amount) {
+          remaining += (ext.additional_amount * 100) // Convert to cents
+        }
+      })
     }
-
-    // Add pending extension payments
-    const extensions = booking.booking_details?.extension_history || []
-    extensions.forEach((ext: any) => {
-      if (ext.payment_status === 'pending' && ext.additional_amount) {
-        remaining += (ext.additional_amount * 100) // Convert to cents
-      }
-    })
 
     return remaining
   }
