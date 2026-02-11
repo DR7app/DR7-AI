@@ -139,7 +139,8 @@ const handler: Handler = async (event) => {
         message += `*Note:* ${notes}\n`;
       }
       message += `*Totale:* €${totalPrice}\n`;
-      message += `*Pagamento:* ${paymentInfo}`;
+      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
+      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
     } else if (serviceType === 'mechanical') {
       const appointmentDate = new Date(booking.appointment_date);
       const serviceName = booking.service_name || 'Servizio Meccanica';
@@ -189,7 +190,8 @@ const handler: Handler = async (event) => {
       if (notes) {
         message += `*Note:* ${notes}\n`;
       }
-      message += `*Pagamento:* ${paymentInfo}`;
+      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
+      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
     } else {
       // Car Rental Booking
       const vehicleName = booking.vehicle_name;
@@ -279,7 +281,8 @@ const handler: Handler = async (event) => {
         message += `*Cauzione:* €0\n`;
       }
 
-      message += `*Pagamento:* ${paymentInfo}`;
+      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
+      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
     }
   } else {
     return {
