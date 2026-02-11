@@ -381,7 +381,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       if (error) throw error
 
-      alert('✅ Prenotazione annullata con successo!')
+      // Success — UI updates automatically
       loadData()
     } catch (error: any) {
       console.error('Failed to cancel booking:', error)
@@ -419,7 +419,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .eq('id', bookingId)
 
       if (error) throw error
-      alert('✅ Prenotazione eliminata definitivamente!')
+      // Success — UI updates automatically
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
@@ -679,7 +679,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       console.error('⚠️ Failed to create Google Calendar event:', calendarError)
     }
 
-    alert('✅ Prenotazione creata con successo!')
+    // Success — UI updates automatically
     setShowForm(false)
     resetWizard()
     loadData()
@@ -833,23 +833,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }
       }
 
-      // If there's a conflict, show informational warning (but always proceed)
+      // Log overlap info but don't block the admin
       if (hasConflict && conflictingBooking) {
-        const bookingId = conflictingBooking.id.substring(0, 8).toUpperCase()
-        const confirmed = confirm(
-          `ℹ️ INFO: Esiste già una prenotazione a quest'orario\n\n` +
-          `Cliente esistente: ${conflictingBooking.customer_name}\n` +
-          `Servizio: ${conflictingBooking.service_name}\n` +
-          `Orario occupato: ${conflictDetails}\n` +
-          `ID Prenotazione: DR7-${bookingId}\n\n` +
-          `Stai per creare una doppia prenotazione.\n\n` +
-          `• Clicca OK per procedere\n` +
-          `• Clicca ANNULLA per scegliere un altro orario`
-        )
-
-        if (!confirmed) {
-          return // User cancelled
-        }
+        console.log('ℹ️ Overlap with existing booking:', conflictingBooking.customer_name, conflictDetails)
       }
 
       // Admin panel: ALWAYS create as forced booking (bypass all backend checks)
@@ -1645,7 +1631,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                       if (error) throw error
 
-                      alert('✅ Prenotazione aggiornata!')
+                      // Success — UI updates automatically
                       setEditingBooking(null)
                       loadData()
                     } catch (error) {

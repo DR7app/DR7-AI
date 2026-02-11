@@ -5,9 +5,10 @@ interface ScadenzeCategoryTableProps {
   categoryKey: string
   scadenze: Scadenza[]
   onAction: (scadenza: Scadenza, action: string) => void
+  onEdit?: (scadenza: Scadenza) => void
 }
 
-export default function ScadenzeCategoryTable({ categoryKey, scadenze, onAction }: ScadenzeCategoryTableProps) {
+export default function ScadenzeCategoryTable({ categoryKey, scadenze, onAction, onEdit }: ScadenzeCategoryTableProps) {
   const category = CATEGORIES[categoryKey]
   if (!category) return null
 
@@ -158,6 +159,16 @@ export default function ScadenzeCategoryTable({ categoryKey, scadenze, onAction 
                             className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium"
                           >
                             Elimina
+                          </button>
+                        )}
+
+                        {/* Edit action */}
+                        {onEdit && (
+                          <button
+                            onClick={() => onEdit(scadenza)}
+                            className="px-3 py-1 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded text-xs font-medium border border-theme-border"
+                          >
+                            Modifica
                           </button>
                         )}
                       </div>

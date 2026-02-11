@@ -61,13 +61,8 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
             if (error) throw error
 
-            // Show success message for 3 seconds
-            alert('Modifiche salvate con successo!')
-
-            // Wait a moment then close the detail view
-            setTimeout(() => {
-                onBack()
-            }, 1500)
+            // Close the detail view after save
+            onBack()
         } catch (error) {
             console.error('Error saving vehicle:', error)
             alert('Errore nel salvataggio')

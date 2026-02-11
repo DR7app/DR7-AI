@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { CATEGORY_KEYS } from './scadenze/scadenzeConfig'
+import type { Scadenza } from './scadenze/scadenzeConfig'
 import { useScadenze } from './scadenze/useScadenze'
 import ScadenzeSidebar from './scadenze/ScadenzeSidebar'
 import ScadenzePanoramica from './scadenze/ScadenzePanoramica'
 import ScadenzeCategoryTable from './scadenze/ScadenzeCategoryTable'
 import ScadenzeAddModal from './scadenze/ScadenzeAddModal'
+import ScadenzeEditModal from './scadenze/ScadenzeEditModal'
 
 export default function ScadenzeTab() {
   const [activeView, setActiveView] = useState('panoramica')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [editingScadenza, setEditingScadenza] = useState<Scadenza | null>(null)
 
   const {
     loading,
@@ -19,7 +22,8 @@ export default function ScadenzeTab() {
     getScadenzeByCategory,
     filterBySearch,
     handleAction,
-    handleAddScadenza
+    handleAddScadenza,
+    handleEditScadenza
   } = useScadenze()
 
   if (loading) {
@@ -86,6 +90,7 @@ export default function ScadenzeTab() {
               categoryKey={activeView}
               scadenze={filterBySearch(getScadenzeByCategory(activeView))}
               onAction={handleAction}
+              onEdit={setEditingScadenza}
             />
           )}
         </div>
@@ -97,6 +102,15 @@ export default function ScadenzeTab() {
           initialCategory={addModalCategory}
           onAdd={handleAddScadenza}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editingScadenza && (
+        <ScadenzeEditModal
+          scadenza={editingScadenza}
+          onSave={handleEditScadenza}
+          onClose={() => setEditingScadenza(null)}
         />
       )}
     </div>

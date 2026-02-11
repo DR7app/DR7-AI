@@ -425,7 +425,7 @@ export function useScadenze() {
       }
     } catch (error) {
       console.error('Error performing action:', error)
-      alert('Errore durante l\'operazione')
+      console.error('Errore durante l\'operazione')
     }
   }, [])
 
@@ -459,7 +459,36 @@ export function useScadenze() {
       return true
     } catch (error) {
       console.error('Error adding scadenza:', error)
-      alert('Errore durante l\'aggiunta')
+      console.error('Errore durante l\'aggiunta')
+      return false
+    }
+  }, [])
+
+  const handleEditScadenza = useCallback(async (id: string, updates: Partial<NewScadenzaForm>) => {
+    try {
+      const isRecurring = !!updates.recurring_interval
+
+      const dbUpdates: Record<string, any> = {}
+      if (updates.item_type !== undefined) dbUpdates.item_type = updates.item_type
+      if (updates.description !== undefined) dbUpdates.description = updates.description
+      if (updates.reference_name !== undefined) dbUpdates.reference_name = updates.reference_name
+      if (updates.due_date !== undefined) dbUpdates.due_date = updates.due_date
+      if (updates.amount !== undefined) dbUpdates.amount = updates.amount ? Math.round(parseFloat(updates.amount) * 100) : null
+      if (updates.recurring_interval !== undefined) {
+        dbUpdates.is_recurring = isRecurring
+        dbUpdates.recurring_interval = isRecurring ? updates.recurring_interval : null
+      }
+
+      const { error } = await supabase
+        .from('scadenze')
+        .update(dbUpdates)
+        .eq('id', id)
+
+      if (error) throw error
+      loadScadenze()
+      return true
+    } catch (error) {
+      console.error('Error editing scadenza:', error)
       return false
     }
   }, [])
@@ -582,6 +611,7 @@ export function useScadenze() {
     getScadenzeByCategory,
     filterBySearch,
     handleAction,
-    handleAddScadenza
+    handleAddScadenza,
+    handleEditScadenza
   }
 }
