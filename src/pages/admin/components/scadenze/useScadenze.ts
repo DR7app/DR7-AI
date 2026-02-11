@@ -436,6 +436,8 @@ export function useScadenze() {
         ? categoryConfig.advanceDays
         : 5
 
+      const isRecurring = !!newScadenza.recurring_interval
+
       const { error } = await supabase
         .from('scadenze')
         .insert({
@@ -448,7 +450,8 @@ export function useScadenze() {
           status: 'pending',
           advance_days: advanceDays,
           is_manual: true,
-          is_recurring: false
+          is_recurring: isRecurring,
+          recurring_interval: isRecurring ? newScadenza.recurring_interval : null
         })
 
       if (error) throw error

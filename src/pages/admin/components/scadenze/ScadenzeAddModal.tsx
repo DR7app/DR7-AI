@@ -8,6 +8,14 @@ interface ScadenzeAddModalProps {
   onClose: () => void
 }
 
+const RECURRING_OPTIONS = [
+  { value: '', label: 'Non ricorrente' },
+  { value: 'monthly', label: 'Ogni mese' },
+  { value: 'quarterly', label: 'Ogni 3 mesi' },
+  { value: 'biannual', label: 'Ogni 6 mesi' },
+  { value: 'yearly', label: 'Ogni anno' },
+]
+
 export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: ScadenzeAddModalProps) {
   const [form, setForm] = useState<NewScadenzaForm>({
     category: initialCategory || 'affitti',
@@ -15,8 +23,10 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
     description: '',
     due_date: '',
     amount: '',
-    reference_name: ''
+    reference_name: '',
+    recurring_interval: ''
   })
+  const [isCustomItem, setIsCustomItem] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit() {
@@ -36,7 +46,10 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Categoria</label>
             <select
               value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value, item_type: '' })}
+              onChange={(e) => {
+                setForm({ ...form, category: e.target.value, item_type: '' })
+                setIsCustomItem(false)
+              }}
               className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
             >
               {Object.entries(CATEGORIES).map(([key, cat]) => (
@@ -46,25 +59,48 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Voce</label>
-            <select
-              value={form.item_type}
-              onChange={(e) => setForm({ ...form, item_type: e.target.value })}
-              className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
-            >
-              <option value="">Seleziona voce...</option>
-              {CATEGORIES[form.category]?.items.map(item => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-              <option value="__custom__">+ Aggiungi voce personalizzata</option>
-            </select>
-            {form.item_type === '__custom__' && (
-              <input
-                type="text"
-                placeholder="Nome voce personalizzata"
-                onChange={(e) => setForm({ ...form, item_type: e.target.value })}
-                className="w-full mt-2 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
-              />
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Voce *</label>
+            {!isCustomItem ? (
+              <select
+                value={form.item_type}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomItem(true)
+                    setForm({ ...form, item_type: '' })
+                  } else {
+                    setForm({ ...form, item_type: e.target.value })
+                  }
+                }}
+                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+              >
+                <option value="">Seleziona voce...</option>
+                {CATEGORIES[form.category]?.items.map(item => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+                <option value="__custom__">+ Aggiungi voce personalizzata</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={form.item_type}
+                  onChange={(e) => setForm({ ...form, item_type: e.target.value })}
+                  placeholder="Nome voce personalizzata"
+                  className="flex-1 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomItem(false)
+                    setForm({ ...form, item_type: '' })
+                  }}
+                  className="px-3 py-2 text-theme-text-muted hover:text-theme-text-primary bg-theme-bg-tertiary rounded border border-theme-border"
+                  title="Torna alla lista"
+                >
+                  X
+                </button>
+              </div>
             )}
           </div>
 
@@ -80,13 +116,26 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Data Scadenza</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Data Scadenza *</label>
             <input
               type="date"
               value={form.due_date}
               onChange={(e) => setForm({ ...form, due_date: e.target.value })}
               className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Ricorrenza</label>
+            <select
+              value={form.recurring_interval}
+              onChange={(e) => setForm({ ...form, recurring_interval: e.target.value })}
+              className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
+            >
+              {RECURRING_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
 
           <div>
