@@ -1329,13 +1329,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               window.location.href = data.url
             }
           } else {
-            // Popup opened successfully
-            alert('Contratto generato con successo!\n\nIl PDF si è aperto in una nuova scheda per la revisione.\n\nDopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
+            // Popup opened successfully — no alert needed
           }
         }
       } else {
         if (showSuccessAlert) {
-          alert('Contratto generato, ma URL non disponibile.')
+          console.warn('Contratto generato, ma URL non disponibile.')
         }
       }
     } catch (error: any) {
@@ -1679,7 +1678,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole deletion if calendar delete fails
       }
 
-      alert('Prenotazione eliminata definitivamente')
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
@@ -1843,18 +1841,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         booking_details_vehicle_id: booking.booking_details?.vehicle_id
       })
 
-      // Show warning but allow editing
-      alert(
-        'ATTENZIONE\n\n' +
-        'Il veicolo associato a questa prenotazione non è stato trovato nella lista veicoli corrente.\n\n' +
-        'Possibili cause:\n' +
-        '- Il veicolo è stato ritirato o rimosso\n' +
-        '- Problema di sincronizzazione dati\n\n' +
-        'Dati veicolo nella prenotazione:\n' +
-        `- ID: ${booking.vehicle_id || 'N/A'}\n` +
-        `- Targa: ${booking.vehicle_plate || 'N/A'}\n` +
-        `- Nome: ${booking.vehicle_name || 'N/A'}\n\n` +
-        'Puoi comunque modificare la prenotazione selezionando un nuovo veicolo.'
+      // Vehicle not found — log warning but don't block
+      console.warn(
+        'Vehicle not found for booking:',
+        `ID: ${booking.vehicle_id || 'N/A'}`,
+        `Plate: ${booking.vehicle_plate || 'N/A'}`,
+        `Name: ${booking.vehicle_name || 'N/A'}`
       )
     } else {
       console.log(`[handleEditBooking] ✅ VEHICLE MATCHED: ${vehicle.display_name} (via ${matchMethod})`)
@@ -2115,7 +2107,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           const result = await response.json()
           if (result.success && result.url) {
-            alert('Contratto generato!')
             window.open(result.url, '_blank')
           } else {
             console.error('[handleConfirmExtend] Extension contract error:', result.error)
@@ -3397,12 +3388,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       resetForm()
       await loadData()
 
-      // Show success message AFTER reload to ensure it's visible
-      const successMessage = editingId
-        ? 'Prenotazione aggiornata con successo!\n\nLa prenotazione è stata modificata e salvata nel database.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
-        : 'Prenotazione creata con successo!\n\nLa nuova prenotazione è stata salvata nel database.\n\nIl cliente riceverà una conferma via email.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
-
-      alert(successMessage)
+      // Success — UI updates automatically
     } catch (error) {
       console.error('Failed to save reservation:', error)
       alert('Failed to save reservation: ' + (error as Error).message)
