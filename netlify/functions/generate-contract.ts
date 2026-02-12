@@ -302,12 +302,15 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
-        // KM limit: use unlimited_km flag directly, fallback to km_limit value
-        const kmLimitValue = booking.booking_details?.unlimited_km
+        // KM limit: use unlimited_km flag (strict boolean check) or legacy km_limit === 'Illimitati'
+        const isUnlimitedKm = booking.booking_details?.unlimited_km === true || booking.booking_details?.km_limit === 'Illimitati'
+        const rawKmLimit = booking.booking_details?.km_limit
+        const kmLimitValue = isUnlimitedKm
             ? 'Illimitati'
-            : (booking.booking_details?.km_limit && booking.booking_details.km_limit !== '0'
-                ? booking.booking_details.km_limit
+            : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
+                ? rawKmLimit
                 : (booking.booking_details?.total_km || 'Illimitati'))
+        console.log(`[generate-contract] KM DEBUG: unlimited_km=${booking.booking_details?.unlimited_km} (type: ${typeof booking.booking_details?.unlimited_km}), km_limit=${rawKmLimit}, resolved=${kmLimitValue}`)
 
         // Helper to format date/time in Rome timezone correctly
         const formatDateRome = (date: Date) => {
