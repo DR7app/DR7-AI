@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface ConsistencyIssue {
     issue_type: string
@@ -34,7 +35,7 @@ export default function BookingDiagnosticPanel() {
             setIssues(data || [])
         } catch (error) {
             console.error('Failed to load consistency report:', error)
-            alert('Errore nel caricamento del report di consistenza')
+            toast.error('Errore nel caricamento del report di consistenza')
         } finally {
             setLoading(false)
         }
@@ -62,11 +63,11 @@ export default function BookingDiagnosticPanel() {
 
             if (updateError) throw updateError
 
-            alert('✅ Targa aggiornata con successo!')
+            toast.success('Targa aggiornata con successo!')
             await loadConsistencyReport()
         } catch (error) {
             console.error('Error fixing plate:', error)
-            alert('Errore nell\'aggiornamento della targa: ' + (error as Error).message)
+            toast.error('Errore nell\'aggiornamento della targa')
         } finally {
             setFixing(null)
         }
@@ -75,15 +76,7 @@ export default function BookingDiagnosticPanel() {
     async function fixPlateMismatch(bookingId: string, vehicleId: string) {
         setFixing(bookingId)
         try {
-            const confirmed = confirm(
-                'Vuoi aggiornare la targa della prenotazione con la targa attuale del veicolo?\n\n' +
-                'Questo aggiornerà la prenotazione per riflettere la targa corrente del veicolo.'
-            )
-
-            if (!confirmed) {
-                setFixing(null)
-                return
-            }
+            // Proceed with plate update
 
             // Get the current vehicle plate
             const { data: vehicle, error: vehicleError } = await supabase
@@ -104,11 +97,11 @@ export default function BookingDiagnosticPanel() {
 
             if (updateError) throw updateError
 
-            alert('✅ Targa aggiornata con successo!')
+            toast.success('Targa aggiornata con successo!')
             await loadConsistencyReport()
         } catch (error) {
             console.error('Error fixing plate mismatch:', error)
-            alert('Errore nell\'aggiornamento: ' + (error as Error).message)
+            toast.error('Errore nell\'aggiornamento')
         } finally {
             setFixing(null)
         }

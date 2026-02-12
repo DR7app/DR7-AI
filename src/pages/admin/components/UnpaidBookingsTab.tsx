@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface UnpaidBooking {
   id: string
@@ -99,12 +100,12 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
 
-      alert('Stato pagamento aggiornato!')
+      toast.success('Stato pagamento aggiornato!')
       loadUnpaidBookings()
     } catch (error: any) {
       console.error('Failed to update payment status:', error)
       const errorMessage = error?.message || error?.details || JSON.stringify(error)
-      alert(`Errore nell'aggiornamento dello stato pagamento:\n\n${errorMessage}\n\nID Prenotazione: ${bookingId.substring(0, 8)}`)
+      toast.error(`Errore nell'aggiornamento dello stato pagamento: ${errorMessage} (ID: ${bookingId.substring(0, 8)})`)
     }
   }
 
@@ -129,20 +130,16 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
 
-      alert('Estensioni segnate come pagate!')
+      toast.success('Estensioni segnate come pagate!')
       loadUnpaidBookings()
     } catch (error: any) {
       console.error('Failed to update extension payment status:', error)
-      alert('Errore: ' + (error.message || error))
+      toast.error('Errore: ' + (error.message || error))
     }
   }
 
   async function markSelectedAsPaid() {
     if (selectedBookings.size === 0) return
-
-    if (!confirm(`Segnare ${selectedBookings.size} prenotazioni come pagate?`)) {
-      return
-    }
 
     try {
       const { error } = await supabase
@@ -155,22 +152,18 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
 
-      alert(`${selectedBookings.size} prenotazioni segnate come pagate!`)
+      toast.success(`${selectedBookings.size} prenotazioni segnate come pagate!`)
       setSelectedBookings(new Set())
       setMultiSelectMode(false)
       loadUnpaidBookings()
     } catch (error) {
       console.error('Failed to mark bookings as paid:', error)
-      alert('Errore durante l\'aggiornamento dello stato pagamento')
+      toast.error('Errore durante l\'aggiornamento dello stato pagamento')
     }
   }
 
   async function deleteSelectedBookings() {
     if (selectedBookings.size === 0) return
-
-    if (!confirm(`Sei sicuro di voler eliminare ${selectedBookings.size} prenotazioni?`)) {
-      return
-    }
 
     try {
       // First, get all selected bookings to check for Google Calendar event IDs
@@ -217,21 +210,17 @@ export default function UnpaidBookingsTab() {
 
       await Promise.all(deletionPromises)
 
-      alert(`${selectedBookings.size} prenotazioni eliminate con successo!`)
+      toast.success(`${selectedBookings.size} prenotazioni eliminate con successo!`)
       setSelectedBookings(new Set())
       setMultiSelectMode(false)
       loadUnpaidBookings()
     } catch (error: any) {
       console.error('Failed to delete bookings:', error)
-      alert('Errore durante l\'eliminazione delle prenotazioni: ' + (error.message || error))
+      toast.error('Errore durante l\'eliminazione delle prenotazioni: ' + (error.message || error))
     }
   }
 
   async function deleteSingleBooking(bookingId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questa prenotazione?')) {
-      return
-    }
-
     try {
       // First, get the booking to check if it has a Google Calendar event ID
       const { data: booking } = await supabase
@@ -271,11 +260,11 @@ export default function UnpaidBookingsTab() {
         throw new Error(data.error || 'Failed to delete booking')
       }
 
-      alert('Prenotazione eliminata con successo!')
+      toast.success('Prenotazione eliminata con successo!')
       loadUnpaidBookings()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
-      alert('Errore durante l\'eliminazione della prenotazione: ' + (error.message || error))
+      toast.error('Errore durante l\'eliminazione della prenotazione: ' + (error.message || error))
     }
   }
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
+import toast from 'react-hot-toast'
 
 interface Customer {
   id: string
@@ -543,8 +544,6 @@ export default function CustomersTab() {
 
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo cliente?')) return
-
     console.log('[handleDelete] Starting delete for ID:', id)
 
     try {
@@ -574,10 +573,10 @@ export default function CustomersTab() {
         return newAll
       })
 
-      alert('Cliente eliminato con successo')
+      toast.success('Cliente eliminato con successo')
     } catch (error: any) {
       console.error('[handleDelete] Failed:', error)
-      alert('Impossibile eliminare il cliente: ' + (error.message || 'Errore sconosciuto'))
+      toast.error('Impossibile eliminare il cliente: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 
@@ -868,11 +867,11 @@ export default function CustomersTab() {
 
       if (uploadError) throw uploadError
 
-      alert('Patente caricata con successo!')
+      toast.success('Patente caricata con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error uploading license:', error)
-      alert('Errore nel caricamento della patente: ' + (error.message || JSON.stringify(error)))
+      toast.error('Errore nel caricamento della patente: ' + (error.message || JSON.stringify(error)))
     } finally {
       setUploadingLicense(false)
     }
@@ -896,21 +895,17 @@ export default function CustomersTab() {
 
       if (uploadError) throw uploadError
 
-      alert('Documento d\'identità caricato con successo!')
+      toast.success('Documento d\'identità caricato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error uploading ID:', error)
-      alert('Errore nel caricamento del documento: ' + (error.message || JSON.stringify(error)))
+      toast.error('Errore nel caricamento del documento: ' + (error.message || JSON.stringify(error)))
     } finally {
       setUploadingId(false)
     }
   }
 
   async function handleDeleteLicense(fileName: string, userId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       const { error } = await supabase.storage
         .from('driver-licenses')
@@ -918,19 +913,15 @@ export default function CustomersTab() {
 
       if (error) throw error
 
-      alert('✅ Documento eliminato con successo!')
+      toast.success('Documento eliminato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error deleting license:', error)
-      alert('❌ Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
+      toast.error('Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
     }
   }
 
   async function handleDeleteId(fileName: string, userId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       const { error } = await supabase.storage
         .from('driver-ids')
@@ -938,11 +929,11 @@ export default function CustomersTab() {
 
       if (error) throw error
 
-      alert('✅ Documento eliminato con successo!')
+      toast.success('Documento eliminato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error deleting ID:', error)
-      alert('❌ Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
+      toast.error('Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
     }
   }
 
@@ -964,21 +955,17 @@ export default function CustomersTab() {
 
       if (uploadError) throw uploadError
 
-      alert('Codice Fiscale caricato con successo!')
+      toast.success('Codice Fiscale caricato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error uploading Codice Fiscale:', error)
-      alert('Errore nel caricamento del Codice Fiscale: ' + (error.message || JSON.stringify(error)))
+      toast.error('Errore nel caricamento del Codice Fiscale: ' + (error.message || JSON.stringify(error)))
     } finally {
       setUploadingCodiceFiscale(false)
     }
   }
 
   async function handleDeleteCodiceFiscale(fileName: string, userId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       const { error } = await supabase.storage
         .from('codice-fiscale')
@@ -986,11 +973,11 @@ export default function CustomersTab() {
 
       if (error) throw error
 
-      alert('✅ Documento eliminato con successo!')
+      toast.success('Documento eliminato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error deleting Codice Fiscale:', error)
-      alert('❌ Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
+      toast.error('Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
     }
   }
 
@@ -1020,10 +1007,10 @@ export default function CustomersTab() {
         c.id === customerId ? { ...c, status: newStatus } : c
       ))
 
-      alert(`Status aggiornato a: ${statusLabel}`)
+      toast.success(`Status aggiornato a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer status:', error)
-      alert('Errore nell\'aggiornamento dello status: ' + (error.message || 'Errore sconosciuto'))
+      toast.error('Errore nell\'aggiornamento dello status: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 
@@ -1032,8 +1019,6 @@ export default function CustomersTab() {
     const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
       newStatus === 'elite' ? 'Elite' :
         newStatus === 'member' ? 'Member' : 'Nessuno'
-
-    if (!confirm(`Vuoi cambiare lo status di ${count} clienti a: ${statusLabel}?`)) return
 
     try {
       const customerIds = Array.from(selectedCustomerIds)
@@ -1065,10 +1050,10 @@ export default function CustomersTab() {
       if (result.skippedTemp > 0) {
         message += ` (${result.skippedTemp} clienti temporanei ignorati)`
       }
-      alert(message)
+      toast.success(message)
     } catch (error: any) {
       console.error('Error updating customer statuses:', error)
-      alert('Errore nell\'aggiornamento degli status: ' + (error.message || 'Errore sconosciuto'))
+      toast.error('Errore nell\'aggiornamento degli status: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 

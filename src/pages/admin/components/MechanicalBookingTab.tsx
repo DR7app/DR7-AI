@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import NewClientModal from './NewClientModal'
 
@@ -63,7 +64,7 @@ export default function MechanicalBookingTab() {
       }
     } catch (error) {
       console.error('Error fetching customer for edit:', error)
-      alert("Impossibile caricare i dati del cliente per la modifica.")
+      toast.error("Impossibile caricare i dati del cliente per la modifica.")
     }
   }
 
@@ -112,8 +113,6 @@ export default function MechanicalBookingTab() {
 
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questa prenotazione?')) return
-
     try {
       // Try to delete from Google Calendar
       try {
@@ -138,7 +137,7 @@ export default function MechanicalBookingTab() {
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
-      alert('Errore durante l\'eliminazione')
+      toast.error('Errore durante l\'eliminazione')
     }
   }
 
@@ -161,11 +160,11 @@ export default function MechanicalBookingTab() {
       const data = await response.json()
       if (!response.ok) {
         if (data.invoiceNumber) {
-          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          toast.error(`Fattura già esistente per questa prenotazione (Numero: ${data.invoiceNumber}). Vai alla tab "Fatture" per visualizzarla.`)
         } else {
           const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
-          const errorDetails = data.details ? `\n\nDettagli: ${data.details}` : ''
-          const errorHint = data.hint ? `\n\nSuggerimento: ${data.hint}` : ''
+          const errorDetails = data.details ? ` - Dettagli: ${data.details}` : ''
+          const errorHint = data.hint ? ` - Suggerimento: ${data.hint}` : ''
           throw new Error(errorMsg + errorDetails + errorHint)
         }
         return
@@ -188,12 +187,12 @@ export default function MechanicalBookingTab() {
         if (printWindow) {
           // Increase timeout to ensure browser has time to load the Blob URL
           setTimeout(() => URL.revokeObjectURL(url), 3000)
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+          toast.success(`Fattura generata con successo (Numero: ${data.invoice.numero_fattura}). Aperta in una nuova finestra.`)
         } else {
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          toast.success(`Fattura generata con successo (Numero: ${data.invoice.numero_fattura}). Vai alla tab "Fatture" per visualizzarla.`)
         }
       } else {
-        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        toast.success(`Fattura generata con successo (Numero: ${data.invoice.numero_fattura}). Vai alla tab "Fatture" per visualizzarla.`)
       }
 
       loadData()
@@ -204,13 +203,11 @@ export default function MechanicalBookingTab() {
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        if (confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
-          openEditCustomer(booking.customer_id)
+        openEditCustomer(booking.customer_id)
           return
-        }
       }
 
-      alert('Errore nella generazione della fattura:\n\n' + errorMessage)
+      toast.error('Errore nella generazione della fattura: ' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
     }

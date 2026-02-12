@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface CarWashService {
   id: string
@@ -63,7 +64,7 @@ export default function CarWashTab() {
       setServices(data || [])
     } catch (error) {
       console.error('Failed to load car wash services:', error)
-      alert('Errore nel caricamento dei servizi')
+      toast.error('Errore nel caricamento dei servizi')
     } finally {
       setLoading(false)
     }
@@ -100,7 +101,7 @@ export default function CarWashTab() {
         try {
           priceOptions = JSON.parse(formData.price_options)
         } catch {
-          alert('Formato price_options non valido. Usa JSON: [{"label":"1h","price":9.90}]')
+          toast.error('Formato price_options non valido. Usa JSON valido')
           return
         }
       }
@@ -131,7 +132,7 @@ export default function CarWashTab() {
           .eq('id', editingId)
 
         if (error) throw error
-        alert('Servizio aggiornato con successo!')
+        toast.success('Servizio aggiornato con successo!')
       } else {
         // Create new service
         const { error } = await supabase
@@ -139,7 +140,7 @@ export default function CarWashTab() {
           .insert([serviceData])
 
         if (error) throw error
-        alert('Servizio creato con successo!')
+        toast.success('Servizio creato con successo!')
       }
 
       setShowForm(false)
@@ -148,15 +149,11 @@ export default function CarWashTab() {
       loadServices()
     } catch (error) {
       console.error('Failed to save service:', error)
-      alert('Errore nel salvataggio del servizio: ' + (error as Error).message)
+      toast.error('Errore nel salvataggio del servizio')
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo servizio?')) {
-      return
-    }
-
     try {
       const { error } = await supabase
         .from('car_wash_services')
@@ -164,11 +161,11 @@ export default function CarWashTab() {
         .eq('id', id)
 
       if (error) throw error
-      alert('Servizio eliminato con successo!')
+      toast.success('Servizio eliminato con successo!')
       loadServices()
     } catch (error) {
       console.error('Failed to delete service:', error)
-      alert('Errore nell\'eliminazione del servizio')
+      toast.error('Errore nell\'eliminazione del servizio')
     }
   }
 
@@ -183,7 +180,7 @@ export default function CarWashTab() {
       loadServices()
     } catch (error) {
       console.error('Failed to toggle service status:', error)
-      alert('Errore nel cambio di stato')
+      toast.error('Errore nel cambio di stato')
     }
   }
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../supabaseClient';
 import { useAdminRole } from '../../../hooks/useAdminRole';
 import NewClientModal from './NewClientModal';
+import toast from 'react-hot-toast';
 
 // Generate UUID for ticket
 function generateTicketUuid(ticketNumber: number): string {
@@ -379,7 +380,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
     if (!paymentMethod) missingFields.push('Metodo di pagamento');
 
     if (missingFields.length > 0) {
-      alert(`❌ DATI MANCANTI!\n\nPer completare la vendita del biglietto, devi inserire:\n\n${missingFields.map(f => `• ${f}`).join('\n')}\n\nCompila tutti i campi richiesti o seleziona un cliente esistente.`);
+      toast.error(`Dati mancanti: ${missingFields.join(', ')}. Compila tutti i campi richiesti o seleziona un cliente esistente.`);
       return;
     }
 
@@ -660,7 +661,7 @@ const LotteriaBoard: React.FC = () => {
       setSoldTickets(ticketMap);
     } catch (error) {
       console.error('Error fetching tickets:', error);
-      alert('Errore nel caricamento dei biglietti. Controlla i permessi del database.');
+      toast.error('Errore nel caricamento dei biglietti. Controlla i permessi del database.');
     } finally {
       setLoading(false);
     }
@@ -788,22 +789,26 @@ const LotteriaBoard: React.FC = () => {
         }
       }
 
-      // Build alert message
+      // Build toast message
       let message = '';
       if (successCount > 0 && failedTickets.length === 0) {
-        message = `${successCount} biglietti venduti con successo!\n\nPDF inviati a: ${email}`;
+        message = `${successCount} biglietti venduti con successo! PDF inviati a: ${email}`;
       } else if (successCount > 0 && failedTickets.length > 0) {
-        message = `${successCount} biglietti venduti.\n\n${failedTickets.length} biglietti già venduti:\n${failedTickets.map(n => '#' + String(n).padStart(4, '0')).join(', ')}`;
+        message = `${successCount} biglietti venduti. ${failedTickets.length} biglietti già venduti: ${failedTickets.map(n => '#' + String(n).padStart(4, '0')).join(', ')}`;
       } else {
         message = `Nessun biglietto venduto. Tutti i biglietti selezionati sono già stati venduti.`;
       }
 
       // Add WhatsApp warning if failed
       if (successCount > 0 && !whatsappResult.success) {
-        message += `\n\nATTENZIONE: Notifica WhatsApp NON inviata!\nMotivo: ${whatsappResult.error}`;
+        message += ` ATTENZIONE: Notifica WhatsApp NON inviata! Motivo: ${whatsappResult.error}`;
       }
 
-      alert(message);
+      if (successCount > 0) {
+        toast.success(message);
+      } else {
+        toast.error(message);
+      }
 
       await fetchSoldTickets();
       setSelectedTicket(null);
@@ -812,7 +817,7 @@ const LotteriaBoard: React.FC = () => {
     } catch (error: any) {
       setGeneratingPdf(false);
       console.error('Error in bulk sale:', error);
-      alert(`Errore: ${error.message || 'Errore durante la vendita multipla.'}`);
+      toast.error(`Errore: ${error.message || 'Errore durante la vendita multipla.'}`);
       await fetchSoldTickets();
     }
   };
@@ -836,7 +841,7 @@ const LotteriaBoard: React.FC = () => {
 
       if (existingTicket) {
         console.log('[handleManualSale] Ticket already sold, aborting');
-        alert(`Biglietto #${String(ticketNumber).padStart(4, '0')} è già stato venduto!`);
+        toast.error(`Biglietto #${String(ticketNumber).padStart(4, '0')} è già stato venduto!`);
         await fetchSoldTickets(); // Refresh to show current state
         setSelectedTicket(null);
         return;
@@ -884,13 +889,13 @@ const LotteriaBoard: React.FC = () => {
         console.error('[handleManualSale] Database insert error:', error);
         // Check if it's a duplicate key error (ticket was just sold)
         if (error.code === '23505') {
-          alert(`Biglietto #${String(ticketNumber).padStart(4, '0')} è appena stato venduto da qualcun altro!`);
+          toast.error(`Biglietto #${String(ticketNumber).padStart(4, '0')} è appena stato venduto da qualcun altro!`);
           await fetchSoldTickets(); // Refresh to show current state
           setSelectedTicket(null);
           return; // Stop execution here
         } else {
           // Show detailed error to user
-          alert(`Errore nel salvare il biglietto: ${error.message}\n\nCodice: ${error.code}\n\nDettagli: ${JSON.stringify(error.details || {})}`);
+          toast.error(`Errore nel salvare il biglietto: ${error.message} - Codice: ${error.code}`);
           throw error;
         }
       } else {
@@ -935,30 +940,30 @@ const LotteriaBoard: React.FC = () => {
           setGeneratingPdf(false);
 
           // Build success message with WhatsApp warning if needed
-          let message = `Biglietto #${String(ticketNumber).padStart(4, '0')} venduto!\n\n`;
+          let message = `Biglietto #${String(ticketNumber).padStart(4, '0')} venduto! `;
 
           if (pdfResult.success) {
-            message += `PDF inviato con successo a:\n${email}`;
+            message += `PDF inviato con successo a: ${email}`;
           } else {
-            message += `PDF non inviato automaticamente.\nMotivo: ${pdfResult.error}\n\nEmail: ${email}`;
+            message += `PDF non inviato automaticamente. Motivo: ${pdfResult.error} Email: ${email}`;
           }
 
           if (!whatsappResult.success) {
-            message += `\n\nATTENZIONE: Notifica WhatsApp NON inviata!\nMotivo: ${whatsappResult.error}`;
+            message += ` ATTENZIONE: Notifica WhatsApp NON inviata! Motivo: ${whatsappResult.error}`;
           }
 
-          alert(message);
+          toast.success(message);
         } catch (pdfError: any) {
           setGeneratingPdf(false);
           console.error('Error sending PDF:', pdfError);
 
-          let message = `Biglietto #${String(ticketNumber).padStart(4, '0')} salvato nel sistema.\n\nATTENZIONE: Errore nell'invio del PDF.\nErrore: ${pdfError.message || 'Network error'}\n\nEmail: ${email}`;
+          let message = `Biglietto #${String(ticketNumber).padStart(4, '0')} salvato nel sistema. ATTENZIONE: Errore nell'invio del PDF. Errore: ${pdfError.message || 'Network error'} Email: ${email}`;
 
           if (!whatsappResult.success) {
-            message += `\n\nNotifica WhatsApp NON inviata!\nMotivo: ${whatsappResult.error}`;
+            message += ` Notifica WhatsApp NON inviata! Motivo: ${whatsappResult.error}`;
           }
 
-          alert(message);
+          toast.error(message);
         }
       }
 
@@ -967,7 +972,7 @@ const LotteriaBoard: React.FC = () => {
       setSelectedTicket(null);
     } catch (error: any) {
       console.error('Error saving manual sale:', error);
-      alert(`Errore: ${error.message || 'Errore durante il salvataggio.'}`);
+      toast.error(`Errore: ${error.message || 'Errore durante il salvataggio.'}`);
       await fetchSoldTickets(); // Refresh to show current state
       setSelectedTicket(null);
     }
@@ -1006,7 +1011,7 @@ const LotteriaBoard: React.FC = () => {
 
   const handleSearchTickets = async () => {
     if (!searchEmail.trim()) {
-      alert('Inserisci un email o nome del cliente');
+      toast.error('Inserisci un email o nome del cliente');
       return;
     }
 
@@ -1023,7 +1028,7 @@ const LotteriaBoard: React.FC = () => {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        alert(`Nessun biglietto trovato per: ${searchEmail}`);
+        toast.error(`Nessun biglietto trovato per: ${searchEmail}`);
         return;
       }
 
@@ -1031,15 +1036,11 @@ const LotteriaBoard: React.FC = () => {
       setShowSearchModal(true);
     } catch (error: any) {
       console.error('Error searching tickets:', error);
-      alert(`Errore nella ricerca: ${error.message}`);
+      toast.error(`Errore nella ricerca: ${error.message}`);
     }
   };
 
   const handleCancelTicket = async (ticketNumber: number, email: string, fullName: string) => {
-    if (!confirm(`Sei sicuro di voler cancellare il biglietto #${String(ticketNumber).padStart(4, '0')} di ${fullName}?`)) {
-      return;
-    }
-
     try {
       const { error } = await supabase
         .from('commercial_operation_tickets')
@@ -1049,7 +1050,7 @@ const LotteriaBoard: React.FC = () => {
 
       if (error) throw error;
 
-      alert(`Biglietto #${String(ticketNumber).padStart(4, '0')} cancellato con successo!`);
+      toast.success(`Biglietto #${String(ticketNumber).padStart(4, '0')} cancellato con successo!`);
 
       // Refresh tickets
       await fetchSoldTickets();
@@ -1079,7 +1080,7 @@ const LotteriaBoard: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error canceling ticket:', error);
-      alert(`Errore nella cancellazione: ${error.message}`);
+      toast.error(`Errore nella cancellazione: ${error.message}`);
     }
   };
 
@@ -1102,7 +1103,7 @@ const LotteriaBoard: React.FC = () => {
       setAvailableClients(uniqueClients);
     } catch (error: any) {
       console.error('[LotteriaBoard] Error loading clients:', error);
-      alert(`Errore nel caricamento dei clienti: ${error.message}`);
+      toast.error(`Errore nel caricamento dei clienti: ${error.message}`);
     } finally {
       setLoadingClients(false);
     }
@@ -1111,7 +1112,7 @@ const LotteriaBoard: React.FC = () => {
   const handleSendEmailsFromModal = async () => {
     // Validate fields
     if (!emailSubject.trim() || !emailTextContent.trim()) {
-      alert('Per favore compila sia l\'oggetto che il contenuto dell\'email prima di inviarla.');
+      toast.error('Per favore compila sia l\'oggetto che il contenuto dell\'email prima di inviarla.');
       return;
     }
 
@@ -1123,10 +1124,6 @@ const LotteriaBoard: React.FC = () => {
     const confirmMessage = sendToAll
       ? `Sei sicuro di voler inviare l'email a TUTTI i ${recipientCount} clienti che hanno comprato biglietti?\n\nQuesta azione invierà un'email personalizzata a tutti gli acquirenti.`
       : `Sei sicuro di voler inviare l'email a ${recipientCount} cliente${recipientCount > 1 ? 'i' : ''} selezionat${recipientCount > 1 ? 'i' : 'o'}?\n\nQuesta azione invierà un'email ai clienti selezionati.`;
-
-    if (!confirm(confirmMessage)) {
-      return;
-    }
 
     setSendingEmails(true);
     try {
@@ -1198,7 +1195,7 @@ const LotteriaBoard: React.FC = () => {
       const result = await response.json();
 
       if (response.ok && result.success) {
-        alert(`✅ Email inviate con successo!\n\nInviate: ${result.sent}\nFallite: ${result.failed}\nTotale clienti: ${result.total}`);
+        toast.success(`Email inviate con successo! Inviate: ${result.sent}, Fallite: ${result.failed}, Totale clienti: ${result.total}`);
         setShowEmailEditorModal(false);
         setSelectedRecipients([]); // Reset selection
       } else {
@@ -1206,7 +1203,7 @@ const LotteriaBoard: React.FC = () => {
       }
     } catch (error: any) {
       console.error('[LotteriaBoard] Error sending emails:', error);
-      alert(`❌ Errore nell\'invio delle email:\n${error.message}`);
+      toast.error(`Errore nell'invio delle email: ${error.message}`);
     } finally {
       setSendingEmails(false);
     }
@@ -1228,7 +1225,7 @@ const LotteriaBoard: React.FC = () => {
       }
     } catch (error: any) {
       console.error('[LotteriaBoard] Error loading template:', error);
-      alert(`Errore nel caricamento del template: ${error.message}`);
+      toast.error(`Errore nel caricamento del template: ${error.message}`);
     } finally {
       setLoadingTemplate(false);
     }
@@ -1236,7 +1233,7 @@ const LotteriaBoard: React.FC = () => {
 
   const handleSaveEmailTemplate = async () => {
     if (!emailSubject.trim() || !emailTextContent.trim()) {
-      alert('Tutti i campi sono obbligatori: Oggetto e Contenuto Email');
+      toast.error('Tutti i campi sono obbligatori: Oggetto e Contenuto Email');
       return;
     }
 
@@ -1293,14 +1290,14 @@ const LotteriaBoard: React.FC = () => {
       const result = await response.json();
 
       if (response.ok && result.success) {
-        alert('✅ Template salvato con successo!\n\nQuesto template verrà utilizzato per le prossime email inviate ai clienti.');
+        toast.success('Template salvato con successo! Questo template verrà utilizzato per le prossime email inviate ai clienti.');
         setShowEmailEditorModal(false);
       } else {
         throw new Error(result.error || 'Errore sconosciuto');
       }
     } catch (error: any) {
       console.error('[LotteriaBoard] Error saving template:', error);
-      alert(`❌ Errore nel salvataggio del template:\n${error.message}`);
+      toast.error(`Errore nel salvataggio del template: ${error.message}`);
     } finally {
       setSavingTemplate(false);
     }
@@ -1588,13 +1585,13 @@ const LotteriaBoard: React.FC = () => {
               console.log('[PaymentModal] Sale process finished successfully');
             } catch (error) {
               console.error('[PaymentModal] Error during sale:', error);
-              alert(`Errore durante la vendita: ${error}`);
+              toast.error(`Errore durante la vendita: ${error}`);
             }
           } else {
             console.error('[PaymentModal] VALIDATION FAILED - Missing data:');
             console.error('  - Tickets:', pendingTicketNumbers);
             console.error('  - Client:', pendingClientData);
-            alert('Errore: dati mancanti per completare la vendita');
+            toast.error('Errore: dati mancanti per completare la vendita');
           }
 
           // Reset state
@@ -1639,7 +1636,7 @@ const LotteriaBoard: React.FC = () => {
 
             if (error) {
               console.error('[NewClientModal] Error fetching client data:', error);
-              alert(`Errore nel recuperare i dati del cliente: ${error.message}`);
+              toast.error(`Errore nel recuperare i dati del cliente: ${error.message}`);
               isCreatingClient.current = false;
               setPendingClientData(null);
               return;
@@ -1665,7 +1662,7 @@ const LotteriaBoard: React.FC = () => {
               // Store client data and verify pendingTicketNumbers is still set
               if (!pendingTicketNumbers || pendingTicketNumbers.length === 0) {
                 console.error('[NewClientModal] ERROR: pendingTicketNumbers is empty!');
-                alert('Errore: nessun biglietto selezionato. Riprova.');
+                toast.error('Errore: nessun biglietto selezionato. Riprova.');
                 isCreatingClient.current = false;
                 setShowNewClientModal(false);
                 setPendingClientData(null);
@@ -1979,11 +1976,9 @@ const LotteriaBoard: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (confirm(`Sei sicuro di voler cancellare il biglietto #${String(selectedTicketForDetails.ticket_number).padStart(4, '0')} di ${selectedTicketForDetails.full_name}?`)) {
                     handleCancelTicket(selectedTicketForDetails.ticket_number, selectedTicketForDetails.email, selectedTicketForDetails.full_name);
                     setShowTicketDetailsModal(false);
                     setSelectedTicketForDetails(null);
-                  }
                 }}
                 className="flex-1 px-4 py-2 bg-red-600 text-theme-text-primary rounded-full hover:bg-red-700 font-semibold"
               >

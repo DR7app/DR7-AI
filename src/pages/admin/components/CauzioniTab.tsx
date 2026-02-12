@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NuovaCauzioneModal from './NuovaCauzioneModal'
+import toast from 'react-hot-toast'
 
 interface Cauzione {
     id: string
@@ -101,7 +102,7 @@ export default function CauzioniTab() {
             setCauzioni(formattedData)
         } catch (error: any) {
             console.error('Error fetching cauzioni:', error)
-            alert(`Errore nel caricamento delle cauzioni: ${error.message}`)
+            toast.error(`Errore nel caricamento delle cauzioni: ${error.message}`)
         } finally {
             setLoading(false)
         }
@@ -167,17 +168,15 @@ export default function CauzioniTab() {
 
             if (error) throw error
 
-            alert('Cauzione marcata come Restituita')
+            toast.success('Cauzione marcata come Restituita')
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error marking restituita:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
     const handleCreatePreauth = async (cauzione: Cauzione) => {
-        if (!confirm(`Creare preautorizzazione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
-
         try {
             const response = await fetch('/.netlify/functions/nexi-create-preauth', {
                 method: 'POST',
@@ -199,19 +198,17 @@ export default function CauzioniTab() {
 
             if (result.paymentUrl) {
                 window.open(result.paymentUrl, '_blank', 'width=600,height=700')
-                alert('Pagina di pagamento Nexi aperta. Completa il pagamento con il cliente.')
+                toast.success('Pagina di pagamento Nexi aperta. Completa il pagamento con il cliente.')
             }
 
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error creating preauth:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
     const handleMarkSbloccataPreauth = async (cauzione: Cauzione) => {
-        if (!confirm('Vuoi sbloccare la preautorizzazione? Il cliente riceverà indietro i fondi.')) return
-
         try {
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
 
@@ -232,7 +229,7 @@ export default function CauzioniTab() {
                     throw new Error(result.error || 'Errore Nexi')
                 }
 
-                alert(result.message || 'Preautorizzazione sbloccata con successo')
+                toast.success(result.message || 'Preautorizzazione sbloccata con successo')
             } else {
                 const { error } = await supabase.rpc('mark_cauzione_sbloccata', {
                     cauzione_id: cauzione.id,
@@ -240,13 +237,13 @@ export default function CauzioniTab() {
                 })
 
                 if (error) throw error
-                alert('Cauzione marcata come sbloccata')
+                toast.success('Cauzione marcata come sbloccata')
             }
 
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error marking sbloccata:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
@@ -256,11 +253,9 @@ export default function CauzioniTab() {
 
         const amount = parseFloat(importo)
         if (isNaN(amount) || amount <= 0 || amount > cauzione.importo) {
-            alert('Importo non valido')
+            toast.error('Importo non valido')
             return
         }
-
-        if (!confirm(`Confermi di voler incassare €${amount.toFixed(2)} dalla preautorizzazione?`)) return
 
         try {
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
@@ -283,7 +278,7 @@ export default function CauzioniTab() {
                     throw new Error(result.error || 'Errore Nexi')
                 }
 
-                alert(result.message || `Incassato €${amount.toFixed(2)} con successo`)
+                toast.success(result.message || `Incassato €${amount.toFixed(2)} con successo`)
             } else {
                 const { error } = await supabase
                     .from('cauzioni')
@@ -296,19 +291,17 @@ export default function CauzioniTab() {
                     .eq('id', cauzione.id)
 
                 if (error) throw error
-                alert(`Incassato €${amount.toFixed(2)} (registrato manualmente)`)
+                toast.success(`Incassato €${amount.toFixed(2)} (registrato manualmente)`)
             }
 
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error capturing payment:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
     const handleSegnaIncassata = async (cauzione: Cauzione) => {
-        if (!confirm(`Segnare come incassata la cauzione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
-
         try {
             const { error } = await supabase
                 .from('cauzioni')
@@ -319,17 +312,15 @@ export default function CauzioniTab() {
                 .eq('id', cauzione.id)
 
             if (error) throw error
-            alert('Cauzione segnata come incassata')
+            toast.success('Cauzione segnata come incassata')
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error marking incassata:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
     const handleSegnaDaIncassare = async (cauzione: Cauzione) => {
-        if (!confirm(`Riportare a "Da incassare" la cauzione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
-
         try {
             const { error } = await supabase
                 .from('cauzioni')
@@ -340,11 +331,11 @@ export default function CauzioniTab() {
                 .eq('id', cauzione.id)
 
             if (error) throw error
-            alert('Cauzione riportata a Da incassare')
+            toast.success('Cauzione riportata a Da incassare')
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error marking da incassare:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
@@ -363,17 +354,15 @@ export default function CauzioniTab() {
                 .eq('id', cauzione.id)
 
             if (error) throw error
-            alert('Cauzione bloccata')
+            toast.success('Cauzione bloccata')
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error blocking cauzione:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
     const handleSblocca = async (cauzione: Cauzione) => {
-        if (!confirm('Sbloccare questa cauzione? Tornerà nella sezione Incassate.')) return
-
         try {
             const { error } = await supabase
                 .from('cauzioni')
@@ -385,11 +374,11 @@ export default function CauzioniTab() {
                 .eq('id', cauzione.id)
 
             if (error) throw error
-            alert('Cauzione sbloccata')
+            toast.success('Cauzione sbloccata')
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error unblocking cauzione:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 

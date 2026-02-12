@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface CustomerDocumentsProps {
   customerId: string
@@ -126,7 +127,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       }
     } catch (error: any) {
       console.error('Error loading customer data:', error)
-      alert(`Errore nel caricamento dati: ${error.message}`)
+      toast.error(`Errore nel caricamento dati: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -158,14 +159,14 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       }
     } catch (error: any) {
       console.error('Error loading documents:', error)
-      alert(`Errore nel caricamento documenti: ${error.message}`)
+      toast.error(`Errore nel caricamento documenti: ${error.message}`)
     }
   }
 
   async function handleUpload(documentType: 'drivers_license' | 'identity_document') {
     const file = selectedFiles[documentType]
     if (!file) {
-      alert('Seleziona un file da caricare')
+      toast.error('Seleziona un file da caricare')
       return
     }
 
@@ -174,7 +175,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       // Check authentication
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (!user || authError) {
-        alert('ERRORE: Non sei autenticato. Effettua il login e riprova.')
+        toast.error('ERRORE: Non sei autenticato. Effettua il login e riprova.')
         return
       }
 
@@ -239,22 +240,18 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         if (insertError) throw insertError
       }
 
-      alert('Documento caricato con successo!')
+      toast.success('Documento caricato con successo!')
       setSelectedFiles({ ...selectedFiles, [documentType]: null })
       await loadDocuments()
     } catch (error: any) {
       console.error('Error uploading document:', error)
-      alert(`ERRORE nel caricamento: ${error.message}`)
+      toast.error(`ERRORE nel caricamento: ${error.message}`)
     } finally {
       setUploading({ ...uploading, [documentType]: false })
     }
   }
 
   async function handleDelete(documentId: string, filePath: string, bucketId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       // Delete from storage
       const { error: storageError } = await supabase.storage
@@ -271,11 +268,11 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
       if (dbError) throw dbError
 
-      alert('Documento eliminato')
+      toast.success('Documento eliminato')
       await loadDocuments()
     } catch (error: any) {
       console.error('Error deleting document:', error)
-      alert(`ERRORE nell'eliminazione: ${error.message}`)
+      toast.error(`ERRORE nell'eliminazione: ${error.message}`)
     }
   }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import Input from './Input'
@@ -71,12 +72,10 @@ export default function CargosTab() {
 
     async function handleAutoSend() {
         if (!apiConfig.username || !apiConfig.password || !apiConfig.agencyCode) {
-            alert('Per l\'invio automatico, configura prima le credenziali API nelle impostazioni.')
+            toast.error('Per l\'invio automatico, configura prima le credenziali API nelle impostazioni.')
             setShowSettings(true)
             return
         }
-
-        if (!confirm('Confermi l\'invio telematico dei dati al portale Cargos?')) return
 
         setExportLoading(true)
         setExportStats('Connessione al Web Service Cargos in corso...')
@@ -93,7 +92,7 @@ export default function CargosTab() {
         } catch (err: any) {
             console.error(err)
             setExportStats('Errore Invio: ' + err.message)
-            alert('Errore durante l\'invio automatico: ' + err.message + '\n\nNota: Per completare l\'integrazione serve il "Manuale API" ufficiale.')
+            toast.error('Errore durante l\'invio automatico: ' + err.message)
         } finally {
             setExportLoading(false)
         }

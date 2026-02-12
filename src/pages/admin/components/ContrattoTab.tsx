@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface Contract {
   id: string
@@ -119,7 +120,7 @@ export default function ContrattoTab() {
       loadContracts()
     } catch (error) {
       console.error('Failed to save contract:', error)
-      alert('Impossibile salvare il contratto. Assicurati che la tabella "contracts" esista nel database.')
+      toast.error('Impossibile salvare il contratto')
     }
   }
 
@@ -166,8 +167,6 @@ export default function ContrattoTab() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo contratto?')) return
-
     try {
       const { error } = await supabase
         .from('contracts')
@@ -178,18 +177,16 @@ export default function ContrattoTab() {
       loadContracts()
     } catch (error) {
       console.error('Failed to delete contract:', error)
-      alert('Impossibile eliminare il contratto')
+      toast.error('Impossibile eliminare il contratto')
     }
   }
 
 
   async function handleSendToYousign(contract: Contract) {
     if (!contract.booking_id) {
-      alert('Impossibile inviare: ID prenotazione mancante.')
+      toast.error('Impossibile inviare: ID prenotazione mancante')
       return
     }
-
-    if (!confirm('Vuoi inviare il contratto a Yousign per la firma digitale?')) return
 
     try {
       const res = await fetch('/.netlify/functions/yousign-init', {
@@ -199,14 +196,14 @@ export default function ContrattoTab() {
       })
       const data = await res.json()
       if (res.ok) {
-        alert('Richiesta di firma inviata con successo! 📩')
+        toast.success('Richiesta di firma inviata con successo!')
         loadContracts()
       } else {
         throw new Error(data.error || 'Errore sconosciuto')
       }
     } catch (error: any) {
       console.error('Yousign error:', error)
-      alert('Errore Yousign: ' + error.message)
+      toast.error('Errore Yousign: ' + error.message)
     }
   }
 

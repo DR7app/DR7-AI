@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import toast from 'react-hot-toast'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
 
@@ -274,7 +275,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     } catch (error) {
       console.error('Error fetching customer for edit:', error)
-      alert("Impossibile caricare i dati del cliente per la modifica.")
+      toast.error("Impossibile caricare i dati del cliente per la modifica.")
     }
   }
 
@@ -369,10 +370,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   async function handleCancelBooking(bookingId: string, customerName: string) {
-    if (!confirm(`Sei sicuro di voler annullare la prenotazione di ${customerName}?`)) {
-      return
-    }
-
     try {
       const { error } = await supabase
         .from('bookings')
@@ -385,15 +382,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       loadData()
     } catch (error: any) {
       console.error('Failed to cancel booking:', error)
-      alert(`❌ Errore nell'annullamento: ${error.message}`)
+      toast.error(`Errore nell'annullamento: ${error.message}`)
     }
   }
 
   async function handleDeleteBooking(bookingId: string, customerName: string) {
-    if (!confirm(`⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE DEFINITIVAMENTE la prenotazione di ${customerName}?\n\nQuesta azione è irreversibile e rimuoverà la prenotazione dal database.`)) {
-      return
-    }
-
     try {
       // Try to delete from Google Calendar
       try {
@@ -423,7 +416,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
-      alert(`❌ Errore durante l'eliminazione: ${error.message}`)
+      toast.error(`Errore durante l'eliminazione: ${error.message}`)
     }
   }
 
@@ -446,7 +439,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const data = await response.json()
       if (!response.ok) {
         if (data.invoiceNumber) {
-          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          toast.error(`Fattura già esistente: ${data.invoiceNumber}. Vai alla tab "Fatture" per visualizzarla.`)
         } else {
           const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
           const errorDetails = data.details ? `\n\nDettagli: ${data.details}` : ''
@@ -472,12 +465,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
         if (printWindow) {
           setTimeout(() => URL.revokeObjectURL(url), 3000)
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+          toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}`)
         } else {
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
         }
       } else {
-        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
       }
 
       loadData()
@@ -487,12 +480,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        if (confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
-          openEditCustomer(booking.customer_id)
+        openEditCustomer(booking.customer_id)
           return
-        }
       }
-      alert('Errore nella generazione della fattura:\n\n' + errorMessage)
+      toast.error('Errore nella generazione della fattura: ' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
     }
@@ -709,19 +700,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     try {
       if (!selectedService) {
-        alert('❌ Errore: Seleziona almeno un servizio')
+        toast.error('Seleziona almeno un servizio')
         setSubmitting(false)
         return
       }
 
       if (!formData.customer_id) {
-        alert('❌ Errore: Seleziona un cliente')
+        toast.error('Seleziona un cliente')
         setSubmitting(false)
         return
       }
 
       if (!formData.appointment_time) {
-        alert('❌ Errore: Seleziona un orario')
+        toast.error('Seleziona un orario')
         setSubmitting(false)
         return
       }
@@ -781,7 +772,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
         errorMessage += 'Modifica l\'orario per rispettare le regole di programmazione.'
 
-        alert(errorMessage)
+        toast.error(errorMessage, { duration: 8000 })
         setSubmitting(false)
         return
       }
@@ -853,14 +844,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         errorMessage.includes('Slot già occupato') ||
         errorMessage.includes('duplicate') ||
         errorMessage.includes('constraint')) {
-        alert(
-          `❌ ERRORE: Impossibile creare la prenotazione\n\n` +
-          `Dettaglio tecnico: ${errorMessage}\n\n` +
-          `Possibile causa: Database constraint o trigger che blocca le doppie prenotazioni.\n\n` +
-          `Soluzione: Controlla i constraint del database 'bookings' table.`
+        toast.error(
+          `Impossibile creare la prenotazione. Dettaglio tecnico: ${errorMessage}. Possibile causa: Database constraint o trigger che blocca le doppie prenotazioni.`,
+          { duration: 6000 }
         )
       } else {
-        alert(`❌ Errore nella creazione della prenotazione: ${errorMessage}`)
+        toast.error(`Errore nella creazione della prenotazione: ${errorMessage}`)
       }
     } finally {
       setSubmitting(false)
@@ -1636,7 +1625,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       loadData()
                     } catch (error) {
                       console.error('Failed to update booking:', error)
-                      alert('❌ Errore durante l\'aggiornamento')
+                      toast.error('Errore durante l\'aggiornamento')
                     }
                   }}
                   className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"

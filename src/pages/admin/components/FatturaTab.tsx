@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface Invoice {
   id: string
@@ -76,21 +77,17 @@ export default function FatturaTab() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questa fattura?')) return
-
     try {
       const { error } = await supabase.from('fatture').delete().eq('id', id)
       if (error) throw error
       loadInvoices()
     } catch (error) {
       console.error('Error deleting invoice:', error)
-      alert('Errore durante l\'eliminazione')
+      toast.error('Errore durante l\'eliminazione')
     }
   }
 
   async function handleBulkDelete() {
-    if (!confirm(`Sei sicuro di voler eliminare ${selectedIds.length} fatture?`)) return
-
     try {
       const { error } = await supabase.from('fatture').delete().in('id', selectedIds)
       if (error) throw error
@@ -98,7 +95,7 @@ export default function FatturaTab() {
       loadInvoices()
     } catch (error) {
       console.error('Error bulk deleting invoices:', error)
-      alert('Errore durante l\'eliminazione multipla')
+      toast.error('Errore durante l\'eliminazione multipla')
     }
   }
 
@@ -144,7 +141,7 @@ export default function FatturaTab() {
     } catch (error) {
       console.error('Error downloading PDF:', error)
       if (printWindow) printWindow.close()
-      alert('Errore durante la generazione del PDF')
+      toast.error('Errore durante la generazione del PDF')
     }
   }
 
@@ -160,14 +157,14 @@ export default function FatturaTab() {
       const result = await response.json()
 
       if (response.ok) {
-        alert(`Stato aggiornato: ${result.status}\n\nDettagli: ${JSON.stringify(result.details, null, 2)}`)
+        toast.success(`Stato aggiornato: ${result.status}`)
         loadInvoices()
       } else {
-        alert(`Errore nel controllo stato:\n\n${result.error}`)
+        toast.error(`Errore nel controllo stato: ${result.error}`)
       }
     } catch (error) {
       console.error('Error checking status:', error)
-      alert('Errore durante il controllo dello stato')
+      toast.error('Errore durante il controllo dello stato')
     } finally {
       setCheckingStatus(null)
     }
@@ -175,7 +172,7 @@ export default function FatturaTab() {
 
   async function handleSendToSDI(invoice: Invoice) {
     if (!invoice.customer_tax_code) {
-      alert('Il Codice Fiscale è obbligatorio per la fatturazione elettronica.')
+      toast.error('Il Codice Fiscale è obbligatorio per la fatturazione elettronica.')
       return
     }
 

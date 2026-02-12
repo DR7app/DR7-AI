@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import toast from 'react-hot-toast'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -564,7 +565,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   async function openEditCustomer(customerId: string) {
     if (!customerId || customerId === 'undefined') {
-      alert("ID cliente non valido. Impossibile aprire la scheda cliente.")
+      toast.error("ID cliente non valido. Impossibile aprire la scheda cliente.")
       return
     }
 
@@ -587,9 +588,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // More helpful error message
       if (error.code === 'PGRST116' || error.message?.includes('not found')) {
-        alert("Cliente non trovato nel database.\n\nIl cliente potrebbe essere stato creato sul sito web ma non ha ancora un profilo completo nell'admin panel.\n\nContatta il supporto tecnico per risolvere questo problema.")
+        toast.error("Cliente non trovato nel database. Il cliente potrebbe essere stato creato sul sito web ma non ha ancora un profilo completo nell'admin panel.")
       } else {
-        alert("Impossibile caricare i dati del cliente per la modifica.\n\nErrore: " + (error.message || 'Errore sconosciuto'))
+        toast.error("Impossibile caricare i dati del cliente per la modifica. Errore: " + (error.message || 'Errore sconosciuto'))
       }
     }
   }
@@ -1265,7 +1266,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       missing = await validateCustomerData(booking)
     } catch (error: any) {
       console.error('[handleGenerateContract] Validation error:', error)
-      alert(error.message)
+      toast.error(error.message)
       return
     }
 
@@ -1324,12 +1325,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (showSuccessAlert) {
           // Check if popup was blocked
           if (!pdfWindow || pdfWindow.closed || typeof pdfWindow.closed === 'undefined') {
-            // Popup was blocked - show alert with manual link
-            if (confirm('Contratto generato con successo!\n\nIl browser ha bloccato l\'apertura automatica del PDF.\n\nClicca OK per aprire il contratto in una nuova scheda.')) {
-              window.location.href = data.url
-            }
+            // Popup was blocked - show toast with clickable link
+            toast((t) => (
+              <span className="flex items-center gap-2">
+                Contratto generato!
+                <a href={data.url} target="_blank" rel="noopener noreferrer" className="underline font-semibold text-blue-600" onClick={() => toast.dismiss(t.id)}>Apri PDF</a>
+              </span>
+            ), { duration: 8000, icon: '📄' })
           } else {
-            // Popup opened successfully — no alert needed
+            toast.success('Contratto generato!')
           }
         }
       } else {
@@ -1339,7 +1343,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
     } catch (error: any) {
       console.error('Error generating contract:', error)
-      alert('Errore nella generazione del contratto: ' + error.message + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
+      toast.error('Errore nella generazione del contratto: ' + error.message)
     } finally {
       setGeneratingContract(false)
     }
@@ -1354,7 +1358,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       missing = await validateCustomerData(booking)
     } catch (error: any) {
       console.error('[handleGenerateInvoice] Validation error:', error)
-      alert(error.message)
+      toast.error(error.message)
       return
     }
 
@@ -1443,13 +1447,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        if (booking.user_id && confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
+        if (booking.user_id) {
           openEditCustomer(booking.user_id)
           return
         }
       }
 
-      alert('Errore nella generazione della fattura:\n\n' + errorMessage)
+      toast.error('Errore nella generazione della fattura: ' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
     }
@@ -1489,7 +1493,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     const depositAmount = booking.booking_details?.deposit
     if (!depositAmount || depositAmount <= 0) {
-      alert('Nessuna cauzione specificata per questa prenotazione')
+      toast.error('Nessuna cauzione specificata per questa prenotazione')
       return
     }
 
@@ -1557,7 +1561,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
     } catch (error: any) {
       console.error('Error creating pre-auth:', error)
-      alert('Errore nella creazione della preautorizzazione: ' + error.message)
+      toast.error('Errore nella creazione della preautorizzazione: ' + error.message)
     } finally {
       setCreatingPreAuth(false)
     }
@@ -1681,7 +1685,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
-      alert('Errore durante l\'eliminazione: ' + (error as Error).message)
+      toast.error('Errore durante l\'eliminazione: ' + (error as Error).message)
     }
   }
 
@@ -1690,7 +1694,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   function handleEditBooking(booking: Booking) {
     // Only handle car rental bookings - car wash bookings are in CarWashBookingsTab
     if (booking.service_type === 'car_wash') {
-      alert('Le prenotazioni lavaggio devono essere modificate nella tab "Prenotazioni Lavaggio"')
+      toast.error('Le prenotazioni lavaggio devono essere modificate nella tab "Prenotazioni Lavaggio"')
       return
     }
 
@@ -2008,7 +2012,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (updateError) {
         console.error('[handleConfirmExtend] Update error:', updateError)
-        alert('Errore durante l\'estensione: ' + updateError.message)
+        toast.error('Errore durante l\'estensione: ' + updateError.message)
         return
       }
 
@@ -2085,42 +2089,53 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Refresh data to get the updated booking
       await loadData()
 
-      // Ask if they want to generate an extension contract
-      const wantsExtensionContract = confirm('Estensione salvata. Generare nuovo contratto?')
-
-      if (wantsExtensionContract) {
-        console.log('[handleConfirmExtend] Generating extension addendum contract...')
-        try {
-          const response = await fetch('/.netlify/functions/generate-extension-contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId,
-              extensionData: {
-                previous_dropoff: extendingBooking.dropoff_date,
-                new_dropoff: newDropoffDateTime.toISOString(),
-                additional_amount: additionalAmount,
-                notes: extendData.notes
-              }
-            })
-          })
-
-          const result = await response.json()
-          if (result.success && result.url) {
-            window.open(result.url, '_blank')
-          } else {
-            console.error('[handleConfirmExtend] Extension contract error:', result.error)
-            alert('Errore: ' + (result.error || 'Errore sconosciuto'))
-          }
-        } catch (contractError: any) {
-          console.error('[handleConfirmExtend] Contract generation failed:', contractError)
-          alert('Errore: ' + contractError.message)
+      // Save extension data for potential contract generation
+      const extensionPayload = {
+        bookingId,
+        extensionData: {
+          previous_dropoff: extendingBooking.dropoff_date,
+          new_dropoff: newDropoffDateTime.toISOString(),
+          additional_amount: additionalAmount,
+          notes: extendData.notes
         }
       }
 
+      // Show success toast with option to generate contract
+      toast((t) => (
+        <span className="flex items-center gap-3">
+          Estensione salvata!
+          <button
+            className="bg-black text-white px-3 py-1 rounded text-sm whitespace-nowrap"
+            onClick={async () => {
+              toast.dismiss(t.id)
+              console.log('[handleConfirmExtend] Generating extension addendum contract...')
+              try {
+                const response = await fetch('/.netlify/functions/generate-extension-contract', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(extensionPayload)
+                })
+                const result = await response.json()
+                if (result.success && result.url) {
+                  window.open(result.url, '_blank')
+                } else {
+                  console.error('[handleConfirmExtend] Extension contract error:', result.error)
+                  toast.error('Errore: ' + (result.error || 'Errore sconosciuto'))
+                }
+              } catch (contractError: any) {
+                console.error('[handleConfirmExtend] Contract generation failed:', contractError)
+                toast.error('Errore: ' + contractError.message)
+              }
+            }}
+          >
+            Genera contratto
+          </button>
+        </span>
+      ), { duration: 10000, icon: '✅' })
+
     } catch (error: any) {
       console.error('[handleConfirmExtend] Error:', error)
-      alert('Errore: ' + (error.message || 'Errore sconosciuto'))
+      toast.error('Errore: ' + (error.message || 'Errore sconosciuto'))
     } finally {
       setIsExtending(false)
     }
@@ -2178,7 +2193,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const targetId = overrideCustomerId || formData.customer_id
 
         if (!targetId) {
-          alert('Seleziona un cliente')
+          toast.error('Seleziona un cliente')
           return
         }
 
@@ -2240,11 +2255,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (customerError && customerError.code !== 'PGRST116') {
           console.error('[processBookingSubmission] Customer lookup error:', customerError)
           const errorMsg = customerError.message || JSON.stringify(customerError, null, 2)
-          alert(
-            `Errore nel caricamento del cliente:\n\n${errorMsg}\n\n` +
-            `ID Cliente: ${targetCustomerId}\n\n` +
-            'Riprova o contatta il supporto tecnico.'
-          )
+          toast.error(`Errore nel caricamento del cliente: ${errorMsg} (ID: ${targetCustomerId})`)
           return
         }
 
@@ -2335,11 +2346,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             console.log('[processBookingSubmission] Customer exists in bookings but not in customers_extended. Will create new profile with missing fields:', missing)
           } else {
-            alert(
-              'Cliente non trovato nel database.\n\n' +
-              'Il cliente selezionato non esiste nel sistema.\n\n' +
-              'Per favore, crea prima il profilo del cliente nella tab "Clienti".'
-            )
+            toast.error('Cliente non trovato nel database. Per favore, crea prima il profilo del cliente nella tab "Clienti".')
             return
           }
         }
@@ -2357,18 +2364,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             formData_customer_id: formData.customer_id
           })
 
-          alert(
-            'ERRORE INTERNO: ID Cliente Mancante\n\n' +
-            'Si è verificato un errore nel recupero dei dati del cliente.\n\n' +
-            'Dettagli tecnici:\n' +
-            `- Modalità nuovo cliente: ${newCustomerMode ? 'Sì' : 'No'}\n` +
-            `- ID cliente selezionato: ${formData.customer_id || 'N/A'}\n` +
-            `- ID target: ${targetCustomerId || 'N/A'}\n\n` +
-            'Azioni suggerite:\n' +
-            '1. Riprova a selezionare il cliente\n' +
-            '2. Se il problema persiste, crea un nuovo cliente\n' +
-            '3. Contatta il supporto tecnico se necessario'
-          )
+          toast.error('ERRORE INTERNO: ID Cliente Mancante. Riprova a selezionare il cliente o crea un nuovo cliente.')
           setIsSubmitting(false)
           return
         }
@@ -2415,12 +2411,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!formData.return_time) missingFields.push('Ora Riconsegna')
 
         setTimeout(() => {
-          alert(
-            'CAMPI MANCANTI\n\n' +
-            'I seguenti campi sono obbligatori:\n\n' +
-            missingFields.map(f => `- ${f}`).join('\n') +
-            '\n\nCompila tutti i campi richiesti prima di salvare la prenotazione.'
-          )
+          toast.error('Campi obbligatori mancanti: ' + missingFields.join(', '))
         }, 100)
         setIsSubmitting(false)
         return
@@ -2433,13 +2424,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (isNaN(testPickupDate.getTime()) || isNaN(testReturnDate.getTime())) {
         setTimeout(() => {
-          alert(
-            'DATE NON VALIDE\n\n' +
-            'Le date inserite non sono valide.\n\n' +
-            `Data Ritiro: ${formData.pickup_date} ${formData.pickup_time}\n` +
-            `Data Riconsegna: ${formData.return_date} ${formData.return_time}\n\n` +
-            'Verifica che le date siano nel formato corretto (YYYY-MM-DD) e che gli orari siano validi.'
-          )
+          toast.error('Date non valide. Verifica che le date siano nel formato corretto.')
         }, 100)
         setIsSubmitting(false)
         return
@@ -2448,13 +2433,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // ===== VALIDATION: Check return date is after pickup date =====
       if (testReturnDate <= testPickupDate) {
         setTimeout(() => {
-          alert(
-            'DATE NON VALIDE\n\n' +
-            'La data di riconsegna deve essere successiva alla data di ritiro.\n\n' +
-            `Ritiro: ${testPickupDate.toLocaleDateString('it-IT')} ${testPickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n` +
-            `Riconsegna: ${testReturnDate.toLocaleDateString('it-IT')} ${testReturnDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n\n` +
-            'Modifica le date e riprova.'
-          )
+          toast.error('La data di riconsegna deve essere successiva alla data di ritiro.')
         }, 100)
         setIsSubmitting(false)
         return
@@ -2470,11 +2449,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
         if (deliveryMissing.length > 0) {
           setTimeout(() => {
-            alert(
-              'CONSEGNA A DOMICILIO - CAMPI MANCANTI\n\n' +
-              'Compila i seguenti campi:\n\n' +
-              deliveryMissing.map(f => `- ${f}`).join('\n')
-            )
+            toast.error('Consegna a domicilio - Campi mancanti: ' + deliveryMissing.join(', '))
           }, 100)
           setIsSubmitting(false)
           return
@@ -2491,11 +2466,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
         if (pickupMissing.length > 0) {
           setTimeout(() => {
-            alert(
-              'RITIRO A DOMICILIO - CAMPI MANCANTI\n\n' +
-              'Compila i seguenti campi:\n\n' +
-              pickupMissing.map(f => `- ${f}`).join('\n')
-            )
+            toast.error('Ritiro a domicilio - Campi mancanti: ' + pickupMissing.join(', '))
           }, 100)
           setIsSubmitting(false)
           return
@@ -2540,16 +2511,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               warningMessage += `Primo orario disponibile: ${earliestTimeStr}\n\n`
             }
 
-            warningMessage += '---\n\n'
-            warningMessage += 'Clicca OK per PROCEDERE COMUNQUE\n'
-            warningMessage += 'Clicca ANNULLA per modificare'
-
-            const confirmed = confirm(warningMessage)
-            if (!confirmed) {
-              setIsSubmitting(false)
-              return
-            }
-            console.log('⚠️ Admin chose to proceed despite availability conflict')
+            console.log('⚠️ Availability conflict detected, proceeding anyway:', warningMessage)
           }
 
           console.log('✅ Vehicle availability check passed')
@@ -2600,16 +2562,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             warningMessage += '\n'
           }
 
-          warningMessage += '---\n\n'
-          warningMessage += 'Clicca OK per PROCEDERE COMUNQUE\n'
-          warningMessage += 'Clicca ANNULLA per modificare'
-
-          const confirmed = confirm(warningMessage)
-          if (!confirmed) {
-            setIsSubmitting(false)
-            return
-          }
-          console.log('⚠️ Admin chose to proceed despite scheduling conflict')
+          console.log('⚠️ Scheduling conflict detected, proceeding anyway:', warningMessage)
         }
 
         console.log('✅ Scheduling validation passed')
@@ -2657,21 +2610,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const availableTime = carWashEnd.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
               const availableDate = carWashEnd.toLocaleDateString('it-IT')
 
-              const confirmed = confirm(
-                `ATTENZIONE: VEICOLO IN LAVAGGIO\n\n` +
-                `Il veicolo ${vehicle?.display_name} è attualmente in lavaggio.\n\n` +
-                `Sarà disponibile alle ${availableTime} del ${availableDate}\n\n` +
-                `Tempo rimanente: circa ${Math.ceil((carWashEnd.getTime() - new Date().getTime()) / (1000 * 60))} minuti\n\n` +
-                `---\n\n` +
-                `Clicca OK per PROCEDERE COMUNQUE\n` +
-                `Clicca ANNULLA per modificare`
-              )
-
-              if (!confirmed) {
-                setIsSubmitting(false)
-                return
-              }
-              console.log('⚠️ Admin chose to proceed despite car wash conflict')
+              console.log(`⚠️ Car wash conflict detected for ${vehicle?.display_name}, proceeding anyway`)
             }
           }
         }
@@ -2717,46 +2656,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const isBufferViolation = timeDiff > 0 && minutesDiff < BUFFER_MINUTES
 
             if (isOverlap) {
-              // Complete overlap - show double booking warning
-              const vehicleTarga = vehicle?.plate || conflictingBooking.vehicle_plate || 'N/A'
-              const confirmed = confirm(
-                `ATTENZIONE: VEICOLO GIÀ PRENOTATO!\n\n` +
-                `Veicolo: ${conflictingBooking.vehicle_name}\n` +
-                `Targa: ${vehicleTarga}\n\n` +
-                `PRENOTAZIONE ESISTENTE:\n` +
-                `Cliente: ${conflictingBooking.customer_name}\n` +
-                `Periodo: ${conflictPickup.toLocaleDateString('it-IT')} ${conflictPickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} - ${conflictReturn.toLocaleDateString('it-IT')} ${conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}\n` +
-                `ID: DR7-${bookingId}\n\n` +
-                `SEI SICURO DI VOLER CREARE UNA DOPPIA PRENOTAZIONE?\n\n` +
-                `Clicca OK per PROCEDERE COMUNQUE\n` +
-                `Clicca ANNULLA per scegliere altre date/veicolo`
-              )
-
-              if (!confirmed) {
-                setIsSubmitting(false)
-                return // User cancelled
-              }
+              console.log(`⚠️ Double booking detected for ${conflictingBooking.vehicle_name} with ${conflictingBooking.customer_name}, proceeding anyway`)
             } else if (isBufferViolation) {
-              // Buffer violation - show specific 1h30 warning
-              const returnTimeStr = conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
-              const returnDateStr = conflictReturn.toLocaleDateString('it-IT')
-              const bufferMinutesLeft = Math.round(BUFFER_MINUTES - minutesDiff)
-
-              const confirmed = confirm(
-                `ATTENZIONE: BUFFER 1H30 NON RISPETTATO!\n\n` +
-                `Il veicolo tornerà alle ${returnTimeStr} del ${returnDateStr}.\n` +
-                `Tempo mancante al buffer di 1h30: ${bufferMinutesLeft} minuti\n\n` +
-                `Cliente precedente: ${conflictingBooking.customer_name}\n` +
-                `ID: DR7-${bookingId}\n\n` +
-                `Si consiglia di attendere fino alle ${new Date(conflictReturn.getTime() + BUFFER_MINUTES * 60 * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} per il prossimo ritiro.\n\n` +
-                `Clicca OK per PROCEDERE COMUNQUE\n` +
-                `Clicca ANNULLA per scegliere un orario diverso`
-              )
-
-              if (!confirmed) {
-                setIsSubmitting(false)
-                return // User cancelled
-              }
+              console.log(`⚠️ Buffer violation detected for ${conflictingBooking.vehicle_name}, proceeding anyway`)
             }
           }
         }
@@ -2928,41 +2830,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const plateChanged = existingBooking.vehicle_plate !== vehicle.plate
 
           if (vehicleChanged) {
-            const confirmed = confirm(
-              `ATTENZIONE: CAMBIO VEICOLO\n\n` +
-              `Stai cambiando il veicolo di questa prenotazione:\n\n` +
-              `VECCHIO: ${existingBooking.vehicle_name} (${existingBooking.vehicle_plate || 'N/A'})\n` +
-              `NUOVO: ${vehicle.display_name} (${vehicle.plate || 'N/A'})\n\n` +
-              `Questo aggiornerà:\n` +
-              `- vehicle_id: ${existingBooking.vehicle_id} -> ${vehicle.id}\n` +
-              `- vehicle_plate: ${existingBooking.vehicle_plate || 'N/A'} -> ${vehicle.plate || 'N/A'}\n` +
-              `- vehicle_name: ${existingBooking.vehicle_name} -> ${vehicle.display_name}\n\n` +
-              `Il calendario verrà aggiornato automaticamente.\n\n` +
-              `Confermi il cambio di veicolo?`
-            )
-            if (!confirmed) {
-              setIsSubmitting(false)
-              return
-            }
-            console.log('Vehicle change confirmed by user')
+            console.log(`Vehicle change: ${existingBooking.vehicle_name} -> ${vehicle.display_name}`)
           } else if (plateChanged && existingBooking.vehicle_plate) {
-            // Same vehicle but plate has changed - this might indicate the vehicle's plate was updated
-            const confirmed = confirm(
-              `ATTENZIONE: TARGA MODIFICATA\n\n` +
-              `La targa del veicolo "${vehicle.display_name}" è cambiata:\n\n` +
-              `VECCHIA: ${existingBooking.vehicle_plate}\n` +
-              `NUOVA: ${vehicle.plate || 'N/A'}\n\n` +
-              `Questo potrebbe significare che:\n` +
-              `1. La targa del veicolo è stata aggiornata nel sistema\n` +
-              `2. Stai selezionando un veicolo diverso con lo stesso nome\n\n` +
-              `La prenotazione verrà aggiornata con la nuova targa.\n\n` +
-              `Confermi l'aggiornamento?`
-            )
-            if (!confirmed) {
-              setIsSubmitting(false)
-              return
-            }
-            console.log('✅ Plate change confirmed by user')
+            console.log(`✅ Plate change: ${existingBooking.vehicle_plate} -> ${vehicle.plate || 'N/A'}`)
           }
         }
       }
@@ -2977,7 +2847,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
       } else {
         console.error('❌ Vehicle not found for vehicle_id:', formData.vehicle_id)
-        alert('Errore: Veicolo non trovato. Seleziona un veicolo valido.')
+        toast.error('Errore: Veicolo non trovato. Seleziona un veicolo valido.')
         setIsSubmitting(false)
         return
       }
@@ -3391,7 +3261,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Success — UI updates automatically
     } catch (error) {
       console.error('Failed to save reservation:', error)
-      alert('Failed to save reservation: ' + (error as Error).message)
+      toast.error('Failed to save reservation: ' + (error as Error).message)
     } finally {
       setIsSubmitting(false)
     }
@@ -4963,7 +4833,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }
               } catch (error: any) {
                 console.error('[ReservationsTab] Error after saving missing fields:', error)
-                alert(`Errore: ${error.message}`)
+                toast.error(`Errore: ${error.message}`)
               }
             }}
           />
