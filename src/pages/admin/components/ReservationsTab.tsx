@@ -3304,12 +3304,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               insurance_option: 'KASKO_BASE', // Always Kasko included
               price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
               payment_status: paymentStatus,
+              payment_method: formData.payment_method || '',
               deposit_amount: parseFloat(formData.deposit) || 0,
+              km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
               booking_details: {
                 amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
                 insuranceOption: 'KASKO_BASE',
                 deposit: parseFloat(formData.deposit) || 0,
                 deposit_status: formData.deposit_status,
+                km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
+                unlimited_km: formData.unlimited_km,
                 delivery_enabled: formData.delivery_enabled,
                 delivery_address: formData.delivery_enabled ? {
                   street: formData.delivery_street,
