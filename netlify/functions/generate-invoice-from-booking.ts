@@ -273,16 +273,11 @@ export const handler: Handler = async (event) => {
             })
         } else {
             // Logic for Rentals (Default)
-            // Parse booking dates and calculate rental days
-            // Business rule: morning return = don't count that day, evening return (>= 14:00) = count it
+            // Parse booking dates
             const pickupDate = new Date(booking.pickup_date)
             const dropoffDate = new Date(booking.dropoff_date)
-            const pickupRome = new Date(pickupDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
-            const dropoffRome = new Date(dropoffDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
-            const pickupMidnight = new Date(pickupRome.getFullYear(), pickupRome.getMonth(), pickupRome.getDate())
-            const dropoffMidnight = new Date(dropoffRome.getFullYear(), dropoffRome.getMonth(), dropoffRome.getDate())
-            const calendarDays = Math.round((dropoffMidnight.getTime() - pickupMidnight.getTime()) / (1000 * 60 * 60 * 24))
-            rentalDays = Math.max(1, calendarDays + (dropoffRome.getHours() >= 14 ? 1 : 0))
+            rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            if (rentalDays < 1) rentalDays = 1
 
             // Parse prices (assuming stored as cents)
             const priceTotal = (booking.price_total || 0) / 100
