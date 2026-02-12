@@ -385,7 +385,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     deposit: '0',
     deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
     // KM Overage Fee
-    km_overage_fee: '0',
+    km_overage_fee: '1.80',
     unlimited_km: false,
     km_limit: '0', // Default KM limit when not unlimited
     // Home Delivery & Pickup
@@ -1931,9 +1931,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
       deposit: booking.booking_details?.deposit || '0',
       deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
-      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '0',
+      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '1.80',
       unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
-      km_limit: booking.booking_details?.km_limit === 'Illimitati' ? '0' : (booking.booking_details?.km_limit || '0'),
+      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '0'),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
@@ -3432,7 +3432,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       source: 'admin',
       total_amount: '0',
       amount_paid: '0',
-      km_overage_fee: '0',
+      km_overage_fee: '1.80',
       payment_status: 'pending',
       payment_method: 'Contanti',
       currency: 'EUR',
@@ -4360,7 +4360,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   type="checkbox"
                   id="unlimited_km"
                   checked={formData.unlimited_km}
-                  onChange={(e) => setFormData({ ...formData, unlimited_km: e.target.checked, km_overage_fee: e.target.checked ? '0' : formData.km_overage_fee })}
+                  onChange={(e) => setFormData({ ...formData, unlimited_km: e.target.checked, km_overage_fee: e.target.checked ? '0' : '1.80' })}
                   className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
                 />
                 <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">

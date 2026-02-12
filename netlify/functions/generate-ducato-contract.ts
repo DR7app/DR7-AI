@@ -78,6 +78,14 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
+        // Calculate rental days: calendar days in Rome TZ + 1 if return is afternoon/evening (>= 14:00)
+        const pickupRome = new Date(pickupDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
+        const dropoffRome = new Date(dropoffDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
+        const pickupMidnight = new Date(pickupRome.getFullYear(), pickupRome.getMonth(), pickupRome.getDate())
+        const dropoffMidnight = new Date(dropoffRome.getFullYear(), dropoffRome.getMonth(), dropoffRome.getDate())
+        const calendarDays = Math.round((dropoffMidnight.getTime() - pickupMidnight.getTime()) / (1000 * 60 * 60 * 24))
+        const rentalDays = Math.max(1, calendarDays + (dropoffRome.getHours() >= 14 ? 1 : 0))
+
         // 2.5. Fetch Second Driver Data from customers_extended if customer_id is present
         let secondDriverCustomer = null
         const secondDriverId = booking.booking_details?.second_driver?.customer_id
@@ -279,7 +287,7 @@ export const handler: Handler = async (event) => {
                 rental_start_date: pickupDate.toISOString().split('T')[0],
                 rental_end_date: dropoffDate.toISOString().split('T')[0],
                 daily_rate: 0,
-                total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
+                total_days: rentalDays,
                 total_amount: booking.price_total / 100,
                 status: 'active',
                 pdf_url: publicUrl

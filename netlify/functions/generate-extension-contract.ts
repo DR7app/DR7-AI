@@ -317,8 +317,16 @@ export const handler: Handler = async (event) => {
             'Assicurazione': insuranceLabel,
             'Deposit': booking.booking_details?.deposit || '0',
             'Cauzione': booking.booking_details?.deposit || '0',
-            'TotalKM': booking.booking_details?.km_limit || 'Illimitati',
-            'KMTotaliNoleggio': booking.booking_details?.km_limit || 'Illimitati',
+            'TotalKM': booking.booking_details?.unlimited_km
+                ? 'Illimitati'
+                : (booking.booking_details?.km_limit && booking.booking_details.km_limit !== '0'
+                    ? booking.booking_details.km_limit
+                    : 'Illimitati'),
+            'KMTotaliNoleggio': booking.booking_details?.unlimited_km
+                ? 'Illimitati'
+                : (booking.booking_details?.km_limit && booking.booking_details.km_limit !== '0'
+                    ? booking.booking_details.km_limit
+                    : 'Illimitati'),
 
             // Company Data (for business clients)
             'CompanyName': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',

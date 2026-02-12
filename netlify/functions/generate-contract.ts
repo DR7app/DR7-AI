@@ -302,6 +302,22 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
+        // Calculate rental days using calendar-day logic in Rome timezone
+        // Business rule: morning return = don't count that day, evening return (>= 14:00) = count it
+        const pickupRome = new Date(pickupDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
+        const dropoffRome = new Date(dropoffDate.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
+        const pickupMidnight = new Date(pickupRome.getFullYear(), pickupRome.getMonth(), pickupRome.getDate())
+        const dropoffMidnight = new Date(dropoffRome.getFullYear(), dropoffRome.getMonth(), dropoffRome.getDate())
+        const calendarDays = Math.round((dropoffMidnight.getTime() - pickupMidnight.getTime()) / (1000 * 60 * 60 * 24))
+        const rentalDays = Math.max(1, calendarDays + (dropoffRome.getHours() >= 14 ? 1 : 0))
+
+        // KM limit: use unlimited_km flag directly, fallback to km_limit value
+        const kmLimitValue = booking.booking_details?.unlimited_km
+            ? 'Illimitati'
+            : (booking.booking_details?.km_limit && booking.booking_details.km_limit !== '0'
+                ? booking.booking_details.km_limit
+                : (booking.booking_details?.total_km || 'Illimitati'))
+
         // Helper to format date/time in Rome timezone correctly
         const formatDateRome = (date: Date) => {
             return date.toLocaleDateString('it-IT', {
@@ -726,8 +742,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'DataFine': formatDateRome(dropoffDate),
             'DropoffTime': formatTimeRome(dropoffDate),
             'OraFine': formatTimeRome(dropoffDate),
-            'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
-            'Giorni': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
+            'TotalDays': rentalDays.toString(),
+            'Giorni': rentalDays.toString(),
             'TotalHours': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
             'Ore': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
 
@@ -736,8 +752,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'Assicurazione': insuranceLabel,
             'Deposit': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
             'Cauzione': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
-            'TotalKM': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
-            'KMTotaliNoleggio': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
+            'TotalKM': kmLimitValue,
+            'KMTotaliNoleggio': kmLimitValue,
 
             // Second Driver Fields (Only if second driver exists)
             'SecondDriverName': (booking.booking_details?.second_driver?.name && booking.booking_details?.second_driver?.surname)
@@ -898,7 +914,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 rental_start_date: pickupDate.toISOString().split('T')[0],
                 rental_end_date: dropoffDate.toISOString().split('T')[0],
                 daily_rate: 0, // We rely on total amount mostly
-                total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
+                total_days: rentalDays,
                 total_amount: booking.price_total / 100,
                 status: 'active',
                 pdf_url: publicUrl,
