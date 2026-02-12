@@ -1461,18 +1461,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           >
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
-                          {booking.status !== 'cancelled' ? (
-                            <button
-                              onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                            >
-                              Annulla
-                            </button>
-                          ) : (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted">
-                              Annullata
-                            </span>
-                          )}
                           <button
                             onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
                             className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
