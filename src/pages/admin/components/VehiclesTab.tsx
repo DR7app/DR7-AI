@@ -270,71 +270,18 @@ export default function VehiclesTab() {
 
   async function handleDelete(id: string) {
     const vehicle = vehicles.find(v => v.id === id)
-    if (!vehicle) {
-      console.error('Vehicle not found in list:', id)
-      alert('Errore: Veicolo non trovato')
-      return
-    }
-
-    if (!confirm('Sei sicuro di voler eliminare questo veicolo?')) return
+    if (!vehicle) return
 
     try {
-      console.log(`Checking dependencies for vehicle: ${vehicle.display_name}`)
-
-      // Check dependencies
-      const { count: resCount, error: resCountError } = await supabase
-        .from('reservations')
-        .select('*', { count: 'exact', head: true })
-        .eq('vehicle_id', id)
-
-      if (resCountError) {
-        console.error('Error checking reservations:', resCountError)
-        throw new Error(`Failed to check reservations: ${resCountError.message}`)
-      }
-
-      const { count: bookCount, error: bookCountError } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('vehicle_name', vehicle.display_name)
-
-      if (bookCountError) {
-        console.error('Error checking bookings:', bookCountError)
-        throw new Error(`Failed to check bookings: ${bookCountError.message}`)
-      }
-
-      const totalDeps = (resCount || 0) + (bookCount || 0)
-      console.log(`  Found ${totalDeps} dependencies (${resCount || 0} reservations, ${bookCount || 0} bookings)`)
-
-      if (totalDeps > 0) {
-        if (!confirm(`⚠️ Questo veicolo ha ${totalDeps} prenotazioni associate (storico incluso).\n\nVerranno eliminate TUTTE le prenotazioni associate.\n\nProcedere con l'eliminazione definitiva?`)) {
-          console.log('  User cancelled deletion')
-          return
-        }
-      }
-
-      // Attempt deletion
       await deleteVehicleLogic(id, vehicle.display_name)
-
-      console.log('Vehicle deletion completed successfully')
-
-      // Reload vehicles list
       await loadVehicles()
     } catch (error: any) {
       console.error('Failed to delete vehicle:', error)
-
-      // Provide detailed error message to user
-      const errorMessage = error.message || 'Errore sconosciuto'
-      alert(`❌ Impossibile eliminare il veicolo:\n\n${errorMessage}\n\nControlla la console del browser (F12) per maggiori dettagli.`)
     }
   }
 
   async function deleteSelectedVehicles() {
     if (selectedVehicles.size === 0) return
-
-    if (!confirm(`Sei sicuro di voler eliminare ${selectedVehicles.size} veicoli selezionati?`)) return
-
-    // Double confirmation for bulk delete
-    if (!confirm(`⚠️ ATTENZIONE: Questa azione eliminerà anche TUTTE le prenotazioni associate a questi ${selectedVehicles.size} veicoli.\n\nSei ASSOLUTAMENTE sicuro?`)) return
 
     setLoading(true)
     try {
@@ -345,7 +292,6 @@ export default function VehiclesTab() {
           await deleteVehicleLogic(vehicle.id, vehicle.display_name)
         } catch (err) {
           console.error(`Failed to delete vehicle ${vehicle.display_name}:`, err)
-          // Continue with others
         }
       }
 
@@ -354,7 +300,6 @@ export default function VehiclesTab() {
       loadVehicles()
     } catch (error) {
       console.error('Error during bulk delete:', error)
-      alert('Errore durante l\'eliminazione multipla')
     } finally {
       setLoading(false)
     }
