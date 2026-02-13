@@ -424,10 +424,10 @@ export default function CauzioniTab() {
                 <div className="text-xs text-theme-text-secondary">{cauzione.veicolo_targa}</div>
             </td>
             <td className="px-4 py-3 text-sm text-theme-text-primary">
-                {new Date(cauzione.data_restituzione_veicolo).toLocaleDateString('it-IT')}
+                {new Date(cauzione.data_restituzione_veicolo + 'T00:00:00').toLocaleDateString('it-IT')}
             </td>
             <td className="px-4 py-3 text-sm text-theme-text-primary">
-                <div>{new Date(cauzione.scadenza_cauzione).toLocaleDateString('it-IT')}</div>
+                <div>{new Date(cauzione.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT')}</div>
                 {cauzione.days_until_deadline !== null && (
                     <div className="text-xs text-theme-text-secondary">
                         {cauzione.days_until_deadline > 0
