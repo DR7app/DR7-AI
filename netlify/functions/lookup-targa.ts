@@ -45,7 +45,7 @@ const handler: Handler = async (event) => {
     const cleanTarga = targa.toUpperCase().replace(/[\s\-]/g, "");
 
     const response = await fetch(
-      `https://automotive.openapi.com/IT-car/${encodeURIComponent(cleanTarga)}`,
+      `https://test.automotive.openapi.com/IT-car/${encodeURIComponent(cleanTarga)}`,
       {
         method: "GET",
         headers: {
