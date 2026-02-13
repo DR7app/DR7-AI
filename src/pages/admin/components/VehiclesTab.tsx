@@ -31,6 +31,10 @@ export default function VehiclesTab() {
 
   const [plateSearch, setPlateSearch] = useState('')
 
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<Vehicle | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
   // Multi-select state
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [selectedVehicles, setSelectedVehicles] = useState<Set<string>>(new Set())
@@ -297,58 +301,56 @@ export default function VehiclesTab() {
     console.log('  Vehicle deleted successfully')
   }
 
-  async function handleDelete(id: string) {
+  function handleDelete(id: string) {
     const vehicle = vehicles.find(v => v.id === id)
     if (!vehicle) {
-      console.error('Vehicle not found in list:', id)
       toast.error('Errore: Veicolo non trovato')
       return
     }
+    setDeleteTarget(vehicle)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
 
     try {
-      console.log(`Checking dependencies for vehicle: ${vehicle.display_name}`)
+      console.log(`Checking dependencies for vehicle: ${deleteTarget.display_name}`)
 
       // Check dependencies
       const { count: resCount, error: resCountError } = await supabase
         .from('reservations')
         .select('*', { count: 'exact', head: true })
-        .eq('vehicle_id', id)
+        .eq('vehicle_id', deleteTarget.id)
 
       if (resCountError) {
-        console.error('Error checking reservations:', resCountError)
         throw new Error(`Failed to check reservations: ${resCountError.message}`)
       }
 
       const { count: bookCount, error: bookCountError } = await supabase
         .from('bookings')
         .select('*', { count: 'exact', head: true })
-        .eq('vehicle_name', vehicle.display_name)
+        .eq('vehicle_name', deleteTarget.display_name)
 
       if (bookCountError) {
-        console.error('Error checking bookings:', bookCountError)
         throw new Error(`Failed to check bookings: ${bookCountError.message}`)
       }
 
       const totalDeps = (resCount || 0) + (bookCount || 0)
       console.log(`  Found ${totalDeps} dependencies (${resCount || 0} reservations, ${bookCount || 0} bookings)`)
 
-      if (totalDeps > 0) {
-        console.log(`  Proceeding with deletion of vehicle with ${totalDeps} associated bookings`)
-      }
-
       // Attempt deletion
-      await deleteVehicleLogic(id, vehicle.display_name)
+      await deleteVehicleLogic(deleteTarget.id, deleteTarget.display_name)
 
-      console.log('Vehicle deletion completed successfully')
-
-      // Reload vehicles list
+      toast.success(`Veicolo "${deleteTarget.display_name}" eliminato`)
+      setDeleteTarget(null)
       await loadVehicles()
     } catch (error: any) {
       console.error('Failed to delete vehicle:', error)
-
-      // Provide detailed error message to user
       const errorMessage = error.message || 'Errore sconosciuto'
-      toast.error(`Impossibile eliminare il veicolo: ${errorMessage}. Controlla la console del browser (F12) per maggiori dettagli.`)
+      toast.error(`Impossibile eliminare il veicolo: ${errorMessage}`)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1101,6 +1103,38 @@ export default function VehiclesTab() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-theme-text-primary mb-2">Eliminare questo veicolo?</h3>
+            <p className="text-theme-text-muted text-sm mb-1">
+              Stai per eliminare <span className="text-theme-text-primary font-semibold">{deleteTarget.display_name}</span>
+              {deleteTarget.plate && <span> ({deleteTarget.plate})</span>}
+            </p>
+            <p className="text-red-400 text-xs mb-6">
+              Tutte le prenotazioni, contratti e dati associati verranno eliminati permanentemente.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="px-5 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-xl hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="px-5 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Eliminazione...' : 'Elimina'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
