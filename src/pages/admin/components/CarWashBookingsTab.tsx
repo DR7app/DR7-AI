@@ -5,6 +5,7 @@ import NewClientModal from './NewClientModal'
 import toast from 'react-hot-toast'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
+import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
 
 interface Customer {
   id: string
@@ -152,12 +153,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [selectedMainTab, setSelectedMainTab] = useState<'lavaggio' | 'meccanica'>('lavaggio')
 
   // Wizard state
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3>(0)
   const [selectedService, setSelectedService] = useState<CarWashService | null>(null)
   const [selectedPriceOption, setSelectedPriceOption] = useState<{ label: string; price: number } | null>(null)
   const [selectedExtras, setSelectedExtras] = useState<CarWashService[]>([])
   const [extraPriceOptions, setExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
   const [showNewClientModal, setShowNewClientModal] = useState(false)
+
+  // Vehicle classification state (Step 0)
+  const [vehiclePlate, setVehiclePlate] = useState('')
+  const [vehicleMakeModel, setVehicleMakeModel] = useState('')
+  const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory | null>(null)
+  const [classifying, setClassifying] = useState(false)
+  const [classificationSource, setClassificationSource] = useState<'local' | 'api' | 'manual' | null>(null)
+  const [lookingUpTarga, setLookingUpTarga] = useState(false)
+  const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -223,11 +233,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   const resetWizard = () => {
-    setCurrentStep(1)
+    setCurrentStep(0)
     setSelectedService(null)
     setSelectedPriceOption(null)
     setSelectedExtras([])
     setExtraPriceOptions({})
+    setVehiclePlate('')
+    setVehicleMakeModel('')
+    setVehicleCategory(null)
+    setClassifying(false)
+    setClassificationSource(null)
+    setLookingUpTarga(false)
+    setTargaVehicleInfo(null)
     setFormData({
       customer_id: '',
       service_name: '',
@@ -250,8 +267,64 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     tech: 'PRIME TECH SERVICE'
   }
 
+  // Targa lookup handler
+  async function handleTargaLookup() {
+    if (vehiclePlate.length < 5 || lookingUpTarga) return
+    setLookingUpTarga(true)
+    setTargaVehicleInfo(null)
+    try {
+      const response = await fetch('/.netlify/functions/lookup-targa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targa: vehiclePlate }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        toast.error(err.error || 'Targa non trovata')
+        return
+      }
+      const data = await response.json()
+      setTargaVehicleInfo({
+        brand: data.brand,
+        model: data.model,
+        year: data.year,
+        fuel: data.fuel,
+        powerCV: data.powerCV,
+      })
+      // Auto-fill make/model and classify
+      if (data.makeModel) {
+        setVehicleMakeModel(data.makeModel)
+        // Auto-classify
+        const localResult = classifyVehicleLocally(data.makeModel)
+        if (localResult) {
+          setVehicleCategory(localResult.category)
+          setClassificationSource('local')
+        } else {
+          // Fallback to API classification
+          classifyVehicle(data.makeModel).then(result => {
+            setVehicleCategory(result.category)
+            setClassificationSource(result.source === 'local' ? 'local' : 'api')
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Targa lookup error:', err)
+      toast.error('Errore nella ricerca targa')
+    } finally {
+      setLookingUpTarga(false)
+    }
+  }
+
   const filteredByTab = carWashServices.filter(s => s.main_tab === selectedMainTab)
-  const mainServices = filteredByTab.filter(s => s.category !== 'extra' && s.category !== 'experience')
+  // Filter main services by vehicle category if classified
+  const mainServices = filteredByTab.filter(s => {
+    if (s.category === 'extra' || s.category === 'experience') return false
+    // If vehicle is classified, only show matching urban/maxi services (plus moto, tech)
+    if (vehicleCategory && (s.category === 'urban' || s.category === 'maxi')) {
+      return s.category === vehicleCategory
+    }
+    return true
+  })
   const extraServices = filteredByTab.filter(s => s.category === 'extra' || s.category === 'experience')
 
   const servicesByCategory = mainServices.reduce<Record<string, CarWashService[]>>((acc, s) => {
@@ -550,13 +623,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       adminOverride: forceBooking,
       createdBy: 'admin_panel',
       cartItems: cartItems,
-      totalDuration: getTotalDuration()
+      totalDuration: getTotalDuration(),
+      ...(vehicleCategory && { vehicleCategory }),
+      ...(vehicleMakeModel && { vehicleMakeModel }),
+      ...(classificationSource && { classificationSource }),
     }
 
     const bookingPayload: any = {
       service_type: 'car_wash',
       service_name: serviceNames,
-      vehicle_name: 'Car Wash Service',
+      vehicle_name: vehicleMakeModel || 'Car Wash Service',
+      vehicle_plate: vehiclePlate || null,
       customer_name: customerName,
       customer_email: customerEmail || null,
       customer_phone: customerPhone || null,
@@ -663,7 +740,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          vehicleName: `🧼 ${serviceNames}`,
+          vehicleName: `🧼 ${serviceNames}${vehicleMakeModel ? ` - ${vehicleMakeModel}` : ''}${vehiclePlate ? ` [${vehiclePlate}]` : ''}`,
           customerName,
           customerEmail,
           customerPhone,
@@ -928,6 +1005,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           {/* Step Indicator */}
           <div className="flex items-center justify-center mb-6">
             {[
+              { step: 0 as const, label: 'Veicolo' },
               { step: 1 as const, label: 'Servizio' },
               { step: 2 as const, label: 'Extra' },
               { step: 3 as const, label: 'Conferma' }
@@ -952,12 +1030,224 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {label}
                   </span>
                 </button>
-                {idx < 2 && (
-                  <div className={`w-16 h-0.5 mx-2 mb-4 ${step < currentStep ? 'bg-dr7-gold/60' : 'bg-theme-bg-tertiary'}`} />
+                {idx < 3 && (
+                  <div className={`w-12 h-0.5 mx-1.5 mb-4 ${step < currentStep ? 'bg-dr7-gold/60' : 'bg-theme-bg-tertiary'}`} />
                 )}
               </div>
             ))}
           </div>
+
+          {/* ===== STEP 0: Vehicle Identification ===== */}
+          {currentStep === 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-theme-text-primary">Identificazione Veicolo</h3>
+
+              {/* Targa + Cerca */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Targa</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={vehiclePlate}
+                    onChange={(e) => setVehiclePlate(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    placeholder="ES. AB123CD"
+                    className="flex-1 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono tracking-widest uppercase focus:border-dr7-gold focus:outline-none"
+                    maxLength={10}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && vehiclePlate.length >= 5 && !lookingUpTarga) {
+                        e.preventDefault()
+                        handleTargaLookup()
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={vehiclePlate.length < 5 || lookingUpTarga}
+                    onClick={handleTargaLookup}
+                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
+                      vehiclePlate.length < 5 || lookingUpTarga
+                        ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
+                        : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                    }`}
+                  >
+                    {lookingUpTarga ? 'Ricerca...' : 'Cerca'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Targa lookup result card */}
+              {targaVehicleInfo && (
+                <div className="p-3 bg-green-900/20 border border-green-600/40 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-green-400 text-sm font-bold">Veicolo trovato</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
+                    {targaVehicleInfo.brand && (
+                      <div><span className="text-theme-text-muted">Marca:</span> <span className="text-theme-text-primary font-medium">{targaVehicleInfo.brand}</span></div>
+                    )}
+                    {targaVehicleInfo.model && (
+                      <div><span className="text-theme-text-muted">Modello:</span> <span className="text-theme-text-primary font-medium">{targaVehicleInfo.model}</span></div>
+                    )}
+                    {targaVehicleInfo.year && (
+                      <div><span className="text-theme-text-muted">Anno:</span> <span className="text-theme-text-primary">{targaVehicleInfo.year}</span></div>
+                    )}
+                    {targaVehicleInfo.fuel && (
+                      <div><span className="text-theme-text-muted">Carburante:</span> <span className="text-theme-text-primary">{targaVehicleInfo.fuel}</span></div>
+                    )}
+                    {targaVehicleInfo.powerCV && (
+                      <div><span className="text-theme-text-muted">Potenza:</span> <span className="text-theme-text-primary">{targaVehicleInfo.powerCV} CV</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Make/Model + Classify */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Marca e Modello</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={vehicleMakeModel}
+                    onChange={(e) => {
+                      setVehicleMakeModel(e.target.value)
+                      // Auto-classify locally on each change
+                      const local = classifyVehicleLocally(e.target.value)
+                      if (local && local.confidence === 'high') {
+                        setVehicleCategory(local.category)
+                        setClassificationSource('local')
+                      } else if (!e.target.value.trim()) {
+                        setVehicleCategory(null)
+                        setClassificationSource(null)
+                      }
+                    }}
+                    placeholder="es. Fiat Panda, BMW X3..."
+                    className="flex-1 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && vehicleMakeModel.trim()) {
+                        e.preventDefault()
+                        setClassifying(true)
+                        classifyVehicle(vehicleMakeModel).then(result => {
+                          setVehicleCategory(result.category)
+                          setClassificationSource(result.source === 'local' ? 'local' : 'api')
+                        }).finally(() => setClassifying(false))
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!vehicleMakeModel.trim() || classifying}
+                    onClick={() => {
+                      setClassifying(true)
+                      classifyVehicle(vehicleMakeModel).then(result => {
+                        setVehicleCategory(result.category)
+                        setClassificationSource(result.source === 'local' ? 'local' : 'api')
+                      }).finally(() => setClassifying(false))
+                    }}
+                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
+                      !vehicleMakeModel.trim() || classifying
+                        ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
+                        : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                    }`}
+                  >
+                    {classifying ? 'Analisi...' : 'Classifica'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Classification Result */}
+              {vehicleCategory && (
+                <div className={`p-4 rounded-lg border-2 ${
+                  vehicleCategory === 'urban'
+                    ? 'bg-blue-900/20 border-blue-500/50'
+                    : 'bg-orange-900/20 border-orange-500/50'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
+                        vehicleCategory === 'urban'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-orange-600 text-white'
+                      }`}>
+                        {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                      </span>
+                      <div>
+                        <span className="text-theme-text-primary font-medium">{vehicleMakeModel}</span>
+                        {classificationSource && (
+                          <span className="text-xs text-theme-text-muted ml-2">
+                            ({classificationSource === 'local' ? 'riconosciuto' : classificationSource === 'api' ? 'AI' : 'manuale'})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Manual override buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setVehicleCategory('urban'); setClassificationSource('manual') }}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          vehicleCategory === 'urban'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-transparent text-blue-400 border-blue-500/50 hover:bg-blue-600/20'
+                        }`}
+                      >
+                        URBAN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setVehicleCategory('maxi'); setClassificationSource('manual') }}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          vehicleCategory === 'maxi'
+                            ? 'bg-orange-600 text-white border-orange-600'
+                            : 'bg-transparent text-orange-400 border-orange-500/50 hover:bg-orange-600/20'
+                        }`}
+                      >
+                        MAXI
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Navigation */}
+              <div className="flex justify-between items-center pt-4 border-t border-theme-border">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                >
+                  Annulla
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Skip classification — show all services
+                      setVehicleCategory(null)
+                      setClassificationSource(null)
+                      setCurrentStep(1)
+                    }}
+                    className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  >
+                    Salta
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Clear service selection when changing step from 0 to 1 (category may have changed)
+                      setSelectedService(null)
+                      setSelectedPriceOption(null)
+                      setSelectedExtras([])
+                      setExtraPriceOptions({})
+                      setCurrentStep(1)
+                    }}
+                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-yellow-500 text-black transition-colors"
+                  >
+                    Avanti
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ===== STEP 1: Service Selection ===== */}
           {currentStep === 1 && (
@@ -1048,14 +1338,27 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               )}
 
+              {/* Category badge reminder */}
+              {vehicleCategory && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-theme-text-muted">Categoria:</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    vehicleCategory === 'urban' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                  }`}>
+                    {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                  </span>
+                  {vehicleMakeModel && <span className="text-theme-text-muted text-xs">({vehicleMakeModel})</span>}
+                </div>
+              )}
+
               {/* Avanti button */}
               <div className="flex justify-between items-center pt-4 border-t border-theme-border">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => setCurrentStep(0)}
                   className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 >
-                  Annulla
+                  Indietro
                 </button>
                 <button
                   type="button"
@@ -1194,6 +1497,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {/* Summary Card */}
               <div className="p-4 bg-theme-bg-tertiary/50 rounded-lg border border-dr7-gold/30">
                 <h4 className="text-sm font-semibold text-dr7-gold mb-2">Riepilogo</h4>
+                {/* Vehicle info */}
+                {(vehicleMakeModel || vehiclePlate) && (
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-theme-border text-sm">
+                    {vehiclePlate && <span className="font-mono text-dr7-gold font-bold">{vehiclePlate}</span>}
+                    {vehicleMakeModel && <span className="text-theme-text-primary">{vehicleMakeModel}</span>}
+                    {vehicleCategory && (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        vehicleCategory === 'urban' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                      }`}>
+                        {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-theme-text-primary">
@@ -1407,6 +1724,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             <div className="font-medium">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
+                            {/* Vehicle info */}
+                            {(booking.booking_details?.vehicleMakeModel || (booking.vehicle_name && booking.vehicle_name !== 'Car Wash Service')) && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className="text-xs text-theme-text-primary">{booking.booking_details?.vehicleMakeModel || booking.vehicle_name}</span>
+                                {booking.booking_details?.vehicleCategory && (
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-600/30 text-blue-400' : 'bg-orange-600/30 text-orange-400'
+                                  }`}>
+                                    {booking.booking_details.vehicleCategory === 'urban' ? 'U' : 'M'}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {booking.vehicle_plate && (
+                              <div className="text-xs text-dr7-gold font-mono">{booking.vehicle_plate}</div>
+                            )}
                           </>
                         )}
                       </td>

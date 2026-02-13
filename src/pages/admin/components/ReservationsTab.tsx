@@ -2928,9 +2928,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (dbCustomer) {
           // Map DB fields to customerInfo shape expected below
           const fullName = dbCustomer.tipo_cliente === 'azienda'
-            ? dbCustomer.denominazione
+            ? (dbCustomer.ragione_sociale || dbCustomer.denominazione)
             : dbCustomer.tipo_cliente === 'pubblica_amministrazione'
-              ? dbCustomer.ente_o_ufficio
+              ? (dbCustomer.ente_o_ufficio || dbCustomer.ragione_sociale)
               : `${dbCustomer.nome} ${dbCustomer.cognome}`
 
           customerInfo = {

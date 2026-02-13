@@ -281,6 +281,15 @@ const handler: Handler = async (event) => {
         message += `*Cauzione:* €0\n`;
       }
 
+      // KM limit info
+      const unlimitedKm = booking.booking_details?.unlimited_km;
+      const kmLimit = booking.booking_details?.km_limit;
+      if (unlimitedKm || kmLimit === 'Illimitati') {
+        message += `*KM:* Illimitati\n`;
+      } else if (kmLimit && kmLimit !== '0') {
+        message += `*KM:* ${kmLimit} km\n`;
+      }
+
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
       message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
     }
