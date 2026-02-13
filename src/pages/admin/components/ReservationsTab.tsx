@@ -299,9 +299,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
   // Delete Confirmation Modal State
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const [pendingDeleteType, setPendingDeleteType] = useState<'booking' | 'reservation'>('booking')
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
@@ -1562,23 +1559,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
-    // Show custom confirmation modal instead of browser confirm
-    setPendingDeleteId(bookingId)
-    setPendingDeleteType(bookingType)
-    setShowDeleteConfirm(true)
-  }
-
-  async function confirmDeleteBooking() {
-    if (!pendingDeleteId) return
-
-    const bookingId = pendingDeleteId
-    const bookingType = pendingDeleteType
-
-    // Close modal and reset state
-    setShowDeleteConfirm(false)
-    setPendingDeleteId(null)
-
+  async function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
     try {
       // Get booking details before deleting
       let customerName = ''
@@ -4839,36 +4820,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
 
-        {/* Delete Confirmation Modal */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
-            <div className="bg-theme-text-primary rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-xl font-bold mb-4 text-red-600">Cancella Prenotazione</h3>
-              <p className="text-theme-text-secondary mb-6">
-                Vuoi cancellare questa prenotazione?
-              </p>
-              <div className="flex gap-3 justify-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setShowDeleteConfirm(false)
-                    setPendingDeleteId(null)
-                  }}
-                >
-                  No
-                </Button>
-                <Button
-                  type="button"
-                  onClick={confirmDeleteBooking}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Sì, Cancella
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ===== EXTEND BOOKING MODAL ===== */}
         {showExtendModal && extendingBooking && (
