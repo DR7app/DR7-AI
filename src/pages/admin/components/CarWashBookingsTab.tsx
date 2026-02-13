@@ -371,10 +371,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
 
   async function handleDeleteBooking(bookingId: string, customerName: string) {
-    if (!confirm(`⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE DEFINITIVAMENTE la prenotazione di ${customerName}?\n\nQuesta azione è irreversibile e rimuoverà la prenotazione dal database.`)) {
-      return
-    }
-
     try {
       // Try to delete from Google Calendar
       try {
@@ -470,10 +466,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        if (confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
-          openEditCustomer(booking.customer_id)
-          return
-        }
+        openEditCustomer(booking.customer_id)
+        return
       }
       alert('Errore nella generazione della fattura:\n\n' + errorMessage)
     } finally {

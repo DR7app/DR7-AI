@@ -75,16 +75,6 @@ export default function BookingDiagnosticPanel() {
     async function fixPlateMismatch(bookingId: string, vehicleId: string) {
         setFixing(bookingId)
         try {
-            const confirmed = confirm(
-                'Vuoi aggiornare la targa della prenotazione con la targa attuale del veicolo?\n\n' +
-                'Questo aggiornerà la prenotazione per riflettere la targa corrente del veicolo.'
-            )
-
-            if (!confirmed) {
-                setFixing(null)
-                return
-            }
-
             // Get the current vehicle plate
             const { data: vehicle, error: vehicleError } = await supabase
                 .from('vehicles')

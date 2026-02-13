@@ -543,8 +543,6 @@ export default function CustomersTab() {
 
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo cliente?')) return
-
     console.log('[handleDelete] Starting delete for ID:', id)
 
     try {
@@ -907,10 +905,6 @@ export default function CustomersTab() {
   }
 
   async function handleDeleteLicense(fileName: string, userId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       const { error } = await supabase.storage
         .from('driver-licenses')
@@ -927,10 +921,6 @@ export default function CustomersTab() {
   }
 
   async function handleDeleteId(fileName: string, userId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       const { error } = await supabase.storage
         .from('driver-ids')
@@ -975,10 +965,6 @@ export default function CustomersTab() {
   }
 
   async function handleDeleteCodiceFiscale(fileName: string, userId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       const { error } = await supabase.storage
         .from('codice-fiscale')
@@ -1028,13 +1014,6 @@ export default function CustomersTab() {
   }
 
   async function handleBulkStatusUpdate(newStatus: 'blacklist' | 'member' | 'elite' | null) {
-    const count = selectedCustomerIds.size
-    const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
-      newStatus === 'elite' ? 'Elite' :
-        newStatus === 'member' ? 'Member' : 'Nessuno'
-
-    if (!confirm(`Vuoi cambiare lo status di ${count} clienti a: ${statusLabel}?`)) return
-
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
@@ -1061,7 +1040,7 @@ export default function CustomersTab() {
       // Clear selection
       setSelectedCustomerIds(new Set())
 
-      let message = `Status aggiornato per ${result.message || count + ' clienti'}`
+      let message = `Status aggiornato per ${result.message || selectedCustomerIds.size + ' clienti'}`
       if (result.skippedTemp > 0) {
         message += ` (${result.skippedTemp} clienti temporanei ignorati)`
       }

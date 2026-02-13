@@ -36,8 +36,8 @@ function getExpirationAlarmHTML(cauzioni: any[]): string {
             <td style="padding: 12px; color: #ffffff;">${c.veicolo_nome || 'N/A'}</td>
             <td style="padding: 12px; color: #d4af37; font-weight: bold;">€${c.importo.toFixed(2)}</td>
             <td style="padding: 12px; color: #ffffff;">${c.metodo}</td>
-            <td style="padding: 12px; color: #ffffff;">${new Date(c.data_restituzione_veicolo).toLocaleDateString('it-IT')}</td>
-            <td style="padding: 12px; color: #ff4444; font-weight: bold;">${new Date(c.scadenza_cauzione).toLocaleDateString('it-IT')}</td>
+            <td style="padding: 12px; color: #ffffff;">${new Date(c.data_restituzione_veicolo + 'T00:00:00').toLocaleDateString('it-IT')}</td>
+            <td style="padding: 12px; color: #ff4444; font-weight: bold;">${new Date(c.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT')}</td>
         </tr>
     `).join('')
 

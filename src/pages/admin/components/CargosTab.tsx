@@ -76,8 +76,6 @@ export default function CargosTab() {
             return
         }
 
-        if (!confirm('Confermi l\'invio telematico dei dati al portale Cargos?')) return
-
         setExportLoading(true)
         setExportStats('Connessione al Web Service Cargos in corso...')
 

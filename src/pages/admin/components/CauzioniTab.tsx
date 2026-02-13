@@ -176,8 +176,6 @@ export default function CauzioniTab() {
     }
 
     const handleCreatePreauth = async (cauzione: Cauzione) => {
-        if (!confirm(`Creare preautorizzazione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
-
         try {
             const response = await fetch('/.netlify/functions/nexi-create-preauth', {
                 method: 'POST',
@@ -210,8 +208,6 @@ export default function CauzioniTab() {
     }
 
     const handleMarkSbloccataPreauth = async (cauzione: Cauzione) => {
-        if (!confirm('Vuoi sbloccare la preautorizzazione? Il cliente riceverà indietro i fondi.')) return
-
         try {
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
 
@@ -260,8 +256,6 @@ export default function CauzioniTab() {
             return
         }
 
-        if (!confirm(`Confermi di voler incassare €${amount.toFixed(2)} dalla preautorizzazione?`)) return
-
         try {
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
 
@@ -307,8 +301,6 @@ export default function CauzioniTab() {
     }
 
     const handleSegnaIncassata = async (cauzione: Cauzione) => {
-        if (!confirm(`Segnare come incassata la cauzione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
-
         try {
             const { error } = await supabase
                 .from('cauzioni')
@@ -328,8 +320,6 @@ export default function CauzioniTab() {
     }
 
     const handleSegnaDaIncassare = async (cauzione: Cauzione) => {
-        if (!confirm(`Riportare a "Da incassare" la cauzione di €${cauzione.importo} per ${cauzione.cliente_nome}?`)) return
-
         try {
             const { error } = await supabase
                 .from('cauzioni')
@@ -372,8 +362,6 @@ export default function CauzioniTab() {
     }
 
     const handleSblocca = async (cauzione: Cauzione) => {
-        if (!confirm('Sbloccare questa cauzione? Tornerà nella sezione Incassate.')) return
-
         try {
             const { error } = await supabase
                 .from('cauzioni')
@@ -436,10 +424,10 @@ export default function CauzioniTab() {
                 <div className="text-xs text-theme-text-secondary">{cauzione.veicolo_targa}</div>
             </td>
             <td className="px-4 py-3 text-sm text-theme-text-primary">
-                {new Date(cauzione.data_restituzione_veicolo).toLocaleDateString('it-IT')}
+                {new Date(cauzione.data_restituzione_veicolo + 'T00:00:00').toLocaleDateString('it-IT')}
             </td>
             <td className="px-4 py-3 text-sm text-theme-text-primary">
-                <div>{new Date(cauzione.scadenza_cauzione).toLocaleDateString('it-IT')}</div>
+                <div>{new Date(cauzione.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT')}</div>
                 {cauzione.days_until_deadline !== null && (
                     <div className="text-xs text-theme-text-secondary">
                         {cauzione.days_until_deadline > 0

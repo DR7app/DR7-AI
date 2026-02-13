@@ -76,8 +76,6 @@ export default function FatturaTab() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questa fattura?')) return
-
     try {
       const { error } = await supabase.from('fatture').delete().eq('id', id)
       if (error) throw error
@@ -89,8 +87,6 @@ export default function FatturaTab() {
   }
 
   async function handleBulkDelete() {
-    if (!confirm(`Sei sicuro di voler eliminare ${selectedIds.length} fatture?`)) return
-
     try {
       const { error } = await supabase.from('fatture').delete().in('id', selectedIds)
       if (error) throw error

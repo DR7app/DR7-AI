@@ -279,10 +279,6 @@ export default function BirthdaysTab() {
             return
         }
 
-        if (!confirm(`Inviare auguri a ${toSend.length} clienti?`)) {
-            return
-        }
-
         setBulkSending(true)
         let sent = 0
         let errors = 0

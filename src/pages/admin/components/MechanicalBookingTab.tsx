@@ -112,8 +112,6 @@ export default function MechanicalBookingTab() {
 
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questa prenotazione?')) return
-
     try {
       // Try to delete from Google Calendar
       try {
@@ -207,10 +205,8 @@ export default function MechanicalBookingTab() {
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        if (confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
-          openEditCustomer(booking.customer_id)
-          return
-        }
+        openEditCustomer(booking.customer_id)
+        return
       }
 
       alert('Errore nella generazione della fattura:\n\n' + errorMessage)

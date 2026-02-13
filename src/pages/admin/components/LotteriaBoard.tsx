@@ -1035,11 +1035,7 @@ const LotteriaBoard: React.FC = () => {
     }
   };
 
-  const handleCancelTicket = async (ticketNumber: number, email: string, fullName: string) => {
-    if (!confirm(`Sei sicuro di voler cancellare il biglietto #${String(ticketNumber).padStart(4, '0')} di ${fullName}?`)) {
-      return;
-    }
-
+  const handleCancelTicket = async (ticketNumber: number, email: string, _fullName: string) => {
     try {
       const { error } = await supabase
         .from('commercial_operation_tickets')
@@ -1117,16 +1113,6 @@ const LotteriaBoard: React.FC = () => {
 
     // Determine recipients
     const sendToAll = selectedRecipients.length === 0;
-    const recipientCount = sendToAll ? availableClients.length : selectedRecipients.length;
-
-    // Confirm send
-    const confirmMessage = sendToAll
-      ? `Sei sicuro di voler inviare l'email a TUTTI i ${recipientCount} clienti che hanno comprato biglietti?\n\nQuesta azione invierà un'email personalizzata a tutti gli acquirenti.`
-      : `Sei sicuro di voler inviare l'email a ${recipientCount} cliente${recipientCount > 1 ? 'i' : ''} selezionat${recipientCount > 1 ? 'i' : 'o'}?\n\nQuesta azione invierà un'email ai clienti selezionati.`;
-
-    if (!confirm(confirmMessage)) {
-      return;
-    }
 
     setSendingEmails(true);
     try {
@@ -1979,11 +1965,9 @@ const LotteriaBoard: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (confirm(`Sei sicuro di voler cancellare il biglietto #${String(selectedTicketForDetails.ticket_number).padStart(4, '0')} di ${selectedTicketForDetails.full_name}?`)) {
-                    handleCancelTicket(selectedTicketForDetails.ticket_number, selectedTicketForDetails.email, selectedTicketForDetails.full_name);
-                    setShowTicketDetailsModal(false);
-                    setSelectedTicketForDetails(null);
-                  }
+                  handleCancelTicket(selectedTicketForDetails.ticket_number, selectedTicketForDetails.email, selectedTicketForDetails.full_name);
+                  setShowTicketDetailsModal(false);
+                  setSelectedTicketForDetails(null);
                 }}
                 className="flex-1 px-4 py-2 bg-red-600 text-theme-text-primary rounded-full hover:bg-red-700 font-semibold"
               >
