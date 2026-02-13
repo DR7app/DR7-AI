@@ -393,6 +393,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         // Continue with database deletion even if Google Calendar deletion fails
       }
 
+      // Delete dependent records first (FK constraints)
+      await supabase.from('contracts').delete().eq('booking_id', bookingId)
+      await supabase.from('fatture').delete().eq('booking_id', bookingId)
+
       // Delete from database
       const { error } = await supabase
         .from('bookings')
@@ -400,11 +404,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .eq('id', bookingId)
 
       if (error) throw error
-      // Success — UI updates automatically
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
-      alert(`❌ Errore durante l'eliminazione: ${error.message}`)
     }
   }
 
