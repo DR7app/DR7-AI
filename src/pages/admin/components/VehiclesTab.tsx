@@ -4,7 +4,6 @@ import Input from './Input'
 import Select from './Select'
 import Button from './Button'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
-import toast from 'react-hot-toast'
 
 interface Vehicle {
   id: string
@@ -30,10 +29,6 @@ export default function VehiclesTab() {
   const [selectedVehicle, setSelectedVehicle] = useState<string>('all')
 
   const [plateSearch, setPlateSearch] = useState('')
-
-  // Delete confirmation
-  const [deleteTarget, setDeleteTarget] = useState<Vehicle | null>(null)
-  const [deleting, setDeleting] = useState(false)
 
   // Multi-select state
   const [multiSelectMode, setMultiSelectMode] = useState(false)
@@ -79,26 +74,26 @@ export default function VehiclesTab() {
 
     // Validate that "targa" is not in the display_name
     if (formData.display_name.toLowerCase().includes('targa')) {
-      toast.error('ERRORE: Non scrivere "targa" nel campo Nome! Usa il campo "Targa" separato sotto.')
+      alert('⚠️ ERRORE: Non scrivere "targa" nel campo Nome!\n\nUsa il campo "Targa" separato sotto.\n\nEsempio:\n✅ Nome: "Audi RS3 Verde"\n✅ Targa: "AB123CD"')
       return
     }
 
     // Validate that the plate number is not in the display_name
     if (formData.plate && formData.display_name.includes(formData.plate.trim())) {
-      toast.error('ERRORE: Non mettere la targa nel campo Nome! Il numero di targa va SOLO nel campo "Targa".')
+      alert('⚠️ ERRORE: Non mettere la targa nel campo Nome!\n\nIl numero di targa va SOLO nel campo "Targa".\n\nEsempio SBAGLIATO:\n❌ Nome: "Audi RS3 Verde PAMT299"\n\nEsempio CORRETTO:\n✅ Nome: "Audi RS3 Verde"\n✅ Targa: "PAMT299"')
       return
     }
 
     // Validate dates when status is unavailable
     if (formData.status === 'unavailable') {
       if (!formData.unavailable_from || !formData.unavailable_until) {
-        toast.error('ATTENZIONE: Per sincronizzare con Google Calendar, devi specificare ENTRAMBE le date (Non Disponibile Dal e Fino Al).')
+        alert('⚠️ ATTENZIONE: Per sincronizzare con Google Calendar, devi specificare ENTRAMBE le date:\n\n📅 Non Disponibile Dal (data inizio)\n📅 Non Disponibile Fino Al (data fine)\n\nSe è solo per un giorno, inserisci la stessa data in entrambi i campi.')
         return
       }
 
       // Validate that from date is not after until date
       if (formData.unavailable_from > formData.unavailable_until) {
-        toast.error('ERRORE: La data "Dal" non può essere successiva alla data "Fino Al"!')
+        alert('⚠️ ERRORE: La data "Dal" non può essere successiva alla data "Fino Al"!')
         return
       }
     }
@@ -176,7 +171,7 @@ export default function VehiclesTab() {
       loadVehicles()
     } catch (error: any) {
       console.error('Failed to save vehicle:', error)
-      toast.error('Impossibile salvare il veicolo: ' + (error.message || JSON.stringify(error)))
+      alert('Impossibile salvare il veicolo: ' + (error.message || JSON.stringify(error)))
     }
   }
 
@@ -197,28 +192,24 @@ export default function VehiclesTab() {
     }
     console.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
 
-    // Get all booking IDs for this vehicle (needed to clean up FK dependencies)
-    // Query by BOTH vehicle_name AND vehicle_id to catch all bookings
-    const { data: bookingsByName } = await supabase
+    // Get booking IDs first so we can delete dependent records
+    console.log('  Fetching booking IDs...')
+    const { data: bookingsToDelete, error: fetchError } = await supabase
       .from('bookings')
       .select('id')
       .eq('vehicle_name', vehicleName)
 
-    const { data: bookingsById } = await supabase
-      .from('bookings')
-      .select('id')
-      .eq('vehicle_id', id)
+    if (fetchError) {
+      console.error('  Error fetching bookings:', fetchError)
+      throw new Error(`Failed to fetch bookings: ${fetchError.message}`)
+    }
 
-    // Merge and deduplicate
-    const allBookingIds = new Set([
-      ...(bookingsByName || []).map(b => b.id),
-      ...(bookingsById || []).map(b => b.id),
-    ])
-    const bookingIds = Array.from(allBookingIds)
+    const bookingIds = (bookingsToDelete || []).map(b => b.id)
+    console.log(`  Found ${bookingIds.length} bookings to delete`)
 
     if (bookingIds.length > 0) {
       // Delete contracts referencing these bookings (FK: contracts_booking_id_fkey)
-      console.log(`  Deleting contracts for ${bookingIds.length} bookings...`)
+      console.log('  Deleting contracts...')
       const { error: contractError } = await supabase
         .from('contracts')
         .delete()
@@ -229,56 +220,32 @@ export default function VehiclesTab() {
         throw new Error(`Failed to delete contracts: ${contractError.message}`)
       }
 
-      // Unlink fatture from these bookings (FK: fatture.booking_id)
-      console.log('  Unlinking fatture...')
+      // Delete fatture (invoices) referencing these bookings
+      console.log('  Deleting fatture...')
       const { error: fattureError } = await supabase
         .from('fatture')
-        .update({ booking_id: null })
-        .in('booking_id', bookingIds)
-
-      if (fattureError) {
-        console.error('  Error unlinking fatture:', fattureError)
-        throw new Error(`Failed to unlink fatture: ${fattureError.message}`)
-      }
-
-      // Delete cauzioni referencing these bookings if any
-      console.log('  Deleting cauzioni...')
-      const { error: cauzioniError } = await supabase
-        .from('cauzioni')
         .delete()
         .in('booking_id', bookingIds)
 
-      if (cauzioniError) {
-        console.warn('  Cauzioni cleanup skipped:', cauzioniError.message)
+      if (fattureError) {
+        console.error('  Error deleting fatture:', fattureError)
+        throw new Error(`Failed to delete fatture: ${fattureError.message}`)
       }
     }
 
-    // Delete from bookings (by both vehicle_name and vehicle_id)
+    // Delete from bookings
     console.log('  Deleting bookings...')
-    const { data: deletedByName, error: bookErrorName } = await supabase
+    const { data: deletedBookings, error: bookError } = await supabase
       .from('bookings')
       .delete()
       .eq('vehicle_name', vehicleName)
       .select()
 
-    if (bookErrorName) {
-      console.error('  Error deleting bookings by name:', bookErrorName)
-      throw new Error(`Failed to delete bookings: ${bookErrorName.message}`)
+    if (bookError) {
+      console.error('  Error deleting bookings:', bookError)
+      throw new Error(`Failed to delete bookings: ${bookError.message}`)
     }
-
-    const { data: deletedById, error: bookErrorId } = await supabase
-      .from('bookings')
-      .delete()
-      .eq('vehicle_id', id)
-      .select()
-
-    if (bookErrorId) {
-      console.error('  Error deleting bookings by id:', bookErrorId)
-      throw new Error(`Failed to delete bookings: ${bookErrorId.message}`)
-    }
-
-    const deletedBookings = [...(deletedByName || []), ...(deletedById || [])]
-    console.log(`  Deleted ${deletedBookings.length} bookings`)
+    console.log(`  Deleted ${deletedBookings?.length || 0} bookings`)
 
     // Finally, delete the vehicle itself
     console.log('  Deleting vehicle record...')
@@ -301,56 +268,15 @@ export default function VehiclesTab() {
     console.log('  Vehicle deleted successfully')
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     const vehicle = vehicles.find(v => v.id === id)
-    if (!vehicle) {
-      toast.error('Errore: Veicolo non trovato')
-      return
-    }
-    setDeleteTarget(vehicle)
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return
-    setDeleting(true)
+    if (!vehicle) return
 
     try {
-      console.log(`Checking dependencies for vehicle: ${deleteTarget.display_name}`)
-
-      // Check dependencies
-      const { count: resCount, error: resCountError } = await supabase
-        .from('reservations')
-        .select('*', { count: 'exact', head: true })
-        .eq('vehicle_id', deleteTarget.id)
-
-      if (resCountError) {
-        throw new Error(`Failed to check reservations: ${resCountError.message}`)
-      }
-
-      const { count: bookCount, error: bookCountError } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('vehicle_name', deleteTarget.display_name)
-
-      if (bookCountError) {
-        throw new Error(`Failed to check bookings: ${bookCountError.message}`)
-      }
-
-      const totalDeps = (resCount || 0) + (bookCount || 0)
-      console.log(`  Found ${totalDeps} dependencies (${resCount || 0} reservations, ${bookCount || 0} bookings)`)
-
-      // Attempt deletion
-      await deleteVehicleLogic(deleteTarget.id, deleteTarget.display_name)
-
-      toast.success(`Veicolo "${deleteTarget.display_name}" eliminato`)
-      setDeleteTarget(null)
+      await deleteVehicleLogic(id, vehicle.display_name)
       await loadVehicles()
     } catch (error: any) {
       console.error('Failed to delete vehicle:', error)
-      const errorMessage = error.message || 'Errore sconosciuto'
-      toast.error(`Impossibile eliminare il veicolo: ${errorMessage}`)
-    } finally {
-      setDeleting(false)
     }
   }
 
@@ -366,16 +292,14 @@ export default function VehiclesTab() {
           await deleteVehicleLogic(vehicle.id, vehicle.display_name)
         } catch (err) {
           console.error(`Failed to delete vehicle ${vehicle.display_name}:`, err)
-          // Continue with others
         }
       }
 
       setSelectedVehicles(new Set())
       setMultiSelectMode(false)
-      await loadVehicles()
+      loadVehicles()
     } catch (error) {
       console.error('Error during bulk delete:', error)
-      toast.error('Errore durante l\'eliminazione multipla')
     } finally {
       setLoading(false)
     }
@@ -414,7 +338,7 @@ export default function VehiclesTab() {
     const unavailableReason = metadata?.unavailable_reason
 
     if (!unavailableFrom || !unavailableUntil) {
-      toast.error('Impossibile sincronizzare: Date di non disponibilità mancanti. Modifica il veicolo e inserisci entrambe le date.')
+      alert('⚠️ Impossibile sincronizzare: Date di non disponibilità mancanti.\n\nModifica il veicolo e inserisci entrambe le date.')
       return
     }
 
@@ -436,11 +360,10 @@ export default function VehiclesTab() {
       if (!response.ok) {
         const errorText = await response.text()
         console.error('Failed to create calendar event:', errorText)
-        toast.error('Errore nella sincronizzazione con Google Calendar. Verifica le credenziali.')
+        alert('❌ Errore nella sincronizzazione con Google Calendar.\n\nVerifica le credenziali.')
       }
     } catch (error) {
       console.error('Error syncing with calendar:', error)
-      toast.error('Errore sincronizzazione calendario')
     }
   }
 
@@ -479,11 +402,10 @@ export default function VehiclesTab() {
   async function handlePriceAdjustment(increase: boolean) {
     const percentage = parseFloat(adjustmentPercentage)
     if (isNaN(percentage) || percentage <= 0) {
-      toast.error('Inserisci una percentuale valida')
+      alert('Inserisci una percentuale valida')
       return
     }
 
-    const vehicleName = selectedVehicle === 'all' ? 'tutti i veicoli' : vehicles.find(v => v.id === selectedVehicle)?.display_name
     setIsAdjusting(true)
     try {
       // Determine which vehicles to update
@@ -514,10 +436,10 @@ export default function VehiclesTab() {
       // Reload vehicles
       await loadVehicles()
 
-      toast.success('Prezzo aggiornato')
+      // Success — prices updated, UI refreshes
     } catch (error) {
       console.error('Failed to adjust prices:', error)
-      toast.error('Errore nell\'aggiornamento dei prezzi')
+      alert('Errore nell\'aggiornamento dei prezzi')
     } finally {
       setIsAdjusting(false)
     }
@@ -592,7 +514,7 @@ export default function VehiclesTab() {
                 if (percentage) {
                   setAdjustmentPercentage(percentage)
                   // TODO: Implement bulk adjustment for selected
-                  toast.success('Funzionalità in arrivo...')
+                  alert('Funzionalità in arrivo...')
                 }
               }}
               variant="secondary"
@@ -1104,38 +1026,6 @@ export default function VehiclesTab() {
           </div>
         </div>
       </div>
-
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !deleting && setDeleteTarget(null)}>
-          <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-bold text-theme-text-primary mb-2">Eliminare questo veicolo?</h3>
-            <p className="text-theme-text-muted text-sm mb-1">
-              Stai per eliminare <span className="text-theme-text-primary font-semibold">{deleteTarget.display_name}</span>
-              {deleteTarget.plate && <span> ({deleteTarget.plate})</span>}
-            </p>
-            <p className="text-red-400 text-xs mb-6">
-              Tutte le prenotazioni, contratti e dati associati verranno eliminati permanentemente.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                className="px-5 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-xl hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
-              >
-                Annulla
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={deleting}
-                className="px-5 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {deleting ? 'Eliminazione...' : 'Elimina'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
-import toast from 'react-hot-toast'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import NewClientModal from './NewClientModal'
 
@@ -48,9 +47,6 @@ export default function MechanicalBookingTab() {
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
 
-  // Delete confirmation modal state
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
-
   async function openEditCustomer(customerId: string) {
     if (!customerId) return
     try {
@@ -67,7 +63,7 @@ export default function MechanicalBookingTab() {
       }
     } catch (error) {
       console.error('Error fetching customer for edit:', error)
-      toast.error("Impossibile caricare i dati del cliente per la modifica.")
+      alert("Impossibile caricare i dati del cliente per la modifica.")
     }
   }
 
@@ -115,41 +111,35 @@ export default function MechanicalBookingTab() {
 
 
 
-  function handleDelete(id: string, name: string) {
-    setDeleteTarget({ id, name })
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return
-
+  async function handleDelete(id: string) {
     try {
       // Try to delete from Google Calendar
       try {
         await fetch('/.netlify/functions/delete-calendar-event', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId: deleteTarget.id }),
+          body: JSON.stringify({ bookingId: id }),
         })
-        console.log('Google Calendar event deletion requested for booking:', deleteTarget.id)
+        console.log('Google Calendar event deletion requested for booking:', id)
       } catch (calError) {
         console.warn('Failed to request deletion from Google Calendar:', calError)
         // Continue with database deletion even if Google Calendar deletion fails
       }
 
+      // Delete dependent records first (FK constraints)
+      await supabase.from('contracts').delete().eq('booking_id', id)
+      await supabase.from('fatture').delete().eq('booking_id', id)
+
       // Delete from database
       const { error } = await supabase
         .from('bookings')
         .delete()
-        .eq('id', deleteTarget.id)
+        .eq('id', id)
 
       if (error) throw error
-      toast.success('Prenotazione eliminata')
-      setDeleteTarget(null)
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
-      toast.error('Errore durante l\'eliminazione')
-      setDeleteTarget(null)
     }
   }
 
@@ -172,11 +162,11 @@ export default function MechanicalBookingTab() {
       const data = await response.json()
       if (!response.ok) {
         if (data.invoiceNumber) {
-          toast.error(`Fattura già esistente per questa prenotazione (Numero: ${data.invoiceNumber}). Vai alla tab "Fatture" per visualizzarla.`)
+          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
         } else {
           const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
-          const errorDetails = data.details ? ` - Dettagli: ${data.details}` : ''
-          const errorHint = data.hint ? ` - Suggerimento: ${data.hint}` : ''
+          const errorDetails = data.details ? `\n\nDettagli: ${data.details}` : ''
+          const errorHint = data.hint ? `\n\nSuggerimento: ${data.hint}` : ''
           throw new Error(errorMsg + errorDetails + errorHint)
         }
         return
@@ -199,12 +189,12 @@ export default function MechanicalBookingTab() {
         if (printWindow) {
           // Increase timeout to ensure browser has time to load the Blob URL
           setTimeout(() => URL.revokeObjectURL(url), 3000)
-          toast.success(`Fattura generata con successo (Numero: ${data.invoice.numero_fattura}). Aperta in una nuova finestra.`)
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
         } else {
-          toast.success(`Fattura generata con successo (Numero: ${data.invoice.numero_fattura}). Vai alla tab "Fatture" per visualizzarla.`)
+          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
         }
       } else {
-        toast.success(`Fattura generata con successo (Numero: ${data.invoice.numero_fattura}). Vai alla tab "Fatture" per visualizzarla.`)
+        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
       loadData()
@@ -216,10 +206,10 @@ export default function MechanicalBookingTab() {
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
         openEditCustomer(booking.customer_id)
-          return
+        return
       }
 
-      toast.error('Errore nella generazione della fattura: ' + errorMessage)
+      alert('Errore nella generazione della fattura:\n\n' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
     }
@@ -366,7 +356,7 @@ export default function MechanicalBookingTab() {
                       {generatingInvoice ? '...' : 'Fattura'}
                     </button>
                     <button
-                      onClick={() => handleDelete(booking.id, booking.customer_name)}
+                      onClick={() => handleDelete(booking.id)}
                       className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       ×
@@ -386,25 +376,7 @@ export default function MechanicalBookingTab() {
         </table>
       </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Conferma eliminazione</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Sei sicuro di voler eliminare la prenotazione di <strong>{deleteTarget.name}</strong>? Questa azione non può essere annullata.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                Annulla
-              </button>
-              <button onClick={confirmDelete} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">
-                Elimina
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   )
 }

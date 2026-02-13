@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
-import toast from 'react-hot-toast'
 
 interface Customer {
   id: string
@@ -573,10 +572,10 @@ export default function CustomersTab() {
         return newAll
       })
 
-      toast.success('Cliente eliminato con successo')
+      alert('Cliente eliminato con successo')
     } catch (error: any) {
       console.error('[handleDelete] Failed:', error)
-      toast.error('Impossibile eliminare il cliente: ' + (error.message || 'Errore sconosciuto'))
+      alert('Impossibile eliminare il cliente: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 
@@ -867,11 +866,11 @@ export default function CustomersTab() {
 
       if (uploadError) throw uploadError
 
-      toast.success('Patente caricata con successo!')
+      alert('Patente caricata con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error uploading license:', error)
-      toast.error('Errore nel caricamento della patente: ' + (error.message || JSON.stringify(error)))
+      alert('Errore nel caricamento della patente: ' + (error.message || JSON.stringify(error)))
     } finally {
       setUploadingLicense(false)
     }
@@ -895,11 +894,11 @@ export default function CustomersTab() {
 
       if (uploadError) throw uploadError
 
-      toast.success('Documento d\'identità caricato con successo!')
+      alert('Documento d\'identità caricato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error uploading ID:', error)
-      toast.error('Errore nel caricamento del documento: ' + (error.message || JSON.stringify(error)))
+      alert('Errore nel caricamento del documento: ' + (error.message || JSON.stringify(error)))
     } finally {
       setUploadingId(false)
     }
@@ -913,11 +912,11 @@ export default function CustomersTab() {
 
       if (error) throw error
 
-      toast.success('Documento eliminato con successo!')
+      alert('✅ Documento eliminato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error deleting license:', error)
-      toast.error('Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
+      alert('❌ Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
     }
   }
 
@@ -929,11 +928,11 @@ export default function CustomersTab() {
 
       if (error) throw error
 
-      toast.success('Documento eliminato con successo!')
+      alert('✅ Documento eliminato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error deleting ID:', error)
-      toast.error('Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
+      alert('❌ Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
     }
   }
 
@@ -955,11 +954,11 @@ export default function CustomersTab() {
 
       if (uploadError) throw uploadError
 
-      toast.success('Codice Fiscale caricato con successo!')
+      alert('Codice Fiscale caricato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error uploading Codice Fiscale:', error)
-      toast.error('Errore nel caricamento del Codice Fiscale: ' + (error.message || JSON.stringify(error)))
+      alert('Errore nel caricamento del Codice Fiscale: ' + (error.message || JSON.stringify(error)))
     } finally {
       setUploadingCodiceFiscale(false)
     }
@@ -973,11 +972,11 @@ export default function CustomersTab() {
 
       if (error) throw error
 
-      toast.success('Documento eliminato con successo!')
+      alert('✅ Documento eliminato con successo!')
       await fetchCustomerDocuments(userId)
     } catch (error: any) {
       console.error('Error deleting Codice Fiscale:', error)
-      toast.error('Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
+      alert('❌ Errore nell\'eliminazione: ' + (error.message || JSON.stringify(error)))
     }
   }
 
@@ -1007,19 +1006,14 @@ export default function CustomersTab() {
         c.id === customerId ? { ...c, status: newStatus } : c
       ))
 
-      toast.success(`Status aggiornato a: ${statusLabel}`)
+      alert(`Status aggiornato a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer status:', error)
-      toast.error('Errore nell\'aggiornamento dello status: ' + (error.message || 'Errore sconosciuto'))
+      alert('Errore nell\'aggiornamento dello status: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 
   async function handleBulkStatusUpdate(newStatus: 'blacklist' | 'member' | 'elite' | null) {
-    const count = selectedCustomerIds.size
-    const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
-      newStatus === 'elite' ? 'Elite' :
-        newStatus === 'member' ? 'Member' : 'Nessuno'
-
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
@@ -1046,14 +1040,14 @@ export default function CustomersTab() {
       // Clear selection
       setSelectedCustomerIds(new Set())
 
-      let message = `Status aggiornato per ${result.message || count + ' clienti'}`
+      let message = `Status aggiornato per ${result.message || selectedCustomerIds.size + ' clienti'}`
       if (result.skippedTemp > 0) {
         message += ` (${result.skippedTemp} clienti temporanei ignorati)`
       }
-      toast.success(message)
+      alert(message)
     } catch (error: any) {
       console.error('Error updating customer statuses:', error)
-      toast.error('Errore nell\'aggiornamento degli status: ' + (error.message || 'Errore sconosciuto'))
+      alert('Errore nell\'aggiornamento degli status: ' + (error.message || 'Errore sconosciuto'))
     }
   }
 

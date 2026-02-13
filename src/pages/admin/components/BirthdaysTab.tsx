@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
-import toast from 'react-hot-toast'
 
 interface CustomerBirthday {
     id: string
@@ -80,10 +79,10 @@ export default function BirthdaysTab() {
 
             setMessageTemplate(draftMessage)
             setEditingMessage(false)
-            toast.success('Messaggio salvato!')
+            alert('Messaggio salvato!')
         } catch (error: any) {
             console.error('Error saving message template:', error)
-            toast.error(`Errore nel salvataggio: ${error.message}`)
+            alert(`Errore nel salvataggio: ${error.message}`)
         } finally {
             setSavingMessage(false)
         }
@@ -276,7 +275,7 @@ export default function BirthdaysTab() {
         const toSend = filteredCustomers.filter(c => selectedIds.has(c.id) && c.phone && !c.already_sent_this_year)
 
         if (toSend.length === 0) {
-            toast.error('Nessun cliente selezionato')
+            alert('Nessun cliente selezionato')
             return
         }
 
@@ -379,12 +378,12 @@ export default function BirthdaysTab() {
 
         setBulkSending(false)
         setSelectedIds(new Set())
-        toast.success(`Invio completato! Inviati: ${sent} - Errori: ${errors}`)
+        alert(`Invio completato!\n\nInviati: ${sent}\nErrori: ${errors}\n\nCodici generati:\n${generatedCodes.join('\n')}`)
     }
 
     async function sendBirthdayMessage(customer: CustomerBirthday) {
         if (!customer.phone) {
-            toast.error('Questo cliente non ha un numero di telefono')
+            alert('Questo cliente non ha un numero di telefono')
             return
         }
 
@@ -479,10 +478,10 @@ export default function BirthdaysTab() {
             ))
 
             // Show success with code
-            toast.success(`Messaggio inviato a ${customer.full_name}! Codice sconto: ${discountCode}`)
+            alert(`Messaggio inviato a ${customer.full_name}!\n\nCodice sconto generato: ${discountCode}`)
         } catch (error: any) {
             console.error('Error sending birthday message:', error)
-            toast.error('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
+            alert('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
         } finally {
             setSending(null)
         }

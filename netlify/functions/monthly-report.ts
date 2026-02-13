@@ -37,10 +37,21 @@ function getDaySet(
 }
 
 /**
+ * Check if dropoff time is in the afternoon/evening (>= 14:00 Rome time).
+ * Business rule: evening return = count that day, morning return = don't count it.
+ */
+function isEveningReturn(dateStr: string): boolean {
+  const d = new Date(dateStr)
+  const romeHour = parseInt(d.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }))
+  return romeHour >= 14
+}
+
+/**
  * Compute billable days for a booking.
- * Business rule: start day inclusive, checkout (end) day exclusive.
- * Feb 6 → Feb 7 = 1 day. Same-day bookings (Feb 6 → Feb 6) = 1 day minimum.
- * Uses UTC to avoid DST issues.
+ * Business rule: calendar days between pickup and dropoff dates.
+ * Morning return (before 14:00 Rome) = dropoff day NOT counted.
+ * Evening return (>= 14:00 Rome) = dropoff day IS counted.
+ * Same-day bookings = 1 day minimum.
  */
 function computeBillableDays(startDateStr: string, endDateStr: string): number {
   const start = startDateStr.substring(0, 10)
@@ -49,18 +60,17 @@ function computeBillableDays(startDateStr: string, endDateStr: string): number {
   const [eY, eM, eD] = end.split('-').map(Number)
   const startMs = Date.UTC(sY, sM - 1, sD)
   const endMs = Date.UTC(eY, eM - 1, eD)
-  const diffDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
-  return Math.max(1, diffDays)
+  const calendarDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
+  const eveningBonus = isEveningReturn(endDateStr) ? 1 : 0
+  return Math.max(1, calendarDays + eveningBonus)
 }
 
 /**
  * Returns occupied day-of-month numbers for a booking within a specific month.
- * Start day inclusive, checkout (end) day exclusive.
+ * Start day inclusive.
+ * Morning return (<14:00 Rome) = checkout day excluded.
+ * Evening return (>=14:00 Rome) = checkout day included.
  * Returns empty set if no occupied days in the given month.
- *
- * Key fix: a booking from a prior month whose checkout falls on day 1 of this
- * month (e.g. Jan 31 → Feb 1) produces 0 occupied days in this month,
- * NOT 1. The checkout day is when the car is returned — it's available.
  */
 function getOccupiedDaysInMonth(
   startDateStr: string,
@@ -74,6 +84,7 @@ function getOccupiedDaysInMonth(
   const dropoff = endDateStr.substring(0, 10)
   const [pY, pM, pD] = pickup.split('-').map(Number)
   const [dY, dM, dD] = dropoff.split('-').map(Number)
+  const eveningReturn = isEveningReturn(endDateStr)
 
   // First occupied day in this month
   let firstDay: number
@@ -85,12 +96,13 @@ function getOccupiedDaysInMonth(
     return days // booking starts after this month
   }
 
-  // Last occupied day in this month (checkout day excluded)
+  // Last occupied day in this month
+  // Morning return (<14:00) = exclude checkout day, evening return (>=14:00) = include it
   let lastDay: number
   if (dY > year || (dY === year && dM > monthNum)) {
     lastDay = daysInMonth // booking extends past this month
   } else if (dY === year && dM === monthNum) {
-    lastDay = dD - 1 // checkout in this month: exclude checkout day
+    lastDay = eveningReturn ? dD : dD - 1 // evening return: count that day
     if (lastDay < firstDay) {
       if (pY === year && pM === monthNum) {
         // Same-day booking within this month: count 1 day
@@ -304,16 +316,17 @@ async function generateVehicleReport(
       }
 
       // Find end day in this month
-      // NOTE: Dropoff day is NOT counted - car is returned that day, so it's available
+      // Business rule: morning return (<14:00) = don't count dropoff day, evening return (>=14:00) = count it
+      const eveningReturn = isEveningReturn(dropoffDateRaw)
       let endDay: number
       if (dYear > year || (dYear === year && dMonth > monthNum)) {
         // Dropoff is after this month - car is rented until end of month
         endDay = daysInMonth
       } else if (dYear === year && dMonth === monthNum) {
-        // Dropoff is in this month - don't count the dropoff day itself
-        endDay = dDay - 1
+        // Dropoff is in this month
+        endDay = eveningReturn ? dDay : dDay - 1
         // Same-day booking in this month: count 1 day
-        // Cross-month checkout (pickup was before this month): 0 days in this month
+        // Cross-month checkout (pickup was before this month): check if any days
         if (endDay < startDay) {
           if (pYear === year && pMonth === monthNum) {
             endDay = startDay

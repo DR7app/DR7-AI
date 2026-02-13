@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
-import toast from 'react-hot-toast'
 
 interface Contract {
   id: string
@@ -35,7 +34,6 @@ export default function ContrattoTab() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   const [formData, setFormData] = useState({
     contract_number: '',
@@ -121,7 +119,7 @@ export default function ContrattoTab() {
       loadContracts()
     } catch (error) {
       console.error('Failed to save contract:', error)
-      toast.error('Impossibile salvare il contratto')
+      alert('Impossibile salvare il contratto. Assicurati che la tabella "contracts" esista nel database.')
     }
   }
 
@@ -167,34 +165,25 @@ export default function ContrattoTab() {
     setShowForm(true)
   }
 
-  function handleDelete(id: string, contractNumber: string) {
-    setDeleteTarget({ id, name: contractNumber })
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return
-
+  async function handleDelete(id: string) {
     try {
       const { error } = await supabase
         .from('contracts')
         .delete()
-        .eq('id', deleteTarget.id)
+        .eq('id', id)
 
       if (error) throw error
-      toast.success('Contratto eliminato')
-      setDeleteTarget(null)
       loadContracts()
     } catch (error) {
       console.error('Failed to delete contract:', error)
-      toast.error('Impossibile eliminare il contratto')
-      setDeleteTarget(null)
+      alert('Impossibile eliminare il contratto')
     }
   }
 
 
   async function handleSendToYousign(contract: Contract) {
     if (!contract.booking_id) {
-      toast.error('Impossibile inviare: ID prenotazione mancante')
+      alert('Impossibile inviare: ID prenotazione mancante.')
       return
     }
 
@@ -206,14 +195,14 @@ export default function ContrattoTab() {
       })
       const data = await res.json()
       if (res.ok) {
-        toast.success('Richiesta di firma inviata con successo!')
+        alert('Richiesta di firma inviata con successo! 📩')
         loadContracts()
       } else {
         throw new Error(data.error || 'Errore sconosciuto')
       }
     } catch (error: any) {
       console.error('Yousign error:', error)
-      toast.error('Errore Yousign: ' + error.message)
+      alert('Errore Yousign: ' + error.message)
     }
   }
 
@@ -576,7 +565,7 @@ export default function ContrattoTab() {
                       Modifica
                     </button>
                     <button
-                      onClick={() => handleDelete(contract.id, contract.contract_number)}
+                      onClick={() => handleDelete(contract.id)}
                       className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
                     >
                       ×
@@ -586,22 +575,6 @@ export default function ContrattoTab() {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-theme-card p-6 rounded-lg shadow-xl max-w-md">
-            <h3 className="text-lg font-bold mb-2 text-theme-text">Conferma eliminazione</h3>
-            <p className="text-theme-text-muted mb-4">
-              Sei sicuro di voler eliminare <strong>{deleteTarget.name}</strong>?
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded border border-theme-border text-theme-text-muted hover:bg-theme-hover">Annulla</button>
-              <button onClick={confirmDelete} className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">Elimina</button>
-            </div>
-          </div>
         </div>
       )}
     </div>

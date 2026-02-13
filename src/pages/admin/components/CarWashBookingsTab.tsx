@@ -454,7 +454,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       if (error) throw error
 
-      // Success — UI updates automatically
       loadData()
     } catch (error: any) {
       console.error('Failed to cancel booking:', error)
@@ -484,8 +483,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         console.log('Google Calendar event deletion requested for booking:', deleteTarget.id)
       } catch (calError) {
         console.warn('Failed to delete from Google Calendar:', calError)
-        // Continue with database deletion even if Google Calendar deletion fails
       }
+
+      // Delete dependent records first (FK constraints)
+      await supabase.from('contracts').delete().eq('booking_id', deleteTarget.id)
+      await supabase.from('fatture').delete().eq('booking_id', deleteTarget.id)
 
       // Delete from database
       const { error } = await supabase
@@ -565,7 +567,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
         openEditCustomer(booking.customer_id)
-          return
+        return
       }
       toast.error('Errore nella generazione della fattura: ' + errorMessage)
     } finally {
@@ -1794,18 +1796,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           >
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
-                          {booking.status !== 'cancelled' ? (
-                            <button
-                              onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                            >
-                              Annulla
-                            </button>
-                          ) : (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted">
-                              Annullata
-                            </span>
-                          )}
                           <button
                             onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
                             className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
-import toast from 'react-hot-toast'
 
 interface ConsistencyIssue {
     issue_type: string
@@ -35,7 +34,7 @@ export default function BookingDiagnosticPanel() {
             setIssues(data || [])
         } catch (error) {
             console.error('Failed to load consistency report:', error)
-            toast.error('Errore nel caricamento del report di consistenza')
+            alert('Errore nel caricamento del report di consistenza')
         } finally {
             setLoading(false)
         }
@@ -63,11 +62,11 @@ export default function BookingDiagnosticPanel() {
 
             if (updateError) throw updateError
 
-            toast.success('Targa aggiornata con successo!')
+            alert('✅ Targa aggiornata con successo!')
             await loadConsistencyReport()
         } catch (error) {
             console.error('Error fixing plate:', error)
-            toast.error('Errore nell\'aggiornamento della targa')
+            alert('Errore nell\'aggiornamento della targa: ' + (error as Error).message)
         } finally {
             setFixing(null)
         }
@@ -76,8 +75,6 @@ export default function BookingDiagnosticPanel() {
     async function fixPlateMismatch(bookingId: string, vehicleId: string) {
         setFixing(bookingId)
         try {
-            // Proceed with plate update
-
             // Get the current vehicle plate
             const { data: vehicle, error: vehicleError } = await supabase
                 .from('vehicles')
@@ -97,11 +94,11 @@ export default function BookingDiagnosticPanel() {
 
             if (updateError) throw updateError
 
-            toast.success('Targa aggiornata con successo!')
+            alert('✅ Targa aggiornata con successo!')
             await loadConsistencyReport()
         } catch (error) {
             console.error('Error fixing plate mismatch:', error)
-            toast.error('Errore nell\'aggiornamento')
+            alert('Errore nell\'aggiornamento: ' + (error as Error).message)
         } finally {
             setFixing(null)
         }
