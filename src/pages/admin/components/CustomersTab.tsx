@@ -1040,7 +1040,7 @@ export default function CustomersTab() {
       // Clear selection
       setSelectedCustomerIds(new Set())
 
-      let message = `Status aggiornato per ${result.message || count + ' clienti'}`
+      let message = `Status aggiornato per ${result.message || selectedCustomerIds.size + ' clienti'}`
       if (result.skippedTemp > 0) {
         message += ` (${result.skippedTemp} clienti temporanei ignorati)`
       }
