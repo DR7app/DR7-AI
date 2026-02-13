@@ -445,22 +445,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
-  async function handleCancelBooking(bookingId: string, customerName: string) {
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('id', bookingId)
-
-      if (error) throw error
-
-      loadData()
-    } catch (error: any) {
-      console.error('Failed to cancel booking:', error)
-      toast.error(`Errore nell'annullamento: ${error.message}`)
-    }
-  }
-
   function handleDeleteBooking(bookingId: string, customerName: string) {
     setDeleteTarget({ id: bookingId, name: customerName })
   }
