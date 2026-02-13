@@ -1249,7 +1249,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return missing
   }
 
-  async function handleGenerateContract(booking: Booking, showSuccessAlert = true) {
+  async function handleGenerateContract(booking: Booking) {
     console.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
@@ -1311,25 +1311,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         throw new Error(data.error || 'Failed to generate contract')
       }
 
-      if (data.url) {
-        // Try to open the PDF in a new tab
-        const pdfWindow = window.open(data.url, '_blank')
-
-        // Reload data to show the contract link and Yousign button in the UI
-        await loadData()
-
-        if (showSuccessAlert) {
-          // Check if popup was blocked
-          if (!pdfWindow || pdfWindow.closed || typeof pdfWindow.closed === 'undefined') {
-            // Popup was blocked - show alert with manual link
-            window.location.href = data.url
-          }
-        }
-      } else {
-        if (showSuccessAlert) {
-          alert('Contratto generato, ma URL non disponibile.')
-        }
-      }
+      // Reload data to show the contract link and Yousign button in the UI
+      await loadData()
     } catch (error: any) {
       console.error('Error generating contract:', error)
       alert('Errore nella generazione del contratto: ' + error.message + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
