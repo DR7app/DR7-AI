@@ -406,11 +406,6 @@ export default function VehiclesTab() {
       return
     }
 
-    const vehicleName = selectedVehicle === 'all' ? 'tutti i veicoli' : vehicles.find(v => v.id === selectedVehicle)?.display_name
-    if (!confirm(`Sei sicuro di voler ${increase ? 'aumentare' : 'diminuire'} i prezzi del ${percentage}% per ${vehicleName}?`)) {
-      return
-    }
-
     setIsAdjusting(true)
     try {
       // Determine which vehicles to update

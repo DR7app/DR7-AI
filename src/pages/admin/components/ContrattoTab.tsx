@@ -166,8 +166,6 @@ export default function ContrattoTab() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo contratto?')) return
-
     try {
       const { error } = await supabase
         .from('contracts')
@@ -188,8 +186,6 @@ export default function ContrattoTab() {
       alert('Impossibile inviare: ID prenotazione mancante.')
       return
     }
-
-    if (!confirm('Vuoi inviare il contratto a Yousign per la firma digitale?')) return
 
     try {
       const res = await fetch('/.netlify/functions/yousign-init', {

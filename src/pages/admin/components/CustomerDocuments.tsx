@@ -251,10 +251,6 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
   }
 
   async function handleDelete(documentId: string, filePath: string, bucketId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo documento?')) {
-      return
-    }
-
     try {
       // Delete from storage
       const { error: storageError } = await supabase.storage

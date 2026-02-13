@@ -1325,9 +1325,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Check if popup was blocked
           if (!pdfWindow || pdfWindow.closed || typeof pdfWindow.closed === 'undefined') {
             // Popup was blocked - show alert with manual link
-            if (confirm('Contratto generato con successo!\n\nIl browser ha bloccato l\'apertura automatica del PDF.\n\nClicca OK per aprire il contratto in una nuova scheda.')) {
-              window.location.href = data.url
-            }
+            window.location.href = data.url
           } else {
             // Popup opened successfully
             alert('Contratto generato con successo!\n\nIl PDF si è aperto in una nuova scheda per la revisione.\n\nDopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
@@ -1444,7 +1442,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        if (booking.user_id && confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
+        if (booking.user_id) {
           openEditCustomer(booking.user_id)
           return
         }
@@ -2093,10 +2091,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Refresh data to get the updated booking
       await loadData()
 
-      // Ask if they want to generate an extension contract
-      const wantsExtensionContract = confirm('Estensione salvata. Generare nuovo contratto?')
-
-      if (wantsExtensionContract) {
+      // Automatically generate extension contract
+      {
         console.log('[handleConfirmExtend] Generating extension addendum contract...')
         try {
           const response = await fetch('/.netlify/functions/generate-extension-contract', {
@@ -2535,30 +2531,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           if (!availabilityResult.available) {
             console.warn('⚠️ Vehicle availability warning:', availabilityResult.reason)
-
-            let warningMessage = 'ATTENZIONE: CONFLITTO PRENOTAZIONE\n\n'
-            warningMessage += `${selectedVehicle.display_name} risulta già prenotato.\n\n`
-            warningMessage += `Motivo: ${availabilityResult.reason}\n\n`
-
-            if (availabilityResult.earliestTime) {
-              const earliestTimeStr = availabilityResult.earliestTime.toLocaleTimeString('it-IT', {
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'Europe/Rome'
-              })
-              warningMessage += `Primo orario disponibile: ${earliestTimeStr}\n\n`
-            }
-
-            warningMessage += '---\n\n'
-            warningMessage += 'Clicca OK per PROCEDERE COMUNQUE\n'
-            warningMessage += 'Clicca ANNULLA per modificare'
-
-            const confirmed = confirm(warningMessage)
-            if (!confirmed) {
-              setIsSubmitting(false)
-              return
-            }
-            console.log('⚠️ Admin chose to proceed despite availability conflict')
           }
 
           console.log('✅ Vehicle availability check passed')
@@ -2589,36 +2561,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         if (!schedulingValidation.isValid) {
           console.warn('⚠️ Scheduling validation warning:', schedulingValidation.errors)
-
-          // Build warning message
-          let warningMessage = 'ATTENZIONE: CONFLITTO DI PROGRAMMAZIONE\n\n'
-          warningMessage += 'La prenotazione presenta conflitti di programmazione:\n\n'
-
-          schedulingValidation.errors.forEach((error, index) => {
-            warningMessage += `${index + 1}. ${error.message}\n\n`
-          })
-
-          // Add suggested slots if available
-          if (schedulingValidation.suggestedSlots && schedulingValidation.suggestedSlots.length > 0) {
-            warningMessage += '---\n\n'
-            warningMessage += 'ORARI SUGGERITI:\n'
-            schedulingValidation.suggestedSlots.slice(0, 3).forEach((slot, index) => {
-              const slotDate = new Date(slot)
-              warningMessage += `${index + 1}. ${slotDate.toLocaleDateString('it-IT')} alle ${slotDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`
-            })
-            warningMessage += '\n'
-          }
-
-          warningMessage += '---\n\n'
-          warningMessage += 'Clicca OK per PROCEDERE COMUNQUE\n'
-          warningMessage += 'Clicca ANNULLA per modificare'
-
-          const confirmed = confirm(warningMessage)
-          if (!confirmed) {
-            setIsSubmitting(false)
-            return
-          }
-          console.log('⚠️ Admin chose to proceed despite scheduling conflict')
         }
 
         console.log('✅ Scheduling validation passed')
@@ -2663,24 +2605,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             // Check if pickup time conflicts with car wash
             if (pickupDateTime >= carWashStart && pickupDateTime < carWashEnd) {
-              const availableTime = carWashEnd.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
-              const availableDate = carWashEnd.toLocaleDateString('it-IT')
-
-              const confirmed = confirm(
-                `ATTENZIONE: VEICOLO IN LAVAGGIO\n\n` +
-                `Il veicolo ${vehicle?.display_name} è attualmente in lavaggio.\n\n` +
-                `Sarà disponibile alle ${availableTime} del ${availableDate}\n\n` +
-                `Tempo rimanente: circa ${Math.ceil((carWashEnd.getTime() - new Date().getTime()) / (1000 * 60))} minuti\n\n` +
-                `---\n\n` +
-                `Clicca OK per PROCEDERE COMUNQUE\n` +
-                `Clicca ANNULLA per modificare`
-              )
-
-              if (!confirmed) {
-                setIsSubmitting(false)
-                return
-              }
-              console.log('⚠️ Admin chose to proceed despite car wash conflict')
+              console.log('⚠️ Car wash conflict detected, proceeding anyway')
             }
           }
         }
@@ -2713,59 +2638,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           for (const conflictingBooking of sortedBookings) {
             const bookingId = conflictingBooking.id.substring(0, 8).toUpperCase()
-            const conflictPickup = new Date(conflictingBooking.pickup_date)
             const conflictReturn = new Date(conflictingBooking.dropoff_date)
 
-            // Check if this is a complete overlap (double booking)
-            // True overlap: new booking starts BEFORE existing ends AND new booking ends AFTER existing starts
-            const isOverlap = pickupDateTime < conflictReturn && returnDateTime > conflictPickup
-
-            // Check if this violates the 1h30 buffer (car returns less than 90 min before new pickup)
+            const isOverlap = pickupDateTime < conflictReturn && returnDateTime > new Date(conflictingBooking.pickup_date)
             const timeDiff = pickupDateTime.getTime() - conflictReturn.getTime()
-            const minutesDiff = timeDiff / (1000 * 60)
-            const isBufferViolation = timeDiff > 0 && minutesDiff < BUFFER_MINUTES
+            const isBufferViolation = timeDiff > 0 && (timeDiff / (1000 * 60)) < BUFFER_MINUTES
 
             if (isOverlap) {
-              // Complete overlap - show double booking warning
-              const vehicleTarga = vehicle?.plate || conflictingBooking.vehicle_plate || 'N/A'
-              const confirmed = confirm(
-                `ATTENZIONE: VEICOLO GIÀ PRENOTATO!\n\n` +
-                `Veicolo: ${conflictingBooking.vehicle_name}\n` +
-                `Targa: ${vehicleTarga}\n\n` +
-                `PRENOTAZIONE ESISTENTE:\n` +
-                `Cliente: ${conflictingBooking.customer_name}\n` +
-                `Periodo: ${conflictPickup.toLocaleDateString('it-IT')} ${conflictPickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} - ${conflictReturn.toLocaleDateString('it-IT')} ${conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}\n` +
-                `ID: DR7-${bookingId}\n\n` +
-                `SEI SICURO DI VOLER CREARE UNA DOPPIA PRENOTAZIONE?\n\n` +
-                `Clicca OK per PROCEDERE COMUNQUE\n` +
-                `Clicca ANNULLA per scegliere altre date/veicolo`
-              )
-
-              if (!confirmed) {
-                setIsSubmitting(false)
-                return // User cancelled
-              }
+              console.log(`⚠️ Double booking conflict with DR7-${bookingId}, proceeding anyway`)
             } else if (isBufferViolation) {
-              // Buffer violation - show specific 1h30 warning
-              const returnTimeStr = conflictReturn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
-              const returnDateStr = conflictReturn.toLocaleDateString('it-IT')
-              const bufferMinutesLeft = Math.round(BUFFER_MINUTES - minutesDiff)
-
-              const confirmed = confirm(
-                `ATTENZIONE: BUFFER 1H30 NON RISPETTATO!\n\n` +
-                `Il veicolo tornerà alle ${returnTimeStr} del ${returnDateStr}.\n` +
-                `Tempo mancante al buffer di 1h30: ${bufferMinutesLeft} minuti\n\n` +
-                `Cliente precedente: ${conflictingBooking.customer_name}\n` +
-                `ID: DR7-${bookingId}\n\n` +
-                `Si consiglia di attendere fino alle ${new Date(conflictReturn.getTime() + BUFFER_MINUTES * 60 * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })} per il prossimo ritiro.\n\n` +
-                `Clicca OK per PROCEDERE COMUNQUE\n` +
-                `Clicca ANNULLA per scegliere un orario diverso`
-              )
-
-              if (!confirmed) {
-                setIsSubmitting(false)
-                return // User cancelled
-              }
+              console.log(`⚠️ Buffer violation with DR7-${bookingId}, proceeding anyway`)
             }
           }
         }
@@ -2937,41 +2819,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const plateChanged = existingBooking.vehicle_plate !== vehicle.plate
 
           if (vehicleChanged) {
-            const confirmed = confirm(
-              `ATTENZIONE: CAMBIO VEICOLO\n\n` +
-              `Stai cambiando il veicolo di questa prenotazione:\n\n` +
-              `VECCHIO: ${existingBooking.vehicle_name} (${existingBooking.vehicle_plate || 'N/A'})\n` +
-              `NUOVO: ${vehicle.display_name} (${vehicle.plate || 'N/A'})\n\n` +
-              `Questo aggiornerà:\n` +
-              `- vehicle_id: ${existingBooking.vehicle_id} -> ${vehicle.id}\n` +
-              `- vehicle_plate: ${existingBooking.vehicle_plate || 'N/A'} -> ${vehicle.plate || 'N/A'}\n` +
-              `- vehicle_name: ${existingBooking.vehicle_name} -> ${vehicle.display_name}\n\n` +
-              `Il calendario verrà aggiornato automaticamente.\n\n` +
-              `Confermi il cambio di veicolo?`
-            )
-            if (!confirmed) {
-              setIsSubmitting(false)
-              return
-            }
-            console.log('Vehicle change confirmed by user')
+            console.log(`Vehicle change: ${existingBooking.vehicle_name} -> ${vehicle.display_name}`)
           } else if (plateChanged && existingBooking.vehicle_plate) {
-            // Same vehicle but plate has changed - this might indicate the vehicle's plate was updated
-            const confirmed = confirm(
-              `ATTENZIONE: TARGA MODIFICATA\n\n` +
-              `La targa del veicolo "${vehicle.display_name}" è cambiata:\n\n` +
-              `VECCHIA: ${existingBooking.vehicle_plate}\n` +
-              `NUOVA: ${vehicle.plate || 'N/A'}\n\n` +
-              `Questo potrebbe significare che:\n` +
-              `1. La targa del veicolo è stata aggiornata nel sistema\n` +
-              `2. Stai selezionando un veicolo diverso con lo stesso nome\n\n` +
-              `La prenotazione verrà aggiornata con la nuova targa.\n\n` +
-              `Confermi l'aggiornamento?`
-            )
-            if (!confirmed) {
-              setIsSubmitting(false)
-              return
-            }
-            console.log('✅ Plate change confirmed by user')
+            console.log(`✅ Plate change: ${existingBooking.vehicle_plate} -> ${vehicle.plate || 'N/A'}`)
           }
         }
       }

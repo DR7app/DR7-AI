@@ -140,10 +140,6 @@ export default function UnpaidBookingsTab() {
   async function markSelectedAsPaid() {
     if (selectedBookings.size === 0) return
 
-    if (!confirm(`Segnare ${selectedBookings.size} prenotazioni come pagate?`)) {
-      return
-    }
-
     try {
       const { error } = await supabase
         .from('bookings')
@@ -167,10 +163,6 @@ export default function UnpaidBookingsTab() {
 
   async function deleteSelectedBookings() {
     if (selectedBookings.size === 0) return
-
-    if (!confirm(`Sei sicuro di voler eliminare ${selectedBookings.size} prenotazioni?`)) {
-      return
-    }
 
     try {
       // First, get all selected bookings to check for Google Calendar event IDs
@@ -228,10 +220,6 @@ export default function UnpaidBookingsTab() {
   }
 
   async function deleteSingleBooking(bookingId: string) {
-    if (!confirm('Sei sicuro di voler eliminare questa prenotazione?')) {
-      return
-    }
-
     try {
       // First, get the booking to check if it has a Google Calendar event ID
       const { data: booking } = await supabase

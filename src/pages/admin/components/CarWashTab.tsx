@@ -153,10 +153,6 @@ export default function CarWashTab() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Sei sicuro di voler eliminare questo servizio?')) {
-      return
-    }
-
     try {
       const { error } = await supabase
         .from('car_wash_services')
