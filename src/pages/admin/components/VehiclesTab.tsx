@@ -197,8 +197,48 @@ export default function VehiclesTab() {
     }
     console.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
 
+    // Get booking IDs first so we can delete dependent records
+    console.log('  Fetching booking IDs...')
+    const { data: bookingsToDelete, error: fetchError } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('vehicle_name', vehicleName)
+
+    if (fetchError) {
+      console.error('  Error fetching bookings:', fetchError)
+      throw new Error(`Failed to fetch bookings: ${fetchError.message}`)
+    }
+
+    const bookingIds = (bookingsToDelete || []).map(b => b.id)
+    console.log(`  Found ${bookingIds.length} bookings to delete`)
+
+    if (bookingIds.length > 0) {
+      // Delete contracts referencing these bookings (FK: contracts_booking_id_fkey)
+      console.log('  Deleting contracts...')
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .delete()
+        .in('booking_id', bookingIds)
+
+      if (contractError) {
+        console.error('  Error deleting contracts:', contractError)
+        throw new Error(`Failed to delete contracts: ${contractError.message}`)
+      }
+
+      // Delete fatture (invoices) referencing these bookings
+      console.log('  Deleting fatture...')
+      const { error: fattureError } = await supabase
+        .from('fatture')
+        .delete()
+        .in('booking_id', bookingIds)
+
+      if (fattureError) {
+        console.error('  Error deleting fatture:', fattureError)
+        throw new Error(`Failed to delete fatture: ${fattureError.message}`)
+      }
+    }
+
     // Delete from bookings
-    // We use vehicle_name because that is what we used to check for dependencies
     console.log('  Deleting bookings...')
     const { data: deletedBookings, error: bookError } = await supabase
       .from('bookings')
