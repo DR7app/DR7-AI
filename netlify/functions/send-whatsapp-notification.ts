@@ -281,6 +281,20 @@ const handler: Handler = async (event) => {
         message += `*Cauzione:* €0\n`;
       }
 
+      // KM limit info
+      const unlimitedKm = booking.booking_details?.unlimited_km;
+      const kmLimit = booking.booking_details?.km_limit;
+      if (unlimitedKm || kmLimit === 'Illimitati') {
+        message += `*KM:* Illimitati\n`;
+      } else if (kmLimit && kmLimit !== '0') {
+        message += `*KM:* ${kmLimit} km\n`;
+        // Sforo per KM (only relevant when km are limited)
+        const kmOverageFee = booking.km_overage_fee;
+        if (kmOverageFee && kmOverageFee > 0) {
+          message += `*Sforo per KM:* €${Number(kmOverageFee).toFixed(2)}/km\n`;
+        }
+      }
+
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
       message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
     }

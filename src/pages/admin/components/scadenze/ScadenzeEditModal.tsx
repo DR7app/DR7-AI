@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { CATEGORIES } from './scadenzeConfig'
-import type { NewScadenzaForm } from './scadenzeConfig'
+import type { Scadenza, NewScadenzaForm } from './scadenzeConfig'
 
-interface ScadenzeAddModalProps {
-  initialCategory?: string
-  onAdd: (form: NewScadenzaForm) => Promise<boolean>
+interface ScadenzeEditModalProps {
+  scadenza: Scadenza
+  onSave: (id: string, updates: Partial<NewScadenzaForm>) => Promise<boolean>
   onClose: () => void
 }
 
@@ -16,92 +16,41 @@ const RECURRING_OPTIONS = [
   { value: 'yearly', label: 'Ogni anno' },
 ]
 
-export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: ScadenzeAddModalProps) {
-  const [form, setForm] = useState<NewScadenzaForm>({
-    category: initialCategory || 'affitti',
-    item_type: '',
-    description: '',
-    due_date: '',
-    amount: '',
-    reference_name: '',
-    recurring_interval: ''
+export default function ScadenzeEditModal({ scadenza, onSave, onClose }: ScadenzeEditModalProps) {
+  const [form, setForm] = useState({
+    item_type: scadenza.item_type || '',
+    description: scadenza.description || '',
+    due_date: scadenza.due_date || '',
+    amount: scadenza.amount ? (scadenza.amount / 100).toString() : '',
+    reference_name: scadenza.reference_name || '',
+    recurring_interval: scadenza.recurring_interval || ''
   })
-  const [isCustomItem, setIsCustomItem] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit() {
     setSubmitting(true)
-    const success = await onAdd(form)
+    const success = await onSave(scadenza.id, form)
     setSubmitting(false)
     if (success) onClose()
   }
 
+  const category = CATEGORIES[scadenza.category]
+
   return (
     <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50">
       <div className="bg-theme-bg-secondary rounded-lg p-6 w-full max-w-md border border-theme-border">
-        <h3 className="text-xl font-bold text-theme-text-primary mb-4">Aggiungi Nuova Scadenza</h3>
+        <h3 className="text-xl font-bold text-theme-text-primary mb-1">Modifica Scadenza</h3>
+        <p className="text-sm text-theme-text-muted mb-4">{category?.label || scadenza.category}</p>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Categoria</label>
-            <select
-              value={form.category}
-              onChange={(e) => {
-                setForm({ ...form, category: e.target.value, item_type: '' })
-                setIsCustomItem(false)
-              }}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Voce</label>
+            <input
+              type="text"
+              value={form.item_type}
+              onChange={(e) => setForm({ ...form, item_type: e.target.value })}
               className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
-            >
-              {Object.entries(CATEGORIES).map(([key, cat]) => (
-                <option key={key} value={key}>{cat.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Voce *</label>
-            {!isCustomItem ? (
-              <select
-                value={form.item_type}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') {
-                    setIsCustomItem(true)
-                    setForm({ ...form, item_type: '' })
-                  } else {
-                    setForm({ ...form, item_type: e.target.value })
-                  }
-                }}
-                className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
-              >
-                <option value="">Seleziona voce...</option>
-                {CATEGORIES[form.category]?.items.map(item => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-                <option value="__custom__">+ Aggiungi voce personalizzata</option>
-              </select>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={form.item_type}
-                  onChange={(e) => setForm({ ...form, item_type: e.target.value })}
-                  placeholder="Nome voce personalizzata"
-                  className="flex-1 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomItem(false)
-                    setForm({ ...form, item_type: '' })
-                  }}
-                  className="px-3 py-2 text-theme-text-muted hover:text-theme-text-primary bg-theme-bg-tertiary rounded border border-theme-border"
-                  title="Torna alla lista"
-                >
-                  X
-                </button>
-              </div>
-            )}
+            />
           </div>
 
           <div>
@@ -116,7 +65,7 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Data Scadenza *</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Data Scadenza</label>
             <input
               type="date"
               value={form.due_date}
@@ -139,7 +88,7 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo (opzionale)</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo</label>
             <input
               type="number"
               step="0.01"
@@ -151,7 +100,7 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Descrizione (opzionale)</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Descrizione</label>
             <input
               type="text"
               value={form.description}
@@ -174,7 +123,7 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
             disabled={!form.item_type || !form.due_date || submitting}
             className="px-4 py-2 bg-dr7-gold text-black rounded-lg font-medium hover:bg-dr7-gold/90 disabled:opacity-50"
           >
-            {submitting ? 'Aggiunta...' : 'Aggiungi'}
+            {submitting ? 'Salvataggio...' : 'Salva'}
           </button>
         </div>
       </div>

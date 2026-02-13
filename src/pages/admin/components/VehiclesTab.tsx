@@ -157,17 +157,12 @@ export default function VehiclesTab() {
           if (!response.ok) {
             const errorText = await response.text();
             console.error('Failed to create calendar event:', errorText);
-            alert('⚠️ Veicolo salvato ma calendario non sincronizzato. Verifica le credenziali Google Calendar.');
           } else {
             console.log('Calendar event created successfully');
-            alert('✅ Veicolo salvato e calendario aggiornato!');
           }
         } catch (calendarError) {
           console.error('Error syncing with calendar:', calendarError);
-          alert('⚠️ Veicolo salvato ma errore nella sincronizzazione del calendario.');
         }
-      } else {
-        alert('✅ Veicolo salvato!');
       }
 
       setShowForm(false)
@@ -321,7 +316,6 @@ export default function VehiclesTab() {
       await deleteVehicleLogic(id, vehicle.display_name)
 
       console.log('Vehicle deletion completed successfully')
-      alert('Veicolo eliminato con successo!')
 
       // Reload vehicles list
       await loadVehicles()
@@ -355,7 +349,6 @@ export default function VehiclesTab() {
         }
       }
 
-      alert('✅ Veicoli selezionati eliminati!')
       setSelectedVehicles(new Set())
       setMultiSelectMode(false)
       loadVehicles()
@@ -423,12 +416,9 @@ export default function VehiclesTab() {
         const errorText = await response.text()
         console.error('Failed to create calendar event:', errorText)
         alert('❌ Errore nella sincronizzazione con Google Calendar.\n\nVerifica le credenziali.')
-      } else {
-        alert('✅ Sincronizzato con Google Calendar!')
       }
     } catch (error) {
       console.error('Error syncing with calendar:', error)
-      alert('❌ Errore nella sincronizzazione del calendario.')
     }
   }
 
@@ -506,7 +496,7 @@ export default function VehiclesTab() {
       // Reload vehicles
       await loadVehicles()
 
-      alert(`Prezzi ${increase ? 'aumentati' : 'diminuiti'} con successo!`)
+      // Success — prices updated, UI refreshes
     } catch (error) {
       console.error('Failed to adjust prices:', error)
       alert('Errore nell\'aggiornamento dei prezzi')

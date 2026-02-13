@@ -27,6 +27,7 @@ export interface NewScadenzaForm {
   due_date: string
   amount: string
   reference_name: string
+  recurring_interval: string
 }
 
 export interface CategoryConfig {

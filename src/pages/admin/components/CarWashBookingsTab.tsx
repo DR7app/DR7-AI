@@ -368,26 +368,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
-  async function handleCancelBooking(bookingId: string, customerName: string) {
-    if (!confirm(`Sei sicuro di voler annullare la prenotazione di ${customerName}?`)) {
-      return
-    }
 
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('id', bookingId)
-
-      if (error) throw error
-
-      alert('✅ Prenotazione annullata con successo!')
-      loadData()
-    } catch (error: any) {
-      console.error('Failed to cancel booking:', error)
-      alert(`❌ Errore nell'annullamento: ${error.message}`)
-    }
-  }
 
   async function handleDeleteBooking(bookingId: string, customerName: string) {
     if (!confirm(`⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE DEFINITIVAMENTE la prenotazione di ${customerName}?\n\nQuesta azione è irreversibile e rimuoverà la prenotazione dal database.`)) {
@@ -419,7 +400,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .eq('id', bookingId)
 
       if (error) throw error
-      alert('✅ Prenotazione eliminata definitivamente!')
+      // Success — UI updates automatically
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
@@ -679,7 +660,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       console.error('⚠️ Failed to create Google Calendar event:', calendarError)
     }
 
-    alert('✅ Prenotazione creata con successo!')
+    // Success — UI updates automatically
     setShowForm(false)
     resetWizard()
     loadData()
@@ -833,23 +814,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }
       }
 
-      // If there's a conflict, show informational warning (but always proceed)
+      // Log overlap info but don't block the admin
       if (hasConflict && conflictingBooking) {
-        const bookingId = conflictingBooking.id.substring(0, 8).toUpperCase()
-        const confirmed = confirm(
-          `ℹ️ INFO: Esiste già una prenotazione a quest'orario\n\n` +
-          `Cliente esistente: ${conflictingBooking.customer_name}\n` +
-          `Servizio: ${conflictingBooking.service_name}\n` +
-          `Orario occupato: ${conflictDetails}\n` +
-          `ID Prenotazione: DR7-${bookingId}\n\n` +
-          `Stai per creare una doppia prenotazione.\n\n` +
-          `• Clicca OK per procedere\n` +
-          `• Clicca ANNULLA per scegliere un altro orario`
-        )
-
-        if (!confirmed) {
-          return // User cancelled
-        }
+        console.log('ℹ️ Overlap with existing booking:', conflictingBooking.customer_name, conflictDetails)
       }
 
       // Admin panel: ALWAYS create as forced booking (bypass all backend checks)
@@ -1475,18 +1442,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           >
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
-                          {booking.status !== 'cancelled' ? (
-                            <button
-                              onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                            >
-                              Annulla
-                            </button>
-                          ) : (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted">
-                              Annullata
-                            </span>
-                          )}
                           <button
                             onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
                             className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
@@ -1645,7 +1600,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                       if (error) throw error
 
-                      alert('✅ Prenotazione aggiornata!')
+                      // Success — UI updates automatically
                       setEditingBooking(null)
                       loadData()
                     } catch (error) {

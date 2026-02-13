@@ -67,7 +67,6 @@ export default function CargosTab() {
     const handleSaveConfig = () => {
         localStorage.setItem('cargos_api_config', JSON.stringify(apiConfig))
         setShowSettings(false)
-        alert('Configurazione salvata correttamente!')
     }
 
     async function handleAutoSend() {
@@ -613,7 +612,6 @@ export default function CargosTab() {
                                         onClick={() => {
                                             const text = `DICHIARAZIONE DATI CONDUCENTE:\n\nIl veicolo targa ${plate} era noleggiato a:\nNome: ${searchResult.customer_name}\nPatente: ${searchResult.driver_license || 'N/D'}\nData Noleggio: ${new Date(searchResult.pickup_date).toLocaleDateString()} - ${new Date(searchResult.dropoff_date).toLocaleDateString()}`
                                             navigator.clipboard.writeText(text)
-                                            alert('Dati copiati negli appunti!')
                                         }}
                                     >
                                         Copia Dati per Comunicazione

@@ -302,6 +302,16 @@ export const handler: Handler = async (event) => {
         const dropoffDate = new Date(booking.dropoff_date)
         const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
 
+        // KM limit: use unlimited_km flag (strict boolean check) or legacy km_limit === 'Illimitati'
+        const isUnlimitedKm = booking.booking_details?.unlimited_km === true || booking.booking_details?.km_limit === 'Illimitati'
+        const rawKmLimit = booking.booking_details?.km_limit
+        const kmLimitValue = isUnlimitedKm
+            ? 'Illimitati'
+            : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
+                ? rawKmLimit
+                : (booking.booking_details?.total_km || 'Illimitati'))
+        console.log(`[generate-contract] KM DEBUG: unlimited_km=${booking.booking_details?.unlimited_km} (type: ${typeof booking.booking_details?.unlimited_km}), km_limit=${rawKmLimit}, resolved=${kmLimitValue}`)
+
         // Helper to format date/time in Rome timezone correctly
         const formatDateRome = (date: Date) => {
             return date.toLocaleDateString('it-IT', {
@@ -736,8 +746,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'Assicurazione': insuranceLabel,
             'Deposit': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
             'Cauzione': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
-            'TotalKM': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
-            'KMTotaliNoleggio': booking.booking_details?.total_km || booking.booking_details?.km_limit || 'Illimitati',
+            'TotalKM': kmLimitValue,
+            'KMTotaliNoleggio': kmLimitValue,
 
             // Second Driver Fields (Only if second driver exists)
             'SecondDriverName': (booking.booking_details?.second_driver?.name && booking.booking_details?.second_driver?.surname)
