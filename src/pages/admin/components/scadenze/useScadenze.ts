@@ -46,10 +46,11 @@ export function useScadenze() {
 
       const { data: bookings } = await supabase
         .from('bookings')
-        .select('id, customer_name, vehicle_name, dropoff_date, price_total, booking_details')
+        .select('id, customer_name, vehicle_name, dropoff_date, price_total, booking_details, service_type')
         .gte('dropoff_date', today.toISOString())
         .lte('dropoff_date', tomorrow.toISOString())
         .in('status', ['confirmed', 'active'])
+        .or('service_type.is.null,service_type.eq.car_rental')
         .order('dropoff_date', { ascending: true })
 
       const { data: cauzioni } = await supabase
