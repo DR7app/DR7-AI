@@ -65,8 +65,13 @@ export function useScadenze() {
 
       const autoScadenze: Scadenza[] = []
 
+      // Filter out "Lavaggio Rientro" bookings (car wash tied to rental returns)
+      const rentalBookings = (bookings || []).filter(b =>
+        !b.customer_name?.toLowerCase().includes('lavaggio')
+      )
+
       // Rental endings
-      bookings?.forEach(booking => {
+      rentalBookings.forEach(booking => {
         autoScadenze.push({
           id: `rental-${booking.id}`,
           category: 'noleggi',
