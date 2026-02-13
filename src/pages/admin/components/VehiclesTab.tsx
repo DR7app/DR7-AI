@@ -372,7 +372,7 @@ export default function VehiclesTab() {
 
       setSelectedVehicles(new Set())
       setMultiSelectMode(false)
-      loadVehicles()
+      await loadVehicles()
     } catch (error) {
       console.error('Error during bulk delete:', error)
       toast.error('Errore durante l\'eliminazione multipla')
@@ -440,6 +440,7 @@ export default function VehiclesTab() {
       }
     } catch (error) {
       console.error('Error syncing with calendar:', error)
+      toast.error('Errore sincronizzazione calendario')
     }
   }
 
@@ -513,7 +514,7 @@ export default function VehiclesTab() {
       // Reload vehicles
       await loadVehicles()
 
-      // Success — prices updated, UI refreshes
+      toast.success('Prezzo aggiornato')
     } catch (error) {
       console.error('Failed to adjust prices:', error)
       toast.error('Errore nell\'aggiornamento dei prezzi')

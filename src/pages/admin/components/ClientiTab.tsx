@@ -57,6 +57,7 @@ export default function ClientiTab() {
       setCustomers(data || [])
     } catch (error) {
       console.error('Failed to load customers:', error)
+      toast.error('Errore caricamento clienti')
     } finally {
       setLoading(false)
     }

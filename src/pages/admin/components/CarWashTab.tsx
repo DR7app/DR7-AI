@@ -30,6 +30,7 @@ export default function CarWashTab() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterTab, setFilterTab] = useState<'all' | 'lavaggio' | 'meccanica'>('all')
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [formData, setFormData] = useState({
     id: '',
     name: '',
@@ -153,19 +154,27 @@ export default function CarWashTab() {
     }
   }
 
-  async function handleDelete(id: string) {
+  function handleDelete(id: string, name: string) {
+    setDeleteTarget({ id, name })
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+
     try {
       const { error } = await supabase
         .from('car_wash_services')
         .delete()
-        .eq('id', id)
+        .eq('id', deleteTarget.id)
 
       if (error) throw error
       toast.success('Servizio eliminato con successo!')
+      setDeleteTarget(null)
       loadServices()
     } catch (error) {
       console.error('Failed to delete service:', error)
       toast.error('Errore nell\'eliminazione del servizio')
+      setDeleteTarget(null)
     }
   }
 
@@ -516,7 +525,7 @@ export default function CarWashTab() {
                 {service.is_active ? 'Disattiva' : 'Attiva'}
               </button>
               <button
-                onClick={() => handleDelete(service.id)}
+                onClick={() => handleDelete(service.id, service.name)}
                 className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary text-sm rounded-full transition-colors"
               >
                 ×
@@ -548,6 +557,22 @@ export default function CarWashTab() {
           <li>• Le caratteristiche vanno inserite una per riga</li>
         </ul>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-theme-card p-6 rounded-lg shadow-xl max-w-md">
+            <h3 className="text-lg font-bold mb-2 text-theme-text">Conferma eliminazione</h3>
+            <p className="text-theme-text-muted mb-4">
+              Sei sicuro di voler eliminare <strong>{deleteTarget.name}</strong>?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded border border-theme-border text-theme-text-muted hover:bg-theme-hover">Annulla</button>
+              <button onClick={confirmDelete} className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">Elimina</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

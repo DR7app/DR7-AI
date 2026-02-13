@@ -120,19 +120,28 @@ export default function ReferralProgramTab() {
   }, [activeSection])
 
   async function loadStats() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('referral_program_stats')
       .select('*')
       .single()
+    if (error) {
+      toast.error('Errore caricamento statistiche')
+      return
+    }
     if (data) setStats(data)
   }
 
   async function loadParticipants() {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('referral_participants')
       .select('*, wallets(balance_cents, total_earned_cents, total_topped_up_cents)')
       .order('created_at', { ascending: false })
+    if (error) {
+      toast.error('Errore caricamento partecipanti')
+      setLoading(false)
+      return
+    }
     if (data) setParticipants(data)
     setLoading(false)
   }
@@ -141,40 +150,45 @@ export default function ReferralProgramTab() {
     setSelectedParticipant(participant)
     setDetailLoading(true)
 
-    // Load wallet & transactions
-    const { data: wallet } = await supabase
-      .from('wallets')
-      .select('id')
-      .eq('participant_id', participant.id)
-      .single()
+    try {
+      // Load wallet & transactions
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('id')
+        .eq('participant_id', participant.id)
+        .single()
 
-    if (wallet) {
-      const { data: txns } = await supabase
-        .from('wallet_transactions')
+      if (wallet) {
+        const { data: txns } = await supabase
+          .from('wallet_transactions')
+          .select('*')
+          .eq('wallet_id', wallet.id)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        setDetailTransactions(txns || [])
+      }
+
+      // Load referrals by this participant
+      const { data: refs } = await supabase
+        .from('referral_participants')
         .select('*')
-        .eq('wallet_id', wallet.id)
+        .eq('referred_by', participant.id)
         .order('created_at', { ascending: false })
-        .limit(50)
-      setDetailTransactions(txns || [])
+      setDetailReferrals(refs || [])
+
+      // Load discount codes for this participant
+      const { data: codes } = await supabase
+        .from('referral_discount_codes')
+        .select('*')
+        .eq('participant_id', participant.id)
+        .order('created_at', { ascending: false })
+      setDetailDiscountCodes(codes || [])
+    } catch (error) {
+      console.error('Error loading participant detail:', error)
+      toast.error('Errore caricamento dettagli partecipante')
+    } finally {
+      setDetailLoading(false)
     }
-
-    // Load referrals by this participant
-    const { data: refs } = await supabase
-      .from('referral_participants')
-      .select('*')
-      .eq('referred_by', participant.id)
-      .order('created_at', { ascending: false })
-    setDetailReferrals(refs || [])
-
-    // Load discount codes for this participant
-    const { data: codes } = await supabase
-      .from('referral_discount_codes')
-      .select('*')
-      .eq('participant_id', participant.id)
-      .order('created_at', { ascending: false })
-    setDetailDiscountCodes(codes || [])
-
-    setDetailLoading(false)
   }
 
   async function loadAllDiscountCodes() {
@@ -193,6 +207,7 @@ export default function ReferralProgramTab() {
       if (data.success) setAllDiscountCodes(data.discount_codes)
     } catch (err) {
       console.error('Error loading discount codes:', err)
+      toast.error('Errore caricamento buoni sconto')
     }
     setBuoniLoading(false)
   }
@@ -213,6 +228,7 @@ export default function ReferralProgramTab() {
       if (data.success) setFraudData(data)
     } catch (err) {
       console.error('Error loading fraud data:', err)
+      toast.error('Errore caricamento dati antifrode')
     }
     setFraudLoading(false)
   }
@@ -278,9 +294,11 @@ export default function ReferralProgramTab() {
         if (selectedParticipant?.id === participantId) {
           setSelectedParticipant({ ...selectedParticipant, status: data.new_status })
         }
+      } else {
+        toast.error('Errore aggiornamento stato')
       }
     } catch {
-      toast.error('Errore')
+      toast.error('Errore aggiornamento stato')
     }
   }
 

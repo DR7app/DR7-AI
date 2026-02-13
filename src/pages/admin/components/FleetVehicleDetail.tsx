@@ -62,11 +62,13 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
             if (error) throw error
 
+            toast.success('Modifiche salvate')
             // Close the detail view after save
             onBack()
         } catch (error) {
             console.error('Error saving vehicle:', error)
             toast.error('Errore nel salvataggio')
+        } finally {
             setSaving(false)
         }
     }

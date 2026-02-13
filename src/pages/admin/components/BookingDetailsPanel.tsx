@@ -168,7 +168,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                             toast.error('Errore: ' + (data.error || 'Errore sconosciuto'));
                           }
                         } catch (e) {
-                          toast.error('Errore di connessione');
+                          toast.error('Errore invio link di pagamento');
                         } finally {
                           setGeneratingLink(false)
                         }

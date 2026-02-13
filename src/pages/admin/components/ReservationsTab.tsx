@@ -957,6 +957,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         setFormData(prev => ({ ...prev, discount_amount: '0' }))
         return
       }
+      // Validate scope: buono with scope ['noleggio','supercar'] only valid for exotic vehicles
+      if (buono.scope && Array.isArray(buono.scope) && buono.scope.includes('supercar')) {
+        const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+        if (!selectedVehicle || selectedVehicle.category !== 'exotic') {
+          setBuonoError('Buono valido solo per noleggio supercar')
+          setValidatedBuono(null)
+          setFormData(prev => ({ ...prev, discount_amount: '0' }))
+          return
+        }
+      }
       // Valid buono
       setValidatedBuono({
         id: buono.id,
@@ -1694,7 +1704,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
 
-        // First, delete any related contracts to avoid foreign key constraint
+        // First, delete any related children to avoid foreign key constraint
         const { error: contractDeleteError } = await supabase
           .from('contracts')
           .delete()
@@ -1702,6 +1712,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         if (contractDeleteError) {
           console.warn('Failed to delete related contracts:', contractDeleteError)
+          // Don't fail the whole operation, just log it
+        }
+
+        const { error: cauzioneDeleteError } = await supabase
+          .from('cauzioni')
+          .delete()
+          .eq('booking_id', bookingId)
+
+        if (cauzioneDeleteError) {
+          console.warn('Failed to delete related cauzioni:', cauzioneDeleteError)
           // Don't fail the whole operation, just log it
         }
 
@@ -3441,6 +3461,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setShowForm(false)
       setEditingId(null)
       setNewCustomerMode(false)
+      setWalletParticipant(null)
+      setValidatedBuono(null)
+      setBuonoError('')
       resetForm()
       await loadData()
 
@@ -3470,12 +3493,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return_time: '',
       pickup_location: 'dr7_office',
       dropoff_location: 'dr7_office',
-      status: 'pending',
+      status: 'confirmed',
       source: 'admin',
       total_amount: '0',
       amount_paid: '0',
       km_overage_fee: '0',
-      payment_status: 'pending',
+      payment_status: 'paid',
       payment_method: 'Contanti',
       currency: 'EUR',
       has_second_driver: false,
@@ -4596,7 +4619,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <Button type="submit">
                 Salva
               </Button>
-              <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm() }}>
+              <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); setWalletParticipant(null); setValidatedBuono(null); setBuonoError(''); resetForm() }}>
                 Annulla
               </Button>
             </div>
