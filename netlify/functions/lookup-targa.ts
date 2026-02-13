@@ -2,6 +2,8 @@ import type { Handler } from "@netlify/functions";
 
 const OPENAPI_EMAIL = process.env.OPENAPI_EMAIL;
 const OPENAPI_API_KEY = process.env.OPENAPI_API_KEY;
+// Fallback: direct token (if user generated one from the console)
+const OPENAPI_DIRECT_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN;
 
 // Use sandbox for testing, production for live
 const USE_SANDBOX = process.env.OPENAPI_USE_SANDBOX !== "false";
@@ -10,7 +12,7 @@ const AUTOMOTIVE_BASE = USE_SANDBOX
   : "https://automotive.openapi.com";
 
 /**
- * Step 1: Generate a Bearer token via OpenAPI.com OAuth
+ * Generate a Bearer token via OpenAPI.com OAuth (email + API key → token)
  */
 async function getOAuthToken(): Promise<string> {
   const scope = USE_SANDBOX
@@ -36,17 +38,31 @@ async function getOAuthToken(): Promise<string> {
   if (!response.ok) {
     const errorText = await response.text();
     console.error("OAuth token error:", response.status, errorText);
-    throw new Error(`OAuth token generation failed: ${response.status}`);
+    throw new Error(`OAuth token generation failed: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  // Token is returned in data.token or data.access_token
   const token = data.token || data.access_token;
   if (!token) {
-    console.error("OAuth response missing token:", JSON.stringify(data));
-    throw new Error("OAuth response missing token");
+    console.error("OAuth response (no token field):", JSON.stringify(data));
+    throw new Error("OAuth response missing token field");
   }
   return token;
+}
+
+/**
+ * Get a Bearer token — try direct token first, then OAuth exchange
+ */
+async function getBearerToken(): Promise<string> {
+  // If user set a direct token from the console, use it
+  if (OPENAPI_DIRECT_TOKEN) {
+    return OPENAPI_DIRECT_TOKEN;
+  }
+  // Otherwise, exchange email+apikey for a token via OAuth
+  if (OPENAPI_EMAIL && OPENAPI_API_KEY) {
+    return getOAuthToken();
+  }
+  throw new Error("No OpenAPI credentials configured");
 }
 
 const handler: Handler = async (event) => {
@@ -69,12 +85,12 @@ const handler: Handler = async (event) => {
     };
   }
 
-  if (!OPENAPI_EMAIL || !OPENAPI_API_KEY) {
+  if (!OPENAPI_DIRECT_TOKEN && (!OPENAPI_EMAIL || !OPENAPI_API_KEY)) {
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: "OPENAPI_EMAIL and OPENAPI_API_KEY not configured",
+        error: "Configure OPENAPI_AUTOMOTIVE_TOKEN (direct token) or OPENAPI_EMAIL + OPENAPI_API_KEY",
       }),
     };
   }
@@ -93,8 +109,8 @@ const handler: Handler = async (event) => {
     // Clean targa: uppercase, remove spaces/dashes
     const cleanTarga = targa.toUpperCase().replace(/[\s\-]/g, "");
 
-    // Step 1: Get OAuth Bearer token
-    const bearerToken = await getOAuthToken();
+    // Step 1: Get Bearer token (direct or via OAuth)
+    const bearerToken = await getBearerToken();
 
     // Step 2: Call the IT-car endpoint
     const response = await fetch(
