@@ -41,16 +41,16 @@ export function useScadenze() {
   async function loadAutoScadenze() {
     try {
       const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 7)
+      const ahead = new Date(today)
+      ahead.setDate(ahead.getDate() + 30)
 
       const { data: bookings } = await supabase
         .from('bookings')
         .select('id, customer_name, vehicle_name, dropoff_date, price_total, booking_details')
         .gte('dropoff_date', today.toISOString())
-        .lte('dropoff_date', tomorrow.toISOString())
+        .lte('dropoff_date', ahead.toISOString())
         .in('status', ['confirmed', 'active'])
-        .neq('service_type', 'car_wash')
+        .or('service_type.is.null,service_type.eq.car_rental')
         .order('dropoff_date', { ascending: true })
 
       const { data: cauzioni } = await supabase
