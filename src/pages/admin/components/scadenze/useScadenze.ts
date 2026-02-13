@@ -50,6 +50,7 @@ export function useScadenze() {
         .gte('dropoff_date', today.toISOString())
         .lte('dropoff_date', tomorrow.toISOString())
         .in('status', ['confirmed', 'active'])
+        .neq('service_type', 'car_wash')
         .order('dropoff_date', { ascending: true })
 
       const { data: cauzioni } = await supabase

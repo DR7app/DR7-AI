@@ -1035,7 +1035,7 @@ const LotteriaBoard: React.FC = () => {
     }
   };
 
-  const handleCancelTicket = async (ticketNumber: number, email: string, fullName: string) => {
+  const handleCancelTicket = async (ticketNumber: number, email: string, _fullName: string) => {
     try {
       const { error } = await supabase
         .from('commercial_operation_tickets')

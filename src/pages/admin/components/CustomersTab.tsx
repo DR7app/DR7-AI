@@ -1014,11 +1014,6 @@ export default function CustomersTab() {
   }
 
   async function handleBulkStatusUpdate(newStatus: 'blacklist' | 'member' | 'elite' | null) {
-    const count = selectedCustomerIds.size
-    const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
-      newStatus === 'elite' ? 'Elite' :
-        newStatus === 'member' ? 'Member' : 'Nessuno'
-
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
