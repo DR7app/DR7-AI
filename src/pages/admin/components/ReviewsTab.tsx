@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface CompletedBooking {
     id: string
@@ -139,9 +140,9 @@ export default function ReviewsTab() {
 
                 if (updateError) {
                     console.error('Error updating review status in DB:', updateError)
-                    alert('Email inviate ma errore aggiornamento DB. Contatta supporto se persiste.')
+                    toast.error('Email inviate ma errore aggiornamento DB. Contatta supporto se persiste.')
                 } else {
-                    alert(`✅ Richieste inviate a ${result.sent} clienti!`)
+                    toast.success(`Richieste inviate a ${result.sent} clienti!`)
                     // Update local state to reflect change immediately
                     const sentIdSet = new Set(sentIds)
                     setBookings(bookings.map(b =>
@@ -159,7 +160,7 @@ export default function ReviewsTab() {
 
         } catch (error: any) {
             console.error('Error sending review requests:', error)
-            alert('Errore: ' + error.message)
+            toast.error('Errore: ' + error.message)
         } finally {
             setSending(false)
         }

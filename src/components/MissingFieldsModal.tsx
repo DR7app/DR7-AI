@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface MissingFieldsModalProps {
     isOpen: boolean
@@ -93,7 +94,7 @@ export default function MissingFieldsModal({
 
         if (!customerId) {
             console.error('[MissingFieldsModal] Critical Error: No customer ID provided!')
-            alert('Errore interno: ID cliente mancante. Riprova o contatta il supporto.')
+            toast.error('Errore interno: ID cliente mancante. Riprova o contatta il supporto.')
             return
         }
 
@@ -189,14 +190,14 @@ export default function MissingFieldsModal({
                 }
             }
 
-            alert('Dati aggiornati con successo!')
+            toast.success('Dati aggiornati con successo!')
 
             // Call onSave callback with updated data
             onSave(data)
             onClose()
         } catch (error: any) {
             console.error('[MissingFieldsModal] Save error:', error)
-            alert(`Errore durante il salvataggio: ${error.message}`)
+            toast.error(`Errore durante il salvataggio: ${error.message}`)
         } finally {
             setIsSaving(false)
         }

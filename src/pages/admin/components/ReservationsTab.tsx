@@ -324,6 +324,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   })
   const [isExtending, setIsExtending] = useState(false)
 
+  // Wallet payment state
+  const [walletParticipant, setWalletParticipant] = useState<{
+    id: string; nome: string; cognome: string; referral_code: string;
+    wallet_balance_cents: number;
+  } | null>(null)
+  const [walletSearching, setWalletSearching] = useState(false)
+
   // Add custom scrollbar styles
   const scrollbarStyle = `
     .custom-scrollbar::-webkit-scrollbar {
@@ -404,7 +411,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     pickup_province: '',
     pickup_notes: '',
     pickup_fee: '0',
+    // Buono Sconto (referral discount code)
+    discount_code: '',
+    discount_amount: '0', // EUR string, filled by validation
   })
+
+  // Buono sconto validation state
+  const [validatedBuono, setValidatedBuono] = useState<{
+    id: string; code: string; amount_cents: number; participant_id: string;
+  } | null>(null)
+  const [buonoValidating, setBuonoValidating] = useState(false)
+  const [buonoError, setBuonoError] = useState('')
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -872,6 +889,89 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }, [formData.vehicle_id, vehicles, formData.insurance_option])
 
+
+  // Wallet: lookup participant by customer phone
+  async function lookupWalletByPhone(phone: string) {
+    if (!phone) { setWalletParticipant(null); return }
+    setWalletSearching(true)
+    try {
+      let cleaned = phone.replace(/[\s\-\+]/g, '')
+      if (cleaned.startsWith('0')) cleaned = '39' + cleaned.substring(1)
+      if (!cleaned.startsWith('39') && cleaned.length === 10) cleaned = '39' + cleaned
+
+      const { data: participant } = await supabase
+        .from('referral_participants')
+        .select('id, nome, cognome, referral_code, wallets(balance_cents)')
+        .eq('telefono', cleaned)
+        .eq('status', 'active')
+        .single()
+
+      if (participant && participant.wallets?.[0]) {
+        setWalletParticipant({
+          id: participant.id,
+          nome: participant.nome,
+          cognome: participant.cognome,
+          referral_code: participant.referral_code,
+          wallet_balance_cents: participant.wallets[0].balance_cents,
+        })
+      } else {
+        setWalletParticipant(null)
+      }
+    } catch {
+      setWalletParticipant(null)
+    }
+    setWalletSearching(false)
+  }
+
+  async function validateBuonoSconto(code: string) {
+    if (!code.trim()) {
+      setValidatedBuono(null)
+      setBuonoError('')
+      setFormData(prev => ({ ...prev, discount_amount: '0' }))
+      return
+    }
+    setBuonoValidating(true)
+    setBuonoError('')
+    try {
+      const { data: buono, error } = await supabase
+        .from('referral_discount_codes')
+        .select('id, code, amount_cents, participant_id, used, expires_at, scope')
+        .eq('code', code.toUpperCase().trim())
+        .single()
+
+      if (error || !buono) {
+        setBuonoError('Codice non trovato')
+        setValidatedBuono(null)
+        setFormData(prev => ({ ...prev, discount_amount: '0' }))
+        return
+      }
+      if (buono.used) {
+        setBuonoError('Codice gia\' utilizzato')
+        setValidatedBuono(null)
+        setFormData(prev => ({ ...prev, discount_amount: '0' }))
+        return
+      }
+      if (new Date(buono.expires_at) < new Date()) {
+        setBuonoError('Codice scaduto')
+        setValidatedBuono(null)
+        setFormData(prev => ({ ...prev, discount_amount: '0' }))
+        return
+      }
+      // Valid buono
+      setValidatedBuono({
+        id: buono.id,
+        code: buono.code,
+        amount_cents: buono.amount_cents,
+        participant_id: buono.participant_id,
+      })
+      setFormData(prev => ({ ...prev, discount_amount: (buono.amount_cents / 100).toString() }))
+      setBuonoError('')
+    } catch {
+      setBuonoError('Errore nella validazione')
+      setValidatedBuono(null)
+    }
+    setBuonoValidating(false)
+  }
 
   async function loadData() {
     setLoading(true)
@@ -1900,6 +2000,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       total_amount: ((booking.price_total
         - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
         - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
+        + (booking.booking_details?.buono_sconto?.amount_cents || 0) // Add back discount to get base rental
       ) / 100).toString(),
       currency: booking.currency.toUpperCase(),
       source: 'admin',
@@ -1945,7 +2046,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
       pickup_fee: booking.pickup_fee != null ? (booking.pickup_fee / 100).toString() : (booking.booking_details?.pickup_fee || '0'),
+      // Buono Sconto
+      discount_code: booking.booking_details?.buono_sconto?.code || '',
+      discount_amount: booking.booking_details?.buono_sconto ? (booking.booking_details.buono_sconto.amount_cents / 100).toString() : '0',
     })
+
+    // Restore validated buono if present
+    if (booking.booking_details?.buono_sconto) {
+      setValidatedBuono({
+        id: booking.booking_details.buono_sconto.code_id,
+        code: booking.booking_details.buono_sconto.code,
+        amount_cents: booking.booking_details.buono_sconto.amount_cents,
+        participant_id: booking.booking_details.buono_sconto.participant_id,
+      })
+    } else {
+      setValidatedBuono(null)
+    }
 
     setEditingId(booking.id)
     setShowForm(true)
@@ -2918,9 +3034,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
-        price_total: Math.round(parseFloat(formData.total_amount) * 100) // Convert to cents (base rental)
+        price_total: Math.max(0,
+          Math.round(parseFloat(formData.total_amount) * 100) // Convert to cents (base rental)
           + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
-          + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
+          + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0)
+          - (validatedBuono ? validatedBuono.amount_cents : 0) // Subtract buono sconto
+        ),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
@@ -3021,7 +3140,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             province: formData.pickup_province,
             notes: formData.pickup_notes
           } : null,
-          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0'
+          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+          // Buono Sconto (referral discount code)
+          ...(validatedBuono ? {
+            buono_sconto: {
+              code_id: validatedBuono.id,
+              code: validatedBuono.code,
+              amount_cents: validatedBuono.amount_cents,
+              participant_id: validatedBuono.participant_id,
+            }
+          } : {})
         }
       }
 
@@ -3060,6 +3188,64 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         console.log('Booking created successfully:', insertedBooking)
+      }
+
+      // Debit wallet if Credit Wallet payment method was used
+      if (formData.payment_method === 'Credit Wallet' && walletParticipant && insertedBooking) {
+        try {
+          const walletAmountCents = Math.round(parseFloat(formData.amount_paid || '0') * 100)
+          if (walletAmountCents > 0) {
+            const walletRes = await fetch('/.netlify/functions/referral-apply-wallet', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                participant_id: walletParticipant.id,
+                amount_cents: walletAmountCents,
+                booking_id: insertedBooking.id,
+                description: `Pagamento prenotazione noleggio #${insertedBooking.id.slice(0, 8)}`,
+              }),
+            })
+            const walletData = await walletRes.json()
+            if (walletData.success) {
+              console.log('✅ Wallet debited:', walletData)
+              // Update booking_details with wallet payment info
+              await supabase
+                .from('bookings')
+                .update({
+                  booking_details: {
+                    ...insertedBooking.booking_details,
+                    wallet_payment: {
+                      participant_id: walletParticipant.id,
+                      transaction_id: walletData.transaction_id,
+                      amount_cents: walletAmountCents,
+                    },
+                  },
+                })
+                .eq('id', insertedBooking.id)
+            } else {
+              console.error('Wallet debit failed:', walletData.error)
+            }
+          }
+        } catch (walletError) {
+          console.error('⚠️ Failed to debit wallet:', walletError)
+        }
+      }
+
+      // Mark buono sconto as used
+      if (validatedBuono && insertedBooking) {
+        try {
+          await supabase
+            .from('referral_discount_codes')
+            .update({
+              used: true,
+              used_at: new Date().toISOString(),
+              booking_id: insertedBooking.id,
+            })
+            .eq('id', validatedBuono.id)
+          console.log('Buono sconto marked as used:', validatedBuono.code)
+        } catch (buonoErr) {
+          console.error('Failed to mark buono as used:', buonoErr)
+        }
       }
 
       // Create Google Calendar event
@@ -3333,7 +3519,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_province: '',
       pickup_notes: '',
       pickup_fee: '0',
+      // Buono Sconto
+      discount_code: '',
+      discount_amount: '0',
     })
+    setValidatedBuono(null)
+    setBuonoError('')
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
       nome: '',
@@ -3360,6 +3551,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       driver_license_number: '',
       patente: ''
     })
+    setWalletParticipant(null)
   }
 
   if (loading) {
@@ -4159,6 +4351,62 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   ]}
                 />
               )}
+              {/* Wallet Payment Section - shown when Credit Wallet is selected */}
+              {formData.payment_method === 'Credit Wallet' && (
+                <div className="col-span-full bg-theme-bg-secondary border border-dr7-gold/30 rounded-xl p-4 space-y-3 animate-fadeIn">
+                  <h4 className="text-sm font-semibold text-dr7-gold">Pagamento Wallet Referral</h4>
+                  {!walletParticipant ? (
+                    <div className="space-y-2">
+                      <p className="text-theme-text-muted text-xs">
+                        {walletSearching ? 'Ricerca wallet...' : 'Seleziona un cliente per cercare il suo wallet. Il telefono del cliente viene usato per la ricerca.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Find the selected customer's phone
+                          const customer = customers.find(c => c.id === formData.customer_id)
+                          if (customer?.phone) {
+                            lookupWalletByPhone(customer.phone)
+                          }
+                        }}
+                        disabled={!formData.customer_id || walletSearching}
+                        className="px-4 py-2 bg-dr7-gold/20 text-dr7-gold rounded-lg text-sm hover:bg-dr7-gold/30 transition-colors disabled:opacity-50"
+                      >
+                        {walletSearching ? 'Ricerca...' : 'Cerca Wallet Cliente'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-theme-text-primary font-semibold text-sm">
+                            {walletParticipant.nome} {walletParticipant.cognome}
+                          </p>
+                          <p className="text-theme-text-muted text-xs font-mono">{walletParticipant.referral_code}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-dr7-gold font-bold text-lg">
+                            €{(walletParticipant.wallet_balance_cents / 100).toFixed(2)}
+                          </p>
+                          <p className="text-theme-text-muted text-xs">Saldo disponibile</p>
+                        </div>
+                      </div>
+                      {walletParticipant.wallet_balance_cents < Math.round(parseFloat(formData.amount_paid || '0') * 100) && (
+                        <p className="text-red-400 text-xs">
+                          Attenzione: il saldo wallet e' inferiore all'importo da pagare
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setWalletParticipant(null)}
+                        className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                      >
+                        Cambia wallet
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <Input
                 label="Importo Totale (€)"
                 type="number"
@@ -4243,10 +4491,65 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 value={formData.currency}
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
               />
+
+              {/* Buono Sconto (Referral Discount Code) */}
+              <div className="col-span-full bg-theme-bg-secondary border border-theme-border rounded-xl p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-theme-text-secondary">Buono Sconto Referral</h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formData.discount_code}
+                    onChange={(e) => {
+                      const code = e.target.value.toUpperCase()
+                      setFormData(prev => ({ ...prev, discount_code: code }))
+                      if (!code.trim()) {
+                        setValidatedBuono(null)
+                        setBuonoError('')
+                        setFormData(prev => ({ ...prev, discount_code: code, discount_amount: '0' }))
+                      }
+                    }}
+                    placeholder="BUONO-XXXX-XXXX"
+                    className="flex-1 px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg font-mono text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => validateBuonoSconto(formData.discount_code)}
+                    disabled={buonoValidating || !formData.discount_code.trim()}
+                    className="px-4 py-2 bg-dr7-gold/20 text-dr7-gold rounded-lg text-sm font-semibold hover:bg-dr7-gold/30 transition-colors disabled:opacity-50"
+                  >
+                    {buonoValidating ? '...' : 'Valida'}
+                  </button>
+                  {validatedBuono && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValidatedBuono(null)
+                        setBuonoError('')
+                        setFormData(prev => ({ ...prev, discount_code: '', discount_amount: '0' }))
+                      }}
+                      className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition-colors"
+                    >
+                      Rimuovi
+                    </button>
+                  )}
+                </div>
+                {buonoError && (
+                  <p className="text-red-400 text-xs">{buonoError}</p>
+                )}
+                {validatedBuono && (
+                  <div className="flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded-lg p-3 animate-fadeIn">
+                    <div>
+                      <p className="text-green-400 font-semibold text-sm">Buono valido</p>
+                      <p className="text-theme-text-muted text-xs">Codice monouso · Solo noleggio supercar</p>
+                    </div>
+                    <p className="text-green-400 font-bold text-lg">-€{(validatedBuono.amount_cents / 100).toFixed(2)}</p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees */}
-            {(formData.delivery_enabled || formData.pickup_enabled) && (
+            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees and buono */}
+            {(formData.delivery_enabled || formData.pickup_enabled || validatedBuono) && (
               <div className="md:col-span-2 bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
                 <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Totale</h4>
                 <div className="space-y-2 text-sm">
@@ -4266,14 +4569,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <span className="font-mono text-theme-text-primary">€{parseFloat(formData.pickup_fee || '0').toFixed(2)}</span>
                     </div>
                   )}
+                  {validatedBuono && (
+                    <div className="flex justify-between items-center text-green-400">
+                      <span>Buono Sconto ({validatedBuono.code})</span>
+                      <span className="font-mono font-bold">-€{(validatedBuono.amount_cents / 100).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="border-t border-theme-border/50 pt-2 mt-2">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-dr7-gold">Totale da saldare</span>
                       <span className="font-mono text-xl font-bold text-dr7-gold">
-                        €{(
+                        €{Math.max(0,
                           parseFloat(formData.total_amount || '0') +
                           (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0) +
-                          (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                          (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0) -
+                          (validatedBuono ? validatedBuono.amount_cents / 100 : 0)
                         ).toFixed(2)}
                       </span>
                     </div>

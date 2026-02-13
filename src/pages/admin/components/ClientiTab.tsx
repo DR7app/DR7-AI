@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import DynamicCustomerForm from './DynamicCustomerForm'
 import CustomerDocuments from './CustomerDocuments'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 type StatusCliente = 'standard' | 'member' | 'elite' | 'blacklist'
 
@@ -115,7 +116,7 @@ export default function ClientiTab() {
       ))
     } catch (error) {
       console.error('Failed to update status:', error)
-      alert('Errore durante l\'aggiornamento dello status')
+      toast.error('Errore durante l\'aggiornamento dello status')
     }
   }
 

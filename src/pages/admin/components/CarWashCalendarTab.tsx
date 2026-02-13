@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
+import toast from 'react-hot-toast'
 
 // --- Configuration ---
 const CELL_WIDTH = 52 // Balanced width: fits full month on screen while maintaining readability
@@ -796,12 +797,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
                     if (error) throw error
 
-                    alert('✅ Prenotazione aggiornata!')
+                    toast.success('Prenotazione aggiornata!')
                     setEditingBooking(null)
                     loadData()
                   } catch (error) {
                     console.error('Failed to update booking:', error)
-                    alert('❌ Errore durante l\'aggiornamento')
+                    toast.error('Errore durante l\'aggiornamento')
                   }
                 }}
                 className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"

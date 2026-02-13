@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NewClientModal from './NewClientModal'
 import CustomerAutocomplete from './CustomerAutocomplete'
+import toast from 'react-hot-toast'
 import {
     fetchConflictingBookings,
     filterAvailableTimeSlots,
@@ -280,7 +281,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
             onSave()
         } catch (error) {
             console.error('Failed to save booking:', error)
-            alert('Errore durante il salvataggio: ' + (error as Error).message)
+            toast.error('Errore durante il salvataggio: ' + (error as Error).message)
         }
     }
 

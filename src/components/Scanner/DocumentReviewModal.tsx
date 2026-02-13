@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import toast from 'react-hot-toast';
 
 interface DocumentReviewModalProps {
     scan: any;
@@ -44,7 +45,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
 
     async function handleCreateCustomer() {
         if (!extractedData || !extractedData.nome) {
-            alert('Dati insufficienti per creare il cliente');
+            toast.error('Dati insufficienti per creare il cliente');
             return;
         }
 
@@ -82,10 +83,10 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
             setCustomerId(newCustomer.id);
             setCustomers([newCustomer, ...customers]);
 
-            alert(`Cliente "${newCustomer.nome} ${newCustomer.cognome}" creato con successo!`);
+            toast.success(`Cliente "${newCustomer.nome} ${newCustomer.cognome}" creato con successo!`);
         } catch (err: any) {
             console.error('Error creating customer:', err);
-            alert(`Errore nella creazione del cliente: ${err.message}`);
+            toast.error(`Errore nella creazione del cliente: ${err.message}`);
         } finally {
             setLoading(false);
         }
@@ -111,7 +112,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
             onClose();
         } catch (err) {
             console.error('Save error:', err);
-            alert('Impossibile salvare');
+            toast.error('Impossibile salvare');
         } finally {
             setLoading(false);
         }

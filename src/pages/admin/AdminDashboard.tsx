@@ -29,8 +29,9 @@ import FleetManagementTab from './components/FleetManagementTab'
 import ScadenzeTab from './components/ScadenzeTab'
 import ReportsTab from './components/ReportsTab'
 import BulkImportTab from './components/BulkImportTab'
+import ReferralProgramTab from './components/ReferralProgramTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -334,6 +335,13 @@ export default function AdminDashboard() {
               >
                 Import Clienti
               </button>
+              <button
+                onClick={() => { setActiveTab('referral'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'referral' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Referral Program
+              </button>
             </nav>
           </div>
         </div>
@@ -604,6 +612,15 @@ export default function AdminDashboard() {
               >
                 Import Clienti
               </button>
+              <button
+                onClick={() => setActiveTab('referral')}
+                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'referral'
+                  ? 'text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                  }`}
+              >
+                Referral
+              </button>
             </nav>
           </div>
         </div>
@@ -634,6 +651,7 @@ export default function AdminDashboard() {
             {activeTab === 'scadenze' && 'Scadenze'}
             {activeTab === 'reports' && 'Report Mensili'}
             {activeTab === 'bulk-import' && 'Import Clienti'}
+            {activeTab === 'referral' && 'Referral Program'}
           </h2>
         </div>
 
@@ -680,6 +698,7 @@ export default function AdminDashboard() {
           {activeTab === 'scadenze' && <ScadenzeTab />}
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'bulk-import' && <BulkImportTab />}
+          {activeTab === 'referral' && <ReferralProgramTab />}
         </div>
       </main>
 

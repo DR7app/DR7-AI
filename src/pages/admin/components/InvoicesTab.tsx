@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface Invoice {
   id: string
@@ -126,7 +127,7 @@ export default function InvoicesTab() {
       loadInvoices()
     } catch (error) {
       console.error('Failed to save invoice:', error)
-      alert('Impossibile salvare la fattura')
+      toast.error('Impossibile salvare la fattura')
     }
   }
 

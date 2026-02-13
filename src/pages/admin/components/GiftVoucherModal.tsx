@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface GiftVoucherModalProps {
     isOpen: boolean
@@ -22,13 +23,13 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
             // Validate file types
             const validFiles = files.filter(file => file.type.startsWith('image/'))
             if (validFiles.length !== files.length) {
-                alert('Alcuni file non sono immagini e sono stati ignorati.')
+                toast.error('Alcuni file non sono immagini e sono stati ignorati.')
             }
 
             // Validate total size (max 15MB total to be safe with Netlify)
             const totalSize = validFiles.reduce((acc, file) => acc + file.size, 0)
             if (totalSize > 15 * 1024 * 1024) {
-                alert('La dimensione totale delle immagini è troppo grande. Massimo 15MB.')
+                toast.error('La dimensione totale delle immagini è troppo grande. Massimo 15MB.')
                 return
             }
 
@@ -53,17 +54,17 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
     const handleSend = async () => {
         if (channel === 'email') {
             if (images.length === 0) {
-                alert('Per favore carica almeno un\'immagine del buono regalo')
+                toast.error('Per favore carica almeno un\'immagine del buono regalo')
                 return
             }
             if (!subject.trim()) {
-                alert('Per favore inserisci un oggetto per l\'email')
+                toast.error('Per favore inserisci un oggetto per l\'email')
                 return
             }
         }
 
         if (!message.trim()) {
-            alert('Per favore inserisci un messaggio')
+            toast.error('Per favore inserisci un messaggio')
             return
         }
 
@@ -79,7 +80,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
             onClose()
         } catch (error) {
             console.error('Error sending vouchers:', error)
-            alert('Errore nell\'invio dei buoni regalo')
+            toast.error('Errore nell\'invio dei buoni regalo')
         } finally {
             setSending(false)
         }

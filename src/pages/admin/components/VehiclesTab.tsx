@@ -194,12 +194,23 @@ export default function VehiclesTab() {
     console.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
 
     // Get all booking IDs for this vehicle (needed to clean up FK dependencies)
-    const { data: vehicleBookings } = await supabase
+    // Query by BOTH vehicle_name AND vehicle_id to catch all bookings
+    const { data: bookingsByName } = await supabase
       .from('bookings')
       .select('id')
       .eq('vehicle_name', vehicleName)
 
-    const bookingIds = (vehicleBookings || []).map(b => b.id)
+    const { data: bookingsById } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('vehicle_id', id)
+
+    // Merge and deduplicate
+    const allBookingIds = new Set([
+      ...(bookingsByName || []).map(b => b.id),
+      ...(bookingsById || []).map(b => b.id),
+    ])
+    const bookingIds = Array.from(allBookingIds)
 
     if (bookingIds.length > 0) {
       // Delete contracts referencing these bookings (FK: contracts_booking_id_fkey)
@@ -238,19 +249,32 @@ export default function VehiclesTab() {
       }
     }
 
-    // Delete from bookings
+    // Delete from bookings (by both vehicle_name and vehicle_id)
     console.log('  Deleting bookings...')
-    const { data: deletedBookings, error: bookError } = await supabase
+    const { data: deletedByName, error: bookErrorName } = await supabase
       .from('bookings')
       .delete()
       .eq('vehicle_name', vehicleName)
       .select()
 
-    if (bookError) {
-      console.error('  Error deleting bookings:', bookError)
-      throw new Error(`Failed to delete bookings: ${bookError.message}`)
+    if (bookErrorName) {
+      console.error('  Error deleting bookings by name:', bookErrorName)
+      throw new Error(`Failed to delete bookings: ${bookErrorName.message}`)
     }
-    console.log(`  Deleted ${deletedBookings?.length || 0} bookings`)
+
+    const { data: deletedById, error: bookErrorId } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('vehicle_id', id)
+      .select()
+
+    if (bookErrorId) {
+      console.error('  Error deleting bookings by id:', bookErrorId)
+      throw new Error(`Failed to delete bookings: ${bookErrorId.message}`)
+    }
+
+    const deletedBookings = [...(deletedByName || []), ...(deletedById || [])]
+    console.log(`  Deleted ${deletedBookings.length} bookings`)
 
     // Finally, delete the vehicle itself
     console.log('  Deleting vehicle record...')

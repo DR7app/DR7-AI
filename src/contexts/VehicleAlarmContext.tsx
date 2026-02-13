@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface AlarmBooking {
     bookingId: string
@@ -55,7 +56,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const enableAudio = async () => {
         // Prevent multiple simultaneous attempts
         if (alarmState.audioEnabled) {
-            alert('✅ Sound alerts are already enabled!')
+            toast.success('Sound alerts are already enabled!')
             return
         }
 
@@ -85,11 +86,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 console.log('Audio unlock:', audioErr)
             }
 
-            alert('✅ Sound alerts enabled! You will hear an alarm when vehicles are due for return.')
+            toast.success('Sound alerts enabled! You will hear an alarm when vehicles are due for return.')
             console.log('✅ Audio alerts enabled')
         } catch (err) {
             console.error('Failed to enable audio:', err)
-            alert('❌ Failed to enable sound alerts. Please try again.')
+            toast.error('Failed to enable sound alerts. Please try again.')
         }
     }
 

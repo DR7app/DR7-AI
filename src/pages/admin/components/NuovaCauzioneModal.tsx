@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface NuovaCauzioneModalProps {
     cauzione?: any | null
@@ -64,7 +65,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
             setVehicles(vehiclesData || [])
         } catch (error: any) {
             console.error('Error loading data:', error)
-            alert(`Errore nel caricamento dei dati: ${error.message}`)
+            toast.error(`Errore nel caricamento dei dati: ${error.message}`)
         } finally {
             setLoadingData(false)
         }
@@ -75,12 +76,12 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
 
         // Validation
         if (!formData.cliente_id || !formData.veicolo_id || !formData.data_restituzione_veicolo || !formData.importo) {
-            alert('Compila tutti i campi obbligatori')
+            toast.error('Compila tutti i campi obbligatori')
             return
         }
 
         if (Number(formData.importo) <= 0) {
-            alert('L\'importo deve essere maggiore di zero')
+            toast.error('L\'importo deve essere maggiore di zero')
             return
         }
 
@@ -103,7 +104,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                     .eq('id', cauzione.id)
 
                 if (error) throw error
-                alert('Cauzione aggiornata con successo')
+                toast.success('Cauzione aggiornata con successo')
             } else {
                 // Create new
                 const { error } = await supabase
@@ -111,13 +112,13 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                     .insert([dataToSave])
 
                 if (error) throw error
-                alert('Cauzione creata con successo')
+                toast.success('Cauzione creata con successo')
             }
 
             onSave()
         } catch (error: any) {
             console.error('Error saving cauzione:', error)
-            alert(`Errore nel salvataggio: ${error.message}`)
+            toast.error(`Errore nel salvataggio: ${error.message}`)
         } finally {
             setLoading(false)
         }

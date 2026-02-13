@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 interface LateBooking {
     id: string;
@@ -148,7 +149,7 @@ const LateReturnAlarm: React.FC = () => {
 
             if (error) {
                 console.error('Error marking booking as returned:', error);
-                alert('Failed to mark booking as returned');
+                toast.error('Failed to mark booking as returned');
                 return;
             }
 
@@ -157,7 +158,7 @@ const LateReturnAlarm: React.FC = () => {
             if (updated.length === 0) setIsAlarmActive(false);
         } catch (err) {
             console.error('Error updating booking:', err);
-            alert('Failed to mark booking as returned');
+            toast.error('Failed to mark booking as returned');
         }
     };
 

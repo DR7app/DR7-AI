@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 
@@ -53,8 +54,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const deliveryAddress = booking.delivery_address || booking.booking_details?.delivery_address || null
   const pickupHomeAddress = booking.pickup_address || booking.booking_details?.pickup_address || null
 
-  // Base rental = total minus delivery/pickup fees
-  const baseRentalCents = totalCents - deliveryFeeCents - pickupHomeFeeCents
+  // Buono sconto
+  const buonoSconto = booking.booking_details?.buono_sconto || null
+  const buonoScontoCents = buonoSconto?.amount_cents || 0
+
+  // Base rental = total minus delivery/pickup fees + buono (since buono was subtracted from total)
+  const baseRentalCents = totalCents - deliveryFeeCents - pickupHomeFeeCents + buonoScontoCents
 
   // Format dates
   const pickupDate = new Date(booking.pickup_date)
@@ -158,12 +163,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                           const data = await res.json();
                           if (data.paymentUrl) {
                             setPaymentLink(data.paymentUrl)
-                            alert('Link di pagamento generato! Clicca "Copia Link" per inviarlo al cliente.')
+                            toast.success('Link di pagamento generato! Clicca "Copia Link" per inviarlo al cliente.')
                           } else {
-                            alert('Errore: ' + (data.error || 'Errore sconosciuto'));
+                            toast.error('Errore: ' + (data.error || 'Errore sconosciuto'));
                           }
                         } catch (e) {
-                          alert('Errore di connessione');
+                          toast.error('Errore di connessione');
                         } finally {
                           setGeneratingLink(false)
                         }
@@ -220,7 +225,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
 
             {/* Financial Breakdown */}
             <div className="bg-theme-text-primary/5 rounded-lg p-4 space-y-2 border border-theme-border/50">
-              {(deliveryEnabled || pickupHomeEnabled) ? (
+              {(deliveryEnabled || pickupHomeEnabled || buonoSconto) ? (
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-theme-text-muted">Noleggio</span>
@@ -236,6 +241,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                     <div className="flex justify-between items-center">
                       <span className="text-theme-text-muted">Ritiro a domicilio</span>
                       <span className="font-mono text-theme-text-primary">{formatEUR(pickupHomeFeeCents)}</span>
+                    </div>
+                  )}
+                  {buonoSconto && (
+                    <div className="flex justify-between items-center text-green-400">
+                      <span>Buono Sconto ({buonoSconto.code})</span>
+                      <span className="font-mono font-bold">-{formatEUR(buonoScontoCents)}</span>
                     </div>
                   )}
                   <div className="border-t border-theme-border/50 pt-2 mt-2">

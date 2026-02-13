@@ -4,6 +4,7 @@ import Button from './Button'
 import GiftVoucherModal from './GiftVoucherModal'
 import DiscountCodeGeneratorModal from './DiscountCodeGeneratorModal'
 import { QRCodeSVG } from 'qrcode.react'
+import toast from 'react-hot-toast'
 
 interface Customer {
     id: string
@@ -352,7 +353,7 @@ export default function MarketingTab() {
 
     async function toggleCodeStatus(id: string, currentStatus: string) {
         if (currentStatus === 'expired') {
-            alert('Un codice scaduto non può essere riattivato.')
+            toast.error('Un codice scaduto non può essere riattivato.')
             return
         }
 
@@ -371,13 +372,13 @@ export default function MarketingTab() {
             ))
         } catch (error: any) {
             console.error('Error toggling code status:', error)
-            alert(`Errore: ${error.message}`)
+            toast.error(`Errore: ${error.message}`)
         }
     }
 
     function copyCode(code: string) {
         navigator.clipboard.writeText(code).then(() => {
-            alert('Codice copiato!')
+            toast.success('Codice copiato!')
         }).catch(() => {
             const el = document.createElement('textarea')
             el.value = code
@@ -385,7 +386,7 @@ export default function MarketingTab() {
             el.select()
             document.execCommand('copy')
             document.body.removeChild(el)
-            alert('Codice copiato!')
+            toast.success('Codice copiato!')
         })
     }
 
@@ -454,7 +455,7 @@ export default function MarketingTab() {
         const channel = data.channel || 'email'
 
         if (channel === 'email' && data.images.length === 0) {
-            alert('Immagine richiesta per email')
+            toast.error('Immagine richiesta per email')
             return
         }
 
@@ -478,10 +479,10 @@ export default function MarketingTab() {
 
                 const result = await response.json()
                 if (result.success) {
-                    alert(`Messaggi WhatsApp inviati a ${result.sent} clienti!`)
+                    toast.success(`Messaggi WhatsApp inviati a ${result.sent} clienti!`)
                     if (result.errors) {
                         console.warn('WhatsApp errors:', result.errors)
-                        alert(`Alcuni messaggi non inviati: ${result.errors.length}`)
+                        toast.error(`Alcuni messaggi non inviati: ${result.errors.length}`)
                     }
                     setSelectedCustomerIds(new Set())
                 } else {
@@ -522,7 +523,7 @@ export default function MarketingTab() {
                 const result = await response.json()
 
                 if (result.success) {
-                    alert(`Buoni regalo inviati con successo a ${result.sent} ${result.sent === 1 ? 'cliente' : 'clienti'}!`)
+                    toast.success(`Buoni regalo inviati con successo a ${result.sent} ${result.sent === 1 ? 'cliente' : 'clienti'}!`)
                     setSelectedCustomerIds(new Set())
                 } else {
                     throw new Error(result.error || 'Errore sconosciuto')
@@ -530,7 +531,7 @@ export default function MarketingTab() {
             }
         } catch (error: any) {
             console.error('Error sending gift vouchers:', error)
-            alert('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
+            toast.error('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
         }
     }
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 import { getVehicleStatus } from '../../../utils/fleetUtils'
+import toast from 'react-hot-toast'
 
 interface FleetListProps {
     onOpenDetail: (vehicleId: string) => void
@@ -29,7 +30,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
             setVehicles(data || [])
         } catch (error) {
             console.error('Error loading vehicles:', error)
-            alert('Errore caricamento veicoli')
+            toast.error('Errore caricamento veicoli')
         } finally {
             setLoading(false)
         }
