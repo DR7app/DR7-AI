@@ -1311,6 +1311,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         throw new Error(data.error || 'Failed to generate contract')
       }
 
+      // Open PDF in new tab
+      if (data.url) {
+        window.open(data.url, '_blank')
+      }
+
       // Reload data to show the contract link and Yousign button in the UI
       await loadData()
     } catch (error: any) {
