@@ -1323,9 +1323,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!pdfWindow || pdfWindow.closed || typeof pdfWindow.closed === 'undefined') {
             // Popup was blocked - show alert with manual link
             window.location.href = data.url
-          } else {
-            // Popup opened successfully
-            alert('Contratto generato con successo!\n\nIl PDF si è aperto in una nuova scheda per la revisione.\n\nDopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
           }
         }
       } else {
