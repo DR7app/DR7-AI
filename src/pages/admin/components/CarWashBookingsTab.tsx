@@ -368,26 +368,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
-  async function handleCancelBooking(bookingId: string, customerName: string) {
-    if (!confirm(`Sei sicuro di voler annullare la prenotazione di ${customerName}?`)) {
-      return
-    }
 
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('id', bookingId)
-
-      if (error) throw error
-
-      // Success — UI updates automatically
-      loadData()
-    } catch (error: any) {
-      console.error('Failed to cancel booking:', error)
-      alert(`❌ Errore nell'annullamento: ${error.message}`)
-    }
-  }
 
   async function handleDeleteBooking(bookingId: string, customerName: string) {
     if (!confirm(`⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE DEFINITIVAMENTE la prenotazione di ${customerName}?\n\nQuesta azione è irreversibile e rimuoverà la prenotazione dal database.`)) {
