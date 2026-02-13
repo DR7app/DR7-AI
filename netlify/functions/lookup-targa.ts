@@ -1,9 +1,8 @@
 import type { Handler } from "@netlify/functions";
 
-const OPENAPI_EMAIL = process.env.OPENAPI_EMAIL;
-const OPENAPI_API_KEY = process.env.OPENAPI_API_KEY;
-// Fallback: direct token (if user generated one from the console)
-const OPENAPI_DIRECT_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN;
+// Accepts any of these env vars — tries each auth method in order
+const API_KEY = process.env.OPENAPI_API_KEY || process.env.OPENAPI_AUTOMOTIVE_TOKEN || "";
+const OPENAPI_EMAIL = process.env.OPENAPI_EMAIL || "";
 
 // Use sandbox for testing, production for live
 const USE_SANDBOX = process.env.OPENAPI_USE_SANDBOX !== "false";
@@ -12,57 +11,101 @@ const AUTOMOTIVE_BASE = USE_SANDBOX
   : "https://automotive.openapi.com";
 
 /**
- * Generate a Bearer token via OpenAPI.com OAuth (email + API key → token)
+ * Try to call the IT-car endpoint with multiple auth strategies
  */
-async function getOAuthToken(): Promise<string> {
-  const scope = USE_SANDBOX
-    ? "GET:test.automotive.openapi.com/IT-car"
-    : "GET:automotive.openapi.com/IT-car";
+async function callITCar(targa: string): Promise<Response> {
+  const url = `${AUTOMOTIVE_BASE}/IT-car/${encodeURIComponent(targa)}`;
 
-  const basicAuth = Buffer.from(`${OPENAPI_EMAIL}:${OPENAPI_API_KEY}`).toString(
-    "base64"
-  );
-
-  const response = await fetch("https://oauth.openapi.it/token", {
-    method: "POST",
+  // Strategy 1: Bearer token with API key
+  console.log("Trying auth: Bearer token...");
+  let response = await fetch(url, {
+    method: "GET",
     headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "Content-Type": "application/json",
+      Authorization: `Bearer ${API_KEY}`,
+      Accept: "application/json",
     },
-    body: JSON.stringify({
-      scope,
-      ttl: 3600,
-    }),
   });
+  if (response.ok) return response;
+  console.log("Bearer failed:", response.status);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("OAuth token error:", response.status, errorText);
-    throw new Error(`OAuth token generation failed: ${response.status} - ${errorText}`);
+  // Strategy 2: Basic auth with email:apikey
+  if (OPENAPI_EMAIL && API_KEY) {
+    console.log("Trying auth: Basic...");
+    const basicAuth = Buffer.from(`${OPENAPI_EMAIL}:${API_KEY}`).toString("base64");
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        Accept: "application/json",
+      },
+    });
+    if (response.ok) return response;
+    console.log("Basic failed:", response.status);
   }
 
-  const data = await response.json();
-  const token = data.token || data.access_token;
-  if (!token) {
-    console.error("OAuth response (no token field):", JSON.stringify(data));
-    throw new Error("OAuth response missing token field");
-  }
-  return token;
-}
+  // Strategy 3: API key as query parameter
+  console.log("Trying auth: query param...");
+  response = await fetch(`${url}?token=${API_KEY}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (response.ok) return response;
+  console.log("Query param failed:", response.status);
 
-/**
- * Get a Bearer token — try direct token first, then OAuth exchange
- */
-async function getBearerToken(): Promise<string> {
-  // If user set a direct token from the console, use it
-  if (OPENAPI_DIRECT_TOKEN) {
-    return OPENAPI_DIRECT_TOKEN;
+  // Strategy 4: OAuth token exchange, then Bearer
+  if (OPENAPI_EMAIL && API_KEY) {
+    console.log("Trying auth: OAuth token exchange...");
+    try {
+      const scope = USE_SANDBOX
+        ? "GET:test.automotive.openapi.com/IT-car"
+        : "GET:automotive.openapi.com/IT-car";
+      const basicAuth = Buffer.from(`${OPENAPI_EMAIL}:${API_KEY}`).toString("base64");
+
+      const tokenResponse = await fetch("https://oauth.openapi.it/token", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ scope, ttl: 3600 }),
+      });
+
+      if (tokenResponse.ok) {
+        const tokenData = await tokenResponse.json();
+        const token = tokenData.token || tokenData.access_token;
+        if (token) {
+          response = await fetch(url, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          });
+          if (response.ok) return response;
+          console.log("OAuth Bearer failed:", response.status);
+        }
+      } else {
+        console.log("OAuth token exchange failed:", tokenResponse.status);
+      }
+    } catch (oauthErr) {
+      console.log("OAuth error:", oauthErr);
+    }
   }
-  // Otherwise, exchange email+apikey for a token via OAuth
-  if (OPENAPI_EMAIL && OPENAPI_API_KEY) {
-    return getOAuthToken();
-  }
-  throw new Error("No OpenAPI credentials configured");
+
+  // Strategy 5: x-api-key header
+  console.log("Trying auth: x-api-key header...");
+  response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "x-api-key": API_KEY,
+      Accept: "application/json",
+    },
+  });
+  if (response.ok) return response;
+  console.log("x-api-key failed:", response.status);
+
+  // All strategies failed — return last response for error handling
+  return response;
 }
 
 const handler: Handler = async (event) => {
@@ -85,12 +128,12 @@ const handler: Handler = async (event) => {
     };
   }
 
-  if (!OPENAPI_DIRECT_TOKEN && (!OPENAPI_EMAIL || !OPENAPI_API_KEY)) {
+  if (!API_KEY) {
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: "Configure OPENAPI_AUTOMOTIVE_TOKEN (direct token) or OPENAPI_EMAIL + OPENAPI_API_KEY",
+        error: "Set OPENAPI_API_KEY or OPENAPI_AUTOMOTIVE_TOKEN in Netlify env vars",
       }),
     };
   }
@@ -106,27 +149,13 @@ const handler: Handler = async (event) => {
       };
     }
 
-    // Clean targa: uppercase, remove spaces/dashes
     const cleanTarga = targa.toUpperCase().replace(/[\s\-]/g, "");
 
-    // Step 1: Get Bearer token (direct or via OAuth)
-    const bearerToken = await getBearerToken();
-
-    // Step 2: Call the IT-car endpoint
-    const response = await fetch(
-      `${AUTOMOTIVE_BASE}/IT-car/${encodeURIComponent(cleanTarga)}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${bearerToken}`,
-          Accept: "application/json",
-        },
-      }
-    );
+    const response = await callITCar(cleanTarga);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OpenAPI automotive error:", response.status, errorText);
+      console.error("All auth strategies failed. Last error:", response.status, errorText);
 
       if (response.status === 404) {
         return {
@@ -140,21 +169,15 @@ const handler: Handler = async (event) => {
         statusCode: response.status,
         headers,
         body: JSON.stringify({
-          error: "Errore nella ricerca targa",
-          details: errorText,
+          error: `Autenticazione fallita (${response.status}). Verifica le credenziali OpenAPI.`,
+          details: errorText.substring(0, 200),
         }),
       };
     }
 
     const data = await response.json();
-    console.log(
-      "OpenAPI automotive raw response keys:",
-      Object.keys(data)
-    );
-    console.log(
-      "OpenAPI automotive raw response:",
-      JSON.stringify(data).substring(0, 500)
-    );
+    console.log("OpenAPI response keys:", Object.keys(data));
+    console.log("OpenAPI response sample:", JSON.stringify(data).substring(0, 500));
 
     // Extract relevant fields — try multiple possible key names
     const result = {
@@ -199,7 +222,6 @@ const handler: Handler = async (event) => {
       makeModel: "",
     };
 
-    // Build makeModel string
     if (result.brand && result.model) {
       result.makeModel = `${result.brand} ${result.model}`;
     } else if (result.brand) {
