@@ -82,10 +82,11 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
 
   async function loadDashboard() {
     try {
-      const res = await fetch(`${API_BASE}/referral-dashboard`, {
+      const res = await fetch(`${API_BASE}/referral-dashboard?_=${Date.now()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participant_id: participantId }),
+        cache: 'no-store',
       })
       const json = await res.json()
       if (res.ok) setData(json)
@@ -152,10 +153,19 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Balance Card */}
-      <div className="bg-gradient-to-br from-[#d4af37]/20 to-[#d4af37]/5 border border-[#d4af37]/30 rounded-2xl p-6 text-center">
+      <div className="bg-gradient-to-br from-[#d4af37]/20 to-[#d4af37]/5 border border-[#d4af37]/30 rounded-2xl p-6 text-center relative">
+        <button
+          onClick={() => { setLoading(true); loadDashboard() }}
+          className="absolute top-3 right-3 text-gray-400 hover:text-[#d4af37] transition-colors p-2"
+          title="Aggiorna"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
         <p className="text-gray-400 text-sm mb-1">Il tuo saldo Wallet</p>
-        <p className="text-5xl font-bold text-[#d4af37]">{balance}</p>
-        <p className="text-gray-400 text-sm mt-2">Totale guadagnato: {totalEarned}</p>
+        <p className="text-5xl font-bold text-[#d4af37]">&euro;{balance}</p>
+        <p className="text-gray-400 text-sm mt-2">Totale guadagnato: &euro;{totalEarned}</p>
       </div>
 
       {/* Referral Code & Share */}
