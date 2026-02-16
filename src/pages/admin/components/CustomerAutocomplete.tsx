@@ -34,11 +34,12 @@ export default function CustomerAutocomplete({
     // Filter customers based on search query
     const filteredCustomers = customers.filter(customer => {
         if (!searchQuery.trim()) return true
-        const query = searchQuery.toLowerCase()
-        return (
-            customer.full_name.toLowerCase().includes(query) ||
-            customer.email?.toLowerCase().includes(query) ||
-            customer.phone?.includes(query)
+        const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
+        const name = customer.full_name.toLowerCase()
+        const email = customer.email?.toLowerCase() || ''
+        const phone = customer.phone || ''
+        return words.every(word =>
+            name.includes(word) || email.includes(word) || phone.includes(word)
         )
     })
 
