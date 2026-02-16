@@ -152,23 +152,23 @@ export default function CustomersTab() {
       return nameA.localeCompare(nameB, 'it')
     })
 
-    // 2. Apply search filter
+    // 2. Apply search filter (split query into words so "Mario Rossi" matches "Mario Giuseppe Rossi")
     if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+      const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
       result = result.filter((customer) => {
-        // Build full name from nome + cognome if full_name doesn't exist
-        const fullName = customer.full_name || `${customer.nome || ''} ${customer.cognome || ''}`.trim()
+        const fullName = (customer.full_name || `${customer.nome || ''} ${customer.cognome || ''}`.trim()).toLowerCase()
+        const fields = [
+          fullName,
+          customer.email?.toLowerCase() || '',
+          customer.phone?.toLowerCase() || '',
+          customer.nome?.toLowerCase() || '',
+          customer.cognome?.toLowerCase() || '',
+          customer.ragione_sociale?.toLowerCase() || '',
+          customer.denominazione?.toLowerCase() || '',
+          customer.telefono?.toLowerCase() || ''
+        ].join(' ')
 
-        return (
-          fullName.toLowerCase().includes(query) ||
-          customer.email?.toLowerCase().includes(query) ||
-          customer.phone?.toLowerCase().includes(query) ||
-          customer.nome?.toLowerCase().includes(query) ||
-          customer.cognome?.toLowerCase().includes(query) ||
-          customer.ragione_sociale?.toLowerCase().includes(query) ||
-          customer.denominazione?.toLowerCase().includes(query) ||
-          customer.telefono?.toLowerCase().includes(query)
-        )
+        return words.every(word => fields.includes(word))
       })
     }
 
