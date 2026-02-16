@@ -1685,9 +1685,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                     // Search filter
                     if (!bookingSearchQuery) return true
-                    const query = bookingSearchQuery.toLowerCase()
+                    const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
                     const customerName = (booking.customer_name || '').toLowerCase()
-                    return customerName.includes(query)
+                    return words.every(word => customerName.includes(word))
                   }).map((booking) => (
                     <tr key={booking.id} className="border-t border-theme-border hover:er/50">
                       <td className="px-4 py-3 text-sm text-theme-text-primary">

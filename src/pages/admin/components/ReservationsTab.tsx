@@ -4262,11 +4262,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {bookings.filter(booking => {
             // Search filter
             if (!bookingSearchQuery) return true
-            const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
+            const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-            return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
+            const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+            return words.every(word => searchText.includes(word))
           }).length === 0 && (
               <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
                 {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
@@ -4277,11 +4278,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {bookings.filter(booking => {
             // Search filter
             if (!bookingSearchQuery) return true
-            const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
+            const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-            return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
+            const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+            return words.every(word => searchText.includes(word))
           }).map((booking) => {
             const isCarWash = booking.service_type === 'car_wash'
             return (
@@ -4424,11 +4426,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {bookings.filter(booking => {
                   // Search filter
                   if (!bookingSearchQuery) return true
-                  const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
+                  const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-                  return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
+                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+                  return words.every(word => searchText.includes(word))
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
@@ -4543,11 +4546,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {bookings.filter(booking => {
                   // Search filter
                   if (!bookingSearchQuery) return true
-                  const query = bookingSearchQuery.toLowerCase().replace(/\s/g, '')
+                  const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-                  return customerName.includes(query) || vehicleName.includes(query) || vehiclePlate.includes(query)
+                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+                  return words.every(word => searchText.includes(word))
                 }).length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">
