@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince'
+import toast from 'react-hot-toast'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -461,7 +462,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         if (error) throw error
         result = updatedClient
-        alert('Cliente aggiornato con successo!')
+        toast.success('Cliente aggiornato con successo!')
       } else {
         // INSERT new customer
         const { data: newClient, error } = await supabase
@@ -472,7 +473,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         if (error) throw error
         result = newClient
-        alert('Cliente creato con successo!')
+        toast.success('Cliente creato con successo!')
       }
 
       if (onClientCreated && result) {
@@ -482,7 +483,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       handleClose()
     } catch (error) {
       console.error('Errore durante il salvataggio del cliente:', error)
-      alert('Errore durante il salvataggio del cliente: ' + (error as Error).message)
+      toast.error('Errore durante il salvataggio del cliente: ' + (error as Error).message)
     } finally {
       setIsSaving(false)
     }

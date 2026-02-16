@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface Invoice {
   id: string
@@ -35,6 +36,7 @@ export default function InvoicesTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ index: number; name: string } | null>(null)
 
   const [formData, setFormData] = useState({
     invoice_number: '',
@@ -126,7 +128,7 @@ export default function InvoicesTab() {
       loadInvoices()
     } catch (error) {
       console.error('Failed to save invoice:', error)
-      alert('Impossibile salvare la fattura')
+      toast.error('Impossibile salvare la fattura')
     }
   }
 
@@ -154,10 +156,17 @@ export default function InvoicesTab() {
   }
 
   function removeItem(index: number) {
+    const item = formData.items[index]
+    setDeleteTarget({ index, name: item.description || 'questo articolo' })
+  }
+
+  function confirmRemoveItem() {
+    if (deleteTarget === null) return
     setFormData({
       ...formData,
-      items: formData.items.filter((_, i) => i !== index)
+      items: formData.items.filter((_, i) => i !== deleteTarget.index)
     })
+    setDeleteTarget(null)
   }
 
   function updateItem(index: number, field: keyof InvoiceItem, value: any) {
@@ -545,6 +554,22 @@ export default function InvoicesTab() {
           </table>
         </div>
       </div>
+
+      {/* Delete Item Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-theme-card p-6 rounded-lg shadow-xl max-w-md">
+            <h3 className="text-lg font-bold mb-2 text-theme-text">Conferma eliminazione</h3>
+            <p className="text-theme-text-muted mb-4">
+              Sei sicuro di voler eliminare <strong>{deleteTarget.name}</strong>?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded border border-theme-border text-theme-text-muted hover:bg-theme-hover">Annulla</button>
+              <button onClick={confirmRemoveItem} className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">Elimina</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

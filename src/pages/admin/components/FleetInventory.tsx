@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface Vehicle {
     id: string
@@ -136,7 +137,7 @@ export default function FleetInventory() {
             await loadVehiclesWithInventory()
         } catch (error: any) {
             console.error('Error saving inventory:', error)
-            alert('Errore nel salvataggio: ' + (error?.message || error?.details || JSON.stringify(error)))
+            toast.error('Errore nel salvataggio')
         } finally {
             setSaving(false)
         }
@@ -210,7 +211,7 @@ export default function FleetInventory() {
         }
 
         if (!phone) {
-            alert('Nessun numero di telefono fornitore configurato. Modifica il veicolo per aggiungere il numero.')
+            toast.error('Nessun numero di telefono fornitore configurato')
             return
         }
 

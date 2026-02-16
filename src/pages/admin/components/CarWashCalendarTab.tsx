@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
+import toast from 'react-hot-toast'
 
 // --- Configuration ---
 const CELL_WIDTH = 52 // Balanced width: fits full month on screen while maintaining readability
@@ -517,6 +518,27 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                               <div className="font-bold mb-1 text-base">{slotBooking.booking.customer_name}</div>
                               <div className="text-theme-text-muted mb-2">{slotBooking.booking.service_name}</div>
 
+                              {/* Vehicle info */}
+                              {(slotBooking.booking.booking_details?.vehicleMakeModel || slotBooking.booking.vehicle_plate) && (
+                                <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-theme-border/50">
+                                  {slotBooking.booking.vehicle_plate && (
+                                    <span className="font-mono font-bold text-dr7-gold text-[11px]">{slotBooking.booking.vehicle_plate}</span>
+                                  )}
+                                  {slotBooking.booking.booking_details?.vehicleMakeModel && (
+                                    <span className="text-theme-text-primary text-[11px]">{slotBooking.booking.booking_details.vehicleMakeModel}</span>
+                                  )}
+                                  {slotBooking.booking.booking_details?.vehicleCategory && (
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      slotBooking.booking.booking_details.vehicleCategory === 'urban'
+                                        ? 'bg-blue-600/30 text-blue-400'
+                                        : 'bg-orange-600/30 text-orange-400'
+                                    }`}>
+                                      {slotBooking.booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
                               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
                                 <span className="text-theme-text-muted">Orario:</span>
                                 <span className="font-mono">{slotBooking.booking.appointment_time}</span>
@@ -588,6 +610,26 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     <div className="text-theme-text-primary font-bold text-lg mb-1">{selectedBooking.customer_name || selectedBooking.booking_details?.customer?.fullName || 'N/A'}</div>
                     <div className="text-theme-text-muted text-sm">{selectedBooking.customer_email || selectedBooking.booking_details?.customer?.email || 'N/A'}</div>
                     <div className="text-theme-text-muted text-sm">{selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone || 'N/A'}</div>
+                    {/* Vehicle info */}
+                    {(selectedBooking.booking_details?.vehicleMakeModel || selectedBooking.vehicle_plate) && (
+                      <div className="flex items-center gap-2 mt-2">
+                        {selectedBooking.vehicle_plate && (
+                          <span className="font-mono font-bold text-dr7-gold text-sm">{selectedBooking.vehicle_plate}</span>
+                        )}
+                        {selectedBooking.booking_details?.vehicleMakeModel && (
+                          <span className="text-theme-text-primary text-sm">{selectedBooking.booking_details.vehicleMakeModel}</span>
+                        )}
+                        {selectedBooking.booking_details?.vehicleCategory && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            selectedBooking.booking_details.vehicleCategory === 'urban'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-orange-600 text-white'
+                          }`}>
+                            {selectedBooking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
                     {selectedBooking.status}
@@ -796,12 +838,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
                     if (error) throw error
 
-                    alert('✅ Prenotazione aggiornata!')
+                    toast.success('Prenotazione aggiornata!')
                     setEditingBooking(null)
                     loadData()
                   } catch (error) {
                     console.error('Failed to update booking:', error)
-                    alert('❌ Errore durante l\'aggiornamento')
+                    toast.error('Errore durante l\'aggiornamento')
                   }
                 }}
                 className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"

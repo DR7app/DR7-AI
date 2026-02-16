@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface FleetVehicleDetailProps {
     vehicleId: string
@@ -61,11 +62,13 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
             if (error) throw error
 
+            toast.success('Modifiche salvate')
             // Close the detail view after save
             onBack()
         } catch (error) {
             console.error('Error saving vehicle:', error)
-            alert('Errore nel salvataggio')
+            toast.error('Errore nel salvataggio')
+        } finally {
             setSaving(false)
         }
     }

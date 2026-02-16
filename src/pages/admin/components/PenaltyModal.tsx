@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 
 interface PenaltyModalProps {
     isOpen: boolean
@@ -159,7 +160,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 }
             }
 
-            alert(`✅ Fattura penale generata con successo!\n\nNumero: ${data.invoice?.numero_fattura || 'N/A'}\nImporto: €${amountNum.toFixed(2)}`)
+            toast.success(`Fattura penale generata con successo! Numero: ${data.invoice?.numero_fattura || 'N/A'} - Importo: €${amountNum.toFixed(2)}`)
 
             // Reset form and close
             setAmount('')

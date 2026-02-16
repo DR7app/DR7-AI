@@ -299,9 +299,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
   // Delete Confirmation Modal State
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const [pendingDeleteType, setPendingDeleteType] = useState<'booking' | 'reservation'>('booking')
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
@@ -1252,7 +1249,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return missing
   }
 
-  async function handleGenerateContract(booking: Booking, showSuccessAlert = true) {
+  async function handleGenerateContract(booking: Booking) {
     console.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
@@ -1314,28 +1311,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         throw new Error(data.error || 'Failed to generate contract')
       }
 
+      // Open PDF in new tab
       if (data.url) {
-        // Try to open the PDF in a new tab
-        const pdfWindow = window.open(data.url, '_blank')
-
-        // Reload data to show the contract link and Yousign button in the UI
-        await loadData()
-
-        if (showSuccessAlert) {
-          // Check if popup was blocked
-          if (!pdfWindow || pdfWindow.closed || typeof pdfWindow.closed === 'undefined') {
-            // Popup was blocked - show alert with manual link
-            window.location.href = data.url
-          } else {
-            // Popup opened successfully
-            alert('Contratto generato con successo!\n\nIl PDF si è aperto in una nuova scheda per la revisione.\n\nDopo aver verificato il contratto, clicca "Invia a Yousign" per inviarlo al cliente.')
-          }
-        }
-      } else {
-        if (showSuccessAlert) {
-          alert('Contratto generato, ma URL non disponibile.')
-        }
+        window.open(data.url, '_blank')
       }
+
+      // Reload data to show the contract link and Yousign button in the UI
+      await loadData()
     } catch (error: any) {
       console.error('Error generating contract:', error)
       alert('Errore nella generazione del contratto: ' + error.message + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
@@ -1562,23 +1544,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
-    // Show custom confirmation modal instead of browser confirm
-    setPendingDeleteId(bookingId)
-    setPendingDeleteType(bookingType)
-    setShowDeleteConfirm(true)
-  }
-
-  async function confirmDeleteBooking() {
-    if (!pendingDeleteId) return
-
-    const bookingId = pendingDeleteId
-    const bookingType = pendingDeleteType
-
-    // Close modal and reset state
-    setShowDeleteConfirm(false)
-    setPendingDeleteId(null)
-
+  async function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
     try {
       // Get booking details before deleting
       let customerName = ''
@@ -2781,9 +2747,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (dbCustomer) {
           // Map DB fields to customerInfo shape expected below
           const fullName = dbCustomer.tipo_cliente === 'azienda'
-            ? dbCustomer.denominazione
+            ? (dbCustomer.ragione_sociale || dbCustomer.denominazione)
             : dbCustomer.tipo_cliente === 'pubblica_amministrazione'
-              ? dbCustomer.ente_o_ufficio
+              ? (dbCustomer.ente_o_ufficio || dbCustomer.ragione_sociale)
               : `${dbCustomer.nome} ${dbCustomer.cognome}`
 
           customerInfo = {
@@ -4839,36 +4805,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
 
-        {/* Delete Confirmation Modal */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
-            <div className="bg-theme-text-primary rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-xl font-bold mb-4 text-red-600">Cancella Prenotazione</h3>
-              <p className="text-theme-text-secondary mb-6">
-                Vuoi cancellare questa prenotazione?
-              </p>
-              <div className="flex gap-3 justify-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setShowDeleteConfirm(false)
-                    setPendingDeleteId(null)
-                  }}
-                >
-                  No
-                </Button>
-                <Button
-                  type="button"
-                  onClick={confirmDeleteBooking}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Sì, Cancella
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ===== EXTEND BOOKING MODAL ===== */}
         {showExtendModal && extendingBooking && (

@@ -288,11 +288,6 @@ const handler: Handler = async (event) => {
         message += `*KM:* Illimitati\n`;
       } else if (kmLimit && kmLimit !== '0') {
         message += `*KM:* ${kmLimit} km\n`;
-        // Sforo per KM (only relevant when km are limited)
-        const kmOverageFee = booking.km_overage_fee;
-        if (kmOverageFee && kmOverageFee > 0) {
-          message += `*Sforo per KM:* €${Number(kmOverageFee).toFixed(2)}/km\n`;
-        }
       }
 
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';

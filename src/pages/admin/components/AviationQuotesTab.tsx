@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface AviationQuote {
   id: string
@@ -162,13 +163,13 @@ export default function AviationQuotesTab() {
 
       if (error) throw error
 
-      alert('Preventivo salvato con successo!')
+      toast.success('Preventivo salvato con successo!')
       setShowForm(false)
       resetForm()
       loadQuotes()
     } catch (error) {
       console.error('Failed to save quote:', error)
-      alert('Errore durante il salvataggio: ' + (error as Error).message)
+      toast.error('Errore durante il salvataggio: ' + (error as Error).message)
     }
   }
 

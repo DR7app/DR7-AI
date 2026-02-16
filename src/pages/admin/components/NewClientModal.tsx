@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../../../data/sardegnaProvince'
+import toast from 'react-hot-toast'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -506,7 +507,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           console.log('✅ Basic customers table updated successfully')
         }
 
-        alert('Cliente aggiornato con successo!')
+        toast.success('Cliente aggiornato con successo!')
 
         if (onClientCreated && resultData) {
           onClientCreated(resultData.id)
@@ -558,7 +559,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           console.warn('Silent error saving to legacy customers table:', legacyError)
         }
 
-        alert('Cliente creato con successo!')
+        toast.success('Cliente creato con successo!')
       }
 
       // Upload documents if any were selected
@@ -604,7 +605,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               return true
             } catch (error: any) {
               console.error(`Error uploading ${docType}${suffix}:`, error)
-              alert(`Errore caricamento ${docType}${suffix}: ${error.message}`)
+              toast.error(`Errore caricamento ${docType}${suffix}: ${error.message}`)
               return false
             }
           }
@@ -683,7 +684,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         errorMessage += error.message || 'Errore sconosciuto'
       }
 
-      alert(errorMessage)
+      toast.error(errorMessage)
     } finally {
       setIsSaving(false)
     }

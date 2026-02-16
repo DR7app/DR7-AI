@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface Admin {
     id: string
@@ -53,7 +54,7 @@ export default function AdminManagementTab() {
             await loadAdmins()
         } catch (err) {
             console.error('Error updating admin:', err)
-            alert('Errore nell\'aggiornamento dell\'amministratore')
+            toast.error('Errore nell\'aggiornamento dell\'amministratore')
         }
     }
 
@@ -70,7 +71,7 @@ export default function AdminManagementTab() {
             await loadAdmins()
         } catch (err) {
             console.error('Error updating admin role:', err)
-            alert('Errore nell\'aggiornamento del ruolo')
+            toast.error('Errore nell\'aggiornamento del ruolo')
         }
     }
 

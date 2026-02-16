@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../../supabaseClient';
 import { QRCodeSVG } from 'qrcode.react';
+import toast from 'react-hot-toast';
 
 export default function ScanJobCreator() {
     const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export default function ScanJobCreator() {
             setCurrentJobId(data.id);
         } catch (err) {
             console.error('Error creating scan job:', err);
-            alert('Errore nella creazione del job');
+            toast.error('Errore nella creazione del job');
         } finally {
             setLoading(false);
         }

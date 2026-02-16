@@ -17,8 +17,9 @@ export function useScadenze() {
   const [scadenzaSearch, setScadenzaSearch] = useState('')
 
   useEffect(() => {
-    loadScadenze()
-    loadAutoScadenze()
+    // loadScadenze must complete before loadAutoScadenze so the latter
+    // can merge manual DB scadenze with auto-generated ones without race conditions.
+    loadScadenze().then(() => loadAutoScadenze())
   }, [])
 
   async function loadScadenze() {
@@ -46,7 +47,7 @@ export function useScadenze() {
 
       const { data: bookings } = await supabase
         .from('bookings')
-        .select('id, customer_name, vehicle_name, dropoff_date, price_total, booking_details')
+        .select('id, customer_name, vehicle_name, dropoff_date, price_total, booking_details, service_type')
         .gte('dropoff_date', today.toISOString())
         .lte('dropoff_date', ahead.toISOString())
         .in('status', ['confirmed', 'active'])
@@ -65,8 +66,17 @@ export function useScadenze() {
 
       const autoScadenze: Scadenza[] = []
 
+      // Filter: keep only real rental bookings (exclude car wash and lavaggio rientro)
+      const rentalBookings = (bookings || []).filter(b => {
+        // Exclude explicit car_wash service type
+        if (b.service_type === 'car_wash') return false
+        // Exclude "Lavaggio Rientro" bookings (car wash tied to rental returns)
+        if (b.customer_name?.toLowerCase().includes('lavaggio')) return false
+        return true
+      })
+
       // Rental endings
-      bookings?.forEach(booking => {
+      rentalBookings.forEach(booking => {
         autoScadenze.push({
           id: `rental-${booking.id}`,
           category: 'noleggi',

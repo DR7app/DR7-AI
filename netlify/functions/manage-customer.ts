@@ -90,6 +90,48 @@ const handler: Handler = async (event) => {
         console.error("Error deleting customer_memberships:", membershipError);
       }
 
+      // Cascade delete bookings and their children
+      console.log("[manage-customer] Finding bookings for customer:", customerId);
+      const { data: customerBookings } = await supabaseAdmin
+        .from("bookings")
+        .select("id")
+        .eq("customer_id", customerId);
+
+      if (customerBookings && customerBookings.length > 0) {
+        const bookingIds = customerBookings.map(b => b.id);
+        console.log("[manage-customer] Found", bookingIds.length, "bookings, deleting children...");
+
+        // Delete children of each booking
+        const { error: fattureError } = await supabaseAdmin
+          .from("fatture")
+          .delete()
+          .in("booking_id", bookingIds);
+        if (fattureError) console.warn("[manage-customer] Fatture deletion warning:", fattureError.message);
+
+        const { error: contractsError } = await supabaseAdmin
+          .from("contracts")
+          .delete()
+          .in("booking_id", bookingIds);
+        if (contractsError) console.warn("[manage-customer] Contracts deletion warning:", contractsError.message);
+
+        const { error: cauzioniError } = await supabaseAdmin
+          .from("cauzioni")
+          .delete()
+          .in("booking_id", bookingIds);
+        if (cauzioniError) console.warn("[manage-customer] Cauzioni deletion warning:", cauzioniError.message);
+
+        // Delete bookings
+        const { error: bookingsError } = await supabaseAdmin
+          .from("bookings")
+          .delete()
+          .in("id", bookingIds);
+        if (bookingsError) {
+          console.error("Error deleting bookings:", bookingsError);
+        } else {
+          console.log("[manage-customer] Deleted", bookingIds.length, "bookings");
+        }
+      }
+
       // Delete from customers_extended
       console.log("[manage-customer] Deleting from customers_extended:", customerId);
       const { error: extError, count: extCount } = await supabaseAdmin
@@ -214,6 +256,39 @@ const handler: Handler = async (event) => {
       const realIds = customerIds.filter((id: string) => !id.startsWith("temp-"));
 
       if (realIds.length > 0) {
+        // Find all bookings for these customers
+        const { data: allBookings } = await supabaseAdmin
+          .from("bookings")
+          .select("id")
+          .in("customer_id", realIds);
+
+        if (allBookings && allBookings.length > 0) {
+          const bookingIds = allBookings.map(b => b.id);
+          console.log("[manage-customer] Bulk delete: Found", bookingIds.length, "bookings, deleting children...");
+
+          // Delete children of each booking
+          const { error: fattureError } = await supabaseAdmin
+            .from("fatture")
+            .delete()
+            .in("booking_id", bookingIds);
+          if (fattureError) console.warn("[manage-customer] Bulk fatture deletion warning:", fattureError.message);
+
+          const { error: contractsError } = await supabaseAdmin
+            .from("contracts")
+            .delete()
+            .in("booking_id", bookingIds);
+          if (contractsError) console.warn("[manage-customer] Bulk contracts deletion warning:", contractsError.message);
+
+          const { error: cauzioniError } = await supabaseAdmin
+            .from("cauzioni")
+            .delete()
+            .in("booking_id", bookingIds);
+          if (cauzioniError) console.warn("[manage-customer] Bulk cauzioni deletion warning:", cauzioniError.message);
+
+          // Delete bookings
+          await supabaseAdmin.from("bookings").delete().in("id", bookingIds);
+        }
+
         await supabaseAdmin.from("birthday_messages").delete().in("customer_id", realIds);
         await supabaseAdmin.from("customer_memberships").delete().in("client_id", realIds);
         await supabaseAdmin.from("customers_extended").delete().in("id", realIds);

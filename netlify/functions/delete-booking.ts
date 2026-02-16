@@ -49,7 +49,14 @@ export const handler: Handler = async (event) => {
         // 1. Cancel booking first (to safe-guard status checks)
         await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
 
-        // 2. Cascade delete related records
+        // 2. Restore any buono sconto linked to this booking
+        const { error: buonoError } = await supabase
+            .from('referral_discount_codes')
+            .update({ used: false, used_at: null, booking_id: null })
+            .eq('booking_id', bookingId)
+        if (buonoError) console.warn('[delete-booking] Buono restore warning:', buonoError.message)
+
+        // 3. Cascade delete related records
         // Delete related invoices (fatture)
         const { error: invoiceError } = await supabase.from('fatture').delete().eq('booking_id', bookingId)
         if (invoiceError) console.warn('[delete-booking] Invoice deletion warning:', invoiceError.message)
@@ -58,11 +65,11 @@ export const handler: Handler = async (event) => {
         const { error: contractError } = await supabase.from('contracts').delete().eq('booking_id', bookingId)
         if (contractError) console.warn('[delete-booking] Contract deletion warning:', contractError.message)
 
-        // Delete related payments? (wallet_transactions might reference it)
-        // If wallet_transactions references booking_id, we should delete those too? 
-        // For now, let's stick to what we know failed. 
+        // Delete related cauzioni (deposits)
+        const { error: cauzioneError } = await supabase.from('cauzioni').delete().eq('booking_id', bookingId)
+        if (cauzioneError) console.warn('[delete-booking] Cauzioni deletion warning:', cauzioneError.message)
 
-        // 3. Delete the booking
+        // 4. Delete the booking
         const { error } = await supabase
             .from('bookings')
             .delete()

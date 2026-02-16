@@ -106,7 +106,6 @@ export default function CarWashTab() {
       }
 
       const serviceData: any = {
-        id: formData.id || undefined,
         name: formData.name,
         name_en: formData.name_en,
         price: parseFloat(formData.price),
@@ -124,7 +123,7 @@ export default function CarWashTab() {
       }
 
       if (editingId) {
-        // Update existing service
+        // Update existing service — only send form fields, preserving metadata/image
         const { error } = await supabase
           .from('car_wash_services')
           .update(serviceData)

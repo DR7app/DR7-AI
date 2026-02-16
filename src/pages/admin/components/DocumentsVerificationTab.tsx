@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface UserDocument {
   id: string
@@ -232,14 +233,14 @@ export default function DocumentsVerificationTab() {
 
       if (error) throw error
 
-      alert(`Documento ${status === 'verified' ? 'verificato' : 'rifiutato'} con successo!`)
+      toast.success(`Documento ${status === 'verified' ? 'verificato' : 'rifiutato'} con successo!`)
       setShowDocModal(false)
       setSelectedDoc(null)
       setRejectionReason('')
       loadDocuments()
     } catch (error) {
       console.error('Failed to update document status:', error)
-      alert('Errore nell\'aggiornamento dello stato del documento')
+      toast.error('Errore nell\'aggiornamento dello stato del documento')
     }
   }
 
@@ -279,13 +280,13 @@ export default function DocumentsVerificationTab() {
             window.open(fuzzyMatch.url, '_blank')
           } else {
             console.error('Document mismatch. Targets:', targetFileName, 'Found:', allDocs.map((d: any) => d.fileName))
-            alert('Impossibile recuperare il file sicuro. Riprova.')
+            toast.error('Impossibile recuperare il file sicuro. Riprova')
           }
         }
       }
     } catch (error) {
       console.error('Failed to get document URL:', error)
-      alert('Errore nel caricamento del documento')
+      toast.error('Errore nel caricamento del documento')
     }
   }
 

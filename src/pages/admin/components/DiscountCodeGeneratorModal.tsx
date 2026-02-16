@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface DiscountCodeGeneratorModalProps {
     editingCode?: any | null
@@ -82,19 +83,19 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
 
         // Validation
         if (!formData.value_amount || Number(formData.value_amount) <= 0) {
-            alert('Inserisci un valore valido')
+            toast.error('Inserisci un valore valido')
             return
         }
         if (!formData.valid_until) {
-            alert('Inserisci una data di fine validità')
+            toast.error('Inserisci una data di fine validità')
             return
         }
         if (!formData.code.trim()) {
-            alert('Il codice non può essere vuoto')
+            toast.error('Il codice non può essere vuoto')
             return
         }
         if (formData.value_type === 'percentage' && Number(formData.value_amount) > 100) {
-            alert('La percentuale non può superare il 100%')
+            toast.error('La percentuale non può superare il 100%')
             return
         }
 
@@ -109,7 +110,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                     .maybeSingle()
 
                 if (existing) {
-                    alert('Questo codice esiste già. Genera un nuovo codice o inseriscine uno diverso.')
+                    toast.error('Questo codice esiste già. Genera un nuovo codice o inseriscine uno diverso.')
                     setLoading(false)
                     return
                 }
@@ -138,19 +139,19 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                     .update(dataToSave)
                     .eq('id', editingCode.id)
                 if (error) throw error
-                alert('Codice aggiornato con successo')
+                toast.success('Codice aggiornato con successo')
             } else {
                 const { error } = await supabase
                     .from('discount_codes')
                     .insert([dataToSave])
                 if (error) throw error
-                alert('Codice sconto creato con successo')
+                toast.success('Codice sconto creato con successo')
             }
 
             onSave()
         } catch (error: any) {
             console.error('Error saving discount code:', error)
-            alert(`Errore nel salvataggio: ${error.message}`)
+            toast.error(`Errore nel salvataggio: ${error.message}`)
         } finally {
             setLoading(false)
         }

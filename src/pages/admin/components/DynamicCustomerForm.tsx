@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Button from './Button'
+import toast from 'react-hot-toast'
 
 interface DynamicCustomerFormProps {
   onSuccess: () => void
@@ -43,7 +44,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
   // Search functions
   const handleSearch = async (type: string, value: string) => {
     if (!value.trim()) {
-      alert('Inserisci un valore per la ricerca')
+      toast.error('Inserisci un valore per la ricerca')
       return
     }
 
@@ -59,14 +60,14 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
       if (data && data.length > 0) {
         // Auto-fill with first result
         const result = data[0]
-        alert(`Trovato: ${result.display_name}\nCodice Fiscale: ${result.codice_fiscale || 'N/A'}`)
+        toast.success(`Trovato: ${result.display_name} - Codice Fiscale: ${result.codice_fiscale || 'N/A'}`)
         // You can auto-fill form here if needed
       } else {
-        alert('Nessun risultato trovato')
+        toast.error('Nessun risultato trovato')
       }
     } catch (error: any) {
       console.error('Search error:', error)
-      alert('Errore durante la ricerca')
+      toast.error('Errore durante la ricerca')
     }
   }
 
@@ -106,11 +107,11 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
 
       if (error) throw error
 
-      alert('✅ Cliente creato con successo!')
+      toast.success('Cliente creato con successo!')
       onSuccess()
     } catch (error: any) {
       console.error('Error creating customer:', error)
-      alert(`❌ Errore: ${error.message}`)
+      toast.error(`Errore: ${error.message}`)
     } finally {
       setLoading(false)
     }
