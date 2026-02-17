@@ -56,7 +56,16 @@ interface DiscountCode {
     last_used_at?: string | null
 }
 
-type ActiveSection = 'customers' | 'consents' | 'discount_codes'
+interface SystemMessage {
+    id: string
+    message_key: string
+    label: string
+    description: string
+    message_body: string
+    updated_at: string
+}
+
+type ActiveSection = 'customers' | 'consents' | 'discount_codes' | 'system_messages'
 type DiscountCodeFilter = 'all' | 'active' | 'deactivated' | 'expired'
 
 export default function MarketingTab() {
@@ -94,6 +103,13 @@ export default function MarketingTab() {
     const [selectedCodeForQR, setSelectedCodeForQR] = useState<DiscountCode | null>(null)
     const [editingCode, setEditingCode] = useState<DiscountCode | null>(null)
 
+    // System messages state
+    const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([])
+    const [systemMessagesLoading, setSystemMessagesLoading] = useState(false)
+    const [editingMessage, setEditingMessage] = useState<string | null>(null) // message_key being edited
+    const [editingMessageBody, setEditingMessageBody] = useState('')
+    const [savingMessage, setSavingMessage] = useState(false)
+
     useEffect(() => {
         loadCustomers()
         loadConsents()
@@ -102,6 +118,9 @@ export default function MarketingTab() {
     useEffect(() => {
         if (activeSection === 'discount_codes' && discountCodes.length === 0 && !discountCodesLoading) {
             loadDiscountCodes()
+        }
+        if (activeSection === 'system_messages' && systemMessages.length === 0 && !systemMessagesLoading) {
+            loadSystemMessages()
         }
     }, [activeSection])
 
@@ -376,6 +395,120 @@ export default function MarketingTab() {
         }
     }
 
+    // ─── System Messages ───────────────────────────────
+    const DEFAULT_MESSAGES: Omit<SystemMessage, 'id' | 'updated_at'>[] = [
+        {
+            message_key: 'supercar_day_before',
+            label: 'Supercar — Giorno prima fine noleggio',
+            description: 'Messaggio inviato il giorno prima della fine del noleggio ai clienti Supercar',
+            message_body: `Buongiorno {nome},\n\nVorrebbe valutare una promo in continuazione super vantaggiosa?\n\nCordiali saluti,\nDR7`,
+        },
+        {
+            message_key: 'utilitaria_day_before',
+            label: 'Utilitaria — Giorno prima fine noleggio',
+            description: 'Messaggio inviato il giorno prima della fine del noleggio ai clienti Utilitaria/Urban',
+            message_body: `Buongiorno {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`,
+        },
+        {
+            message_key: 'deposit_return_iban',
+            label: 'Cauzione — Richiesta IBAN dopo fine noleggio',
+            description: 'Messaggio inviato 60 minuti dopo la fine del noleggio ai clienti che hanno lasciato la cauzione',
+            message_body: `Buongiorno {nome},\n\nLa ringraziamo per aver scelto i nostri servizi.\n\nAl fine di procedere con la restituzione della cauzione, Le chiediamo cortesemente di comunicarci il Suo IBAN completo e il nominativo dell'intestatario del conto.\n\nIl rimborso verrà effettuato tramite bonifico ordinario entro il quattordicesimo giorno lavorativo, come da condizioni contrattuali.\n\nCordiali saluti,\nDR7`,
+        },
+    ]
+
+    async function loadSystemMessages() {
+        setSystemMessagesLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('system_messages')
+                .select('*')
+                .order('message_key')
+
+            if (error) {
+                // Table might not exist yet — seed defaults
+                console.warn('system_messages table error, seeding defaults:', error.message)
+                await seedSystemMessages()
+                return
+            }
+
+            if (!data || data.length === 0) {
+                await seedSystemMessages()
+                return
+            }
+
+            setSystemMessages(data)
+        } catch (err: any) {
+            console.error('Error loading system messages:', err.message)
+            toast.error('Errore nel caricamento dei messaggi di sistema')
+        } finally {
+            setSystemMessagesLoading(false)
+        }
+    }
+
+    async function seedSystemMessages() {
+        try {
+            const rows = DEFAULT_MESSAGES.map(m => ({
+                message_key: m.message_key,
+                label: m.label,
+                description: m.description,
+                message_body: m.message_body,
+            }))
+
+            const { data, error } = await supabase
+                .from('system_messages')
+                .upsert(rows, { onConflict: 'message_key' })
+                .select()
+
+            if (error) {
+                console.error('Error seeding system messages:', error.message)
+                // Use defaults in memory
+                setSystemMessages(DEFAULT_MESSAGES.map((m, i) => ({
+                    ...m,
+                    id: `default-${i}`,
+                    updated_at: new Date().toISOString(),
+                })))
+            } else {
+                setSystemMessages(data || [])
+                toast.success('Messaggi di sistema inizializzati')
+            }
+        } catch (err: any) {
+            console.error('Error seeding:', err.message)
+        } finally {
+            setSystemMessagesLoading(false)
+        }
+    }
+
+    async function saveSystemMessage(messageKey: string) {
+        setSavingMessage(true)
+        try {
+            const { error } = await supabase
+                .from('system_messages')
+                .update({
+                    message_body: editingMessageBody,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('message_key', messageKey)
+
+            if (error) throw error
+
+            setSystemMessages(prev =>
+                prev.map(m =>
+                    m.message_key === messageKey
+                        ? { ...m, message_body: editingMessageBody, updated_at: new Date().toISOString() }
+                        : m
+                )
+            )
+            setEditingMessage(null)
+            toast.success('Messaggio aggiornato con successo')
+        } catch (err: any) {
+            console.error('Error saving system message:', err.message)
+            toast.error('Errore nel salvataggio: ' + err.message)
+        } finally {
+            setSavingMessage(false)
+        }
+    }
+
     function copyCode(code: string) {
         navigator.clipboard.writeText(code).then(() => {
             toast.success('Codice copiato!')
@@ -604,6 +737,16 @@ export default function MarketingTab() {
                     }`}
                 >
                     Codici Sconto
+                </button>
+                <button
+                    onClick={() => setActiveSection('system_messages')}
+                    className={`px-4 py-2 rounded-t font-semibold transition-colors ${
+                        activeSection === 'system_messages'
+                            ? 'bg-dr7-gold text-theme-bg-primary'
+                            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
+                    }`}
+                >
+                    Messaggi di Sistema
                 </button>
             </div>
 
@@ -1141,6 +1284,92 @@ export default function MarketingTab() {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* ===================== SYSTEM MESSAGES SECTION ===================== */}
+            {activeSection === 'system_messages' && (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
+                        <div>
+                            <h2 className="text-xl font-bold text-theme-text-primary">Messaggi di Sistema</h2>
+                            <p className="text-theme-text-muted text-sm">
+                                Messaggi WhatsApp inviati automaticamente ai clienti. Usa <code className="bg-theme-bg-tertiary px-1 rounded">{'{nome}'}</code> per inserire il nome del cliente.
+                            </p>
+                        </div>
+                    </div>
+
+                    {systemMessagesLoading ? (
+                        <div className="text-center py-10 text-dr7-gold">Caricamento messaggi...</div>
+                    ) : (
+                        <div className="space-y-4">
+                            {systemMessages.map(msg => (
+                                <div key={msg.message_key} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                                    <div className="p-4 border-b border-theme-border">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-theme-text-primary">{msg.label}</h3>
+                                                <p className="text-theme-text-muted text-sm mt-1">{msg.description}</p>
+                                            </div>
+                                            <div className="text-right text-xs text-theme-text-muted">
+                                                Ultimo aggiornamento:<br />
+                                                {new Date(msg.updated_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4">
+                                        {editingMessage === msg.message_key ? (
+                                            <div className="space-y-3">
+                                                <textarea
+                                                    value={editingMessageBody}
+                                                    onChange={(e) => setEditingMessageBody(e.target.value)}
+                                                    rows={8}
+                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary border border-theme-border rounded-lg p-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
+                                                    placeholder="Scrivi il messaggio..."
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-xs text-theme-text-muted flex-1">
+                                                        Variabili: <code className="bg-theme-bg-tertiary px-1 rounded">{'{nome}'}</code> = nome del cliente
+                                                    </p>
+                                                    <button
+                                                        onClick={() => setEditingMessage(null)}
+                                                        className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-muted rounded-lg hover:bg-theme-bg-hover transition-colors text-sm"
+                                                    >
+                                                        Annulla
+                                                    </button>
+                                                    <button
+                                                        onClick={() => saveSystemMessage(msg.message_key)}
+                                                        disabled={savingMessage}
+                                                        className="px-4 py-2 bg-dr7-gold text-theme-bg-primary rounded-lg hover:bg-dr7-gold/80 transition-colors text-sm font-semibold disabled:opacity-50"
+                                                    >
+                                                        {savingMessage ? 'Salvataggio...' : 'Salva'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                <pre className="whitespace-pre-wrap text-sm text-theme-text-primary bg-theme-bg-tertiary rounded-lg p-3 border border-theme-border font-sans">
+                                                    {msg.message_body}
+                                                </pre>
+                                                <div className="flex justify-end">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingMessage(msg.message_key)
+                                                            setEditingMessageBody(msg.message_body)
+                                                        }}
+                                                        className="px-4 py-2 bg-dr7-gold text-theme-bg-primary rounded-lg hover:bg-dr7-gold/80 transition-colors text-sm font-semibold"
+                                                    >
+                                                        Modifica
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
 
             <GiftVoucherModal
