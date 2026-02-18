@@ -1249,7 +1249,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return missing
   }
 
-  async function handleGenerateContract(booking: Booking) {
+  async function handleGenerateContract(booking: Booking, _silent?: boolean) {
     console.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
