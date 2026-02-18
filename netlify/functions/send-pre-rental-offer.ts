@@ -78,19 +78,19 @@ const preRentalOfferHandler: Handler = async () => {
   });
 
   try {
-    // Calculate tomorrow's date in Rome timezone
+    // Calculate tomorrow's date in Rome timezone (24h before dropoff)
     const tomorrowRome = getRomeDateString(1);
     const tomorrowStart = `${tomorrowRome}T00:00:00`;
     const tomorrowEnd = `${tomorrowRome}T23:59:59`;
 
-    console.log(`[Pre-Rental Offer] Looking for bookings with pickup_date on ${tomorrowRome} (Rome time)`);
+    console.log(`[Pre-Rental Offer] Looking for bookings with dropoff_date on ${tomorrowRome} (Rome time)`);
 
-    // Query bookings with pickup_date tomorrow, confirmed/active/pending, car_rental or null service_type
+    // Query bookings with dropoff_date tomorrow (rental ending), confirmed/active, car_rental or null service_type
     const { data: bookings, error: bookingsError } = await supabase
       .from('bookings')
-      .select('id, customer_name, customer_phone, pickup_date, vehicle_id, booking_details, service_type, status')
-      .gte('pickup_date', tomorrowStart)
-      .lte('pickup_date', tomorrowEnd)
+      .select('id, customer_name, customer_phone, dropoff_date, vehicle_id, booking_details, service_type, status')
+      .gte('dropoff_date', tomorrowStart)
+      .lte('dropoff_date', tomorrowEnd)
       .in('status', ['confirmed', 'active', 'pending', 'confermata', 'in_corso'])
       .in('service_type', ['car_rental']);
 
@@ -102,9 +102,9 @@ const preRentalOfferHandler: Handler = async () => {
     // Also fetch bookings with null service_type (legacy car rentals)
     const { data: nullServiceBookings, error: nullError } = await supabase
       .from('bookings')
-      .select('id, customer_name, customer_phone, pickup_date, vehicle_id, booking_details, service_type, status')
-      .gte('pickup_date', tomorrowStart)
-      .lte('pickup_date', tomorrowEnd)
+      .select('id, customer_name, customer_phone, dropoff_date, vehicle_id, booking_details, service_type, status')
+      .gte('dropoff_date', tomorrowStart)
+      .lte('dropoff_date', tomorrowEnd)
       .in('status', ['confirmed', 'active', 'pending', 'confermata', 'in_corso'])
       .is('service_type', null);
 
