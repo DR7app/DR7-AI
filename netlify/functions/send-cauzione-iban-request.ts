@@ -20,7 +20,7 @@ Cordiali saluti,
 Team DR7`;
 
 function cleanPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\+]/g, '');
+  let cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
   if (cleaned.startsWith('0')) {
     cleaned = '39' + cleaned.substring(1);
   }
@@ -28,6 +28,19 @@ function cleanPhone(phone: string): string {
     cleaned = '39' + cleaned;
   }
   return cleaned;
+}
+
+// Get a date string in Rome timezone (YYYY-MM-DD)
+function getRomeDateString(offsetDays: number): string {
+  const now = new Date();
+  const target = new Date(now.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(target);
 }
 
 const cauzioneIbanHandler: Handler = async () => {
@@ -48,16 +61,14 @@ const cauzioneIbanHandler: Handler = async () => {
   });
 
   try {
-    // Calculate yesterday's date range (24h after dropoff = dropoff was yesterday)
-    const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStart = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}T00:00:00`;
-    const yesterdayEnd = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}T23:59:59`;
+    // Calculate yesterday's date in Rome timezone (24h after dropoff)
+    const yesterdayRome = getRomeDateString(-1);
+    const yesterdayStart = `${yesterdayRome}T00:00:00`;
+    const yesterdayEnd = `${yesterdayRome}T23:59:59`;
 
-    console.log(`[Cauzione IBAN] Looking for bookings with dropoff_date between ${yesterdayStart} and ${yesterdayEnd}`);
+    console.log(`[Cauzione IBAN] Looking for bookings with dropoff_date on ${yesterdayRome} (Rome time)`);
 
-    // Query car rental bookings where dropoff was yesterday, not cancelled, with deposit
+    // Query car rental bookings where dropoff was yesterday, not cancelled
     const { data: bookings, error: bookingsError } = await supabase
       .from('bookings')
       .select('id, customer_name, customer_phone, dropoff_date, deposit_amount, booking_details, service_type, status')
@@ -92,6 +103,18 @@ const cauzioneIbanHandler: Handler = async () => {
       return { statusCode: 200, body: JSON.stringify({ message: 'No bookings with dropoff yesterday', sent: 0 }) };
     }
 
+    // Pre-fetch cauzioni for all bookings to catch deposits not tracked on booking itself
+    const bookingIds = allBookings.map(b => b.id);
+    const { data: cauzioni } = await supabase
+      .from('cauzioni')
+      .select('riferimento_contratto_id, importo, stato')
+      .in('riferimento_contratto_id', bookingIds)
+      .in('stato', ['Attiva', 'In scadenza', 'Incassata']);
+
+    const cauzioneMap = new Map(
+      (cauzioni || []).map(c => [c.riferimento_contratto_id, c])
+    );
+
     let sent = 0;
     let skipped = 0;
     let errors = 0;
@@ -105,22 +128,34 @@ const cauzioneIbanHandler: Handler = async () => {
           continue;
         }
 
-        // Skip if no deposit — check deposit_amount and booking_details.deposit
-        const depositAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
-        if (depositAmount <= 0) {
-          console.log(`[Cauzione IBAN] Skipping ${booking.id} - no deposit (amount: ${depositAmount})`);
-          skipped++;
-          continue;
-        }
-
-        // Skip if no deposit option or explicitly "no_deposit"
+        // Skip if explicitly "no_deposit" option
         if (booking.booking_details?.depositOption === 'no_deposit') {
           console.log(`[Cauzione IBAN] Skipping ${booking.id} - no_deposit option`);
           skipped++;
           continue;
         }
 
-        // Get phone number
+        // Check deposit: first from booking fields, then from cauzioni table
+        let hasDeposit = false;
+        const depositFromBooking = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
+        if (depositFromBooking > 0) {
+          hasDeposit = true;
+        } else {
+          // Fallback: check cauzioni table for this booking
+          const cauzione = cauzioneMap.get(booking.id);
+          if (cauzione && Number(cauzione.importo) > 0) {
+            hasDeposit = true;
+            console.log(`[Cauzione IBAN] Booking ${booking.id} - deposit found in cauzioni table (€${cauzione.importo})`);
+          }
+        }
+
+        if (!hasDeposit) {
+          console.log(`[Cauzione IBAN] Skipping ${booking.id} - no deposit`);
+          skipped++;
+          continue;
+        }
+
+        // Get phone number — check both fields
         const phone = booking.customer_phone || booking.booking_details?.customer?.phone;
         if (!phone) {
           console.log(`[Cauzione IBAN] Skipping ${booking.id} - no phone number`);
@@ -157,7 +192,7 @@ const cauzioneIbanHandler: Handler = async () => {
           continue;
         }
 
-        console.log(`[Cauzione IBAN] Sent IBAN request to ${firstName} (${cleanedPhone}) for booking ${booking.id} - deposit: €${depositAmount}`);
+        console.log(`[Cauzione IBAN] Sent IBAN request to ${firstName} (${cleanedPhone}) for booking ${booking.id}`);
 
         // Mark as sent in booking_details
         const updatedDetails = { ...(booking.booking_details || {}), iban_request_sent: true };
