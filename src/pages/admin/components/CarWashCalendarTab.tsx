@@ -60,6 +60,10 @@ const getServiceDuration = (serviceName: string): number => {
   return 60
 }
 
+const isRientroBooking = (booking: CarWashBooking): boolean => {
+  return booking.customer_name === 'Lavaggio Rientro'
+}
+
 const formatDuration = (minutes: number): string => {
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -193,7 +197,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           minutes = timeParts[1] || 0
         }
 
-        const duration = getServiceDuration(booking.service_name)
+        // Rientro washes always occupy only 15 minutes (1 slot)
+        const duration = isRientroBooking(booking) ? 15 : getServiceDuration(booking.service_name)
 
         // Calculate position
         const dayIndex = day - 1
@@ -420,25 +425,26 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     const isRedDay = getHolidayForDate(d) || isSunday(d)
                     const isToday = day === todayDay
 
-                    // Check if this time slot has a booking
-                    const slotBooking = eventsWithLanes.find(evt => {
+                    // Find ALL bookings occupying this slot
+                    const slotBookings = eventsWithLanes.filter(evt => {
                       if (evt.day !== day) return false
-
-                      // Parse booking time
                       const [bookingHours, bookingMinutes] = evt.booking.appointment_time.split(':').map(Number)
                       const bookingStartMinutes = bookingHours * 60 + bookingMinutes
                       const bookingEndMinutes = bookingStartMinutes + evt.duration
-
-                      // Check if current slot is within booking duration
                       return totalMinutes >= bookingStartMinutes && totalMinutes < bookingEndMinutes
                     })
 
-                    // Determine if this is the first slot of a booking (to render the booking block)
-                    const isBookingStart = slotBooking && (() => {
-                      const [bookingHours, bookingMinutes] = slotBooking.booking.appointment_time.split(':').map(Number)
+                    const slotBooking = slotBookings.length > 0 ? slotBookings[0] : null
+
+                    // Find all bookings that START at this slot
+                    const startingBookings = eventsWithLanes.filter(evt => {
+                      if (evt.day !== day) return false
+                      const [bookingHours, bookingMinutes] = evt.booking.appointment_time.split(':').map(Number)
                       const bookingStartMinutes = bookingHours * 60 + bookingMinutes
                       return totalMinutes === bookingStartMinutes
-                    })()
+                    })
+
+                    const isBookingStart = startingBookings.length > 0
 
                     return (
                       <div
@@ -459,17 +465,24 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           }
                         }}
                       >
-                        {/* Render booking block on the first slot */}
-                        {isBookingStart && slotBooking && (
+                        {/* Render booking blocks for all bookings starting at this slot */}
+                        {startingBookings.map(startEvt => {
+                          const isRientro = isRientroBooking(startEvt.booking)
+                          // If rientro overlaps with a client wash at same time, shift rientro up one slot
+                          const hasClientOverlap = isRientro && startingBookings.some(b => !isRientroBooking(b.booking))
+                          const topOffset = hasClientOverlap ? -(CELL_HEIGHT - 1) : 1
+
+                          return (
                           <div
-                            className="absolute inset-x-0 bg-red-800 border border-red-700/30 rounded shadow-md hover:shadow-xl hover:brightness-110 transition-all cursor-pointer z-20 overflow-hidden group/booking"
+                            key={startEvt.booking.id}
+                            className={`absolute inset-x-0 ${isRientro ? 'bg-blue-800 border-blue-600/30' : 'bg-red-800 border-red-700/30'} border rounded shadow-md hover:shadow-xl hover:brightness-110 transition-all cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking`}
                             style={{
-                              height: `${(slotBooking.duration / 15) * CELL_HEIGHT - 2}px`,
-                              top: '1px'
+                              height: `${(startEvt.duration / 15) * CELL_HEIGHT - 2}px`,
+                              top: `${topOffset}px`
                             }}
                             onClick={(e) => {
                               e.stopPropagation()
-                              setSelectedBooking(slotBooking.booking)
+                              setSelectedBooking(startEvt.booking)
                             }}
                           >
                             {/* Inner glow effect */}
@@ -479,7 +492,11 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                             <div className="relative px-2 py-1.5 flex flex-col justify-center h-full items-center gap-0.5 text-center">
                               <span className="font-bold text-[11px] leading-tight truncate max-w-full text-theme-text-primary drop-shadow-md">
                                 {(() => {
-                                  const name = slotBooking.booking.customer_name || 'Cliente'
+                                  if (isRientro) {
+                                    // Show vehicle plate or "Rientro" for compact display
+                                    return startEvt.booking.vehicle_plate || 'Rientro'
+                                  }
+                                  const name = startEvt.booking.customer_name || 'Cliente'
                                   if (name.length > 10) {
                                     const parts = name.split(' ')
                                     if (parts.length > 1) {
@@ -491,11 +508,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                 })()}
                               </span>
                               <span className="font-bold text-[12px] leading-tight text-theme-text-primary drop-shadow-md">
-                                {slotBooking.booking.appointment_time}
+                                {startEvt.booking.appointment_time}
                               </span>
                               <span className="text-[9px] leading-tight text-theme-text-primary/90 drop-shadow-sm">
                                 {(() => {
-                                  const svc = slotBooking.booking.service_name.toLowerCase()
+                                  if (isRientro) return 'Rientro'
+                                  const svc = startEvt.booking.service_name.toLowerCase()
                                   if (svc.includes('scooter')) return 'Scooter'
                                   if (svc.includes('solo esterno') || svc.includes('exterior')) return 'Esterno'
                                   if (svc.includes('solo interno') || svc.includes('interior')) return 'Interno'
@@ -509,31 +527,31 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                             </div>
 
                             {/* Left accent bar */}
-                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-theme-text-primary/40" />
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : 'bg-theme-text-primary/40'}`} />
                             {/* Right accent bar */}
-                            <div className="absolute right-0 top-0 bottom-0 w-1 bg-theme-text-primary/40" />
+                            <div className={`absolute right-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : 'bg-theme-text-primary/40'}`} />
 
                             {/* Tooltip on hover */}
                             <div className="hidden group-hover/booking:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs p-3 rounded-lg shadow-2xl w-max z-[100] pointer-events-none min-w-[220px]">
-                              <div className="font-bold mb-1 text-base">{slotBooking.booking.customer_name}</div>
-                              <div className="text-theme-text-muted mb-2">{slotBooking.booking.service_name}</div>
+                              <div className="font-bold mb-1 text-base">{isRientro ? 'Lavaggio Rientro' : startEvt.booking.customer_name}</div>
+                              <div className="text-theme-text-muted mb-2">{startEvt.booking.service_name}</div>
 
                               {/* Vehicle info */}
-                              {(slotBooking.booking.booking_details?.vehicleMakeModel || slotBooking.booking.vehicle_plate) && (
+                              {(startEvt.booking.booking_details?.vehicleMakeModel || startEvt.booking.vehicle_plate || startEvt.booking.vehicle_name) && (
                                 <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-theme-border/50">
-                                  {slotBooking.booking.vehicle_plate && (
-                                    <span className="font-mono font-bold text-dr7-gold text-[11px]">{slotBooking.booking.vehicle_plate}</span>
+                                  {startEvt.booking.vehicle_plate && (
+                                    <span className="font-mono font-bold text-dr7-gold text-[11px]">{startEvt.booking.vehicle_plate}</span>
                                   )}
-                                  {slotBooking.booking.booking_details?.vehicleMakeModel && (
-                                    <span className="text-theme-text-primary text-[11px]">{slotBooking.booking.booking_details.vehicleMakeModel}</span>
+                                  {(startEvt.booking.booking_details?.vehicleMakeModel || startEvt.booking.vehicle_name) && (
+                                    <span className="text-theme-text-primary text-[11px]">{startEvt.booking.booking_details?.vehicleMakeModel || startEvt.booking.vehicle_name}</span>
                                   )}
-                                  {slotBooking.booking.booking_details?.vehicleCategory && (
+                                  {startEvt.booking.booking_details?.vehicleCategory && (
                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      slotBooking.booking.booking_details.vehicleCategory === 'urban'
+                                      startEvt.booking.booking_details.vehicleCategory === 'urban'
                                         ? 'bg-blue-600/30 text-blue-400'
                                         : 'bg-orange-600/30 text-orange-400'
                                     }`}>
-                                      {slotBooking.booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                                      {startEvt.booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                                     </span>
                                   )}
                                 </div>
@@ -541,22 +559,23 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
                               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
                                 <span className="text-theme-text-muted">Orario:</span>
-                                <span className="font-mono">{slotBooking.booking.appointment_time}</span>
+                                <span className="font-mono">{startEvt.booking.appointment_time}</span>
 
                                 <span className="text-theme-text-muted">Durata:</span>
-                                <span className="font-mono">{formatDuration(slotBooking.duration)}</span>
+                                <span className="font-mono">{formatDuration(startEvt.duration)}</span>
 
                                 <span className="text-theme-text-muted">Prezzo:</span>
-                                <span className="font-mono">€{(slotBooking.booking.price_total / 100).toFixed(2)}</span>
+                                <span className="font-mono">€{(startEvt.booking.price_total / 100).toFixed(2)}</span>
 
                                 <span className="text-theme-text-muted">Stato:</span>
-                                <span className="uppercase font-bold tracking-wider text-[10px]">{slotBooking.booking.status}</span>
+                                <span className="uppercase font-bold tracking-wider text-[10px]">{startEvt.booking.status}</span>
                               </div>
 
                               <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-theme-bg-primary rotate-45 border-r border-b border-theme-border" />
                             </div>
                           </div>
-                        )}
+                          )
+                        })}
                       </div>
                     )
                   })}
