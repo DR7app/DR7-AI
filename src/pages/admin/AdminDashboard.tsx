@@ -27,6 +27,7 @@ import ScadenzeTab from './components/ScadenzeTab'
 import ReportsTab from './components/ReportsTab'
 import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
+import CodiciScontoTab from './components/CodiciScontoTab'
 import PlaceholderTab from './components/PlaceholderTab'
 
 type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt'
@@ -492,7 +493,7 @@ export default function AdminDashboard() {
           {activeTab === 'gestione-danni' && <PlaceholderTab title="Gestione Danni" />}
           {activeTab === 'gestione-multe' && <PlaceholderTab title="Gestione Multe" />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
-          {activeTab === 'codice-sconto' && <PlaceholderTab title="Codice Sconto" />}
+          {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && <PlaceholderTab title="Report Lavaggio" />}
           {activeTab === 'report-clienti' && <PlaceholderTab title="Report Clienti" />}
           {activeTab === 'com-email' && <PlaceholderTab title="E-mail" />}
