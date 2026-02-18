@@ -27,8 +27,17 @@ Vuole valutare una promo in continuazione super vantaggiosa?
 Ci faccia sapere, grazie.
 DR7`;
 
+// Map all vehicle category variants to the two message types
+function getCategoryType(category: string | null | undefined): 'urban' | 'exotic' | null {
+  if (!category) return null;
+  const lower = category.toLowerCase();
+  if (lower === 'urban') return 'urban';
+  if (lower === 'exotic' || lower === 'supercar') return 'exotic';
+  return null;
+}
+
 function cleanPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\+]/g, '');
+  let cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
   if (cleaned.startsWith('0')) {
     cleaned = '39' + cleaned.substring(1);
   }
@@ -36,6 +45,19 @@ function cleanPhone(phone: string): string {
     cleaned = '39' + cleaned;
   }
   return cleaned;
+}
+
+// Get today/tomorrow date string in Rome timezone (YYYY-MM-DD)
+function getRomeDateString(offsetDays: number): string {
+  const now = new Date();
+  const target = new Date(now.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(target);
 }
 
 const preRentalOfferHandler: Handler = async () => {
@@ -56,22 +78,20 @@ const preRentalOfferHandler: Handler = async () => {
   });
 
   try {
-    // Calculate tomorrow's date range (full day in UTC)
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStart = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}T00:00:00`;
-    const tomorrowEnd = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}T23:59:59`;
+    // Calculate tomorrow's date in Rome timezone
+    const tomorrowRome = getRomeDateString(1);
+    const tomorrowStart = `${tomorrowRome}T00:00:00`;
+    const tomorrowEnd = `${tomorrowRome}T23:59:59`;
 
-    console.log(`[Pre-Rental Offer] Looking for bookings with pickup_date between ${tomorrowStart} and ${tomorrowEnd}`);
+    console.log(`[Pre-Rental Offer] Looking for bookings with pickup_date on ${tomorrowRome} (Rome time)`);
 
-    // Query bookings with pickup_date tomorrow, confirmed/active, car_rental or null service_type
+    // Query bookings with pickup_date tomorrow, confirmed/active/pending, car_rental or null service_type
     const { data: bookings, error: bookingsError } = await supabase
       .from('bookings')
       .select('id, customer_name, customer_phone, pickup_date, vehicle_id, booking_details, service_type, status')
       .gte('pickup_date', tomorrowStart)
       .lte('pickup_date', tomorrowEnd)
-      .in('status', ['confirmed', 'active', 'confermata', 'in_corso'])
+      .in('status', ['confirmed', 'active', 'pending', 'confermata', 'in_corso'])
       .in('service_type', ['car_rental']);
 
     if (bookingsError) {
@@ -85,7 +105,7 @@ const preRentalOfferHandler: Handler = async () => {
       .select('id, customer_name, customer_phone, pickup_date, vehicle_id, booking_details, service_type, status')
       .gte('pickup_date', tomorrowStart)
       .lte('pickup_date', tomorrowEnd)
-      .in('status', ['confirmed', 'active', 'confermata', 'in_corso'])
+      .in('status', ['confirmed', 'active', 'pending', 'confermata', 'in_corso'])
       .is('service_type', null);
 
     if (nullError) {
@@ -129,17 +149,19 @@ const preRentalOfferHandler: Handler = async () => {
           continue;
         }
 
-        // Skip if no phone
-        if (!booking.customer_phone) {
+        // Skip if no phone — check both fields
+        const phone = booking.customer_phone || booking.booking_details?.customer?.phone;
+        if (!phone) {
           console.log(`[Pre-Rental Offer] Skipping ${booking.id} - no phone number`);
           skipped++;
           continue;
         }
 
-        // Get vehicle category
-        const category = vehicleMap.get(booking.vehicle_id)?.toLowerCase();
-        if (!category || (category !== 'urban' && category !== 'exotic')) {
-          console.log(`[Pre-Rental Offer] Skipping ${booking.id} - category "${category}" not urban/exotic`);
+        // Get vehicle category type (urban or exotic/supercar)
+        const rawCategory = vehicleMap.get(booking.vehicle_id);
+        const categoryType = getCategoryType(rawCategory);
+        if (!categoryType) {
+          console.log(`[Pre-Rental Offer] Skipping ${booking.id} - category "${rawCategory}" not urban/exotic/supercar`);
           skipped++;
           continue;
         }
@@ -148,11 +170,11 @@ const preRentalOfferHandler: Handler = async () => {
         const firstName = booking.customer_name?.split(' ')[0] || booking.booking_details?.customer?.fullName?.split(' ')[0] || 'Cliente';
 
         // Pick message template
-        const template = category === 'urban' ? URBAN_MESSAGE : EXOTIC_MESSAGE;
+        const template = categoryType === 'urban' ? URBAN_MESSAGE : EXOTIC_MESSAGE;
         const message = template.replace('{nome}', firstName);
 
         // Clean phone number
-        const phone = cleanPhone(booking.customer_phone);
+        const cleanedPhone = cleanPhone(phone);
 
         // Send via Green API
         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
@@ -161,7 +183,7 @@ const preRentalOfferHandler: Handler = async () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chatId: `${phone}@c.us`,
+            chatId: `${cleanedPhone}@c.us`,
             message
           })
         });
@@ -174,7 +196,7 @@ const preRentalOfferHandler: Handler = async () => {
           continue;
         }
 
-        console.log(`[Pre-Rental Offer] Sent ${category} offer to ${firstName} (${phone}) for booking ${booking.id}`);
+        console.log(`[Pre-Rental Offer] Sent ${categoryType} offer to ${firstName} (${cleanedPhone}) for booking ${booking.id}`);
 
         // Mark as sent in booking_details
         const updatedDetails = { ...(booking.booking_details || {}), pre_rental_offer_sent: true };
