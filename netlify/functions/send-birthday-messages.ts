@@ -188,13 +188,18 @@ const birthdayHandler: Handler = async (event) => {
           .replace('{nome}', firstName)
           .replace('{codice}', discountCode);
 
-        // Clean phone number
-        let cleanPhone = customer.telefono.replace(/[\s\-\+]/g, '');
+        // Clean phone number — strip all non-digit chars, normalize Italian prefix
+        let cleanPhone = customer.telefono.replace(/[^\d]/g, '');
         if (cleanPhone.startsWith('0')) {
           cleanPhone = '39' + cleanPhone.substring(1);
         }
         if (!cleanPhone.startsWith('39') && cleanPhone.length === 10) {
           cleanPhone = '39' + cleanPhone;
+        }
+        if (cleanPhone.length < 10) {
+          console.log(`[Birthday Auto] Skipping ${customer.nome}: invalid phone ${customer.telefono}`);
+          errors++;
+          continue;
         }
 
         // Send via Green API
