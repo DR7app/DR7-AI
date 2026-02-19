@@ -235,12 +235,17 @@ export default function AdminDashboard() {
 
               {/* MECCANICA */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Meccanica</div>
+              <button onClick={() => { setActiveTab('mechanical'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'mechanical')}>Prenotazioni</button>
+              <button onClick={() => { setActiveTab('mechanical-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'mechanical-calendar')}>Calendario</button>
+
+              {/* FLOTTA */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Flotta</div>
               <button onClick={() => { setActiveTab('vehicles'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'vehicles')}>Veicoli</button>
               <button onClick={() => { setActiveTab('fleet'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
               <button onClick={() => { setActiveTab('gps-keyless'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
 
-              {/* FLOTTA */}
-              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Flotta</div>
+              {/* DA SALDARE */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Da Saldare</div>
               <button onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'unpaid')}>Da Saldare</button>
 
               {/* CLIENTI */}
@@ -264,11 +269,11 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
               <button onClick={() => { setActiveTab('referral'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'referral')}>Referral</button>
               <button onClick={() => { setActiveTab('codice-sconto'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
-              <button onClick={() => { setActiveTab('bulk-import'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
 
               {/* SCANNER */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Scanner</div>
               <button onClick={() => { setActiveTab('scanner'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'scanner')}>Scanner</button>
+              <button onClick={() => { setActiveTab('bulk-import'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
 
               {/* NEXI */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Nexi</div>
@@ -337,8 +342,20 @@ export default function AdminDashboard() {
 
               {/* MECCANICA Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(activeTab === 'vehicles' || activeTab === 'fleet' || activeTab === 'gps-keyless')}>
+                <button className={dropdownBtnClass(activeTab === 'mechanical' || activeTab === 'mechanical-calendar')}>
                   Meccanica
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button onClick={() => setActiveTab('mechanical')} className={dropdownItemClass(activeTab === 'mechanical')}>Prenotazioni</button>
+                  <button onClick={() => setActiveTab('mechanical-calendar')} className={dropdownItemClass(activeTab === 'mechanical-calendar')}>Calendario</button>
+                </div>
+              </div>
+
+              {/* FLOTTA Dropdown */}
+              <div className="relative group">
+                <button className={dropdownBtnClass(activeTab === 'vehicles' || activeTab === 'fleet' || activeTab === 'gps-keyless')}>
+                  Flotta
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
@@ -348,16 +365,10 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* FLOTTA Dropdown */}
-              <div className="relative group">
-                <button className={dropdownBtnClass(activeTab === 'unpaid')}>
-                  Flotta
-                  <span className="text-xs">▼</span>
-                </button>
-                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
-                  <button onClick={() => setActiveTab('unpaid')} className={dropdownItemClass(activeTab === 'unpaid')}>Da Saldare</button>
-                </div>
-              </div>
+              {/* DA SALDARE - standalone */}
+              <button onClick={() => setActiveTab('unpaid')} className={standaloneBtnClass(activeTab === 'unpaid')}>
+                Da Saldare
+              </button>
 
               {/* CLIENTI - standalone */}
               <button onClick={() => setActiveTab('customers')} className={standaloneBtnClass(activeTab === 'customers')}>
@@ -366,7 +377,7 @@ export default function AdminDashboard() {
 
               {/* MARKETING Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['birthdays', 'reviews', 'marketing', 'referral', 'codice-sconto', 'bulk-import'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['birthdays', 'reviews', 'marketing', 'referral', 'codice-sconto'].includes(activeTab))}>
                   Marketing
                   <span className="text-xs">▼</span>
                 </button>
@@ -383,14 +394,20 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('marketing')} className={dropdownItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
                   <button onClick={() => setActiveTab('referral')} className={dropdownItemClass(activeTab === 'referral')}>Referral</button>
                   <button onClick={() => setActiveTab('codice-sconto')} className={dropdownItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
-                  <button onClick={() => setActiveTab('bulk-import')} className={dropdownItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
                 </div>
               </div>
 
-              {/* SCANNER - standalone */}
-              <button onClick={() => setActiveTab('scanner')} className={standaloneBtnClass(activeTab === 'scanner')}>
-                Scanner
-              </button>
+              {/* SCANNER Dropdown */}
+              <div className="relative group">
+                <button className={dropdownBtnClass(activeTab === 'scanner' || activeTab === 'bulk-import')}>
+                  Scanner
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button onClick={() => setActiveTab('scanner')} className={dropdownItemClass(activeTab === 'scanner')}>Scanner</button>
+                  <button onClick={() => setActiveTab('bulk-import')} className={dropdownItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
+                </div>
+              </div>
 
               {/* NEXI - standalone */}
               <button onClick={() => setActiveTab('nexi')} className={standaloneBtnClass(activeTab === 'nexi')}>
