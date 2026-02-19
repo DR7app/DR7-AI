@@ -24,8 +24,18 @@ export default function ReviewsTab() {
     const [sending, setSending] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
 
+    // WhatsApp template editor state
+    const [waTemplateOpen, setWaTemplateOpen] = useState(false)
+    const [waTemplate, setWaTemplate] = useState('')
+    const [waDraft, setWaDraft] = useState('')
+    const [waEditing, setWaEditing] = useState(false)
+    const [waSaving, setWaSaving] = useState(false)
+    const [waSentCount, setWaSentCount] = useState(0)
+    const [waTesting, setWaTesting] = useState(false)
+
     useEffect(() => {
         loadCompletedBookings()
+        loadWhatsAppData()
     }, [])
 
     async function loadCompletedBookings() {
@@ -83,6 +93,83 @@ export default function ReviewsTab() {
             console.error('Error loading reviews tab data:', err)
         } finally {
             setLoading(false)
+        }
+    }
+
+    async function loadWhatsAppData() {
+        try {
+            // Load template
+            const { data: settingData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'review_whatsapp_template')
+                .single()
+
+            if (settingData?.value) {
+                setWaTemplate(settingData.value)
+            }
+
+            // Load sent count
+            const { count } = await supabase
+                .from('review_whatsapp_sent')
+                .select('id', { count: 'exact', head: true })
+
+            setWaSentCount(count || 0)
+        } catch (err) {
+            console.error('Error loading WhatsApp review data:', err)
+        }
+    }
+
+    async function saveWaTemplate() {
+        setWaSaving(true)
+        try {
+            const { error } = await supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'review_whatsapp_template',
+                    value: waDraft,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' })
+
+            if (error) throw error
+
+            setWaTemplate(waDraft)
+            setWaEditing(false)
+            toast.success('Template WhatsApp salvato!')
+        } catch (error: any) {
+            console.error('Error saving WhatsApp template:', error)
+            toast.error(`Errore nel salvataggio: ${error.message}`)
+        } finally {
+            setWaSaving(false)
+        }
+    }
+
+    async function sendWaTest() {
+        setWaTesting(true)
+        try {
+            const template = waTemplate || 'Ciao {nome} 👋🏻\n\nQuesto è un messaggio di test dal sistema recensioni DR7.'
+            const testMessage = template.replace(/\{nome\}/g, 'Test')
+
+            const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customMessage: testMessage
+                })
+            })
+
+            const result = await response.json()
+
+            if (response.ok && result.success) {
+                toast.success('Messaggio test inviato al numero admin!')
+            } else {
+                throw new Error(result.message || result.error || 'Errore invio')
+            }
+        } catch (error: any) {
+            console.error('Error sending test WhatsApp:', error)
+            toast.error('Errore test: ' + error.message)
+        } finally {
+            setWaTesting(false)
         }
     }
 
@@ -202,6 +289,89 @@ export default function ReviewsTab() {
                         {sending ? 'Invio...' : `Invia Richiesta (${selectedIds.size})`}
                     </Button>
                 </div>
+            </div>
+
+            {/* WhatsApp Auto Review Template */}
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                <button
+                    onClick={() => setWaTemplateOpen(!waTemplateOpen)}
+                    className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-bg-tertiary/50 transition-colors"
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="text-lg">📱</span>
+                        <div>
+                            <h3 className="font-semibold text-theme-text-primary">Messaggio WhatsApp Automatico</h3>
+                            <p className="text-xs text-theme-text-muted">
+                                Inviato automaticamente 60 min dopo la fine del noleggio/lavaggio. Ogni cliente lo riceve 1 sola volta.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-theme-text-muted bg-theme-bg-tertiary px-2 py-1 rounded-full">
+                            {waSentCount} inviati
+                        </span>
+                        <span className={`transition-transform ${waTemplateOpen ? 'rotate-180' : ''}`}>▼</span>
+                    </div>
+                </button>
+
+                {waTemplateOpen && (
+                    <div className="p-4 border-t border-theme-border animate-fadeIn">
+                        {waEditing ? (
+                            <div className="space-y-3">
+                                <textarea
+                                    value={waDraft}
+                                    onChange={(e) => setWaDraft(e.target.value)}
+                                    rows={14}
+                                    className="w-full bg-theme-bg-tertiary border border-theme-border-light text-theme-text-primary p-3 rounded-lg text-sm font-mono focus:outline-none focus:border-dr7-gold resize-y"
+                                />
+                                <p className="text-xs text-theme-text-muted">
+                                    Placeholder disponibile: <code className="bg-theme-bg-tertiary px-1 rounded">{'{nome}'}</code> = nome del cliente
+                                </p>
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={saveWaTemplate}
+                                        disabled={waSaving}
+                                        className="bg-dr7-gold hover:bg-yellow-500 text-black"
+                                    >
+                                        {waSaving ? 'Salvataggio...' : 'Salva Template'}
+                                    </Button>
+                                    <Button
+                                        onClick={() => setWaEditing(false)}
+                                        variant="secondary"
+                                    >
+                                        Annulla
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <pre className="whitespace-pre-wrap text-sm text-theme-text-secondary bg-theme-bg-tertiary p-3 rounded-lg max-h-64 overflow-y-auto">
+                                    {waTemplate || '(Nessun template configurato — verrà usato il messaggio predefinito)'}
+                                </pre>
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={() => {
+                                            setWaDraft(waTemplate)
+                                            setWaEditing(true)
+                                        }}
+                                        variant="secondary"
+                                        className="text-sm"
+                                    >
+                                        Modifica Template
+                                    </Button>
+                                    <Button
+                                        onClick={sendWaTest}
+                                        disabled={waTesting}
+                                        variant="secondary"
+                                        className="text-sm bg-green-600/20 hover:bg-green-600/30 text-green-400 border-green-500/30"
+                                    >
+                                        {waTesting ? 'Invio test...' : 'Invia Test'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Filters */}
