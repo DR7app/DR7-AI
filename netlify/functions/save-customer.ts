@@ -39,7 +39,7 @@ export const handler: Handler = async (event) => {
         let result;
 
         if (customerId) {
-            // Update existing customer
+            // Try to update existing customer
             const { data, error } = await supabase
                 .from('customers_extended')
                 .update(customerData)
@@ -47,12 +47,29 @@ export const handler: Handler = async (event) => {
                 .select()
                 .single();
 
-            if (error) {
+            if (error && error.code === 'PGRST116') {
+                // No row found for UPDATE — customer doesn't exist in customers_extended yet
+                // Fall back to INSERT with the provided ID (upsert behavior)
+                console.log('[save-customer] Customer not found for update, falling back to insert with ID:', customerId);
+                const { data: insertData, error: insertError } = await supabase
+                    .from('customers_extended')
+                    .insert([{ ...customerData, id: customerId }])
+                    .select()
+                    .single();
+
+                if (insertError) {
+                    console.error('[save-customer] Fallback insert error:', insertError);
+                    throw insertError;
+                }
+                result = insertData;
+                console.log('[save-customer] Customer created via fallback insert:', result.id);
+            } else if (error) {
                 console.error('[save-customer] Update error:', error);
                 throw error;
+            } else {
+                result = data;
+                console.log('[save-customer] Customer updated:', result.id);
             }
-            result = data;
-            console.log('[save-customer] Customer updated:', result.id);
         } else {
             // Insert new customer
             const { data, error } = await supabase
