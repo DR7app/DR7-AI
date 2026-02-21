@@ -2627,39 +2627,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (formData.has_second_driver && newSecondDriverMode) {
         console.log('[processBookingSubmission] Creating new customer for second driver...')
         try {
-          // DEDUP CHECK for second driver
-          let existingDriver: any = null
-
-          if (formData.second_driver_codice_fiscale) {
+          // Dedup check: look for existing customer by codice_fiscale, then email, then telefono
+          let existingSecondDriver: { id: string } | null = null
+          if (formData.second_driver_codice_fiscale?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('codice_fiscale', formData.second_driver_codice_fiscale)
-              .limit(1)
-            if (data && data.length > 0) existingDriver = data[0]
+              .select('id')
+              .eq('codice_fiscale', formData.second_driver_codice_fiscale.trim())
+              .maybeSingle()
+            existingSecondDriver = data
           }
-
-          if (!existingDriver && formData.second_driver_email) {
+          if (!existingSecondDriver && formData.second_driver_email?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('email', formData.second_driver_email)
-              .limit(1)
-            if (data && data.length > 0) existingDriver = data[0]
+              .select('id')
+              .eq('email', formData.second_driver_email.trim().toLowerCase())
+              .maybeSingle()
+            existingSecondDriver = data
           }
-
-          if (!existingDriver && formData.second_driver_phone) {
+          if (!existingSecondDriver && formData.second_driver_phone?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('telefono', formData.second_driver_phone)
-              .limit(1)
-            if (data && data.length > 0) existingDriver = data[0]
+              .select('id')
+              .eq('telefono', formData.second_driver_phone.trim())
+              .maybeSingle()
+            existingSecondDriver = data
           }
 
-          if (existingDriver) {
-            secondDriverId = existingDriver.id
-            console.log('✅ Existing second driver found (dedup), reusing ID:', existingDriver.id)
+          if (existingSecondDriver) {
+            secondDriverId = existingSecondDriver.id
+            console.log('✅ Secondo conducente esistente trovato, profilo riutilizzato:', existingSecondDriver.id)
           } else {
             const secondDriverData = {
               tipo_cliente: 'persona_fisica',
@@ -2705,42 +2702,53 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // BUT FIRST check if an identical customer already exists (prevent duplicates)
       if (newCustomerMode) {
         try {
-          // DEDUP CHECK: Look for existing customer by codice_fiscale, email, or telefono
-          let existingCustomer: any = null
+          // Dedup check: look for existing customer by type-specific unique field, then email, then telefono
+          let existingCustomer: { id: string } | null = null
 
-          if (newCustomerData.codice_fiscale) {
+          if (newCustomerData.tipo_cliente === 'persona_fisica' && newCustomerData.codice_fiscale?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('codice_fiscale', newCustomerData.codice_fiscale)
-              .limit(1)
-            if (data && data.length > 0) existingCustomer = data[0]
+              .select('id')
+              .eq('codice_fiscale', newCustomerData.codice_fiscale.trim())
+              .maybeSingle()
+            existingCustomer = data
+          } else if (newCustomerData.tipo_cliente === 'azienda' && newCustomerData.partita_iva?.trim()) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('id')
+              .eq('partita_iva', newCustomerData.partita_iva.trim())
+              .maybeSingle()
+            existingCustomer = data
+          } else if (newCustomerData.tipo_cliente === 'pubblica_amministrazione' && newCustomerData.codice_univoco_pa?.trim()) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('id')
+              .eq('codice_univoco', newCustomerData.codice_univoco_pa.trim())
+              .maybeSingle()
+            existingCustomer = data
           }
 
-          if (!existingCustomer && newCustomerData.email) {
+          if (!existingCustomer && newCustomerData.email?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('email', newCustomerData.email)
-              .limit(1)
-            if (data && data.length > 0) existingCustomer = data[0]
+              .select('id')
+              .eq('email', newCustomerData.email.trim().toLowerCase())
+              .maybeSingle()
+            existingCustomer = data
           }
-
-          if (!existingCustomer && newCustomerData.telefono) {
+          if (!existingCustomer && newCustomerData.telefono?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('telefono', newCustomerData.telefono)
-              .limit(1)
-            if (data && data.length > 0) existingCustomer = data[0]
+              .select('id')
+              .eq('telefono', newCustomerData.telefono.trim())
+              .maybeSingle()
+            existingCustomer = data
           }
 
           if (existingCustomer) {
-            // Customer already exists — reuse their ID instead of creating a duplicate
             customerId = existingCustomer.id
-            console.log('✅ Existing customer found (dedup), reusing ID:', existingCustomer.id, existingCustomer.nome, existingCustomer.cognome)
+            console.log('✅ Cliente esistente trovato, profilo riutilizzato:', existingCustomer.id)
           } else {
-            // No existing customer found — create new one
             const customerData: any = {
               tipo_cliente: newCustomerData.tipo_cliente,
               nazione: newCustomerData.nazione,

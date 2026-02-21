@@ -70,6 +70,32 @@ export const handler: Handler = async (event) => {
                 result = data;
                 console.log('[save-customer] Customer updated:', result.id);
             }
+
+            // Sync key fields to auth.users user_metadata so the main website sees updates
+            if (result.user_id) {
+                const fullName = [result.nome, result.cognome].filter(Boolean).join(' ')
+                    || result.denominazione
+                    || undefined;
+
+                const metadataUpdate: Record<string, any> = {};
+                if (fullName) metadataUpdate.full_name = fullName;
+                if (result.telefono) metadataUpdate.phone = result.telefono;
+                if (result.tipo_cliente === 'azienda' && result.denominazione) {
+                    metadataUpdate.company_name = result.denominazione;
+                }
+
+                if (Object.keys(metadataUpdate).length > 0) {
+                    const { error: authError } = await supabase.auth.admin.updateUserById(
+                        result.user_id,
+                        { user_metadata: metadataUpdate }
+                    );
+                    if (authError) {
+                        console.error('[save-customer] Auth metadata sync error:', authError);
+                    } else {
+                        console.log('[save-customer] Auth metadata synced for user:', result.user_id);
+                    }
+                }
+            }
         } else {
             // Insert new customer
             const { data, error } = await supabase
