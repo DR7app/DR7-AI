@@ -114,6 +114,8 @@ export default function CustomersTab() {
 
   // Gift Voucher feature
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -1051,7 +1053,36 @@ export default function CustomersTab() {
     }
   }
 
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    try {
+      const customerIds = Array.from(selectedCustomerIds)
 
+      const response = await fetch('/.netlify/functions/manage-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulkDelete', customerIds })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Errore durante l\'eliminazione')
+      }
+
+      // Remove deleted customers from local state
+      setAllCustomers(prev => prev.filter(c => !selectedCustomerIds.has(c.id)))
+      setSelectedCustomerIds(new Set())
+      setShowBulkDeleteModal(false)
+
+      alert(`${result.message || customerIds.length + ' clienti eliminati'}`)
+    } catch (error: any) {
+      console.error('Error bulk deleting customers:', error)
+      alert('Errore nell\'eliminazione: ' + (error.message || 'Errore sconosciuto'))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   if (loading) {
     return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
@@ -1059,6 +1090,65 @@ export default function CustomersTab() {
 
   return (
     <div>
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-bg-secondary border border-red-600/50 rounded-lg max-w-lg w-full overflow-hidden">
+            <div className="bg-red-900/30 border-b border-red-600/30 p-6">
+              <h3 className="text-xl font-bold text-red-400 flex items-center gap-2">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                Elimina {selectedCustomerIds.size} Clienti
+              </h3>
+            </div>
+            <div className="p-6">
+              <p className="text-theme-text-secondary mb-4">
+                Stai per eliminare <span className="font-bold text-red-400">{selectedCustomerIds.size}</span> clienti e tutti i loro dati associati (prenotazioni, contratti, fatture, cauzioni).
+              </p>
+              <div className="max-h-40 overflow-y-auto mb-4 bg-theme-bg-primary rounded-lg p-3 border border-theme-border">
+                {Array.from(selectedCustomerIds).map(id => {
+                  const c = customers.find(cu => cu.id === id) || allCustomers.find(cu => cu.id === id)
+                  return (
+                    <div key={id} className="py-1 text-sm text-theme-text-primary border-b border-theme-border/30 last:border-b-0">
+                      {c?.full_name || id}
+                      {c?.email ? <span className="text-theme-text-muted ml-2">({c.email})</span> : null}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-red-400 text-sm font-semibold">Questa azione è irreversibile.</p>
+            </div>
+            <div className="flex justify-end gap-3 p-6 border-t border-theme-border">
+              <button
+                onClick={() => setShowBulkDeleteModal(false)}
+                disabled={bulkDeleting}
+                className="px-4 py-2 rounded-lg bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border transition-all"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="px-4 py-2 rounded-lg bg-red-700 text-white hover:bg-red-600 border border-red-500 transition-all font-bold flex items-center gap-2"
+              >
+                {bulkDeleting ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Eliminazione...
+                  </>
+                ) : (
+                  `Elimina ${selectedCustomerIds.size} Clienti`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Customer Details Modal - For Fattura Generation */}
       {viewingCustomerDetails && (
         <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1762,43 +1852,53 @@ export default function CustomersTab() {
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-theme-text-primary">Clienti</h2>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
+            <button
+              onClick={() => selectedCustomerIds.size > 0 && setShowBulkDeleteModal(true)}
+              disabled={selectedCustomerIds.size === 0}
+              className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${
+                selectedCustomerIds.size > 0
+                  ? 'bg-red-900 text-red-200 hover:bg-red-700 border border-red-600 cursor-pointer'
+                  : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border cursor-not-allowed opacity-60'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Elimina Multipla{selectedCustomerIds.size > 0 ? ` (${selectedCustomerIds.size})` : ''}
+            </button>
             {selectedCustomerIds.size > 0 && (
-              <>
-
-
-                <div className="flex gap-2 items-center border-l border-theme-border-light pl-4">
-                  <span className="text-sm text-theme-text-muted">Cambia Status:</span>
-                  <button
-                    onClick={() => handleBulkStatusUpdate('blacklist')}
-                    className="px-3 py-2 rounded-full text-sm font-bold bg-red-800 text-white hover:bg-red-600 border border-red-500 transition-all"
-                    title="Imposta come Blacklist"
-                  >
-                    Blacklist
-                  </button>
-                  <button
-                    onClick={() => handleBulkStatusUpdate('member')}
-                    className="px-3 py-2 rounded-full text-sm font-bold bg-blue-800 text-white hover:bg-blue-600 border border-blue-500 transition-all"
-                    title="Imposta come Member"
-                  >
-                    Member
-                  </button>
-                  <button
-                    onClick={() => handleBulkStatusUpdate('elite')}
-                    className="px-3 py-2 rounded-full text-sm font-bold bg-amber-700 text-white hover:bg-amber-500 border border-amber-400 transition-all"
-                    title="Imposta come Elite"
-                  >
-                    Elite
-                  </button>
-                  <button
-                    onClick={() => handleBulkStatusUpdate(null)}
-                    className="px-3 py-2 rounded-full text-sm font-bold bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border transition-all"
-                    title="Rimuovi Status"
-                  >
-                    Rimuovi
-                  </button>
-                </div>
-              </>
+              <div className="flex gap-2 items-center border-l border-theme-border-light pl-4">
+                <span className="text-sm text-theme-text-muted">Status:</span>
+                <button
+                  onClick={() => handleBulkStatusUpdate('blacklist')}
+                  className="px-3 py-2 rounded-full text-sm font-bold bg-red-800 text-white hover:bg-red-600 border border-red-500 transition-all"
+                  title="Imposta come Blacklist"
+                >
+                  Blacklist
+                </button>
+                <button
+                  onClick={() => handleBulkStatusUpdate('member')}
+                  className="px-3 py-2 rounded-full text-sm font-bold bg-blue-800 text-white hover:bg-blue-600 border border-blue-500 transition-all"
+                  title="Imposta come Member"
+                >
+                  Member
+                </button>
+                <button
+                  onClick={() => handleBulkStatusUpdate('elite')}
+                  className="px-3 py-2 rounded-full text-sm font-bold bg-amber-700 text-white hover:bg-amber-500 border border-amber-400 transition-all"
+                  title="Imposta come Elite"
+                >
+                  Elite
+                </button>
+                <button
+                  onClick={() => handleBulkStatusUpdate(null)}
+                  className="px-3 py-2 rounded-full text-sm font-bold bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border transition-all"
+                  title="Rimuovi Status"
+                >
+                  Rimuovi
+                </button>
+              </div>
             )}
             <Button onClick={() => {
               setSelectedCustomer(null)  // Clear any previous selection

@@ -2623,42 +2623,78 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let secondDriverId = formData.second_driver_id || null
 
       // If creating new second driver, create them in customers_extended table first
+      // BUT FIRST check if an identical second driver already exists (prevent duplicates)
       if (formData.has_second_driver && newSecondDriverMode) {
         console.log('[processBookingSubmission] Creating new customer for second driver...')
         try {
-          const secondDriverData = {
-            tipo_cliente: 'persona_fisica',
-            nome: formData.second_driver_name,
-            cognome: formData.second_driver_surname,
-            codice_fiscale: formData.second_driver_codice_fiscale,
-            sesso: formData.second_driver_sesso,
-            indirizzo: formData.second_driver_indirizzo,
-            codice_postale: formData.second_driver_cap,
-            citta_residenza: formData.second_driver_citta,
-            provincia_residenza: formData.second_driver_provincia,
-            data_nascita: formData.second_driver_birth_date || null,
-            luogo_nascita: formData.second_driver_birth_place || null,
-            telefono: formData.second_driver_phone,
-            email: formData.second_driver_email,
-            patente: formData.second_driver_license_number,
-            scadenza_patente: formData.second_driver_license_expiry || null,
-            source: 'admin_second_driver',
-            created_at: new Date().toISOString()
+          // DEDUP CHECK for second driver
+          let existingDriver: any = null
+
+          if (formData.second_driver_codice_fiscale) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('*')
+              .eq('codice_fiscale', formData.second_driver_codice_fiscale)
+              .limit(1)
+            if (data && data.length > 0) existingDriver = data[0]
           }
 
-          const { data: newSecondDriver, error: secondDriverError } = await supabase
-            .from('customers_extended')
-            .insert([secondDriverData])
-            .select()
-            .single()
-
-          if (secondDriverError) {
-            console.error('Failed to create second driver customer:', secondDriverError)
-            throw new Error(`Failed to create second driver: ${secondDriverError.message}`)
+          if (!existingDriver && formData.second_driver_email) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('*')
+              .eq('email', formData.second_driver_email)
+              .limit(1)
+            if (data && data.length > 0) existingDriver = data[0]
           }
 
-          secondDriverId = newSecondDriver.id
-          console.log('✅ New second driver created:', newSecondDriver)
+          if (!existingDriver && formData.second_driver_phone) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('*')
+              .eq('telefono', formData.second_driver_phone)
+              .limit(1)
+            if (data && data.length > 0) existingDriver = data[0]
+          }
+
+          if (existingDriver) {
+            secondDriverId = existingDriver.id
+            console.log('✅ Existing second driver found (dedup), reusing ID:', existingDriver.id)
+          } else {
+            const secondDriverData = {
+              tipo_cliente: 'persona_fisica',
+              nome: formData.second_driver_name,
+              cognome: formData.second_driver_surname,
+              codice_fiscale: formData.second_driver_codice_fiscale,
+              sesso: formData.second_driver_sesso,
+              indirizzo: formData.second_driver_indirizzo,
+              codice_postale: formData.second_driver_cap,
+              citta_residenza: formData.second_driver_citta,
+              provincia_residenza: formData.second_driver_provincia,
+              data_nascita: formData.second_driver_birth_date || null,
+              luogo_nascita: formData.second_driver_birth_place || null,
+              telefono: formData.second_driver_phone,
+              email: formData.second_driver_email,
+              patente: formData.second_driver_license_number,
+              scadenza_patente: formData.second_driver_license_expiry || null,
+              source: 'admin_second_driver',
+              created_at: new Date().toISOString()
+            }
+
+            const { data: newSecondDriver, error: secondDriverError } = await supabase
+              .from('customers_extended')
+              .insert([secondDriverData])
+              .select()
+              .single()
+
+            if (secondDriverError) {
+              console.error('Failed to create second driver customer:', secondDriverError)
+              throw new Error(`Failed to create second driver: ${secondDriverError.message}`)
+            }
+
+            secondDriverId = newSecondDriver.id
+            console.log('✅ New second driver created:', newSecondDriver)
+          }
         } catch (error) {
           console.error('Error creating second driver:', error)
           throw new Error('Failed to create second driver: ' + (error as Error).message)
@@ -2666,58 +2702,96 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // If creating new customer, create them in customers_extended table
+      // BUT FIRST check if an identical customer already exists (prevent duplicates)
       if (newCustomerMode) {
         try {
-          const customerData: any = {
-            tipo_cliente: newCustomerData.tipo_cliente,
-            nazione: newCustomerData.nazione,
-            email: newCustomerData.email || null,
-            telefono: newCustomerData.telefono || null,
-            indirizzo: newCustomerData.indirizzo || null,
-            source: 'admin',
-            created_at: new Date().toISOString()
+          // DEDUP CHECK: Look for existing customer by codice_fiscale, email, or telefono
+          let existingCustomer: any = null
+
+          if (newCustomerData.codice_fiscale) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('*')
+              .eq('codice_fiscale', newCustomerData.codice_fiscale)
+              .limit(1)
+            if (data && data.length > 0) existingCustomer = data[0]
           }
 
-          // Add type-specific fields
-          if (newCustomerData.tipo_cliente === 'persona_fisica') {
-            customerData.nome = newCustomerData.nome
-            customerData.cognome = newCustomerData.cognome
-            customerData.codice_fiscale = newCustomerData.codice_fiscale
-            customerData.data_nascita = newCustomerData.data_nascita || null
-            customerData.luogo_nascita = newCustomerData.luogo_nascita || null
-            customerData.numero_civico = newCustomerData.numero_civico || null
-            customerData.codice_postale = newCustomerData.codice_postale
-            customerData.citta_residenza = newCustomerData.citta_residenza
-            customerData.provincia_residenza = newCustomerData.provincia_residenza
-            customerData.pec = newCustomerData.pec || null
-            customerData.patente = newCustomerData.driver_license_number || null
-          } else if (newCustomerData.tipo_cliente === 'azienda') {
-            customerData.denominazione = newCustomerData.denominazione
-            customerData.partita_iva = newCustomerData.partita_iva
-            customerData.codice_destinatario = newCustomerData.codice_destinatario || null
-            customerData.codice_fiscale = newCustomerData.codice_fiscale || null
-            customerData.pec = newCustomerData.pec || null
-          } else if (newCustomerData.tipo_cliente === 'pubblica_amministrazione') {
-            customerData.codice_univoco = newCustomerData.codice_univoco_pa
-            customerData.codice_fiscale = newCustomerData.codice_fiscale_pa
-            customerData.ente_o_ufficio = newCustomerData.ente_o_ufficio
-            customerData.citta = newCustomerData.citta
-            customerData.pec = newCustomerData.pec || null
+          if (!existingCustomer && newCustomerData.email) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('*')
+              .eq('email', newCustomerData.email)
+              .limit(1)
+            if (data && data.length > 0) existingCustomer = data[0]
           }
 
-          const { data: newCustomer, error: customerError } = await supabase
-            .from('customers_extended')
-            .insert([customerData])
-            .select()
-            .single()
-
-          if (customerError) {
-            console.error('Failed to create customer:', customerError)
-            throw new Error(`Failed to create customer: ${customerError.message}`)
+          if (!existingCustomer && newCustomerData.telefono) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('*')
+              .eq('telefono', newCustomerData.telefono)
+              .limit(1)
+            if (data && data.length > 0) existingCustomer = data[0]
           }
 
-          customerId = newCustomer.id
-          console.log('✅ New customer created in customers_extended table:', newCustomer)
+          if (existingCustomer) {
+            // Customer already exists — reuse their ID instead of creating a duplicate
+            customerId = existingCustomer.id
+            console.log('✅ Existing customer found (dedup), reusing ID:', existingCustomer.id, existingCustomer.nome, existingCustomer.cognome)
+          } else {
+            // No existing customer found — create new one
+            const customerData: any = {
+              tipo_cliente: newCustomerData.tipo_cliente,
+              nazione: newCustomerData.nazione,
+              email: newCustomerData.email || null,
+              telefono: newCustomerData.telefono || null,
+              indirizzo: newCustomerData.indirizzo || null,
+              source: 'admin',
+              created_at: new Date().toISOString()
+            }
+
+            // Add type-specific fields
+            if (newCustomerData.tipo_cliente === 'persona_fisica') {
+              customerData.nome = newCustomerData.nome
+              customerData.cognome = newCustomerData.cognome
+              customerData.codice_fiscale = newCustomerData.codice_fiscale
+              customerData.data_nascita = newCustomerData.data_nascita || null
+              customerData.luogo_nascita = newCustomerData.luogo_nascita || null
+              customerData.numero_civico = newCustomerData.numero_civico || null
+              customerData.codice_postale = newCustomerData.codice_postale
+              customerData.citta_residenza = newCustomerData.citta_residenza
+              customerData.provincia_residenza = newCustomerData.provincia_residenza
+              customerData.pec = newCustomerData.pec || null
+              customerData.patente = newCustomerData.driver_license_number || null
+            } else if (newCustomerData.tipo_cliente === 'azienda') {
+              customerData.denominazione = newCustomerData.denominazione
+              customerData.partita_iva = newCustomerData.partita_iva
+              customerData.codice_destinatario = newCustomerData.codice_destinatario || null
+              customerData.codice_fiscale = newCustomerData.codice_fiscale || null
+              customerData.pec = newCustomerData.pec || null
+            } else if (newCustomerData.tipo_cliente === 'pubblica_amministrazione') {
+              customerData.codice_univoco = newCustomerData.codice_univoco_pa
+              customerData.codice_fiscale = newCustomerData.codice_fiscale_pa
+              customerData.ente_o_ufficio = newCustomerData.ente_o_ufficio
+              customerData.citta = newCustomerData.citta
+              customerData.pec = newCustomerData.pec || null
+            }
+
+            const { data: newCustomer, error: customerError } = await supabase
+              .from('customers_extended')
+              .insert([customerData])
+              .select()
+              .single()
+
+            if (customerError) {
+              console.error('Failed to create customer:', customerError)
+              throw new Error(`Failed to create customer: ${customerError.message}`)
+            }
+
+            customerId = newCustomer.id
+            console.log('✅ New customer created in customers_extended table:', newCustomer)
+          }
         } catch (error) {
           console.error('Error creating customer:', error)
           throw new Error('Failed to create customer: ' + (error as Error).message)
