@@ -26,35 +26,44 @@ interface CarWashBooking {
   vehicle_plate?: string
 }
 
-// Service durations in minutes
-const SERVICE_DURATIONS: Record<string, number> = {
-  'Lavaggio Completo': 45,
-  'Lavaggio Top': 90,
-  'Lavaggio VIP': 120,
-  'Lavaggio DR7 Luxury': 150,
-  // New services added Jan 2026
-  'Lavaggio Scooter': 15,
-  'Lavaggio Solo Esterno': 15,
-  'Lavaggio Solo Interno': 30
+// Service durations in minutes by vehicle category
+const SERVICE_DURATIONS_URBAN: Record<string, number> = {
+  interior: 40,
+  exterior: 30,
+  full_clean: 80,
+  full_clean_n2: 80,
+  top_shine: 120,
+  vip: 140,
+  luxury: 220,
 }
 
-const getServiceDuration = (serviceName: string): number => {
-  // Try exact match first
-  if (SERVICE_DURATIONS[serviceName]) {
-    return SERVICE_DURATIONS[serviceName]
-  }
+const SERVICE_DURATIONS_MAXI: Record<string, number> = {
+  interior: 45,
+  exterior: 40,
+  full_clean: 90,
+  full_clean_n2: 90,
+  top_shine: 130,
+  vip: 150,
+  luxury: 280,
+}
 
-  // Try case-insensitive match
-  const lowerServiceName = serviceName.toLowerCase()
+const getServiceDuration = (serviceName: string, vehicleCategory?: string): number => {
+  const name = serviceName.toLowerCase()
+  const isMaxi = vehicleCategory?.toLowerCase() === 'maxi'
+  const durations = isMaxi ? SERVICE_DURATIONS_MAXI : SERVICE_DURATIONS_URBAN
 
-  // Match patterns
-  if (lowerServiceName.includes('completo')) return 45
-  if (lowerServiceName.includes('top')) return 90
-  if (lowerServiceName.includes('vip')) return 120
-  if (lowerServiceName.includes('dr7') || lowerServiceName.includes('luxury')) return 150
-  if (lowerServiceName.includes('scooter')) return 15
-  if (lowerServiceName.includes('solo esterno') || lowerServiceName.includes('exterior only')) return 15
-  if (lowerServiceName.includes('solo interno') || lowerServiceName.includes('interior only')) return 30
+  // Scooter/Moto — fixed short duration
+  if (name.includes('scooter')) return 15
+  if (name.includes('moto')) return 20
+
+  // Match service patterns (check more specific patterns first)
+  if (name.includes('luxury') || name.includes('dr7')) return durations.luxury
+  if (name.includes('vip')) return durations.vip
+  if (name.includes('top')) return durations.top_shine
+  if (name.includes('full clean n2') || name.includes('completo n2')) return durations.full_clean_n2
+  if (name.includes('full clean') || name.includes('completo')) return durations.full_clean
+  if (name.includes('interior') || name.includes('solo interno') || name.includes('interno')) return durations.interior
+  if (name.includes('exterior') || name.includes('solo esterno') || name.includes('esterno')) return durations.exterior
 
   // Default to 60 minutes if no match
   return 60
@@ -198,7 +207,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         }
 
         // Rientro washes always occupy only 15 minutes (1 slot)
-        const duration = isRientroBooking(booking) ? 15 : getServiceDuration(booking.service_name)
+        const duration = isRientroBooking(booking) ? 15 : getServiceDuration(booking.service_name, booking.booking_details?.vehicleCategory)
 
         // Calculate position
         const dayIndex = day - 1
@@ -662,7 +671,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-muted">Durata:</span>
-                    <span className="text-theme-text-primary font-medium">{formatDuration(getServiceDuration(selectedBooking.service_name))}</span>
+                    <span className="text-theme-text-primary font-medium">{formatDuration(getServiceDuration(selectedBooking.service_name, selectedBooking.booking_details?.vehicleCategory))}</span>
                   </div>
                   {selectedBooking.booking_details?.additionalService && (
                     <div className="flex justify-between">
