@@ -2170,9 +2170,40 @@ export default function CustomersTab() {
           // it will trigger the "new mode" path and reset editingId
           setTimeout(() => setSelectedCustomer(null), 100)
         }}
-        onClientCreated={() => {
+        onClientCreated={async (clientId: string) => {
           setShowNewClientModal(false)
           setSelectedCustomer(null)
+          // Immediately fetch and add the new customer so count updates instantly
+          try {
+            const { data: newCustomer } = await supabase
+              .from('customers_extended')
+              .select('*')
+              .eq('id', clientId)
+              .single()
+            if (newCustomer) {
+              let fullName = 'Cliente'
+              if (newCustomer.tipo_cliente === 'persona_fisica') {
+                fullName = `${newCustomer.nome || ''} ${newCustomer.cognome || ''}`.trim()
+              } else if (newCustomer.tipo_cliente === 'azienda') {
+                fullName = newCustomer.ragione_sociale || newCustomer.denominazione || 'Azienda'
+              } else if (newCustomer.tipo_cliente === 'pubblica_amministrazione') {
+                fullName = newCustomer.ente_ufficio || newCustomer.denominazione || 'Pubblica Amministrazione'
+              }
+              setAllCustomers(prev => [{
+                ...newCustomer,
+                full_name: fullName || 'Cliente',
+                phone: newCustomer.telefono,
+                driver_license_number: newCustomer.numero_patente,
+                created_at: newCustomer.created_at,
+                updated_at: newCustomer.updated_at || newCustomer.created_at,
+                notes: newCustomer.note,
+                source: 'db',
+              } as any, ...prev])
+            }
+          } catch (e) {
+            console.error('Failed to fetch new customer:', e)
+          }
+          // Full reload in background for complete data consistency
           loadCustomers()
         }}
         initialData={selectedCustomer}
