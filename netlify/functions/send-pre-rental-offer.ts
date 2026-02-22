@@ -22,10 +22,16 @@ DR7`;
 
 const EXOTIC_MESSAGE = `Buongiorno {nome},
 
-Vuole valutare una promo in continuazione super vantaggiosa?
+La contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a Sua completa disposizione per verificarne la disponibilità.
 
-Ci faccia sapere, grazie.
-DR7`;
+In caso di estensione, saremo lieti di riservarLe una promozione dedicata e particolarmente vantaggiosa sul periodo aggiuntivo.
+
+Restiamo in attesa di un Suo gentile riscontro.
+
+Grazie.
+
+Cordiali saluti,
+Team DR7`;
 
 // Map all vehicle category variants to the two message types
 function getCategoryType(category: string | null | undefined): 'urban' | 'exotic' | null {
