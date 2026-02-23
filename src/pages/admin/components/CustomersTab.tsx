@@ -565,7 +565,7 @@ export default function CustomersTab() {
         return newAll
       })
 
-      alert('Cliente eliminato con successo')
+      // Success - no popup needed, the customer disappears from the list
     } catch (error: any) {
       console.error('[handleDelete] Failed:', error)
       alert('Impossibile eliminare il cliente: ' + (error.message || 'Errore sconosciuto'))
