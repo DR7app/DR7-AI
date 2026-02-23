@@ -2162,12 +2162,13 @@ export default function CustomersTab() {
           setTimeout(() => setSelectedCustomer(null), 100)
         }}
         onClientCreated={(clientId: string, customerData?: any) => {
+          console.log('[onClientCreated] called with:', { clientId, hasData: !!customerData })
           setShowNewClientModal(false)
           setSelectedCustomer(null)
           // Use the customer data passed directly from the Netlify function response
           // (avoids RLS issues that block client-side re-fetching from customers_extended)
-          const newCustomer = customerData
-          if (newCustomer) {
+          if (customerData) {
+            const newCustomer = customerData
             let fullName = 'Cliente'
             if (newCustomer.tipo_cliente === 'persona_fisica') {
               fullName = `${newCustomer.nome || ''} ${newCustomer.cognome || ''}`.trim()
@@ -2177,9 +2178,8 @@ export default function CustomersTab() {
               fullName = newCustomer.ente_ufficio || newCustomer.denominazione || 'Pubblica Amministrazione'
             }
             setAllCustomers(prev => {
-              // Remove any existing entry with same ID to avoid duplicates (e.g. on update)
               const filtered = prev.filter(c => c.id !== clientId)
-              return [{
+              const updated = [{
                 ...newCustomer,
                 id: clientId,
                 full_name: fullName || 'Cliente',
@@ -2190,11 +2190,12 @@ export default function CustomersTab() {
                 notes: newCustomer.note,
                 source: 'db',
               } as any, ...filtered]
+              console.log('[onClientCreated] State update:', { prevCount: prev.length, newCount: updated.length })
+              return updated
             })
-          } else {
-            // Fallback: reload everything if no data was passed
-            loadCustomers()
           }
+          // Always reload for full consistency (pagination fix ensures all customers are fetched)
+          loadCustomers()
         }}
         initialData={selectedCustomer}
       />
