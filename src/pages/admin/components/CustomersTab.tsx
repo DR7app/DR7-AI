@@ -280,34 +280,25 @@ export default function CustomersTab() {
         console.log('Unique customers from bookings:', customerMap.size)
       }
 
-      // Get customers from customers_extended table
-      console.log('[CustomersTab] Fetching customers_extended...')
+      // Get customers from customers_extended table via Netlify function (bypasses RLS)
+      console.log('[CustomersTab] Fetching customers_extended via Netlify function...')
 
-      // We'll set total count after loading from all sources
+      let customersExtendedData: any[] | null = null
+      let customersExtendedError: any = null
 
-      // Fetch all customers (we'll paginate client-side for proper alphabetical sorting)
-      // CRITICAL FIX: Sort by updated_at so we get the most recently modified version when deduplicating
-      const { data: customersExtendedData, error: customersExtendedError } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .order('updated_at', { ascending: false })
-
-      if (customersExtendedError) {
-        console.error('[CustomersTab] ❌ ERROR loading customers_extended:', customersExtendedError)
-        console.error('[CustomersTab] Error code:', customersExtendedError.code)
-        console.error('[CustomersTab] Error message:', customersExtendedError.message)
-
-        // @ts-ignore
-        console.error('[CustomersTab] Error hint:', customersExtendedError.hint)
-
-        // Show user-friendly error message
-        if (customersExtendedError.code === '42501') {
-          console.warn('[CustomersTab] ⚠️ RLS policy blocking access. Run fix_customers_extended_rls.sql')
-        } else if (customersExtendedError.code === '42P01') {
-          console.warn('[CustomersTab] ⚠️ Table does not exist. Run create-customers-extended-table.sql')
+      try {
+        const response = await fetch('/.netlify/functions/list-customers')
+        const result = await response.json()
+        if (!response.ok) {
+          customersExtendedError = { code: result.code, message: result.error }
+          console.error('[CustomersTab] ❌ ERROR loading customers_extended:', customersExtendedError)
+        } else {
+          customersExtendedData = result.customers
+          console.log('[CustomersTab] ✅ Successfully loaded customers_extended:', customersExtendedData?.length)
         }
-      } else {
-        console.log('[CustomersTab] ✅ Successfully loaded customers_extended:', customersExtendedData?.length)
+      } catch (e: any) {
+        customersExtendedError = { code: 'FETCH_ERROR', message: e.message }
+        console.error('[CustomersTab] ❌ ERROR loading customers_extended:', e)
       }
 
       // DEBUG: Log counts
