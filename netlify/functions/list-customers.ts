@@ -24,23 +24,42 @@ export const handler: Handler = async (event) => {
     );
 
     try {
-        // Fetch all customers from customers_extended
-        const { data: customers, error } = await supabase
-            .from('customers_extended')
-            .select('*')
-            .order('updated_at', { ascending: false });
+        // Fetch ALL customers from customers_extended
+        // Supabase defaults to 1000 rows — paginate to get everything
+        const allCustomers: any[] = [];
+        const PAGE_SIZE = 1000;
+        let from = 0;
 
-        if (error) {
-            console.error('[list-customers] Error:', error);
-            throw error;
+        while (true) {
+            const { data, error } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .order('updated_at', { ascending: false })
+                .range(from, from + PAGE_SIZE - 1);
+
+            if (error) {
+                console.error('[list-customers] Error:', error);
+                throw error;
+            }
+
+            if (data && data.length > 0) {
+                allCustomers.push(...data);
+                from += data.length;
+                // If we got fewer than PAGE_SIZE, we've reached the end
+                if (data.length < PAGE_SIZE) break;
+            } else {
+                break;
+            }
         }
+
+        console.log(`[list-customers] Total customers fetched: ${allCustomers.length}`);
 
         return {
             statusCode: 200,
             headers,
             body: JSON.stringify({
                 success: true,
-                customers: customers || []
+                customers: allCustomers
             })
         };
 
