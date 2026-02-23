@@ -104,35 +104,8 @@ const handler: Handler = async (event) => {
     console.log(`[WhatsApp AI] Message from ${senderName} (${chatId}): ${userMessage}`);
 
     // Get or create conversation history for this chat
-    const isNewConversation = !conversationHistory.has(chatId);
-    if (isNewConversation) {
+    if (!conversationHistory.has(chatId)) {
       conversationHistory.set(chatId, []);
-
-      // Send welcome message on first contact
-      const welcomeMessage = `Grazie per aver contattato DR7.
-
-Per poter verificare rapidamente disponibilità e condizioni dedicate, Le chiediamo gentilmente di indicarci:
-
-•⁠  ⁠Nome e Cognome
-•⁠  ⁠Data di nascita
-•⁠  ⁠Data di rilascio della patente
-•⁠  ⁠E-mail (per ricevere eventuali sconti e promozioni riservate)
-
-Dopo una breve verifica Le forniremo tutte le informazioni necessarie nel più breve tempo possibile.
-
-Nel frattempo può registrarsi gratuitamente sul nostro sito:
-
-👉 www.dr7empire.com
-
-Restiamo a disposizione.
-Team DR7`;
-
-      await sendWhatsAppMessage(chatId, welcomeMessage);
-      console.log(`[WhatsApp AI] Sent welcome message to new contact: ${chatId}`);
-
-      // Still store the user message in history for context
-      conversationHistory.get(chatId)!.push({ role: "user", content: userMessage });
-      return { statusCode: 200, headers, body: JSON.stringify({ status: "welcome sent" }) };
     }
     const history = conversationHistory.get(chatId)!;
 
