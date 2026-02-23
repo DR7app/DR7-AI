@@ -2170,27 +2170,27 @@ export default function CustomersTab() {
           // it will trigger the "new mode" path and reset editingId
           setTimeout(() => setSelectedCustomer(null), 100)
         }}
-        onClientCreated={async (clientId: string) => {
+        onClientCreated={(clientId: string, customerData?: any) => {
           setShowNewClientModal(false)
           setSelectedCustomer(null)
-          // Immediately fetch and add the new customer so count updates instantly
-          try {
-            const { data: newCustomer } = await supabase
-              .from('customers_extended')
-              .select('*')
-              .eq('id', clientId)
-              .single()
-            if (newCustomer) {
-              let fullName = 'Cliente'
-              if (newCustomer.tipo_cliente === 'persona_fisica') {
-                fullName = `${newCustomer.nome || ''} ${newCustomer.cognome || ''}`.trim()
-              } else if (newCustomer.tipo_cliente === 'azienda') {
-                fullName = newCustomer.ragione_sociale || newCustomer.denominazione || 'Azienda'
-              } else if (newCustomer.tipo_cliente === 'pubblica_amministrazione') {
-                fullName = newCustomer.ente_ufficio || newCustomer.denominazione || 'Pubblica Amministrazione'
-              }
-              setAllCustomers(prev => [{
+          // Use the customer data passed directly from the Netlify function response
+          // (avoids RLS issues that block client-side re-fetching from customers_extended)
+          const newCustomer = customerData
+          if (newCustomer) {
+            let fullName = 'Cliente'
+            if (newCustomer.tipo_cliente === 'persona_fisica') {
+              fullName = `${newCustomer.nome || ''} ${newCustomer.cognome || ''}`.trim()
+            } else if (newCustomer.tipo_cliente === 'azienda') {
+              fullName = newCustomer.ragione_sociale || newCustomer.denominazione || 'Azienda'
+            } else if (newCustomer.tipo_cliente === 'pubblica_amministrazione') {
+              fullName = newCustomer.ente_ufficio || newCustomer.denominazione || 'Pubblica Amministrazione'
+            }
+            setAllCustomers(prev => {
+              // Remove any existing entry with same ID to avoid duplicates (e.g. on update)
+              const filtered = prev.filter(c => c.id !== clientId)
+              return [{
                 ...newCustomer,
+                id: clientId,
                 full_name: fullName || 'Cliente',
                 phone: newCustomer.telefono,
                 driver_license_number: newCustomer.numero_patente,
@@ -2198,13 +2198,12 @@ export default function CustomersTab() {
                 updated_at: newCustomer.updated_at || newCustomer.created_at,
                 notes: newCustomer.note,
                 source: 'db',
-              } as any, ...prev])
-            }
-          } catch (e) {
-            console.error('Failed to fetch new customer:', e)
+              } as any, ...filtered]
+            })
+          } else {
+            // Fallback: reload everything if no data was passed
+            loadCustomers()
           }
-          // Full reload in background for complete data consistency
-          loadCustomers()
         }}
         initialData={selectedCustomer}
       />
