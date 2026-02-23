@@ -1839,7 +1839,7 @@ export default function CustomersTab() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
-            <p className="text-4xl font-bold text-dr7-gold">{totalCustomers}</p>
+            <p className="text-4xl font-bold text-dr7-gold">{allCustomers.length}</p>
           </div>
           <div className="text-dr7-gold">
             <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2173,7 +2173,7 @@ export default function CustomersTab() {
         onClientCreated={async (clientId: string) => {
           setShowNewClientModal(false)
           setSelectedCustomer(null)
-          // Immediately fetch and add the new customer so count updates instantly
+          // Immediately fetch and update the customer so count updates instantly
           try {
             const { data: newCustomer } = await supabase
               .from('customers_extended')
@@ -2189,7 +2189,7 @@ export default function CustomersTab() {
               } else if (newCustomer.tipo_cliente === 'pubblica_amministrazione') {
                 fullName = newCustomer.ente_ufficio || newCustomer.denominazione || 'Pubblica Amministrazione'
               }
-              setAllCustomers(prev => [{
+              const mappedCustomer = {
                 ...newCustomer,
                 full_name: fullName || 'Cliente',
                 phone: newCustomer.telefono,
@@ -2198,7 +2198,18 @@ export default function CustomersTab() {
                 updated_at: newCustomer.updated_at || newCustomer.created_at,
                 notes: newCustomer.note,
                 source: 'db',
-              } as any, ...prev])
+              } as any
+              setAllCustomers(prev => {
+                const existingIndex = prev.findIndex(c => c.id === clientId)
+                if (existingIndex !== -1) {
+                  // Edit: replace existing customer in-place (don't inflate count)
+                  const updated = [...prev]
+                  updated[existingIndex] = mappedCustomer
+                  return updated
+                }
+                // New: prepend to list
+                return [mappedCustomer, ...prev]
+              })
             }
           } catch (e) {
             console.error('Failed to fetch new customer:', e)
