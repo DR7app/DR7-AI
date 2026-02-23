@@ -189,8 +189,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
 
-  // Delete confirmation modal state
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+
+
 
   // Wizard computed values
   const getTotal = () => {
@@ -445,13 +445,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
-  function handleDeleteBooking(bookingId: string, customerName: string) {
-    setDeleteTarget({ id: bookingId, name: customerName })
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return
-
+  async function handleDeleteBooking(bookingId: string, customerName: string) {
     try {
       // Try to delete from Google Calendar
       try {
@@ -459,30 +453,29 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            bookingId: deleteTarget.id,
-            customerName: deleteTarget.name,
+            bookingId: bookingId,
+            customerName: customerName,
             vehicleName: 'Car Wash'
           }),
         })
-        console.log('Google Calendar event deletion requested for booking:', deleteTarget.id)
+        console.log('Google Calendar event deletion requested for booking:', bookingId)
       } catch (calError) {
         console.warn('Failed to delete from Google Calendar:', calError)
       }
 
       // Delete dependent records first (FK constraints)
-      await supabase.from('contracts').delete().eq('booking_id', deleteTarget.id)
-      await supabase.from('fatture').delete().eq('booking_id', deleteTarget.id)
+      await supabase.from('contracts').delete().eq('booking_id', bookingId)
+      await supabase.from('fatture').delete().eq('booking_id', bookingId)
 
       // Delete from database
       const { error } = await supabase
         .from('bookings')
         .delete()
-        .eq('id', deleteTarget.id)
+        .eq('id', bookingId)
 
       if (error) throw error
 
       toast.success('Prenotazione eliminata')
-      setDeleteTarget(null)
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
@@ -1962,31 +1955,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         )
       }
 
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Conferma eliminazione</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Sei sicuro di voler eliminare la prenotazione di <strong>{deleteTarget.name}</strong>? Questa azione non può essere annullata.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                Annulla
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
-              >
-                Elimina
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+
     </div >
   )
 }
