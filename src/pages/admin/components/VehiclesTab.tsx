@@ -284,13 +284,56 @@ export default function VehiclesTab() {
     const vehicle = vehicles.find(v => v.id === id)
     if (!vehicle) return
 
+    // First check if there are associated bookings
+    const { data: existingBookings } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('vehicle_name', vehicle.display_name)
+      .limit(1)
+
+    if (existingBookings && existingBookings.length > 0) {
+      alert(
+        `Impossibile eliminare ${vehicle.display_name}: ci sono prenotazioni associate.\n\n` +
+        'Elimina prima le prenotazioni dal tab Prenotazioni, oppure imposta il veicolo come "retired".'
+      )
+      return
+    }
+
     const confirmed = confirm(
-      `Sei sicuro di voler eliminare ${vehicle.display_name}? Verranno eliminati anche tutte le prenotazioni, contratti e fatture associate.`
+      `Sei sicuro di voler eliminare ${vehicle.display_name}?`
     )
     if (!confirmed) return
 
     try {
-      await deleteVehicleLogic(id, vehicle.display_name)
+      // Only delete the vehicle and orphaned references (reservations, cauzioni)
+      // Do NOT cascade-delete bookings/contracts/fatture
+
+      const { error: resError } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('vehicle_id', id)
+
+      if (resError) throw new Error(`Failed to delete reservations: ${resError.message}`)
+
+      const { error: cauzioniError } = await supabase
+        .from('cauzioni')
+        .delete()
+        .eq('veicolo_id', id)
+
+      if (cauzioniError) throw new Error(`Failed to delete cauzioni: ${cauzioniError.message}`)
+
+      const { data: deletedVehicle, error: vehicleError } = await supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', id)
+        .select()
+
+      if (vehicleError) throw new Error(`Failed to delete vehicle: ${vehicleError.message}`)
+
+      if (!deletedVehicle || deletedVehicle.length === 0) {
+        throw new Error('Il veicolo non è stato eliminato. Potresti non avere i permessi necessari.')
+      }
+
       await loadVehicles()
       alert('Veicolo eliminato con successo!')
     } catch (error: any) {
