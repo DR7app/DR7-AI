@@ -34,6 +34,14 @@ export const handler: Handler = async (event) => {
             };
         }
 
+        // Normalize phone number to digits-only with country code (e.g., 393290838561)
+        if (customerData.telefono) {
+            let phone = customerData.telefono.replace(/[\s\-\+\(\)]/g, '');
+            if (phone.startsWith('00')) phone = phone.substring(2);
+            if (phone.length === 10) phone = '39' + phone;
+            customerData.telefono = phone;
+        }
+
         console.log('[save-customer] Saving customer:', customerId ? 'UPDATE' : 'INSERT');
 
         let result;

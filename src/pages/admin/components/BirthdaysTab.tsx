@@ -327,13 +327,11 @@ export default function BirthdaysTab() {
                     .replace('{nome}', firstName)
                     .replace('{codice}', discountCode)
 
-                let cleanPhone = customer.phone!.replace(/\s+/g, '').replace(/[^\d+]/g, '')
-                if (cleanPhone.startsWith('0')) {
-                    cleanPhone = '39' + cleanPhone.substring(1)
-                } else if (cleanPhone.startsWith('+')) {
-                    cleanPhone = cleanPhone.substring(1)
+                let cleanPhone = customer.phone!.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+                if (cleanPhone.startsWith('00')) {
+                    cleanPhone = cleanPhone.substring(2)
                 }
-                if (!cleanPhone.startsWith('39') && cleanPhone.length === 10) {
+                if (cleanPhone.length === 10) {
                     cleanPhone = '39' + cleanPhone
                 }
 
@@ -432,13 +430,11 @@ export default function BirthdaysTab() {
                 .replace('{codice}', discountCode)
 
             // Clean phone number
-            let cleanPhone = customer.phone.replace(/\s+/g, '').replace(/[^\d+]/g, '')
-            if (cleanPhone.startsWith('0')) {
-                cleanPhone = '39' + cleanPhone.substring(1)
-            } else if (cleanPhone.startsWith('+')) {
-                cleanPhone = cleanPhone.substring(1)
+            let cleanPhone = customer.phone.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+            if (cleanPhone.startsWith('00')) {
+                cleanPhone = cleanPhone.substring(2)
             }
-            if (!cleanPhone.startsWith('39') && cleanPhone.length === 10) {
+            if (cleanPhone.length === 10) {
                 cleanPhone = '39' + cleanPhone
             }
 

@@ -12,10 +12,13 @@ const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 function cleanPhone(phone: string): string | null {
   if (!phone) return null;
   let clean = phone.replace(/[\s\-\+\(\)]/g, '');
-  if (clean.startsWith('0')) {
-    clean = '39' + clean.substring(1);
+  // Handle 00 international prefix (e.g., 00393921900763)
+  if (clean.startsWith('00')) {
+    clean = clean.substring(2);
   }
-  if (!clean.startsWith('39') && clean.length === 10) {
+  // 10-digit local Italian number → always prepend country code 39
+  // (covers numbers starting with 39X like 392, 393, 394 mobile prefixes)
+  if (clean.length === 10) {
     clean = '39' + clean;
   }
   return clean;

@@ -1186,10 +1186,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Fallback: Try by phone if still no customer found
     if (!customer && resolvedPhone) {
       console.log('[validateCustomerData] Fallback: Fetching by phone from customers_extended...')
+      let normPhone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
+      if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
+      if (normPhone.length === 10) normPhone = '39' + normPhone
       const { data: cData, error } = await supabase
         .from('customers_extended')
         .select('*')
-        .eq('telefono', resolvedPhone)
+        .eq('telefono', normPhone)
         .maybeSingle()
 
       if (cData) {
@@ -1591,7 +1594,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           console.log('Client-side cascade: Deleting related records...')
           await supabase.from('fatture').delete().eq('booking_id', bookingId)
           await supabase.from('contracts').delete().eq('booking_id', bookingId)
-          await supabase.from('cauzioni').delete().eq('booking_id', bookingId)
+          await supabase.from('cauzioni').delete().eq('riferimento_contratto_id', bookingId)
 
           const { error: clientError } = await supabase
             .from('bookings')
@@ -1959,6 +1962,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         deposit_reminder_sent: false,
         deposit_reminder_sent_at: null,
         iban_request_sent: false,
+        day_before_reminder_sent: false,
+        day_before_reminder_sent_at: null,
         extension_history: [
           ...(extendingBooking.booking_details?.extension_history || []),
           {
@@ -2022,12 +2027,39 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da saldare'}`
         if (extendData.notes) extensionMsg += `\n*Note:* ${extendData.notes}`
 
+        // Send to admin notification phone
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customMessage: extensionMsg })
         })
-        console.log('[handleConfirmExtend] ✅ WhatsApp notification sent')
+        console.log('[handleConfirmExtend] ✅ WhatsApp admin notification sent')
+
+        // Send to customer phone
+        const customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
+        if (customerPhone) {
+          const customerFirstName = extendingBooking.booking_details?.customer?.firstName
+            || extendingBooking.customer_name?.split(' ')[0]
+            || 'Cliente'
+
+          const customerMsg = `Buongiorno ${customerFirstName},\n\n`
+            + `La informiamo che la Sua prenotazione è stata estesa.\n\n`
+            + `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+            + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
+            + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+            + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
+            + `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n\n`
+            + `Cordiali saluti,\nDR7`
+
+          await fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customMessage: customerMsg, customPhone: customerPhone })
+          })
+          console.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
+        } else {
+          console.warn('[handleConfirmExtend] ⚠️ No customer phone — skipped customer notification')
+        }
       } catch (whatsappError) {
         console.error('[handleConfirmExtend] ⚠️ WhatsApp notification failed:', whatsappError)
       }
@@ -2200,11 +2232,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         // If not found by email, try by phone
         if ((!customerData || customerData.length === 0) && localCustomer?.phone) {
-          console.log('[processBookingSubmission] Trying lookup by phone:', localCustomer.phone)
+          let normPhone = localCustomer.phone.replace(/[\s\-\+\(\)]/g, '')
+          if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
+          if (normPhone.length === 10) normPhone = '39' + normPhone
+          console.log('[processBookingSubmission] Trying lookup by phone:', normPhone)
           const { data: phoneData } = await supabase
             .from('customers_extended')
             .select('*')
-            .eq('telefono', localCustomer.phone)
+            .eq('telefono', normPhone)
             .limit(1)
           if (phoneData && phoneData.length > 0) {
             customerData = phoneData
@@ -2654,10 +2689,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           if (!existingDriver && formData.second_driver_phone) {
+            let normSDPhone = formData.second_driver_phone.replace(/[\s\-\+\(\)]/g, '')
+            if (normSDPhone.startsWith('00')) normSDPhone = normSDPhone.substring(2)
+            if (normSDPhone.length === 10) normSDPhone = '39' + normSDPhone
             const { data } = await supabase
               .from('customers_extended')
               .select('*')
-              .eq('telefono', formData.second_driver_phone)
+              .eq('telefono', normSDPhone)
               .limit(1)
             if (data && data.length > 0) existingDriver = data[0]
           }
@@ -2732,10 +2770,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           if (!existingCustomer && newCustomerData.telefono) {
+            let normNewPhone = newCustomerData.telefono.replace(/[\s\-\+\(\)]/g, '')
+            if (normNewPhone.startsWith('00')) normNewPhone = normNewPhone.substring(2)
+            if (normNewPhone.length === 10) normNewPhone = '39' + normNewPhone
             const { data } = await supabase
               .from('customers_extended')
               .select('*')
-              .eq('telefono', newCustomerData.telefono)
+              .eq('telefono', normNewPhone)
               .limit(1)
             if (data && data.length > 0) existingCustomer = data[0]
           }
@@ -3180,6 +3221,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
         // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
+        // Send admin notification (detailed internal format)
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3192,11 +3234,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               customer_email: customerInfo?.email || '',
               customer_phone: customerInfo?.phone || '',
               vehicle_name: vehicle?.display_name || '',
-              // Use the pre-computed datetime strings with correct Italy offset
               pickup_date: pickupDateTime,
               dropoff_date: returnDateTime,
               pickup_location: pickupLocationLabel,
-              insurance_option: 'KASKO_BASE', // Always Kasko included
+              insurance_option: 'KASKO_BASE',
               price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
               payment_status: paymentStatus,
               payment_method: formData.payment_method || '',
@@ -3231,7 +3272,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }
           })
         })
-        console.log('✅ WhatsApp notification sent')
+        console.log('✅ WhatsApp admin notification sent')
+
+        // Send customer confirmation message
+        const custPhone = customerInfo?.phone
+        if (custPhone) {
+          const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
+          const pickupDt = new Date(pickupDateTime)
+          const dropoffDt = new Date(returnDateTime)
+          const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+          const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+          const totalEur = ((insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) / 100).toFixed(2)
+
+          let custMsg = editingId
+            ? `Buongiorno ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
+            : `Buongiorno ${custFirstName},\n\nConfermiamo la Sua prenotazione.\n\n`
+          custMsg += `*Veicolo:* ${vehicle?.display_name || 'N/A'}\n`
+          custMsg += `*Ritiro:* ${fmtDate(pickupDt)} alle ${fmtTime(pickupDt)}\n`
+          custMsg += `*Riconsegna:* ${fmtDate(dropoffDt)} alle ${fmtTime(dropoffDt)}\n`
+          custMsg += `*Totale:* €${totalEur}\n\n`
+          custMsg += `Cordiali saluti,\nDR7`
+
+          await fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
+          })
+          console.log('✅ WhatsApp customer confirmation sent to', custPhone)
+        }
       } catch (whatsappError) {
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
         // Don't fail the whole booking if WhatsApp fails

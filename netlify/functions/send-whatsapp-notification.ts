@@ -34,11 +34,14 @@ const handler: Handler = async (event) => {
   let targetPhone = customPhone || NOTIFICATION_PHONE;
 
   // Clean phone number - Green API format: 393457905205 (no + or spaces)
-  targetPhone = targetPhone.replace(/[\s\-\+]/g, '');
-  if (targetPhone.startsWith('0')) {
-    targetPhone = '39' + targetPhone.substring(1);
+  targetPhone = targetPhone.replace(/[\s\-\+\(\)]/g, '');
+  // Handle 00 international prefix (e.g., 00393921900763)
+  if (targetPhone.startsWith('00')) {
+    targetPhone = targetPhone.substring(2);
   }
-  if (!targetPhone.startsWith('39') && targetPhone.length === 10) {
+  // 10-digit local Italian number → always prepend country code 39
+  // (covers numbers starting with 39X like 392, 393, 394 mobile prefixes)
+  if (targetPhone.length === 10) {
     targetPhone = '39' + targetPhone;
   }
 

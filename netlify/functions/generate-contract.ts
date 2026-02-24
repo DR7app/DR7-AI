@@ -118,7 +118,9 @@ export const handler: Handler = async (event) => {
         // 3. Fallback: Try by phone number
         if (!customer && resolvedPhone) {
             console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...')
-            const phone = resolvedPhone.replace(/\s+/g, '')
+            let phone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
+            if (phone.startsWith('00')) phone = phone.substring(2)
+            if (phone.length === 10) phone = '39' + phone
             const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', phone).order('updated_at', { ascending: false }).limit(1).maybeSingle()
             if (cData) {
                 console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome)

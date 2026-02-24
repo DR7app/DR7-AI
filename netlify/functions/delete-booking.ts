@@ -66,7 +66,7 @@ export const handler: Handler = async (event) => {
         if (contractError) console.warn('[delete-booking] Contract deletion warning:', contractError.message)
 
         // Delete related cauzioni (deposits)
-        const { error: cauzioneError } = await supabase.from('cauzioni').delete().eq('booking_id', bookingId)
+        const { error: cauzioneError } = await supabase.from('cauzioni').delete().eq('riferimento_contratto_id', bookingId)
         if (cauzioneError) console.warn('[delete-booking] Cauzioni deletion warning:', cauzioneError.message)
 
         // 4. Delete the booking

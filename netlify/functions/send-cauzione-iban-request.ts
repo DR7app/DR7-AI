@@ -21,10 +21,13 @@ Team DR7`;
 
 function cleanPhone(phone: string): string {
   let cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
-  if (cleaned.startsWith('0')) {
-    cleaned = '39' + cleaned.substring(1);
+  // Handle 00 international prefix (e.g., 00393921900763)
+  if (cleaned.startsWith('00')) {
+    cleaned = cleaned.substring(2);
   }
-  if (!cleaned.startsWith('39') && cleaned.length === 10) {
+  // 10-digit local Italian number → always prepend country code 39
+  // (covers numbers starting with 39X like 392, 393, 394 mobile prefixes)
+  if (cleaned.length === 10) {
     cleaned = '39' + cleaned;
   }
   return cleaned;

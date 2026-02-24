@@ -466,7 +466,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // Delete dependent records first (FK constraints)
       await supabase.from('contracts').delete().eq('booking_id', bookingId)
       await supabase.from('fatture').delete().eq('booking_id', bookingId)
-      await supabase.from('cauzioni').delete().eq('booking_id', bookingId)
+      await supabase.from('cauzioni').delete().eq('riferimento_contratto_id', bookingId)
 
       // Delete from database
       const { error } = await supabase
@@ -683,6 +683,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const paymentStatus = formData.payment_status || 'pending'
       const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
 
+      // Send admin notification (detailed internal format)
       await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -705,6 +706,28 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           }
         })
       })
+
+      // Send customer confirmation message
+      if (customerPhone) {
+        const custFirstName = customerName?.split(' ')[0] || 'Cliente'
+        const apptDt = new Date(appointmentDateTime)
+        const fmtDate = apptDt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+        const fmtTime = apptDt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+        const totalEur = totalPrice.toFixed(2)
+
+        let custMsg = `Buongiorno ${custFirstName},\n\nConfermiamo il Suo appuntamento.\n\n`
+        custMsg += `*Servizio:* ${serviceNames}\n`
+        custMsg += `*Data:* ${fmtDate} alle ${fmtTime}\n`
+        custMsg += `*Totale:* €${totalEur}\n\n`
+        custMsg += `Cordiali saluti,\nDR7`
+
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customMessage: custMsg, customPhone: customerPhone })
+        })
+        console.log('✅ WhatsApp customer confirmation sent to', customerPhone)
+      }
     } catch (whatsappError) {
       console.error('⚠️ WhatsApp notification failed:', whatsappError)
     }
