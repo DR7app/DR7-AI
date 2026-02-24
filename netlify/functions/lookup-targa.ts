@@ -50,19 +50,22 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const data = await response.json();
+    const json = await response.json();
+    const car = json.data || json; // API wraps in { data: {...}, success: true }
+
+    console.log("[lookup-targa] Car data keys:", Object.keys(car));
 
     const result = {
       targa: cleanTarga,
-      brand: data.CarMake || "",
-      model: data.CarModel || "",
-      makeModel: `${data.CarMake || ""} ${data.CarModel || ""}`.trim(),
-      description: data.Description || "",
-      year: data.RegistrationYear || "",
-      fuel: data.FuelType || "",
-      powerCV: data.PowerCV || "",
-      displacement: data.EngineDisplacement || "",
-      doors: data.Doors || "",
+      brand: car.CarMake || "",
+      model: car.CarModel || "",
+      makeModel: `${car.CarMake || ""} ${car.CarModel || ""}`.trim(),
+      description: car.Description || "",
+      year: car.RegistrationYear || "",
+      fuel: car.FuelType || "",
+      powerCV: car.PowerCV || "",
+      displacement: car.EngineSize || "",
+      doors: car.NumberOfDoors || "",
     };
 
     return { statusCode: 200, headers, body: JSON.stringify(result) };
