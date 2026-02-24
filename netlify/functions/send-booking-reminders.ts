@@ -56,12 +56,12 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
 }
 
 /**
- * Scheduled function — runs every 30 minutes
+ * Scheduled function — runs every 5 minutes
  * Sends 3 types of WhatsApp reminders:
  *
  * 1. SUPERCAR day-before: promo continuation offer
  * 2. UTILITARIA day-before: extension offer with discount
- * 3. DEPOSIT return (60 min after rental ends): IBAN request for refund
+ * 3. DEPOSIT return (exactly 1h after rental ends): IBAN request for refund
  */
 const reminderHandler: Handler = async (event) => {
   console.log('=== Booking Reminders Started ===');
@@ -200,19 +200,20 @@ const reminderHandler: Handler = async (event) => {
   }
 
   // ──────────────────────────────────────────────
-  // 3. DEPOSIT RETURN REMINDER (60 min after rental ends)
+  // 3. DEPOSIT RETURN REMINDER (exactly 1 hour after rental ends)
   // Only for customers who left a deposit (cauzione)
+  // Runs every 5 min → window is 55–65 min after dropoff for ±5 min precision
   // ──────────────────────────────────────────────
   try {
-    const sixtyMinAgo = new Date(now.getTime() - 60 * 60 * 1000);
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const fiftyFiveMinAgo = new Date(now.getTime() - 55 * 60 * 1000);
+    const sixtyFiveMinAgo = new Date(now.getTime() - 65 * 60 * 1000);
 
-    // Fetch all bookings that ended 60min–24h ago (we check deposit below)
+    // Fetch bookings that ended 55–65 min ago (tight 1-hour window)
     const { data: recentEndedBookings, error: depositError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('dropoff_date', twentyFourHoursAgo.toISOString())
-      .lte('dropoff_date', sixtyMinAgo.toISOString())
+      .gte('dropoff_date', sixtyFiveMinAgo.toISOString())
+      .lte('dropoff_date', fiftyFiveMinAgo.toISOString())
       .in('status', ['confirmed', 'active', 'completed'])
       .is('service_type', null);
 
@@ -296,5 +297,5 @@ const reminderHandler: Handler = async (event) => {
   return { statusCode: 200, body: `Reminders sent: ${sent}, failed: ${failed}` };
 };
 
-// Run every 30 minutes
-export const handler = schedule('*/30 * * * *', reminderHandler);
+// Run every 5 minutes for precise 1-hour-after-dropoff IBAN delivery
+export const handler = schedule('*/5 * * * *', reminderHandler);
