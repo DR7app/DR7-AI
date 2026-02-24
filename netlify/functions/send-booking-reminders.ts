@@ -207,19 +207,38 @@ const reminderHandler: Handler = async (event) => {
     const sixtyMinAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const { data: depositBookings, error: depositError } = await supabase
+    // Fetch all bookings that ended 60min–24h ago (we check deposit below)
+    const { data: recentEndedBookings, error: depositError } = await supabase
       .from('bookings')
       .select('*')
       .gte('dropoff_date', twentyFourHoursAgo.toISOString())
       .lte('dropoff_date', sixtyMinAgo.toISOString())
       .in('status', ['confirmed', 'active', 'completed'])
-      .gt('deposit_amount', 0)
       .is('service_type', null);
 
     if (depositError) {
       console.error('Error querying deposit bookings:', depositError);
-    } else if (depositBookings && depositBookings.length > 0) {
-      console.log(`Found ${depositBookings.length} deposit booking(s) eligible for IBAN reminder`);
+    } else if (recentEndedBookings && recentEndedBookings.length > 0) {
+      // Check cauzioni table for deposits not tracked on booking itself
+      const bookingIds = recentEndedBookings.map(b => b.id);
+      const { data: cauzioni } = await supabase
+        .from('cauzioni')
+        .select('riferimento_contratto_id, importo, stato')
+        .in('riferimento_contratto_id', bookingIds)
+        .in('stato', ['Attiva', 'In scadenza', 'Incassata']);
+      const cauzioneMap = new Map(
+        (cauzioni || []).map(c => [c.riferimento_contratto_id, c])
+      );
+
+      // Filter to only bookings that have a deposit
+      const depositBookings = recentEndedBookings.filter(b => {
+        const fromAmount = Number(b.deposit_amount ?? 0) > 0;
+        const fromDetails = Number(b.booking_details?.deposit ?? 0) > 0;
+        const fromCauzioni = cauzioneMap.has(b.id) && Number(cauzioneMap.get(b.id)!.importo) > 0;
+        return fromAmount || fromDetails || fromCauzioni;
+      });
+
+      console.log(`Found ${depositBookings.length} deposit booking(s) eligible for IBAN reminder (from ${recentEndedBookings.length} ended bookings)`);
 
       for (const booking of depositBookings) {
         try {
@@ -231,7 +250,7 @@ const reminderHandler: Handler = async (event) => {
           const firstName = booking.booking_details?.customer?.firstName
             || booking.customer_name?.split(' ')[0]
             || 'Cliente';
-          const phone = booking.customer_phone;
+          const phone = booking.customer_phone || booking.booking_details?.customer?.phone;
 
           if (!phone) {
             console.log(`Skipping booking ${booking.id} — no phone number`);
