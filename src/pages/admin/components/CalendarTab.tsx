@@ -67,18 +67,22 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   }, [])
 
   async function loadData() {
+    console.log('[CalendarTab] loadData() called')
     setLoading(true)
     try {
-      const { data: vehiclesData } = await supabase
+      const { data: vehiclesData, error: vErr } = await supabase
         .from('vehicles')
         .select('id, display_name, plate, status, category, metadata')
         .neq('status', 'retired')
 
-      const { data: allBookings } = await supabase
+      const { data: allBookings, error: bErr } = await supabase
         .from('bookings')
         .select('*')
         .neq('status', 'cancelled')
         .order('pickup_date', { ascending: true })
+
+      console.log('[CalendarTab] Vehicles:', vehiclesData?.length ?? 'null', 'error:', vErr?.message || 'none')
+      console.log('[CalendarTab] Bookings:', allBookings?.length ?? 'null', 'error:', bErr?.message || 'none')
 
       if (vehiclesData) {
         // Sort: Exotic -> Urban -> Aziendali
@@ -96,6 +100,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         const validBookings = allBookings.filter(b =>
           !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
         )
+        console.log('[CalendarTab] Valid bookings after filter:', validBookings.length)
         setBookings(validBookings)
       }
     } catch (e) {
