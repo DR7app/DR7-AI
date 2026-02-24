@@ -247,6 +247,18 @@ export default function VehiclesTab() {
     }
     console.log(`  Deleted ${deletedBookings?.length || 0} bookings`)
 
+    // Delete cauzioni (security deposits) referencing this vehicle
+    console.log('  Deleting cauzioni...')
+    const { error: cauzioniError } = await supabase
+      .from('cauzioni')
+      .delete()
+      .eq('veicolo_id', id)
+
+    if (cauzioniError) {
+      console.error('  Error deleting cauzioni:', cauzioniError)
+      throw new Error(`Failed to delete cauzioni: ${cauzioniError.message}`)
+    }
+
     // Finally, delete the vehicle itself
     console.log('  Deleting vehicle record...')
     const { data: deletedVehicle, error: vehicleError } = await supabase
@@ -272,11 +284,18 @@ export default function VehiclesTab() {
     const vehicle = vehicles.find(v => v.id === id)
     if (!vehicle) return
 
+    const confirmed = confirm(
+      `Sei sicuro di voler eliminare ${vehicle.display_name}? Verranno eliminati anche tutte le prenotazioni, contratti e fatture associate.`
+    )
+    if (!confirmed) return
+
     try {
       await deleteVehicleLogic(id, vehicle.display_name)
       await loadVehicles()
+      alert('Veicolo eliminato con successo!')
     } catch (error: any) {
       console.error('Failed to delete vehicle:', error)
+      alert('Errore durante l\'eliminazione: ' + error.message)
     }
   }
 
