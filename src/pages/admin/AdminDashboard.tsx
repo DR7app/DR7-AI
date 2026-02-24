@@ -11,9 +11,7 @@ import CarWashBookingsTab from './components/CarWashBookingsTab'
 import CarWashCalendarTab from './components/CarWashCalendarTab'
 import MechanicalBookingTab from './components/MechanicalBookingTab'
 import MechanicalCalendarTab from './components/MechanicalCalendarTab'
-import LotteriaBoard from './components/LotteriaBoard'
 import UnpaidBookingsTab from './components/UnpaidBookingsTab'
-import DocumentsVerificationTab from './components/DocumentsVerificationTab'
 import MarketingTab from './components/MarketingTab'
 import ReviewsTab from './components/ReviewsTab'
 import FatturaTab from './components/FatturaTab'
@@ -24,13 +22,15 @@ import ScannerTab from './components/ScannerTab'
 import CauzioniTab from './components/CauzioniTab'
 import NexiTab from './components/NexiTab'
 import BirthdaysTab, { useBirthdayCount } from './components/BirthdaysTab'
-
 import FleetManagementTab from './components/FleetManagementTab'
 import ScadenzeTab from './components/ScadenzeTab'
 import ReportsTab from './components/ReportsTab'
 import BulkImportTab from './components/BulkImportTab'
+import ReferralProgramTab from './components/ReferralProgramTab'
+import CodiciScontoTab from './components/CodiciScontoTab'
+import PlaceholderTab from './components/PlaceholderTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'lotteria' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'documents-verification' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -72,6 +72,56 @@ export default function AdminDashboard() {
       window.removeEventListener('openBookingForm', handleOpenBookingForm as EventListener)
     }
   }, [])
+
+  // Reusable style helpers for nav
+  const dropdownBtnClass = (isActive: boolean) =>
+    `py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${isActive ? 'text-theme-text-primary' : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'}`
+  const dropdownItemClass = (isActive: boolean) =>
+    `w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${isActive ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'}`
+  const standaloneBtnClass = (isActive: boolean) =>
+    `py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${isActive ? 'text-theme-text-primary' : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'}`
+  const mobileItemClass = (isActive: boolean) =>
+    `w-full text-left px-4 py-3 rounded-3xl transition-colors ${isActive ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`
+
+  // Mobile tab labels
+  const tabLabels: Record<string, string> = {
+    'reservations': 'Prenotazioni Noleggio',
+    'calendar': 'Calendario Noleggio',
+    'cauzioni': 'Cauzioni',
+    'contratto': 'Contratti',
+    'cargos': 'Cargos',
+    'gestione-danni': 'Gestione Danni',
+    'gestione-multe': 'Gestione Multe',
+    'carwash': 'Prenotazioni Lavaggio',
+    'carwash-calendar': 'Calendario Lavaggio',
+    'vehicles': 'Veicoli',
+    'fleet': 'Gestione Flotta',
+    'gps-keyless': 'GPS & Keyless',
+    'unpaid': 'Da Saldare',
+    'customers': 'Clienti',
+    'birthdays': 'Compleanni',
+    'reviews': 'Recensioni',
+    'marketing': 'Messaggi di Sistema',
+    'referral': 'Referral',
+    'codice-sconto': 'Codice Sconto',
+    'bulk-import': 'Import Clienti',
+    'scanner': 'Scanner',
+    'nexi': 'Nexi',
+    'report-noleggio': 'Report Noleggio',
+    'report-lavaggio': 'Report Lavaggio',
+    'report-clienti': 'Report Clienti',
+    'reports': 'Report',
+    'com-email': 'E-mail',
+    'com-pec': 'PEC',
+    'com-whatsapp': 'WhatsApp',
+    'com-sms': 'SMS',
+    'com-chiamate': 'Chiamate',
+    'com-chatgpt': 'Chat GPT',
+    'scadenze': 'Scadenze',
+    'fattura': 'Fattura',
+    'mechanical': 'Prenotazioni Meccanica',
+    'mechanical-calendar': 'Calendario Meccanica',
+  }
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -168,129 +218,45 @@ export default function AdminDashboard() {
               </button>
             </div>
             <nav className="p-2 space-y-1">
-              <button
-                onClick={() => { setActiveTab('reservations'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Noleggio
-              </button>
-              <button
-                onClick={() => { setActiveTab('carwash'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Prenotazioni Lavaggio
-              </button>
-              <button
-                onClick={() => { setActiveTab('mechanical'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Prenotazioni Meccanica
-              </button>
-              <button
-                onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'unpaid' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Da Saldare
-              </button>
-              <button
-                onClick={() => { setActiveTab('documents-verification'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'documents-verification' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Verifica Documenti
-              </button>
-              <button
-                onClick={() => { setActiveTab('customers'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'customers' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Clienti
-              </button>
-              <button
-                onClick={() => { setActiveTab('vehicles'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Veicoli
-              </button>
-              <button
-                onClick={() => { setActiveTab('fleet'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Gestione Flotta
-              </button>
-              <button
-                onClick={() => { setActiveTab('calendar'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Calendario Noleggio
-              </button>
-              <button
-                onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Cauzioni
-              </button>
-              <button
-                onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Calendario Lavaggi
-              </button>
-              <button
-                onClick={() => { setActiveTab('mechanical-calendar'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Calendario Meccanica
-              </button>
-              <button
-                onClick={() => { setActiveTab('lotteria'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'lotteria' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Biglietti Lotteria
-              </button>
-              <button
-                onClick={() => { setActiveTab('fattura'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'fattura' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Fatture
-              </button>
-              <button
-                onClick={() => { setActiveTab('contratto'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Contratti
-              </button>
-              <button
-                onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Cargos
-              </button>
-              <button
-                onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'marketing' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Marketing
-              </button>
+              {/* NOLEGGIO */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Noleggio</div>
+              <button onClick={() => { setActiveTab('reservations'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'reservations')}>Prenotazioni</button>
+              <button onClick={() => { setActiveTab('calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'calendar')}>Calendario</button>
+              <button onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
+              <button onClick={() => { setActiveTab('contratto'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'contratto')}>Contratti</button>
+              <button onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cargos')}>Cargos</button>
+              <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Gestione Danni</button>
+              <button onClick={() => { setActiveTab('gestione-multe'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
+
+              {/* LAVAGGIO */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Lavaggio</div>
+              <button onClick={() => { setActiveTab('carwash'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash')}>Prenotazioni</button>
+              <button onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
+
+              {/* MECCANICA */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Meccanica</div>
+              <button onClick={() => { setActiveTab('mechanical'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'mechanical')}>Prenotazioni</button>
+              <button onClick={() => { setActiveTab('mechanical-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'mechanical-calendar')}>Calendario</button>
+
+              {/* FLOTTA */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Flotta</div>
+              <button onClick={() => { setActiveTab('vehicles'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'vehicles')}>Veicoli</button>
+              <button onClick={() => { setActiveTab('fleet'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
+              <button onClick={() => { setActiveTab('gps-keyless'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
+
+              {/* DA SALDARE */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Da Saldare</div>
+              <button onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'unpaid')}>Da Saldare</button>
+
+              {/* CLIENTI */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Clienti</div>
+              <button onClick={() => { setActiveTab('customers'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'customers')}>Clienti</button>
+
+              {/* MARKETING */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Marketing</div>
               <button
                 onClick={() => { setActiveTab('birthdays'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors flex items-center justify-between ${activeTab === 'birthdays' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
+                className={`${mobileItemClass(activeTab === 'birthdays')} flex items-center justify-between`}
               >
                 <span>Compleanni</span>
                 {birthdayCount > 0 && (
@@ -299,41 +265,42 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </button>
-              <button
-                onClick={() => { setActiveTab('reviews'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reviews' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Recensioni
-              </button>
-              <button
-                onClick={() => { setActiveTab('scanner'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'scanner' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Scanner
-              </button>
-              <button
-                onClick={() => { setActiveTab('scadenze'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'scadenze' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Scadenze
-              </button>
-              <button
-                onClick={() => { setActiveTab('reports'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'reports' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Report
-              </button>
-              <button
-                onClick={() => { setActiveTab('bulk-import'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3 rounded-3xl transition-colors ${activeTab === 'bulk-import' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Import Clienti
-              </button>
+              <button onClick={() => { setActiveTab('reviews'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'reviews')}>Recensioni</button>
+              <button onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
+              <button onClick={() => { setActiveTab('referral'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'referral')}>Referral</button>
+              <button onClick={() => { setActiveTab('codice-sconto'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
+
+              {/* SCANNER */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Scanner</div>
+              <button onClick={() => { setActiveTab('scanner'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'scanner')}>Scanner</button>
+              <button onClick={() => { setActiveTab('bulk-import'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
+
+              {/* NEXI */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Nexi</div>
+              <button onClick={() => { setActiveTab('nexi'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'nexi')}>Nexi</button>
+
+              {/* REPORT */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Report</div>
+              <button onClick={() => { setActiveTab('report-noleggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
+              <button onClick={() => { setActiveTab('report-lavaggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
+              <button onClick={() => { setActiveTab('report-clienti'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-clienti')}>Clienti</button>
+
+              {/* COMUNICAZIONE */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Comunicazione</div>
+              <button onClick={() => { setActiveTab('com-email'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-email')}>E-mail</button>
+              <button onClick={() => { setActiveTab('com-pec'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-pec')}>PEC</button>
+              <button onClick={() => { setActiveTab('com-whatsapp'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
+              <button onClick={() => { setActiveTab('com-sms'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-sms')}>SMS</button>
+              <button onClick={() => { setActiveTab('com-chiamate'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
+              <button onClick={() => { setActiveTab('com-chatgpt'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
+
+              {/* SCADENZE */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Scadenze</div>
+              <button onClick={() => { setActiveTab('scadenze'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'scadenze')}>Scadenze</button>
+
+              {/* FATTURA */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Fattura</div>
+              <button onClick={() => { setActiveTab('fattura'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'fattura')}>Fattura</button>
             </nav>
           </div>
         </div>
@@ -343,266 +310,147 @@ export default function AdminDashboard() {
         {/* Desktop Tabs */}
         <div className="mb-6 hidden lg:block relative z-50">
           <div>
-            <nav className="-mb-px flex gap-4">
-              {/* Noleggio Dropdown */}
+            <nav className="-mb-px flex gap-4 flex-wrap">
+              {/* NOLEGGIO Dropdown */}
               <div className="relative group">
-                <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'reservations' || activeTab === 'calendar' || activeTab === 'cauzioni' || activeTab === 'contratto' || activeTab === 'cargos'
-                    ? 'text-theme-text-primary'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                    }`}
-                >
+                <button className={dropdownBtnClass(['reservations', 'calendar', 'cauzioni', 'contratto', 'cargos', 'gestione-danni', 'gestione-multe'].includes(activeTab))}>
                   Noleggio
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
-                  <button
-                    onClick={() => setActiveTab('reservations')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'reservations' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Prenotazioni
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Calendario
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('cauzioni')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cauzioni' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Cauzioni
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('contratto')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'contratto' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Contratti
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('cargos')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'cargos' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Cargos
-                  </button>
+                  <button onClick={() => setActiveTab('reservations')} className={dropdownItemClass(activeTab === 'reservations')}>Prenotazioni</button>
+                  <button onClick={() => setActiveTab('calendar')} className={dropdownItemClass(activeTab === 'calendar')}>Calendario</button>
+                  <button onClick={() => setActiveTab('cauzioni')} className={dropdownItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
+                  <button onClick={() => setActiveTab('contratto')} className={dropdownItemClass(activeTab === 'contratto')}>Contratti</button>
+                  <button onClick={() => setActiveTab('cargos')} className={dropdownItemClass(activeTab === 'cargos')}>Cargos</button>
+                  <button onClick={() => setActiveTab('gestione-danni')} className={dropdownItemClass(activeTab === 'gestione-danni')}>Gestione Danni</button>
+                  <button onClick={() => setActiveTab('gestione-multe')} className={dropdownItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
                 </div>
               </div>
 
-              {/* Lavaggio Dropdown */}
+              {/* LAVAGGIO Dropdown */}
               <div className="relative group">
-                <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'carwash' || activeTab === 'carwash-calendar'
-                    ? 'text-theme-text-primary'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                    }`}
-                >
+                <button className={dropdownBtnClass(activeTab === 'carwash' || activeTab === 'carwash-calendar')}>
                   Lavaggio
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
-                  <button
-                    onClick={() => setActiveTab('carwash')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Prenotazioni
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('carwash-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'carwash-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Calendario
-                  </button>
+                  <button onClick={() => setActiveTab('carwash')} className={dropdownItemClass(activeTab === 'carwash')}>Prenotazioni</button>
+                  <button onClick={() => setActiveTab('carwash-calendar')} className={dropdownItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
                 </div>
               </div>
 
-              {/* Meccanica Dropdown */}
+              {/* MECCANICA Dropdown */}
               <div className="relative group">
-                <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'mechanical' || activeTab === 'mechanical-calendar'
-                    ? 'text-theme-text-primary'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                    }`}
-                >
+                <button className={dropdownBtnClass(activeTab === 'mechanical' || activeTab === 'mechanical-calendar')}>
                   Meccanica
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
-                  <button
-                    onClick={() => setActiveTab('mechanical')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Prenotazioni
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('mechanical-calendar')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'mechanical-calendar' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Calendario
-                  </button>
+                  <button onClick={() => setActiveTab('mechanical')} className={dropdownItemClass(activeTab === 'mechanical')}>Prenotazioni</button>
+                  <button onClick={() => setActiveTab('mechanical-calendar')} className={dropdownItemClass(activeTab === 'mechanical-calendar')}>Calendario</button>
                 </div>
               </div>
 
-              {/* Flotta Dropdown */}
+              {/* FLOTTA Dropdown */}
               <div className="relative group">
-                <button
-                  className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'vehicles' || activeTab === 'fleet'
-                    ? 'text-theme-text-primary'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                    }`}
-                >
+                <button className={dropdownBtnClass(activeTab === 'vehicles' || activeTab === 'fleet' || activeTab === 'gps-keyless')}>
                   Flotta
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
-                  <button
-                    onClick={() => setActiveTab('vehicles')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'vehicles' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Veicoli
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('fleet')}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${activeTab === 'fleet' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'
-                      }`}
-                  >
-                    Gestione Flotta
-                  </button>
+                  <button onClick={() => setActiveTab('vehicles')} className={dropdownItemClass(activeTab === 'vehicles')}>Veicoli</button>
+                  <button onClick={() => setActiveTab('fleet')} className={dropdownItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
+                  <button onClick={() => setActiveTab('gps-keyless')} className={dropdownItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
                 </div>
               </div>
 
-              {/* Other menu items */}
-              <button
-                onClick={() => setActiveTab('unpaid')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'unpaid'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
+              {/* DA SALDARE - standalone */}
+              <button onClick={() => setActiveTab('unpaid')} className={standaloneBtnClass(activeTab === 'unpaid')}>
                 Da Saldare
               </button>
-              <button
-                onClick={() => setActiveTab('documents-verification')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'documents-verification'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Verifica Documenti
-              </button>
-              <button
-                onClick={() => setActiveTab('customers')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'customers'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
+
+              {/* CLIENTI - standalone */}
+              <button onClick={() => setActiveTab('customers')} className={standaloneBtnClass(activeTab === 'customers')}>
                 Clienti
               </button>
-              <button
-                onClick={() => setActiveTab('lotteria')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'lotteria'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Lotteria
-              </button>
-              <button
-                onClick={() => setActiveTab('fattura')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'fattura'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Fatture
-              </button>
-              <button
-                onClick={() => setActiveTab('marketing')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'marketing'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Marketing
-              </button>
-              <button
-                onClick={() => setActiveTab('birthdays')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${activeTab === 'birthdays'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Compleanni
-                {birthdayCount > 0 && (
-                  <span className="bg-dr7-gold text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
-                    {birthdayCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('reviews')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reviews'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Recensioni
-              </button>
-              <button
-                onClick={() => setActiveTab('scanner')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'scanner'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Scanner
-              </button>
-              <button
-                onClick={() => setActiveTab('nexi')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'nexi'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
+
+              {/* MARKETING Dropdown */}
+              <div className="relative group">
+                <button className={dropdownBtnClass(['birthdays', 'reviews', 'marketing', 'referral', 'codice-sconto'].includes(activeTab))}>
+                  Marketing
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-56 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button onClick={() => setActiveTab('birthdays')} className={`${dropdownItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
+                    <span>Compleanni</span>
+                    {birthdayCount > 0 && (
+                      <span className="bg-dr7-gold text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
+                        {birthdayCount}
+                      </span>
+                    )}
+                  </button>
+                  <button onClick={() => setActiveTab('reviews')} className={dropdownItemClass(activeTab === 'reviews')}>Recensioni</button>
+                  <button onClick={() => setActiveTab('marketing')} className={dropdownItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
+                  <button onClick={() => setActiveTab('referral')} className={dropdownItemClass(activeTab === 'referral')}>Referral</button>
+                  <button onClick={() => setActiveTab('codice-sconto')} className={dropdownItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
+                </div>
+              </div>
+
+              {/* SCANNER Dropdown */}
+              <div className="relative group">
+                <button className={dropdownBtnClass(activeTab === 'scanner' || activeTab === 'bulk-import')}>
+                  Scanner
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button onClick={() => setActiveTab('scanner')} className={dropdownItemClass(activeTab === 'scanner')}>Scanner</button>
+                  <button onClick={() => setActiveTab('bulk-import')} className={dropdownItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
+                </div>
+              </div>
+
+              {/* NEXI - standalone */}
+              <button onClick={() => setActiveTab('nexi')} className={standaloneBtnClass(activeTab === 'nexi')}>
                 Nexi
               </button>
-              <button
-                onClick={() => setActiveTab('scadenze')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'scadenze'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
+
+              {/* REPORT Dropdown */}
+              <div className="relative group">
+                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'reports'].includes(activeTab))}>
+                  Report
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button onClick={() => setActiveTab('report-noleggio')} className={dropdownItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
+                  <button onClick={() => setActiveTab('report-lavaggio')} className={dropdownItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
+                  <button onClick={() => setActiveTab('report-clienti')} className={dropdownItemClass(activeTab === 'report-clienti')}>Clienti</button>
+                </div>
+              </div>
+
+              {/* COMUNICAZIONE Dropdown */}
+              <div className="relative group">
+                <button className={dropdownBtnClass(['com-email', 'com-pec', 'com-whatsapp', 'com-sms', 'com-chiamate', 'com-chatgpt'].includes(activeTab))}>
+                  Comunicazione
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button onClick={() => setActiveTab('com-email')} className={dropdownItemClass(activeTab === 'com-email')}>E-mail</button>
+                  <button onClick={() => setActiveTab('com-pec')} className={dropdownItemClass(activeTab === 'com-pec')}>PEC</button>
+                  <button onClick={() => setActiveTab('com-whatsapp')} className={dropdownItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
+                  <button onClick={() => setActiveTab('com-sms')} className={dropdownItemClass(activeTab === 'com-sms')}>SMS</button>
+                  <button onClick={() => setActiveTab('com-chiamate')} className={dropdownItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
+                  <button onClick={() => setActiveTab('com-chatgpt')} className={dropdownItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
+                </div>
+              </div>
+
+              {/* SCADENZE - standalone */}
+              <button onClick={() => setActiveTab('scadenze')} className={standaloneBtnClass(activeTab === 'scadenze')}>
                 Scadenze
               </button>
-              <button
-                onClick={() => setActiveTab('reports')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'reports'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Report
-              </button>
-              <button
-                onClick={() => setActiveTab('bulk-import')}
-                className={`py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${activeTab === 'bulk-import'
-                  ? 'text-theme-text-primary'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'
-                  }`}
-              >
-                Import Clienti
+
+              {/* FATTURA - standalone */}
+              <button onClick={() => setActiveTab('fattura')} className={standaloneBtnClass(activeTab === 'fattura')}>
+                Fattura
               </button>
             </nav>
           </div>
@@ -611,29 +459,7 @@ export default function AdminDashboard() {
         {/* Mobile Tab Indicator */}
         <div className="mb-4 lg:hidden">
           <h2 className="text-xl font-bold text-theme-text-primary">
-            {activeTab === 'reservations' && 'Noleggio'}
-            {activeTab === 'carwash' && 'Prenotazioni Lavaggio'}
-            {activeTab === 'mechanical' && 'Prenotazioni Meccanica'}
-            {activeTab === 'unpaid' && 'Da Saldare'}
-            {activeTab === 'documents-verification' && 'Verifica Documenti'}
-            {activeTab === 'customers' && 'Clienti'}
-            {activeTab === 'vehicles' && 'Veicoli'}
-            {activeTab === 'calendar' && 'Calendario Noleggio'}
-            {activeTab === 'carwash-calendar' && 'Calendario Lavaggi'}
-            {activeTab === 'mechanical-calendar' && 'Calendario Meccanica'}
-            {activeTab === 'lotteria' && 'Biglietti Lotteria'}
-            {activeTab === 'fattura' && 'Fatture'}
-            {activeTab === 'contratto' && 'Contratti'}
-            {activeTab === 'cargos' && 'Cargos'}
-            {activeTab === 'cauzioni' && 'Cauzioni'}
-            {activeTab === 'marketing' && 'Marketing'}
-            {activeTab === 'birthdays' && 'Compleanni'}
-            {activeTab === 'reviews' && 'Recensioni'}
-            {activeTab === 'scanner' && 'Scanner Documenti'}
-            {activeTab === 'nexi' && 'Nexi'}
-            {activeTab === 'scadenze' && 'Scadenze'}
-            {activeTab === 'reports' && 'Report Mensili'}
-            {activeTab === 'bulk-import' && 'Import Clienti'}
+            {tabLabels[activeTab] || activeTab}
           </h2>
         </div>
 
@@ -645,7 +471,6 @@ export default function AdminDashboard() {
             />
           )}
           {activeTab === 'unpaid' && <UnpaidBookingsTab />}
-          {activeTab === 'documents-verification' && <DocumentsVerificationTab />}
           {activeTab === 'customers' && <CustomersTab />}
           {activeTab === 'vehicles' && <VehiclesTab />}
           {activeTab === 'calendar' && (
@@ -666,7 +491,6 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'mechanical' && <MechanicalBookingTab />}
           {activeTab === 'mechanical-calendar' && <MechanicalCalendarTab />}
-          {activeTab === 'lotteria' && <LotteriaBoard />}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cargos' && <CargosTab />}
@@ -679,7 +503,22 @@ export default function AdminDashboard() {
           {activeTab === 'nexi' && <NexiTab />}
           {activeTab === 'scadenze' && <ScadenzeTab />}
           {activeTab === 'reports' && <ReportsTab />}
+          {activeTab === 'report-noleggio' && <ReportsTab />}
           {activeTab === 'bulk-import' && <BulkImportTab />}
+          {activeTab === 'referral' && <ReferralProgramTab />}
+          {/* Placeholder tabs for new features */}
+          {activeTab === 'gestione-danni' && <PlaceholderTab title="Gestione Danni" />}
+          {activeTab === 'gestione-multe' && <PlaceholderTab title="Gestione Multe" />}
+          {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
+          {activeTab === 'codice-sconto' && <CodiciScontoTab />}
+          {activeTab === 'report-lavaggio' && <PlaceholderTab title="Report Lavaggio" />}
+          {activeTab === 'report-clienti' && <PlaceholderTab title="Report Clienti" />}
+          {activeTab === 'com-email' && <PlaceholderTab title="E-mail" />}
+          {activeTab === 'com-pec' && <PlaceholderTab title="PEC" />}
+          {activeTab === 'com-whatsapp' && <PlaceholderTab title="WhatsApp" />}
+          {activeTab === 'com-sms' && <PlaceholderTab title="SMS" />}
+          {activeTab === 'com-chiamate' && <PlaceholderTab title="Chiamate" />}
+          {activeTab === 'com-chatgpt' && <PlaceholderTab title="Chat GPT" />}
         </div>
       </main>
 
