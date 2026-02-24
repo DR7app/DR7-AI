@@ -32,6 +32,10 @@ interface WalletTransaction {
 }
 
 const TYPE_LABELS: Record<string, string> = {
+  registration_bonus: 'Bonus Registrazione',
+  referral_friend_topup: 'Bonus Amico Referral',
+  milestone_10_friends: 'Milestone 10 Amici',
+  topup: 'Ricarica',
   manual_credit: 'Credito Manuale',
   manual_debit: 'Addebito Manuale',
   booking_payment: 'Pagamento Prenotazione',

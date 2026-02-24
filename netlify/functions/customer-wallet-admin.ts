@@ -55,17 +55,33 @@ const handler: Handler = async (event) => {
 
         if (searchError) throw searchError;
 
-        // For each customer, check if they have a wallet
-        const customerIds = (customers || []).map(c => c.id);
-        const { data: wallets } = await supabase
-          .from('customer_wallets')
-          .select('customer_id, balance_cents')
-          .in('customer_id', customerIds.length > 0 ? customerIds : ['none']);
+        // Get wallet balances by matching customer phone → referral_participants.telefono → wallets
+        const phones = (customers || []).map(c => c.telefono).filter(Boolean);
+        let walletMap = new Map<string, number>();
 
-        const walletMap = new Map<string, number>();
-        (wallets || []).forEach((w: any) => {
-          walletMap.set(w.customer_id, w.balance_cents);
-        });
+        if (phones.length > 0) {
+          const { data: participants } = await supabase
+            .from('referral_participants')
+            .select('id, telefono')
+            .in('telefono', phones);
+
+          if (participants && participants.length > 0) {
+            const participantIds = participants.map(p => p.id);
+            const { data: wallets } = await supabase
+              .from('wallets')
+              .select('participant_id, balance_cents')
+              .in('participant_id', participantIds);
+
+            // Build phone → balance map
+            const participantPhoneMap = new Map<string, string>();
+            participants.forEach((p: any) => participantPhoneMap.set(p.id, p.telefono));
+
+            (wallets || []).forEach((w: any) => {
+              const phone = participantPhoneMap.get(w.participant_id);
+              if (phone) walletMap.set(phone, w.balance_cents);
+            });
+          }
+        }
 
         const results = (customers || []).map((c: any) => {
           const fullName = c.tipo_cliente === 'persona_fisica'
@@ -76,7 +92,7 @@ const handler: Handler = async (event) => {
             full_name: fullName || 'Cliente',
             email: c.email,
             phone: c.telefono,
-            balance_cents: walletMap.get(c.id) ?? null,
+            balance_cents: walletMap.get(c.telefono) ?? null,
           };
         });
 
@@ -100,22 +116,78 @@ const handler: Handler = async (event) => {
         const amountCents = Math.round(amount * 100);
         const isCredit = action === 'credit';
 
+        // Find customer phone
+        const { data: customer } = await supabase
+          .from('customers_extended')
+          .select('telefono')
+          .eq('id', customer_id)
+          .single();
+
+        if (!customer?.telefono) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'Cliente non ha un numero di telefono' }),
+          };
+        }
+
+        // Find referral participant by phone
+        let { data: participant } = await supabase
+          .from('referral_participants')
+          .select('id')
+          .eq('telefono', customer.telefono)
+          .single();
+
+        // Auto-create participant if crediting and doesn't exist
+        if (!participant && isCredit) {
+          const { data: custInfo } = await supabase
+            .from('customers_extended')
+            .select('nome, cognome, email, telefono')
+            .eq('id', customer_id)
+            .single();
+
+          if (custInfo) {
+            const { data: newParticipant, error: createParticipantError } = await supabase
+              .from('referral_participants')
+              .insert({
+                nome: custInfo.nome || 'Cliente',
+                cognome: custInfo.cognome || '',
+                telefono: custInfo.telefono,
+                email: custInfo.email,
+                phone_verified: true,
+              })
+              .select()
+              .single();
+
+            if (createParticipantError) throw createParticipantError;
+            participant = newParticipant;
+          }
+        }
+
+        if (!participant) {
+          return {
+            statusCode: 404,
+            headers,
+            body: JSON.stringify({ error: 'Partecipante referral non trovato. Effettua prima un credito.' }),
+          };
+        }
+
         // Get or create wallet
         let { data: wallet } = await supabase
-          .from('customer_wallets')
+          .from('wallets')
           .select('*')
-          .eq('customer_id', customer_id)
+          .eq('participant_id', participant.id)
           .single();
 
         if (!wallet && isCredit) {
-          // Auto-create wallet on first credit
           const { data: newWallet, error: createError } = await supabase
-            .from('customer_wallets')
+            .from('wallets')
             .insert({
-              customer_id,
+              participant_id: participant.id,
               balance_cents: 0,
               total_earned_cents: 0,
               total_spent_cents: 0,
+              total_topped_up_cents: 0,
             })
             .select()
             .single();
@@ -144,7 +216,7 @@ const handler: Handler = async (event) => {
         }
 
         // Insert transaction
-        const { error: txnError } = await supabase.from('customer_wallet_transactions').insert({
+        const { error: txnError } = await supabase.from('wallet_transactions').insert({
           wallet_id: wallet.id,
           type: isCredit ? 'manual_credit' : 'manual_debit',
           amount_cents: signedAmount,
@@ -167,7 +239,7 @@ const handler: Handler = async (event) => {
         }
 
         const { error: updateError } = await supabase
-          .from('customer_wallets')
+          .from('wallets')
           .update(updateData)
           .eq('id', wallet.id);
 
@@ -189,10 +261,39 @@ const handler: Handler = async (event) => {
           };
         }
 
+        // Find customer phone → participant → wallet
+        const { data: customer } = await supabase
+          .from('customers_extended')
+          .select('telefono')
+          .eq('id', customer_id)
+          .single();
+
+        if (!customer?.telefono) {
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ success: true, wallet: null, transactions: [] }),
+          };
+        }
+
+        const { data: participant } = await supabase
+          .from('referral_participants')
+          .select('id')
+          .eq('telefono', customer.telefono)
+          .single();
+
+        if (!participant) {
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ success: true, wallet: null, transactions: [] }),
+          };
+        }
+
         const { data: wallet } = await supabase
-          .from('customer_wallets')
+          .from('wallets')
           .select('*')
-          .eq('customer_id', customer_id)
+          .eq('participant_id', participant.id)
           .single();
 
         if (!wallet) {
@@ -204,7 +305,7 @@ const handler: Handler = async (event) => {
         }
 
         const { data: transactions } = await supabase
-          .from('customer_wallet_transactions')
+          .from('wallet_transactions')
           .select('*')
           .eq('wallet_id', wallet.id)
           .order('created_at', { ascending: false })
