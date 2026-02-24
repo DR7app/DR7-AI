@@ -186,7 +186,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       // Filter by search query if needed
       let displayEvents = laningResults
       if (searchQuery) {
-        // If filtering, we still might want to show the row, 
+        // If filtering, we still might want to show the row,
         // but maybe dim non-matching? Or just filter the VEHICLES list?
         // Let's rely on the vehicle filter below ideally, but here we process all.
       }
