@@ -92,25 +92,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       }
 
       if (allBookings) {
-        console.log('[CalendarTab] Total bookings fetched:', allBookings.length)
-        // Debug: check Clio bookings
-        const clioPlates = ['GS586ZJ', 'GT619LN', 'GT621LN', 'GS602ZJ', 'GT006DG', 'GT687DF', 'GT897DF', 'GV075FN']
-        const clioBookings = allBookings.filter(b => {
-          const plate = (b.vehicle_plate || b.booking_details?.vehicle?.plate || '').replace(/\s/g, '').toUpperCase()
-          return clioPlates.includes(plate)
-        })
-        console.log('[CalendarTab] Clio Orange bookings found:', clioBookings.length, clioBookings.map(b => ({ id: b.id, plate: b.vehicle_plate, customer: b.customer_name, service_type: b.service_type, status: b.status })))
-
         // Filter out irrelevant service types if needed
         const validBookings = allBookings.filter(b =>
           !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
         )
-        console.log('[CalendarTab] Valid bookings after service_type filter:', validBookings.length)
-        const clioValid = validBookings.filter(b => {
-          const plate = (b.vehicle_plate || b.booking_details?.vehicle?.plate || '').replace(/\s/g, '').toUpperCase()
-          return clioPlates.includes(plate)
-        })
-        console.log('[CalendarTab] Clio Orange bookings after filter:', clioValid.length)
         setBookings(validBookings)
       }
     } catch (e) {
@@ -180,14 +165,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         }
       }
     })
-
-    // Debug: log Clio vehicle matching
-    const clioVehicles = vehicles.filter(v => v.display_name?.toLowerCase().includes('clio'))
-    clioVehicles.forEach(v => {
-      const matched = Array.from(bookingToVehicleId.entries()).filter(([, vid]) => vid === v.id)
-      console.log(`[CalendarTab] Vehicle ${v.plate} (${v.id}): ${matched.length} bookings matched`)
-    })
-    console.log('[CalendarTab] Total vehicles:', vehicles.length, 'Total matched bookings:', bookingToVehicleId.size)
 
     vehicles.forEach(vehicle => {
       const vehicleBookings = bookings.filter(b => bookingToVehicleId.get(b.id) === vehicle.id)
