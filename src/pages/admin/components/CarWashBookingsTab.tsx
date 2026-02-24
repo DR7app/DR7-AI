@@ -466,6 +466,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // Delete dependent records first (FK constraints)
       await supabase.from('contracts').delete().eq('booking_id', bookingId)
       await supabase.from('fatture').delete().eq('booking_id', bookingId)
+      await supabase.from('cauzioni').delete().eq('booking_id', bookingId)
 
       // Delete from database
       const { error } = await supabase

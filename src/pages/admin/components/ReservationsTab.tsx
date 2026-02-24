@@ -1591,6 +1591,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           console.log('Client-side cascade: Deleting related records...')
           await supabase.from('fatture').delete().eq('booking_id', bookingId)
           await supabase.from('contracts').delete().eq('booking_id', bookingId)
+          await supabase.from('cauzioni').delete().eq('booking_id', bookingId)
 
           const { error: clientError } = await supabase
             .from('bookings')

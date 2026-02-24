@@ -129,6 +129,7 @@ export default function MechanicalBookingTab() {
       // Delete dependent records first (FK constraints)
       await supabase.from('contracts').delete().eq('booking_id', id)
       await supabase.from('fatture').delete().eq('booking_id', id)
+      await supabase.from('cauzioni').delete().eq('booking_id', id)
 
       // Delete from database
       const { error } = await supabase
