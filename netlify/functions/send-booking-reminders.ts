@@ -208,7 +208,7 @@ const reminderHandler: Handler = async (event) => {
     const fiftyFiveMinAgo = new Date(now.getTime() - 55 * 60 * 1000);
     const sixtyFiveMinAgo = new Date(now.getTime() - 65 * 60 * 1000);
 
-    // Fetch bookings that ended 55–65 min ago (tight 1-hour window)
+    // Fetch bookings that ended 55–65 min ago (exactly 60 min ±5 min)
     const { data: recentEndedBookings, error: depositError } = await supabase
       .from('bookings')
       .select('*')
