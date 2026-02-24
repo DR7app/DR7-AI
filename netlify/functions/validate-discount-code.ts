@@ -332,15 +332,18 @@ async function handleMarketingCode(
     const scope = discountCode.scope;
     const normalizedServiceType = service_type.toLowerCase().replace(/\s+/g, '_');
 
+    const isRentalService = ['noleggio', 'supercar', 'utilitarie', 'urban-cars', 'corporate-fleet'].includes(normalizedServiceType);
+    const isCarWashService = normalizedServiceType.includes('lavag') || normalizedServiceType === 'car_wash' || normalizedServiceType === 'car-wash';
+
     const isValidScope = scope.some((s: string) => {
       const normalizedScope = s.toLowerCase().replace(/\s+/g, '_');
       return normalizedScope === 'tutti' ||
              normalizedScope === 'tutti_i_servizi' ||
              normalizedScope === normalizedServiceType ||
-             (normalizedServiceType.includes('noleggio') && normalizedScope === 'noleggio') ||
-             (normalizedServiceType.includes('lavag') && normalizedScope === 'lavaggi') ||
+             (isRentalService && normalizedScope === 'noleggio') ||
+             (isCarWashService && normalizedScope === 'lavaggi') ||
              (normalizedServiceType.includes('supercar') && normalizedScope === 'supercar') ||
-             (normalizedServiceType.includes('utilitaria') && normalizedScope === 'utilitarie');
+             (normalizedServiceType.includes('utilitari') && normalizedScope === 'utilitarie');
     });
 
     if (!isValidScope) {

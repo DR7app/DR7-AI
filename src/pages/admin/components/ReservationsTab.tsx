@@ -2667,42 +2667,40 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (formData.has_second_driver && newSecondDriverMode) {
         console.log('[processBookingSubmission] Creating new customer for second driver...')
         try {
-          // DEDUP CHECK for second driver
-          let existingDriver: any = null
-
-          if (formData.second_driver_codice_fiscale) {
+          // DEDUP CHECK for second driver: codice_fiscale, then email, then telefono (with phone normalization)
+          let existingSecondDriver: { id: string } | null = null
+          if (formData.second_driver_codice_fiscale?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('codice_fiscale', formData.second_driver_codice_fiscale)
-              .limit(1)
-            if (data && data.length > 0) existingDriver = data[0]
+              .select('id')
+              .eq('codice_fiscale', formData.second_driver_codice_fiscale.trim())
+              .maybeSingle()
+            existingSecondDriver = data
           }
-
-          if (!existingDriver && formData.second_driver_email) {
+          if (!existingSecondDriver && formData.second_driver_email?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('email', formData.second_driver_email)
-              .limit(1)
-            if (data && data.length > 0) existingDriver = data[0]
+              .select('id')
+              .eq('email', formData.second_driver_email.trim().toLowerCase())
+              .maybeSingle()
+            existingSecondDriver = data
           }
-
-          if (!existingDriver && formData.second_driver_phone) {
+          if (!existingSecondDriver && formData.second_driver_phone?.trim()) {
+            // Normalize phone before dedup lookup (same logic as save-customer)
             let normSDPhone = formData.second_driver_phone.replace(/[\s\-\+\(\)]/g, '')
             if (normSDPhone.startsWith('00')) normSDPhone = normSDPhone.substring(2)
             if (normSDPhone.length === 10) normSDPhone = '39' + normSDPhone
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
+              .select('id')
               .eq('telefono', normSDPhone)
-              .limit(1)
-            if (data && data.length > 0) existingDriver = data[0]
+              .maybeSingle()
+            existingSecondDriver = data
           }
 
-          if (existingDriver) {
-            secondDriverId = existingDriver.id
-            console.log('✅ Existing second driver found (dedup), reusing ID:', existingDriver.id)
+          if (existingSecondDriver) {
+            secondDriverId = existingSecondDriver.id
+            console.log('✅ Existing second driver found (dedup), reusing ID:', existingSecondDriver.id)
           } else {
             const secondDriverData = {
               tipo_cliente: 'persona_fisica',
@@ -2748,45 +2746,59 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // BUT FIRST check if an identical customer already exists (prevent duplicates)
       if (newCustomerMode) {
         try {
-          // DEDUP CHECK: Look for existing customer by codice_fiscale, email, or telefono
-          let existingCustomer: any = null
+          // DEDUP CHECK: Look for existing customer by type-specific unique field, then email, then telefono (with phone normalization)
+          let existingCustomer: { id: string } | null = null
 
-          if (newCustomerData.codice_fiscale) {
+          if (newCustomerData.tipo_cliente === 'persona_fisica' && newCustomerData.codice_fiscale?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('codice_fiscale', newCustomerData.codice_fiscale)
-              .limit(1)
-            if (data && data.length > 0) existingCustomer = data[0]
-          }
-
-          if (!existingCustomer && newCustomerData.email) {
+              .select('id')
+              .eq('codice_fiscale', newCustomerData.codice_fiscale.trim())
+              .maybeSingle()
+            existingCustomer = data
+          } else if (newCustomerData.tipo_cliente === 'azienda' && newCustomerData.partita_iva?.trim()) {
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
-              .eq('email', newCustomerData.email)
-              .limit(1)
-            if (data && data.length > 0) existingCustomer = data[0]
+              .select('id')
+              .eq('partita_iva', newCustomerData.partita_iva.trim())
+              .maybeSingle()
+            existingCustomer = data
+          } else if (newCustomerData.tipo_cliente === 'pubblica_amministrazione' && newCustomerData.codice_univoco_pa?.trim()) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('id')
+              .eq('codice_univoco', newCustomerData.codice_univoco_pa.trim())
+              .maybeSingle()
+            existingCustomer = data
           }
 
-          if (!existingCustomer && newCustomerData.telefono) {
+          if (!existingCustomer && newCustomerData.email?.trim()) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('id')
+              .eq('email', newCustomerData.email.trim().toLowerCase())
+              .maybeSingle()
+            existingCustomer = data
+          }
+          if (!existingCustomer && newCustomerData.telefono?.trim()) {
+            // Normalize phone before dedup lookup (same logic as save-customer)
             let normNewPhone = newCustomerData.telefono.replace(/[\s\-\+\(\)]/g, '')
             if (normNewPhone.startsWith('00')) normNewPhone = normNewPhone.substring(2)
             if (normNewPhone.length === 10) normNewPhone = '39' + normNewPhone
             const { data } = await supabase
               .from('customers_extended')
-              .select('*')
+              .select('id')
               .eq('telefono', normNewPhone)
-              .limit(1)
-            if (data && data.length > 0) existingCustomer = data[0]
+              .maybeSingle()
+            existingCustomer = data
           }
 
           if (existingCustomer) {
-            // Customer already exists — reuse their ID instead of creating a duplicate
+            // Customer already exists -- reuse their ID instead of creating a duplicate
             customerId = existingCustomer.id
-            console.log('✅ Existing customer found (dedup), reusing ID:', existingCustomer.id, existingCustomer.nome, existingCustomer.cognome)
+            console.log('✅ Existing customer found (dedup), reusing ID:', existingCustomer.id)
           } else {
-            // No existing customer found — create new one
+            // No existing customer found -- create new one
             const customerData: any = {
               tipo_cliente: newCustomerData.tipo_cliente,
               nazione: newCustomerData.nazione,

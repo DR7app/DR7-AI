@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 interface NewClientModalProps {
   isOpen: boolean
   onClose: () => void
-  onClientCreated?: (clientId: string) => void
+  onClientCreated?: (clientId: string, customerData?: any) => void
   initialData?: any // Can be Customer type, but using any for flexibility with the complex objects
 }
 
@@ -510,7 +510,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         toast.success('Cliente aggiornato con successo!')
 
         if (onClientCreated && resultData) {
-          onClientCreated(resultData.id)
+          onClientCreated(resultData.id, resultData)
         }
         handleClose()
         return // Exit early - UPDATE complete
@@ -652,7 +652,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
 
       if (onClientCreated && resultData) {
-        onClientCreated(resultData.id)
+        onClientCreated(resultData.id, resultData)
       }
       handleClose()
 

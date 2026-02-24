@@ -185,6 +185,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
 
+  // Manual price override
+  const [manualPrice, setManualPrice] = useState<string | null>(null)
+
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
@@ -203,6 +206,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       total += ep?.price ?? extra.price
     }
     return total
+  }
+
+  const getFinalPrice = () => {
+    if (manualPrice !== null && manualPrice !== '') {
+      const parsed = parseFloat(manualPrice)
+      return isNaN(parsed) ? getTotal() : parsed
+    }
+    return getTotal()
   }
 
   const getTotalDuration = () => {
@@ -238,6 +249,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setSelectedPriceOption(null)
     setSelectedExtras([])
     setExtraPriceOptions({})
+    setManualPrice(null)
     setVehiclePlate('')
     setVehicleMakeModel('')
     setVehicleCategory(null)
@@ -568,8 +580,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0)
     const appointmentDateTime = appointmentDate.toISOString()
 
-    // Total price from wizard selections
-    const totalPrice = getTotal()
+    // Total price: manual override or wizard selections
+    const totalPrice = getFinalPrice()
     const serviceNames = buildServiceNames()
 
     // Build cart items for booking details (backward compatible format)
@@ -1533,11 +1545,44 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </div>
                     )
                   })}
-                  <div className="pt-2 mt-2 border-t border-theme-border flex justify-between">
+                  <div className="pt-2 mt-2 border-t border-theme-border flex justify-between items-center">
                     <span className="text-theme-text-muted">Durata: ~{getTotalDuration()} min</span>
                     <span className="text-dr7-gold font-bold text-base">EUR {getTotal().toFixed(2)}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Manual Price Override */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo manuale (opzionale)</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted text-sm">EUR</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={manualPrice ?? ''}
+                      onChange={(e) => setManualPrice(e.target.value === '' ? null : e.target.value)}
+                      placeholder={getTotal().toFixed(2)}
+                      className="w-full pl-12 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary placeholder-theme-text-muted"
+                    />
+                  </div>
+                  {manualPrice !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setManualPrice(null)}
+                      className="px-3 py-2 text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded transition-colors"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+                {manualPrice !== null && manualPrice !== '' && (
+                  <p className="text-xs text-dr7-gold mt-1">
+                    Prezzo manuale: EUR {parseFloat(manualPrice).toFixed(2)} (invece di EUR {getTotal().toFixed(2)})
+                  </p>
+                )}
               </div>
 
               {/* Customer */}
@@ -1628,7 +1673,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     value={formData.payment_status}
                     onChange={(e) => {
                       const newStatus = e.target.value
-                      const total = getTotal()
+                      const total = getFinalPrice()
                       const newAmountPaid = newStatus === 'paid' ? total.toString() : '0'
                       setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid })
                     }}
@@ -1670,7 +1715,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       : 'bg-dr7-gold hover:bg-yellow-500 text-black'
                   }`}
                 >
-                  {submitting ? 'Creazione...' : `Conferma - EUR ${getTotal().toFixed(2)}`}
+                  {submitting ? 'Creazione...' : `Conferma - EUR ${getFinalPrice().toFixed(2)}`}
                 </button>
               </div>
             </div>

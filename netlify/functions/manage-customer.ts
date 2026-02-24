@@ -132,6 +132,14 @@ const handler: Handler = async (event) => {
         }
       }
 
+      // Delete cauzioni linked directly to this customer (via cliente_id FK)
+      console.log("[manage-customer] Deleting cauzioni by cliente_id for:", customerId);
+      const { error: cauzioniDirectError } = await supabaseAdmin
+        .from("cauzioni")
+        .delete()
+        .eq("cliente_id", customerId);
+      if (cauzioniDirectError) console.warn("[manage-customer] Cauzioni (by cliente_id) deletion warning:", cauzioniDirectError.message);
+
       // Delete from customers_extended
       console.log("[manage-customer] Deleting from customers_extended:", customerId);
       const { error: extError, count: extCount } = await supabaseAdmin
@@ -291,6 +299,8 @@ const handler: Handler = async (event) => {
 
         await supabaseAdmin.from("birthday_messages").delete().in("customer_id", realIds);
         await supabaseAdmin.from("customer_memberships").delete().in("client_id", realIds);
+        // Delete cauzioni linked directly to these customers (via cliente_id FK)
+        await supabaseAdmin.from("cauzioni").delete().in("cliente_id", realIds);
         await supabaseAdmin.from("customers_extended").delete().in("id", realIds);
         await supabaseAdmin.from("customers").delete().in("id", realIds);
       }
