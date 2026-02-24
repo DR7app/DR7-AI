@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 
-const API_KEY = process.env.OPENAPI_API_KEY || process.env.OPENAPI_AUTOMOTIVE_TOKEN || "";
+const API_TOKEN = "699d7f716e76c425ee086085";
 
 const handler: Handler = async (event) => {
   const headers = {
@@ -18,14 +18,6 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
   }
 
-  if (!API_KEY) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: "Set OPENAPI_AUTOMOTIVE_TOKEN in Netlify env vars" }),
-    };
-  }
-
   try {
     const { targa } = JSON.parse(event.body || "{}");
 
@@ -35,20 +27,26 @@ const handler: Handler = async (event) => {
 
     const cleanTarga = targa.toUpperCase().replace(/[\s\-]/g, "");
 
-    const response = await fetch(`https://automotive.openapi.com/IT-car/${encodeURIComponent(cleanTarga)}`, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
+    const url = `https://automotive.openapi.com/IT-car/${encodeURIComponent(cleanTarga)}`;
+    console.log("[lookup-targa] Calling:", url);
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
     });
+
+    console.log("[lookup-targa] API status:", response.status);
 
     if (response.status === 404) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: "Targa non trovata" }) };
     }
 
     if (!response.ok) {
-      console.error("[lookup-targa] API error:", response.status);
+      const errBody = await response.text().catch(() => "");
+      console.error("[lookup-targa] API error:", response.status, errBody);
       return {
         statusCode: 502,
         headers,
-        body: JSON.stringify({ error: "Errore nella ricerca. Riprova tra qualche istante." }),
+        body: JSON.stringify({ error: `Errore API (${response.status}). Riprova.` }),
       };
     }
 
@@ -69,11 +67,11 @@ const handler: Handler = async (event) => {
 
     return { statusCode: 200, headers, body: JSON.stringify(result) };
   } catch (error: any) {
-    console.error("[lookup-targa] error:", error.message);
+    console.error("[lookup-targa] error:", error.message, error.stack);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: "Errore nella ricerca targa" }),
+      body: JSON.stringify({ error: `Errore: ${error.message}` }),
     };
   }
 };
