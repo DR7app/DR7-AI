@@ -1,8 +1,6 @@
-import type { Handler } from "@netlify/functions";
+const OPENAPI_AUTOMOTIVE_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN || "699d7f716e76c425ee086085";
 
-const API_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN || "";
-
-const handler: Handler = async (event) => {
+exports.handler = async (event) => {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -27,11 +25,11 @@ const handler: Handler = async (event) => {
 
     const cleanTarga = targa.toUpperCase().replace(/[\s\-]/g, "");
 
-    const url = `https://automotive.openapi.com/IT-car/${encodeURIComponent(cleanTarga)}`;
+    const url = "https://automotive.openapi.com/IT-car/" + encodeURIComponent(cleanTarga);
     console.log("[lookup-targa] Calling:", url);
 
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${API_TOKEN}` },
+      headers: { Authorization: "Bearer " + OPENAPI_AUTOMOTIVE_TOKEN },
     });
 
     console.log("[lookup-targa] API status:", response.status);
@@ -41,25 +39,25 @@ const handler: Handler = async (event) => {
     }
 
     if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
+      const errBody = await response.text().catch(function() { return ""; });
       console.error("[lookup-targa] API error:", response.status, errBody);
       return {
         statusCode: 502,
         headers,
-        body: JSON.stringify({ error: `Errore API (${response.status}). Riprova.` }),
+        body: JSON.stringify({ error: "Errore API (" + response.status + "). Riprova." }),
       };
     }
 
     const json = await response.json();
-    const car = json.data || json; // API wraps in { data: {...}, success: true }
+    const car = json.data || json;
 
-    console.log("[lookup-targa] Car data keys:", Object.keys(car));
+    console.log("[lookup-targa] Success:", car.CarMake, car.CarModel);
 
-    const result = {
+    var result = {
       targa: cleanTarga,
       brand: car.CarMake || "",
       model: car.CarModel || "",
-      makeModel: `${car.CarMake || ""} ${car.CarModel || ""}`.trim(),
+      makeModel: ((car.CarMake || "") + " " + (car.CarModel || "")).trim(),
       description: car.Description || "",
       year: car.RegistrationYear || "",
       fuel: car.FuelType || "",
@@ -69,14 +67,12 @@ const handler: Handler = async (event) => {
     };
 
     return { statusCode: 200, headers, body: JSON.stringify(result) };
-  } catch (error: any) {
-    console.error("[lookup-targa] error:", error.message, error.stack);
+  } catch (error) {
+    console.error("[lookup-targa] error:", error.message);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: `Errore: ${error.message}` }),
+      body: JSON.stringify({ error: "Errore: " + error.message }),
     };
   }
 };
-
-export { handler };
