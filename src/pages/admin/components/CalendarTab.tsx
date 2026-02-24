@@ -157,26 +157,26 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     const rows: { vehicle: Vehicle, events: CalendarEvent[], laneCount: number }[] = []
 
     // PRE-ASSIGN: Each booking belongs to exactly ONE vehicle (no duplicates)
-    // Priority: 1) plate match, 2) vehicle_id match. First match wins.
+    // Priority: 1) vehicle_id match (FK, most reliable), 2) plate match (fallback)
     const bookingToVehicleId = new Map<string, string>()
     bookings.forEach(b => {
       if (b.status === 'cancelled') return
-      const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
+      const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
 
-      // Try plate match first (most reliable - unique per physical car)
-      if (bPlate) {
-        const plateMatch = vehicles.find(v => v.plate?.replace(/\s/g, '').toUpperCase() === bPlate)
-        if (plateMatch) {
-          bookingToVehicleId.set(b.id, plateMatch.id)
-          return
-        }
-      }
-      // Fallback: vehicle_id match
+      // Try vehicle_id match first (FK to vehicles table)
       if (bVehicleId) {
         const idMatch = vehicles.find(v => v.id === bVehicleId)
         if (idMatch) {
           bookingToVehicleId.set(b.id, idMatch.id)
+          return
+        }
+      }
+      // Fallback: plate match
+      if (bPlate) {
+        const plateMatch = vehicles.find(v => v.plate?.replace(/\s/g, '').toUpperCase() === bPlate)
+        if (plateMatch) {
+          bookingToVehicleId.set(b.id, plateMatch.id)
           return
         }
       }
