@@ -142,8 +142,8 @@ const VEHICLE_DB: Record<string, { models: string[]; category: VehicleCategory }
     { models: ['vitara', 'jimny', 'grand vitara', 's-cross', 'sx4 s-cross', 'across'], category: 'maxi' },
   ],
   dacia: [
-    { models: ['sandero', 'logan', 'spring'], category: 'urban' },
-    { models: ['sandero stepway', 'duster', 'jogger', 'lodgy', 'dokker'], category: 'maxi' },
+    { models: ['logan', 'spring'], category: 'urban' },
+    { models: ['sandero', 'sandero stepway', 'duster', 'jogger', 'lodgy', 'dokker'], category: 'maxi' },
   ],
   mazda: [
     { models: ['2', 'mazda2', '3', 'mazda3', 'mx-5', 'mx-30', 'demio', '323', '6', 'mazda6'], category: 'urban' },
