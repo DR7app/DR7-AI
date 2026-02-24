@@ -1953,8 +1953,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const newTotal = extendingBooking.price_total + (additionalAmount * 100) // price_total is in cents
 
       // Update booking_details with extension info
+      // Reset deposit_reminder_sent so IBAN message re-sends 60 min after the NEW dropoff
       const updatedBookingDetails = {
         ...extendingBooking.booking_details,
+        deposit_reminder_sent: false,
+        deposit_reminder_sent_at: null,
+        iban_request_sent: false,
         extension_history: [
           ...(extendingBooking.booking_details?.extension_history || []),
           {
