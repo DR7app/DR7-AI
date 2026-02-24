@@ -32,6 +32,28 @@ interface SentMessageLog {
 
 const SYSTEM_KEYS = ['supercar_day_before', 'utilitaria_day_before', 'deposit_return_iban']
 
+// Timeline info for system templates
+const SCHEDULE_INFO: Record<string, { trigger: string; timing: string; frequency: string; target: string }> = {
+    supercar_day_before: {
+        trigger: 'Fine noleggio',
+        timing: '1 giorno prima',
+        frequency: 'Automatico (cron ogni 5 min)',
+        target: 'Clienti Supercar',
+    },
+    utilitaria_day_before: {
+        trigger: 'Fine noleggio',
+        timing: '1 giorno prima',
+        frequency: 'Automatico (cron ogni 5 min)',
+        target: 'Clienti Utilitaria / Furgone / V-Class',
+    },
+    deposit_return_iban: {
+        trigger: 'Fine noleggio',
+        timing: '60 minuti dopo',
+        frequency: 'Automatico (cron ogni 5 min)',
+        target: 'Clienti con cauzione attiva',
+    },
+}
+
 export default function MessaggiSistemaTab() {
     // Template state
     const [templates, setTemplates] = useState<SystemMessage[]>([])
@@ -418,12 +440,12 @@ export default function MessaggiSistemaTab() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Descrizione (opzionale)</label>
+                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Pianificazione</label>
                                 <input
                                     type="text"
                                     value={newDescription}
                                     onChange={e => setNewDescription(e.target.value)}
-                                    placeholder="es. Inviato il giorno prima dell'appuntamento"
+                                    placeholder="es. 60 min dopo fine noleggio, 1 giorno prima, manuale..."
                                     className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
                                 />
                             </div>
@@ -459,7 +481,9 @@ export default function MessaggiSistemaTab() {
 
                 {/* Template Cards */}
                 <div className="space-y-3">
-                    {templates.map(template => (
+                    {templates.map(template => {
+                        const schedule = SCHEDULE_INFO[template.message_key]
+                        return (
                         <div key={template.id} className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
@@ -470,6 +494,11 @@ export default function MessaggiSistemaTab() {
                                     {SYSTEM_KEYS.includes(template.message_key) && (
                                         <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">
                                             Automatico
+                                        </span>
+                                    )}
+                                    {!SYSTEM_KEYS.includes(template.message_key) && (
+                                        <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-600/20 text-purple-400">
+                                            Solo manuale
                                         </span>
                                     )}
                                 </div>
@@ -511,6 +540,28 @@ export default function MessaggiSistemaTab() {
                                 </div>
                             </div>
 
+                            {/* Timeline visual */}
+                            {schedule && (
+                                <div className="mt-3 mb-3 flex items-center gap-3 px-3 py-2.5 rounded-lg bg-theme-bg-primary border border-theme-border/50">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                                        <span className="text-xs font-medium text-theme-text-secondary whitespace-nowrap">{schedule.trigger}</span>
+                                    </div>
+                                    <div className="text-theme-text-muted text-xs">―</div>
+                                    <div className="px-2.5 py-1 rounded-full bg-dr7-gold/15 text-dr7-gold text-xs font-bold whitespace-nowrap">
+                                        {schedule.timing}
+                                    </div>
+                                    <div className="text-theme-text-muted text-xs">―</div>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                                        <span className="text-xs text-theme-text-secondary truncate">{schedule.target}</span>
+                                    </div>
+                                    <div className="ml-auto pl-3 border-l border-theme-border/50">
+                                        <span className="text-[10px] text-theme-text-muted whitespace-nowrap">{schedule.frequency}</span>
+                                    </div>
+                                </div>
+                            )}
+
                             {editingId === template.id ? (
                                 <div>
                                     <textarea
@@ -527,7 +578,8 @@ export default function MessaggiSistemaTab() {
                                 </pre>
                             )}
                         </div>
-                    ))}
+                        )
+                    })}
 
                     {templates.length === 0 && (
                         <div className="text-center py-8 text-theme-text-muted">
