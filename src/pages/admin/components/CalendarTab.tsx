@@ -96,6 +96,19 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       }
 
       if (allBookings) {
+        console.log('[CalendarTab] Total bookings fetched:', allBookings.length)
+        // Debug: check Clio bookings
+        const clioBookings = allBookings.filter(b => {
+          const name = (b.vehicle_name || '').toLowerCase()
+          const plate = (b.vehicle_plate || b.booking_details?.vehicle?.plate || '').replace(/\s/g, '').toUpperCase()
+          return name.includes('clio') && (name.includes('orange') || name.includes('arancione'))
+            || ['GS586ZJ', 'GT619LN', 'GT621LN', 'GS602ZJ', 'GT006DG', 'GT687DF', 'GT897DF', 'GV075FN'].includes(plate)
+        })
+        console.log('[CalendarTab] Clio Orange bookings:', clioBookings.length, clioBookings.map(b => ({
+          id: b.id.slice(0,8), plate: b.vehicle_plate, customer: b.customer_name,
+          service_type: b.service_type, pickup: b.pickup_date, dropoff: b.dropoff_date
+        })))
+
         // Filter out irrelevant service types if needed
         const validBookings = allBookings.filter(b =>
           !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
@@ -171,6 +184,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       }
     })
 
+    // Debug: log current viewing month and Clio matching
+    console.log(`[CalendarTab] === VIEWING: ${currentRomeComponents.year}-${String(currentRomeComponents.month + 1).padStart(2, '0')} ===`)
+    const clioVehiclesList = vehicles.filter(v => v.display_name?.toLowerCase().includes('clio'))
+    clioVehiclesList.forEach(v => {
+      const matched = Array.from(bookingToVehicleId.entries()).filter(([, vid]) => vid === v.id)
+      console.log(`[CalendarTab] Vehicle ${v.plate} (${v.display_name}): ${matched.length} bookings matched`)
+    })
+
     vehicles.forEach(vehicle => {
       const vehicleBookings = bookings.filter(b => bookingToVehicleId.get(b.id) === vehicle.id)
 
@@ -182,7 +203,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           daysInMonth
         })
         if (evt) events.push(evt)
+        if (vehicle.display_name?.toLowerCase().includes('clio')) {
+          console.log(`[CalendarTab] Normalize ${vehicle.plate} booking ${b.id.slice(0,8)}: ${b.customer_name} (${b.pickup_date} → ${b.dropoff_date}) → ${evt ? `event left=${evt.leftPx} w=${evt.widthPx}` : 'NULL (filtered out)'}`)
+        }
       })
+
+      if (vehicle.display_name?.toLowerCase().includes('clio')) {
+        console.log(`[CalendarTab] >>> ${vehicle.plate}: ${vehicleBookings.length} matched → ${events.length} events this month`)
+      }
 
       // Compute Lanes
       const laningResults = computeLanes(events)
