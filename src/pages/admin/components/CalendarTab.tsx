@@ -67,10 +67,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   }, [])
 
   async function loadData() {
-    console.log('[CalendarTab] loadData() called')
     setLoading(true)
     try {
-      const { data: vehiclesData, error: vErr } = await supabase
+      const { data: vehiclesData } = await supabase
         .from('vehicles')
         .select('id, display_name, plate, status, category, metadata')
         .neq('status', 'retired')
@@ -82,14 +81,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         const bookingsResult = await bookingsResponse.json()
         if (bookingsResponse.ok && bookingsResult.bookings) {
           allBookings = bookingsResult.bookings
-        } else {
-          console.error('[CalendarTab] list-bookings error, falling back to direct query:', bookingsResult.error)
         }
-      } catch (fetchErr) {
-        console.error('[CalendarTab] list-bookings fetch failed, falling back to direct query:', fetchErr)
+      } catch {
+        // Netlify function unavailable
       }
 
-      // Fallback: direct Supabase query (subject to RLS)
+      // Fallback: direct Supabase query
       if (!allBookings) {
         const { data } = await supabase
           .from('bookings')
@@ -98,9 +95,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           .order('pickup_date', { ascending: true })
         allBookings = data
       }
-
-      console.log('[CalendarTab] Vehicles:', vehiclesData?.length ?? 'null', 'error:', vErr?.message || 'none')
-      console.log('[CalendarTab] Bookings:', allBookings?.length ?? 'null')
 
       if (vehiclesData) {
         // Sort: Exotic -> Urban -> Aziendali
@@ -114,13 +108,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       }
 
       if (allBookings) {
-        console.log('[CalendarTab] Total bookings fetched:', allBookings.length)
-
         // Filter out irrelevant service types
         const validBookings = allBookings.filter(b =>
           !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
         )
-        console.log('[CalendarTab] Valid bookings after filter:', validBookings.length)
         setBookings(validBookings)
       }
     } catch (e) {
@@ -490,22 +481,24 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
-                      // Markers text
-
-                      // Visual Width Logic: At least 1 cell, but real width is strictly calc'd
-                      // If strict width is 0 (e.g. same day small hours?), force min width
-                      const finalWidth = Math.max(evt.widthPx, CELL_WIDTH)
+                      // Clamp bar to visible grid area to avoid browser rendering limits
+                      // (bars with left=-44955 width=46305 exceed max texture size ~16384px)
+                      const gridWidth = daysInMonth * CELL_WIDTH
+                      const clampedLeft = Math.max(0, evt.leftPx)
+                      const rightEdge = evt.leftPx + evt.widthPx
+                      const clampedRight = Math.min(gridWidth, rightEdge)
+                      const finalWidth = Math.max(CELL_WIDTH, clampedRight - clampedLeft)
 
                       return (
                         <div
                           key={evt.id}
                           className={`
-                                absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-theme-text-primary 
-                                ${bgClass} ${borderClass} 
+                                absolute rounded shadow-md border pointer-events-auto group/evt overflow-hidden flex flex-col justify-center text-theme-text-primary
+                                ${bgClass} ${borderClass}
                                 hover:z-50 hover:shadow-xl hover:brightness-110 transition-all
                               `}
                           style={{
-                            left: evt.leftPx,
+                            left: clampedLeft,
                             width: finalWidth,
                             top: top,
                             height: BAR_HEIGHT,
