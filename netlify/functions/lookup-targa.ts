@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 
-const API_TOKEN = "699d7f716e76c425ee086085";
+const API_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN || "";
 
 const handler: Handler = async (event) => {
   const headers = {
