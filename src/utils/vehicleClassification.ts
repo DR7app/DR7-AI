@@ -19,21 +19,19 @@ interface ClassificationResult {
   matchedModel?: string
 }
 
-// Keywords that indicate a Station Wagon / large variant → always MAXI
-const SW_KEYWORDS = [
-  'station wagon',
-  'sw',
-  'wagon',
-  'variant',
-  'touring',
-  'avant',
-  'estate',
-  'break',
-  'allroad',
-  'alltrack',
-  'cross country',
-  'sportwagon',
-  'sport wagon',
+// Keywords that indicate MAXI body type — always MAXI regardless of model
+const MAXI_KEYWORDS = [
+  // Station wagon variants
+  'station wagon', 'sw', 'wagon', 'variant', 'touring', 'avant',
+  'estate', 'break', 'allroad', 'alltrack', 'cross country',
+  'sportwagon', 'sport wagon',
+  // SUV / crossover / fuoristrada
+  'suv', 'crossover', 'fuoristrada', 'off road', 'offroad', '4x4', '4wd',
+  'stepway', 'cross',
+  // Monovolume / MPV / van
+  'monovolume', 'mpv', 'minivan', 'van', 'multivan',
+  // Pickup
+  'pickup', 'pick up', 'pick-up',
 ]
 
 // Brand → [{ models[], category }]
@@ -145,7 +143,7 @@ const VEHICLE_DB: Record<string, { models: string[]; category: VehicleCategory }
   ],
   dacia: [
     { models: ['sandero', 'logan', 'spring'], category: 'urban' },
-    { models: ['duster', 'jogger', 'lodgy', 'dokker'], category: 'maxi' },
+    { models: ['sandero stepway', 'duster', 'jogger', 'lodgy', 'dokker'], category: 'maxi' },
   ],
   mazda: [
     { models: ['2', 'mazda2', '3', 'mazda3', 'mx-5', 'mx-30', 'demio', '323', '6', 'mazda6'], category: 'urban' },
@@ -186,6 +184,31 @@ const VEHICLE_DB: Record<string, { models: string[]; category: VehicleCategory }
     { models: ['spark', 'aveo', 'cruze', 'sonic', 'bolt', 'malibu', 'camaro', 'corvette', 'matiz', 'kalos'], category: 'urban' },
     { models: ['captiva', 'trax', 'equinox', 'blazer', 'tahoe', 'suburban', 'colorado', 'silverado', 'orlando', 'trailblazer'], category: 'maxi' },
   ],
+  dr: [
+    { models: ['1', 'dr1', '3', 'dr3', '5', 'dr5'], category: 'urban' },
+    { models: ['4', 'dr4', '6', 'dr6', '7', 'dr7', 'f35', 'evo'], category: 'maxi' },
+  ],
+  evo: [
+    { models: ['3', '4', '5', '6', 'cross 4'], category: 'urban' },
+  ],
+  mg: [
+    { models: ['3', 'mg3', '4', 'mg4', '5', 'mg5', 'zs ev'], category: 'urban' },
+    { models: ['zs', 'hs', 'marvel r', 'ehs'], category: 'maxi' },
+  ],
+  ssangyong: [
+    { models: ['tivoli'], category: 'urban' },
+    { models: ['korando', 'rexton', 'musso', 'xlv', 'rodius', 'torres'], category: 'maxi' },
+  ],
+  jaguar: [
+    { models: ['xe', 'xf', 'xj', 'f-type', 'i-pace'], category: 'maxi' },
+  ],
+  lexus: [
+    { models: ['ct', 'is', 'es', 'ux'], category: 'urban' },
+    { models: ['nx', 'rx', 'lx', 'lc', 'ls', 'rz'], category: 'maxi' },
+  ],
+  infiniti: [
+    { models: ['q30', 'q50', 'q60', 'qx30', 'qx50', 'qx70', 'qx80'], category: 'maxi' },
+  ],
 }
 
 // Brand aliases for normalization
@@ -207,17 +230,13 @@ function normalize(s: string): string {
   return s.toLowerCase().trim().replace(/[-_]/g, ' ').replace(/\s+/g, ' ')
 }
 
-/**
- * Check if the vehicle name contains a Station Wagon / variant keyword.
- * Any car in SW form is classified as MAXI regardless of base model.
- */
-function isStationWagon(input: string): boolean {
+function hasMaxiKeyword(input: string): string | null {
   const n = normalize(input)
-  for (const keyword of SW_KEYWORDS) {
+  for (const keyword of MAXI_KEYWORDS) {
     const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
-    if (regex.test(n)) return true
+    if (regex.test(n)) return keyword
   }
-  return false
+  return null
 }
 
 function resolveBrand(input: string): string {
@@ -236,33 +255,36 @@ function resolveBrand(input: string): string {
   return ''
 }
 
-export function classifyVehicleLocally(makeModel: string): ClassificationResult | null {
+export function classifyVehicleLocally(makeModel: string): ClassificationResult {
   const input = normalize(makeModel)
-  if (!input) return null
+  if (!input) return { category: 'urban', confidence: 'low', source: 'local' }
 
-  // Station Wagon / SW detection — always MAXI
-  if (isStationWagon(input)) {
+  // MAXI keyword detection (SUV, SW, fuoristrada, monovolume, etc.) — always MAXI
+  const maxiKeyword = hasMaxiKeyword(input)
+  if (maxiKeyword) {
     const brand = resolveBrand(input)
     return {
       category: 'maxi',
       confidence: 'high',
       source: 'local',
       matchedBrand: brand || undefined,
-      matchedModel: 'station wagon variant',
+      matchedModel: maxiKeyword,
     }
   }
 
   // Try to resolve the brand
   const brand = resolveBrand(input)
-  if (!brand || !VEHICLE_DB[brand]) return null
+  if (!brand || !VEHICLE_DB[brand]) {
+    // Unknown brand — default to URBAN
+    return { category: 'urban', confidence: 'low', source: 'local' }
+  }
 
   const entries = VEHICLE_DB[brand]
 
   // Extract the model part (everything after the brand name)
   let modelPart = input
-  // Remove the brand name from the beginning
   const brandVariants = [brand, ...Object.entries(BRAND_ALIASES).filter(([, v]) => v === brand).map(([k]) => k)]
-    .sort((a, b) => b.length - a.length) // Prioritize longer matches (mercedes-benz before mercedes)
+    .sort((a, b) => b.length - a.length)
   for (const variant of brandVariants) {
     if (modelPart.startsWith(variant + ' ')) {
       modelPart = modelPart.slice(variant.length).trim()
@@ -274,20 +296,14 @@ export function classifyVehicleLocally(makeModel: string): ClassificationResult 
   }
 
   if (!modelPart) {
-    // Only brand, no model — return first entry as best guess
-    return {
-      category: entries[0].category,
-      confidence: 'low',
-      source: 'local',
-      matchedBrand: brand,
-    }
+    // Only brand, no model — default to URBAN
+    return { category: 'urban', confidence: 'low', source: 'local', matchedBrand: brand }
   }
 
-  // Search for model match
+  // Search for exact model match
   for (const entry of entries) {
     for (const model of entry.models) {
       const normalizedModel = normalize(model)
-      // Exact match or starts with
       if (modelPart === normalizedModel || modelPart.startsWith(normalizedModel + ' ') || modelPart.startsWith(normalizedModel)) {
         return {
           category: entry.category,
@@ -300,7 +316,7 @@ export function classifyVehicleLocally(makeModel: string): ClassificationResult 
     }
   }
 
-  // Partial matching: check if the model part contains any known model
+  // Partial matching
   for (const entry of entries) {
     for (const model of entry.models) {
       const normalizedModel = normalize(model)
@@ -316,7 +332,8 @@ export function classifyVehicleLocally(makeModel: string): ClassificationResult 
     }
   }
 
-  return null
+  // Brand known but model not found — default to URBAN
+  return { category: 'urban', confidence: 'low', source: 'local', matchedBrand: brand }
 }
 
 export async function classifyVehicleFromAPI(makeModel: string): Promise<ClassificationResult> {
