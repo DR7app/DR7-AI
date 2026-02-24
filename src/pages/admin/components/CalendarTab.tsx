@@ -99,7 +99,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           const plate = (b.vehicle_plate || b.booking_details?.vehicle?.plate || '').replace(/\s/g, '').toUpperCase()
           return clioPlates.includes(plate)
         })
-        console.log('[CalendarTab] Clio Orange bookings found:', clioBookings.length, clioBookings.map(b => ({ id: b.id, plate: b.vehicle_plate, customer: b.customer_name, service_type: b.service_type, status: b.status })))
+        console.log('[CalendarTab] Clio Orange bookings found:', clioBookings.length, clioBookings.map(b => ({ id: b.id, plate: b.vehicle_plate, customer: b.customer_name, service_type: b.service_type, status: b.status, pickup: b.pickup_date, dropoff: b.dropoff_date })))
 
         // Filter out irrelevant service types if needed
         const validBookings = allBookings.filter(b =>
@@ -182,10 +182,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     })
 
     // Debug: log Clio vehicle matching
+    console.log(`[CalendarTab] === VIEWING MONTH: ${currentRomeComponents.year}-${String(currentRomeComponents.month + 1).padStart(2, '0')} (month0=${currentRomeComponents.month}) ===`)
     const clioVehicles = vehicles.filter(v => v.display_name?.toLowerCase().includes('clio'))
     clioVehicles.forEach(v => {
       const matched = Array.from(bookingToVehicleId.entries()).filter(([, vid]) => vid === v.id)
-      console.log(`[CalendarTab] Vehicle ${v.plate} (${v.id}): ${matched.length} bookings matched`)
+      console.log(`[CalendarTab] Vehicle ${v.plate} (${v.display_name}, ${v.id}): ${matched.length} bookings matched`)
     })
     console.log('[CalendarTab] Total vehicles:', vehicles.length, 'Total matched bookings:', bookingToVehicleId.size)
 
@@ -200,7 +201,16 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           daysInMonth
         })
         if (evt) events.push(evt)
+        // Debug Clio normalization
+        if (vehicle.display_name?.toLowerCase().includes('clio')) {
+          console.log(`[CalendarTab] Normalize ${vehicle.plate} booking ${b.id.slice(0,8)}: ${b.customer_name} (${b.pickup_date} → ${b.dropoff_date}) → ${evt ? `event left=${evt.leftPx} width=${evt.widthPx}` : 'NULL (filtered out)'}`)
+        }
       })
+
+      // Debug: Clio event summary after normalization
+      if (vehicle.display_name?.toLowerCase().includes('clio')) {
+        console.log(`[CalendarTab] >>> ${vehicle.plate}: ${vehicleBookings.length} bookings → ${events.length} events for this month`)
+      }
 
       // Compute Lanes
       const laningResults = computeLanes(events)
@@ -209,7 +219,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       // Filter by search query if needed
       let displayEvents = laningResults
       if (searchQuery) {
-        // If filtering, we still might want to show the row, 
+        // If filtering, we still might want to show the row,
         // but maybe dim non-matching? Or just filter the VEHICLES list?
         // Let's rely on the vehicle filter below ideally, but here we process all.
       }
