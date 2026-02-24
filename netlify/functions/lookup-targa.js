@@ -1,4 +1,4 @@
-const OPENAPI_AUTOMOTIVE_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN || "699d7f716e76c425ee086085";
+const OPENAPI_AUTOMOTIVE_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN || "";
 
 exports.handler = async (event) => {
   const headers = {
