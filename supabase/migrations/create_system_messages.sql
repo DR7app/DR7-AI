@@ -47,3 +47,7 @@ CREATE POLICY "Authenticated users can update system_messages" ON system_message
 DROP POLICY IF EXISTS "Authenticated users can insert system_messages" ON system_messages;
 CREATE POLICY "Authenticated users can insert system_messages" ON system_messages
     FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users can delete system_messages" ON system_messages;
+CREATE POLICY "Authenticated users can delete system_messages" ON system_messages
+    FOR DELETE USING (true);

@@ -214,6 +214,7 @@ function normalize(s: string): string {
 function isStationWagon(input: string): boolean {
   const n = normalize(input)
   for (const keyword of SW_KEYWORDS) {
+    // Match as a whole word or at end of string
     const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
     if (regex.test(n)) return true
   }
@@ -274,13 +275,8 @@ export function classifyVehicleLocally(makeModel: string): ClassificationResult 
   }
 
   if (!modelPart) {
-    // Only brand, no model — return first entry as best guess
-    return {
-      category: entries[0].category,
-      confidence: 'low',
-      source: 'local',
-      matchedBrand: brand,
-    }
+    // Only brand, no model — can't classify with high confidence
+    return null
   }
 
   // Search for model match
