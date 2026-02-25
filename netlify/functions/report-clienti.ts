@@ -40,6 +40,7 @@ export const handler: Handler = async (event) => {
       email: string
       totalSpendCents: number
       bookingsCount: number
+      totalRentalDays: number
     }> = {}
 
     rentalBookings.forEach(b => {
@@ -56,11 +57,22 @@ export const handler: Handler = async (event) => {
           email: custEmail,
           totalSpendCents: 0,
           bookingsCount: 0,
+          totalRentalDays: 0,
         }
       }
 
       customerMap[key].totalSpendCents += (b.price_total || 0)
       customerMap[key].bookingsCount += 1
+
+      // Compute rental days for this booking
+      if (b.pickup_date && b.dropoff_date) {
+        const pickup = new Date(b.pickup_date)
+        const dropoff = new Date(b.dropoff_date)
+        const diffMs = dropoff.getTime() - pickup.getTime()
+        const days = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)))
+        customerMap[key].totalRentalDays += days
+      }
+
       // Update name/email if better data is available
       if (!customerMap[key].name && (b.customer_name || b.booking_details?.customer?.fullName)) {
         customerMap[key].name = b.customer_name || b.booking_details?.customer?.fullName || ''
@@ -73,29 +85,34 @@ export const handler: Handler = async (event) => {
     const customerList = Object.values(customerMap)
 
     // Enrich names from customers_extended (batch in chunks of 100)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     const customerIds = customerList
       .map(c => c.customerId)
-      .filter(id => id && id.length > 0)
+      .filter(id => id && uuidRegex.test(id))
 
     if (customerIds.length > 0) {
       const CHUNK_SIZE = 100
       for (let i = 0; i < customerIds.length; i += CHUNK_SIZE) {
         const chunk = customerIds.slice(i, i + CHUNK_SIZE)
-        const { data: customers } = await supabase
-          .from('customers_extended')
-          .select('id, nome, cognome, email')
-          .in('id', chunk)
+        try {
+          const { data: customers } = await supabase
+            .from('customers_extended')
+            .select('id, nome, cognome, email')
+            .in('id', chunk)
 
-        if (customers) {
-          const custLookup = new Map(customers.map(c => [c.id, c]))
-          customerList.forEach(cl => {
-            const enriched = custLookup.get(cl.customerId)
-            if (enriched) {
-              const fullName = [enriched.nome, enriched.cognome].filter(Boolean).join(' ')
-              if (fullName) cl.name = fullName
-              if (enriched.email && !cl.email) cl.email = enriched.email
-            }
-          })
+          if (customers) {
+            const custLookup = new Map(customers.map(c => [c.id, c]))
+            customerList.forEach(cl => {
+              const enriched = custLookup.get(cl.customerId)
+              if (enriched) {
+                const fullName = [enriched.nome, enriched.cognome].filter(Boolean).join(' ')
+                if (fullName) cl.name = fullName
+                if (enriched.email && !cl.email) cl.email = enriched.email
+              }
+            })
+          }
+        } catch (enrichErr) {
+          console.warn('Customer enrichment failed for chunk, skipping:', enrichErr)
         }
       }
     }
@@ -119,6 +136,10 @@ export const handler: Handler = async (event) => {
           email: c.email || '-',
           totalSpend: Math.round(c.totalSpendCents / 100 * 100) / 100,
           bookingsCount: c.bookingsCount,
+          totalRentalDays: c.totalRentalDays,
+          avgDailyRate: c.totalRentalDays > 0
+            ? Math.round(c.totalSpendCents / c.totalRentalDays) / 100
+            : 0,
         }))
       })
     }

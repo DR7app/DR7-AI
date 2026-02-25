@@ -316,6 +316,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     new_return_time: '10:00',
     additional_amount: '0',
     extension_payment_status: 'pending' as 'paid' | 'pending',
+    extension_payment_method: '',
     notes: ''
   })
   const [isExtending, setIsExtending] = useState(false)
@@ -1941,6 +1942,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       new_return_time: romeTime.toISOString().split('T')[1].substring(0, 5),
       additional_amount: '0',
       extension_payment_status: 'pending',
+      extension_payment_method: booking.payment_method || '',
       notes: ''
     })
     setShowExtendModal(true)
@@ -2028,7 +2030,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const cauzioneLabel = depositSts === 'incassata' ? 'Pagata' : 'Da saldare'
           extensionMsg += `*Cauzione:* €${depositAmt.toFixed(2)} - ${cauzioneLabel}\n`
         }
-        extensionMsg += `*Pagamento estensione:* ${extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da saldare'}`
+        const adminExtPayLabel = extendData.extension_payment_status === 'paid'
+          ? `Pagato${extendData.extension_payment_method ? ` con ${extendData.extension_payment_method.toLowerCase()}` : ''}`
+          : 'Da saldare'
+        extensionMsg += `*Pagamento estensione:* ${adminExtPayLabel}`
         if (extendData.notes) extensionMsg += `\n*Note:* ${extendData.notes}`
 
         // Send to admin notification phone
@@ -2062,19 +2067,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             || 'Cliente'
 
           const kmLabel = extendingBooking.booking_details?.unlimited_km ? 'Illimitati' : (extendingBooking.booking_details?.km_limit ? `${extendingBooking.booking_details.km_limit} km` : '-')
-          const insuranceOpt = extendingBooking.booking_details?.insurance_option
+          const insuranceOpt = extendingBooking.booking_details?.insuranceOption || extendingBooking.booking_details?.insurance_option
           const insuranceLabel = insuranceOpt === 'KASKO_BASE' ? 'Kasko Base'
             : insuranceOpt === 'KASKO_BLACK' ? 'Kasko Black'
             : insuranceOpt === 'KASKO_SIGNATURE' ? 'Kasko Signature'
             : insuranceOpt === 'DR7' ? 'Kasko DR7'
-            : insuranceOpt || '-'
-          let cauzioneLabel = '-'
+            : insuranceOpt || ''
+          let cauzioneLabel = ''
           if (depositOpt === 'no_deposit') {
             cauzioneLabel = 'Senza cauzione'
           } else if (depositAmt > 0) {
             cauzioneLabel = `€${depositAmt.toFixed(2)} (${depositSts === 'incassata' ? 'Pagata' : 'Da saldare'})`
           }
-          const extPayLabel = extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da saldare'
+          const extPayLabel = extendData.extension_payment_status === 'paid'
+            ? `Pagato${extendData.extension_payment_method ? ` con ${extendData.extension_payment_method.toLowerCase()}` : ''}`
+            : 'Da saldare'
 
           let customerMsg = `Salve ${customerFirstName},\n\n`
             + `Confermiamo la sua prenotazione.\n\n`
@@ -2086,8 +2093,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
             + `*Pagamento estensione:* ${extPayLabel}\n`
             + `*Km:* ${kmLabel}\n`
-            + `*Cauzione:* ${cauzioneLabel}\n`
-            + `*Assicurazione:* ${insuranceLabel}\n`
+          if (cauzioneLabel) customerMsg += `*Cauzione:* ${cauzioneLabel}\n`
+          if (insuranceLabel) customerMsg += `*Assicurazione:* ${insuranceLabel}\n`
           if (extendData.notes) customerMsg += `*Note:* ${extendData.notes}\n`
           customerMsg += `\nCordiali Saluti,\nDR7`
 
@@ -5099,6 +5106,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <option value="paid">Pagato</option>
                   </select>
                 </div>
+
+                {extendData.extension_payment_status === 'paid' && (
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Metodo Pagamento Estensione</label>
+                    <select
+                      value={extendData.extension_payment_method}
+                      onChange={(e) => setExtendData({ ...extendData, extension_payment_method: e.target.value })}
+                      className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">-- Seleziona --</option>
+                      <option value="Bonifico">Bonifico</option>
+                      <option value="Contanti">Contanti</option>
+                      <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
+                      <option value="Credit Wallet">Credit Wallet</option>
+                      <option value="Paypal">Paypal</option>
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>

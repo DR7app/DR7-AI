@@ -724,15 +724,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (customerPhone) {
         const custFirstName = customerName?.split(' ')[0] || 'Cliente'
         const apptDt = new Date(appointmentDateTime)
-        const fmtDate = apptDt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+        const fmtDate = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
         const fmtTime = apptDt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
         const totalEur = totalPrice.toFixed(2)
+        const bookingIdShort = (data.id || '').substring(0, 8).toUpperCase()
+        const paymentMethod = formData.payment_method || ''
 
-        let custMsg = `Buongiorno ${custFirstName},\n\nConfermiamo il Suo appuntamento.\n\n`
+        let paymentLabel = ''
+        if (paymentStatus === 'paid') {
+          paymentLabel = `Pagato${paymentMethod ? ` (${paymentMethod})` : ''}`
+        } else if (amountPaid > 0) {
+          paymentLabel = `${(amountPaid / 100).toFixed(2)}€ pagati - ${((totalPrice * 100 - amountPaid) / 100).toFixed(2)}€ da pagare`
+        } else {
+          paymentLabel = 'Da saldare'
+        }
+
+        let custMsg = `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
+        custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`
+        custMsg += `*ID:* DR7-${bookingIdShort}\n`
         custMsg += `*Servizio:* ${serviceNames}\n`
-        custMsg += `*Data:* ${fmtDate} alle ${fmtTime}\n`
-        custMsg += `*Totale:* €${totalEur}\n\n`
-        custMsg += `Cordiali saluti,\nDR7`
+        custMsg += `*Data e Ora:* ${fmtDate} alle ${fmtTime}\n`
+        if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
+        custMsg += `*Totale:* €${totalEur}\n`
+        custMsg += `*Pagamento:* ${paymentLabel}\n`
+        custMsg += `\nCordiali Saluti,\nDR7`
 
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',

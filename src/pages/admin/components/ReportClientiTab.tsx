@@ -6,6 +6,8 @@ interface CustomerReport {
   email: string
   totalSpend: number
   bookingsCount: number
+  totalRentalDays: number
+  avgDailyRate: number
 }
 
 interface CustomerReportData {
@@ -24,7 +26,7 @@ export default function ReportClientiTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [sortField, setSortField] = useState<'totalSpend' | 'bookingsCount'>('totalSpend')
+  const [sortField, setSortField] = useState<'totalSpend' | 'bookingsCount' | 'totalRentalDays' | 'avgDailyRate'>('totalSpend')
 
   async function fetchClienti() {
     setLoading(true)
@@ -32,7 +34,7 @@ export default function ReportClientiTab() {
     try {
       const res = await fetch('/.netlify/functions/report-clienti')
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
+      if (!res.ok) throw new Error(data.details || data.error || 'Errore nel caricamento')
       setClientiData(data)
     } catch (err: any) {
       setError(err.message || 'Errore sconosciuto')
@@ -51,6 +53,8 @@ export default function ReportClientiTab() {
 
   const sortedClienti = [...filteredClienti].sort((a, b) => {
     if (sortField === 'totalSpend') return b.totalSpend - a.totalSpend
+    if (sortField === 'totalRentalDays') return b.totalRentalDays - a.totalRentalDays
+    if (sortField === 'avgDailyRate') return b.avgDailyRate - a.avgDailyRate
     return b.bookingsCount - a.bookingsCount
   })
 
@@ -109,11 +113,13 @@ export default function ReportClientiTab() {
               <label className="text-xs text-theme-text-muted">Ordina per:</label>
               <select
                 value={sortField}
-                onChange={(e) => setSortField(e.target.value as 'totalSpend' | 'bookingsCount')}
+                onChange={(e) => setSortField(e.target.value as typeof sortField)}
                 className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
               >
                 <option value="totalSpend">Spesa totale</option>
                 <option value="bookingsCount">N. Prenotazioni</option>
+                <option value="totalRentalDays">Giorni noleggio</option>
+                <option value="avgDailyRate">Tariffa media</option>
               </select>
             </div>
             {search && (
@@ -137,6 +143,12 @@ export default function ReportClientiTab() {
                     <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('bookingsCount')}>
                       N. Prenotazioni {sortField === 'bookingsCount' && '↓'}
                     </th>
+                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalRentalDays')}>
+                      Giorni Noleggio {sortField === 'totalRentalDays' && '↓'}
+                    </th>
+                    <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('avgDailyRate')}>
+                      Tariffa Media {sortField === 'avgDailyRate' && '↓'}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -146,6 +158,8 @@ export default function ReportClientiTab() {
                       <td className="px-4 py-3 text-theme-text-muted text-xs">{c.email}</td>
                       <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(c.totalSpend)}</td>
                       <td className="text-center px-4 py-3 text-theme-text-primary">{c.bookingsCount}</td>
+                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.totalRentalDays}</td>
+                      <td className="text-right px-4 py-3 text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -167,6 +181,14 @@ export default function ReportClientiTab() {
                     <div>
                       <p className="text-lg font-bold text-theme-text-primary">{c.bookingsCount}</p>
                       <p className="text-xs text-theme-text-muted">Prenotazioni</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-theme-text-primary">{c.totalRentalDays}</p>
+                      <p className="text-xs text-theme-text-muted">Giorni</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</p>
+                      <p className="text-xs text-theme-text-muted">Tariffa Media</p>
                     </div>
                   </div>
                 </div>
