@@ -3314,15 +3314,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
           const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
           const totalEur = ((insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) / 100).toFixed(2)
+          const depositEur = parseFloat(formData.deposit) || 0
+          const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : 'Nessuna'
+          const kmLabel = formData.unlimited_km ? 'Illimitati' : (formData.km_limit ? `${formData.km_limit} km` : '-')
+          const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
+            : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
+            : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
+            : formData.insurance_option === 'DR7' ? 'Kasko DR7'
+            : formData.insurance_option || '-'
+          const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
+          const bookingNotes = insertedBooking?.booking_details?.notes || ''
 
           let custMsg = editingId
-            ? `Buongiorno ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
-            : `Buongiorno ${custFirstName},\n\nConfermiamo la Sua prenotazione.\n\n`
+            ? `Salve ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
+            : `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`
+          custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`
+          custMsg += `*ID:* DR7-${(insertedBooking?.id || '').substring(0, 8).toUpperCase()}\n`
           custMsg += `*Veicolo:* ${vehicle?.display_name || 'N/A'}\n`
           custMsg += `*Ritiro:* ${fmtDate(pickupDt)} alle ${fmtTime(pickupDt)}\n`
           custMsg += `*Riconsegna:* ${fmtDate(dropoffDt)} alle ${fmtTime(dropoffDt)}\n`
-          custMsg += `*Totale:* €${totalEur}\n\n`
-          custMsg += `Cordiali saluti,\nDR7`
+          custMsg += `*Luogo ritiro:* ${pickupLocationLabel}\n`
+          custMsg += `*Pagamento:* ${paymentLabel}\n`
+          custMsg += `*Km:* ${kmLabel}\n`
+          custMsg += `*Cauzione:* ${depositLabel}\n`
+          custMsg += `*Assicurazione:* ${insuranceLabel}\n`
+          if (bookingNotes) custMsg += `*Note:* ${bookingNotes}\n`
+          custMsg += `\nCordiali Saluti,\nDR7`
 
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
