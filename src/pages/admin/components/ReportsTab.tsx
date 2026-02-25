@@ -71,9 +71,8 @@ const CATEGORY_BADGE: Record<string, string> = {
   '-': 'bg-theme-bg-hover/20 text-theme-text-muted'
 }
 
-type SortableField = 'utilizationRate' | 'rentalRevenue' | 'rentedDays'
+type SortableField = 'rentalRevenue' | 'rentedDays'
 const SORT_OPTIONS: { value: SortableField; label: string }[] = [
-  { value: 'utilizationRate', label: 'Utilizzo' },
   { value: 'rentalRevenue', label: 'Fatturato' },
   { value: 'rentedDays', label: 'Giorni di Noleggio' },
 ]
@@ -89,7 +88,7 @@ export default function ReportsTab() {
   const [vehicleData, setVehicleData] = useState<VehicleReportData | null>(null)
 
   const [plateSearch, setPlateSearch] = useState('')
-  const [sortField, setSortField] = useState<keyof VehicleReport>('utilizationRate')
+  const [sortField, setSortField] = useState<keyof VehicleReport>('rentalRevenue')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   async function fetchReport() {
