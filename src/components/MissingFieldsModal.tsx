@@ -102,39 +102,25 @@ export default function MissingFieldsModal({
         try {
             console.log('[MissingFieldsModal] Saving missing fields:', formData)
 
-            // Prepare update/insert data
-            // We merge what we already know (customerData) with the new form data (formData)
-            // ensuring we don't overwrite existing good data with blanks, but also populating
-            // a new record fully if it doesn't exist yet.
-            const upsertPayload: any = {
-                id: customerId, // Ensure ID is present for upsert
-                ...customerData, // Start with what we have (this might include extra props but we'll filter implicitly by what Supabase accepts, or we hope customerData is clean enough)
-                ...formData,     // Overwrite with new user inputs
+            // Only update the fields the user just filled in (+ special mappings)
+            const updatePayload: any = {
+                ...formData,
                 updated_at: new Date().toISOString()
             }
 
-            // Remove internal or joined fields that might be in customerData but not table columns
-            delete upsertPayload.bookings;
-            delete upsertPayload.booking_details;
-            // Add any other known non-column fields to delete here if necessary
-
             // Handle special field mappings
             if (formData.patente || formData.numero_patente) {
-                upsertPayload.patente = formData.patente || formData.numero_patente
-                upsertPayload.numero_patente = formData.patente || formData.numero_patente
+                updatePayload.patente = formData.patente || formData.numero_patente
+                updatePayload.numero_patente = formData.patente || formData.numero_patente
             }
 
-            // Ensure critical fields are present if we are creating a new row
-            if (!upsertPayload.created_at) {
-                upsertPayload.created_at = new Date().toISOString();
-            }
+            console.log('[MissingFieldsModal] Updating customer:', customerId, updatePayload)
 
-            console.log('[MissingFieldsModal] Upserting customer:', upsertPayload)
-
-            // Update OR Insert customer in database
+            // Update customer in database (only the missing fields)
             const { data, error } = await supabase
                 .from('customers_extended')
-                .upsert(upsertPayload)
+                .update(updatePayload)
+                .eq('id', customerId)
                 .select()
                 .single()
 
