@@ -632,6 +632,12 @@ export default function CauzioniTab() {
                                             >
                                                 SBLOCCA
                                             </button>
+                                            <button
+                                                onClick={() => handleIncassa(cauzione)}
+                                                className="px-3 py-1 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors font-semibold"
+                                            >
+                                                INCASSA
+                                            </button>
                                         </>)
                                     )
                                 )}
