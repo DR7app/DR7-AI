@@ -2035,8 +2035,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         console.log('[handleConfirmExtend] ✅ WhatsApp admin notification sent')
 
-        // Send to customer phone
-        const customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
+        // Send to customer phone — resolve from multiple sources
+        let customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
+
+        // Fallback: look up phone from customers_extended if not on the booking
+        if (!customerPhone) {
+          const custEmail = extendingBooking.customer_email || extendingBooking.booking_details?.customer?.email
+          const custId = extendingBooking.booking_details?.customer?.customerId || extendingBooking.booking_details?.customer_id
+          if (custId) {
+            const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle()
+            if (cust?.telefono) customerPhone = cust.telefono
+          }
+          if (!customerPhone && custEmail) {
+            const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('email', custEmail).maybeSingle()
+            if (cust?.telefono) customerPhone = cust.telefono
+          }
+        }
+
         if (customerPhone) {
           const customerFirstName = extendingBooking.booking_details?.customer?.firstName
             || extendingBooking.customer_name?.split(' ')[0]
