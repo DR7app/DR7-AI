@@ -276,6 +276,37 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 } catch (calendarError) {
                     console.error('⚠️ Failed to create calendar event:', calendarError)
                 }
+
+                // Send WhatsApp confirmation to customer
+                const custPhone = customerInfo?.phone
+                if (custPhone) {
+                    try {
+                        const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
+                        const fmtDate = new Date(`${formData.appointment_date}T${formData.appointment_time}:00`)
+                            .toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+                        const totalEur = formData.price_total.toFixed(2)
+
+                        const custMsg = `Salve ${custFirstName},\n\n`
+                            + `Confermiamo il suo appuntamento.\n\n`
+                            + `*NUOVA PRENOTAZIONE MECCANICA*\n\n`
+                            + `*ID:* ${insertedBooking.id.slice(0, 8).toUpperCase()}\n`
+                            + `*Servizio:* ${formData.service_name}\n`
+                            + `*Data e Ora:* ${fmtDate} alle ${formData.appointment_time}\n`
+                            + `*Totale:* €${totalEur}\n`
+                            + `*Pagamento:* ${formData.payment_status === 'paid' ? 'Pagato' : 'Da pagare'}\n`
+                            + `*Note:* ${formData.notes || '-'}\n\n`
+                            + `Cordiali Saluti,\nDR7`
+
+                        await fetch('/.netlify/functions/send-whatsapp-notification', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
+                        })
+                        console.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
+                    } catch (waError) {
+                        console.error('⚠️ Failed to send WhatsApp:', waError)
+                    }
+                }
             }
 
             onSave()
