@@ -2061,14 +2061,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             || extendingBooking.customer_name?.split(' ')[0]
             || 'Cliente'
 
-          const customerMsg = `Buongiorno ${customerFirstName},\n\n`
-            + `La informiamo che la Sua prenotazione è stata estesa.\n\n`
+          const kmLabel = extendingBooking.booking_details?.unlimited_km ? 'Illimitati' : (extendingBooking.booking_details?.km_limit ? `${extendingBooking.booking_details.km_limit} km` : '-')
+          const insuranceOpt = extendingBooking.booking_details?.insurance_option
+          const insuranceLabel = insuranceOpt === 'KASKO_BASE' ? 'Kasko Base'
+            : insuranceOpt === 'KASKO_BLACK' ? 'Kasko Black'
+            : insuranceOpt === 'KASKO_SIGNATURE' ? 'Kasko Signature'
+            : insuranceOpt === 'DR7' ? 'Kasko DR7'
+            : insuranceOpt || '-'
+          let cauzioneLabel = '-'
+          if (depositOpt === 'no_deposit') {
+            cauzioneLabel = 'Senza cauzione'
+          } else if (depositAmt > 0) {
+            cauzioneLabel = `€${depositAmt.toFixed(2)} (${depositSts === 'incassata' ? 'Pagata' : 'Da saldare'})`
+          }
+          const extPayLabel = extendData.extension_payment_status === 'paid' ? 'Pagato' : 'Da saldare'
+
+          let customerMsg = `Salve ${customerFirstName},\n\n`
+            + `Confermiamo la sua prenotazione.\n\n`
+            + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
+            + `*ID:* DR7-${bookingIdShort}\n`
             + `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
             + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
             + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
             + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
-            + `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n\n`
-            + `Cordiali saluti,\nDR7`
+            + `*Pagamento estensione:* ${extPayLabel}\n`
+            + `*Km:* ${kmLabel}\n`
+            + `*Cauzione:* ${cauzioneLabel}\n`
+            + `*Assicurazione:* ${insuranceLabel}\n`
+          if (extendData.notes) customerMsg += `*Note:* ${extendData.notes}\n`
+          customerMsg += `\nCordiali Saluti,\nDR7`
 
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
