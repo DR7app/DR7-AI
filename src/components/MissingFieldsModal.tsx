@@ -114,22 +114,51 @@ export default function MissingFieldsModal({
                 updatePayload.numero_patente = formData.patente || formData.numero_patente
             }
 
-            console.log('[MissingFieldsModal] Updating customer:', customerId, updatePayload)
+            console.log('[MissingFieldsModal] Saving for customer:', customerId, updatePayload)
 
-            // Update customer in database (only the missing fields)
-            const { data, error } = await supabase
+            // Try update first, fall back to insert if customer doesn't exist yet
+            let data: any = null
+            const { data: updated, error: updateError } = await supabase
                 .from('customers_extended')
                 .update(updatePayload)
                 .eq('id', customerId)
                 .select()
-                .single()
 
-            if (error) {
-                console.error('[MissingFieldsModal] Error updating customer:', error)
-                throw error
+            if (updateError) {
+                console.error('[MissingFieldsModal] Update error:', updateError)
+                throw updateError
             }
 
-            console.log('[MissingFieldsModal] Customer updated successfully:', data)
+            if (updated && updated.length > 0) {
+                data = updated[0]
+                console.log('[MissingFieldsModal] Customer updated:', data)
+            } else {
+                // Customer doesn't exist in customers_extended yet — insert
+                console.log('[MissingFieldsModal] Customer not found, inserting new row')
+                const insertPayload: any = {
+                    id: customerId,
+                    ...customerData,
+                    ...formData,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                }
+                // Remove fields that aren't table columns
+                delete insertPayload.bookings
+                delete insertPayload.booking_details
+
+                const { data: inserted, error: insertError } = await supabase
+                    .from('customers_extended')
+                    .insert(insertPayload)
+                    .select()
+                    .single()
+
+                if (insertError) {
+                    console.error('[MissingFieldsModal] Insert error:', insertError)
+                    throw insertError
+                }
+                data = inserted
+                console.log('[MissingFieldsModal] Customer inserted:', data)
+            }
 
             // 2. ALSO update the basic 'customers' table to ensure the main list view updates
             // We merge existing data with updates to ensure we have full name components
