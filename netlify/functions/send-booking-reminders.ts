@@ -236,20 +236,20 @@ const reminderHandler: Handler = async (event) => {
   }
 
   // ──────────────────────────────────────────────
-  // 3. DEPOSIT RETURN REMINDER (exactly 1 hour after rental ends)
+  // 3. DEPOSIT RETURN REMINDER (24 hours after rental ends)
   // Only for customers who left a deposit (cauzione)
-  // Runs every 5 min → window is 55–65 min after dropoff for ±5 min precision
+  // Runs every 5 min → window is 24h ±5 min after dropoff
   // ──────────────────────────────────────────────
   try {
-    const fiftyFiveMinAgo = new Date(now.getTime() - 55 * 60 * 1000);
-    const sixtyFiveMinAgo = new Date(now.getTime() - 65 * 60 * 1000);
+    const twentyFourHoursMinusFive = new Date(now.getTime() - (24 * 60 + 5) * 60 * 1000);
+    const twentyFourHoursPlusFive = new Date(now.getTime() - (24 * 60 - 5) * 60 * 1000);
 
-    // Fetch bookings that ended 55–65 min ago (exactly 60 min ±5 min)
+    // Fetch bookings that ended ~24h ago (±5 min precision)
     const { data: recentEndedBookings, error: depositError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('dropoff_date', sixtyFiveMinAgo.toISOString())
-      .lte('dropoff_date', fiftyFiveMinAgo.toISOString())
+      .gte('dropoff_date', twentyFourHoursMinusFive.toISOString())
+      .lte('dropoff_date', twentyFourHoursPlusFive.toISOString())
       .in('status', ['confirmed', 'active', 'completed'])
       .is('service_type', null);
 
