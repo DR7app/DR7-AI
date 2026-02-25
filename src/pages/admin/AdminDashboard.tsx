@@ -25,6 +25,8 @@ import BirthdaysTab, { useBirthdayCount } from './components/BirthdaysTab'
 import FleetManagementTab from './components/FleetManagementTab'
 import ScadenzeTab from './components/ScadenzeTab'
 import ReportsTab from './components/ReportsTab'
+import ReportLavaggioTab from './components/ReportLavaggioTab'
+import ReportClientiTab from './components/ReportClientiTab'
 import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
@@ -513,8 +515,8 @@ export default function AdminDashboard() {
           {activeTab === 'gestione-multe' && <PlaceholderTab title="Gestione Multe" />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
-          {activeTab === 'report-lavaggio' && <PlaceholderTab title="Report Lavaggio" />}
-          {activeTab === 'report-clienti' && <PlaceholderTab title="Report Clienti" />}
+          {activeTab === 'report-lavaggio' && <ReportLavaggioTab />}
+          {activeTab === 'report-clienti' && <ReportClientiTab />}
           {activeTab === 'com-email' && <PlaceholderTab title="E-mail" />}
           {activeTab === 'com-pec' && <PlaceholderTab title="PEC" />}
           {activeTab === 'com-whatsapp' && <PlaceholderTab title="WhatsApp" />}
