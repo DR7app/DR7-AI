@@ -128,22 +128,27 @@ const handler: Handler = async (event) => {
       }
 
       const isEditCarWash = booking.isEdit;
-      message = isEditCarWash ? `*MODIFICA PRENOTAZIONE AUTOLAVAGGIO*\n\n` : `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
-      message += `*ID:* DR7-${bookingId}\n`;
-      message += `*Cliente:* ${customerName}\n`;
-      message += `*Email:* ${customerEmail}\n`;
-      message += `*Telefono:* ${customerPhone}\n`;
-      message += `*Servizio:* ${serviceName}\n`;
-      message += `*Data e Ora:* ${formattedDate} alle ${formattedTime}\n`;
+      const firstName = customerName.split(' ')[0];
+      const vehiclePlate = booking.vehicle_plate || booking.booking_details?.vehicle?.targa || booking.booking_details?.vehicle?.plate || '';
+
+      message = `Salve ${firstName},\n\n`;
+      message += `Confermiamo il suo appuntamento.\n\n`;
+      message += isEditCarWash ? `MODIFICA PRENOTAZIONE AUTOLAVAGGIO\n\n` : `NUOVA PRENOTAZIONE AUTOLAVAGGIO\n\n`;
+      message += `ID: DR7-${bookingId}\n`;
+      message += `Servizio: ${serviceName}\n`;
+      if (vehiclePlate) {
+        message += `Targa:${vehiclePlate}\n`;
+      }
+      message += `Data e Ora: ${formattedDate} alle ${formattedTime}\n`;
       if (additionalService) {
-        message += `*Servizio Aggiuntivo:* ${additionalService}\n`;
+        message += `Servizio Aggiuntivo: ${additionalService}\n`;
       }
       if (notes) {
-        message += `*Note:* ${notes}\n`;
+        message += `Note: ${notes}\n`;
       }
-      message += `*Totale:* €${totalPrice}\n`;
-      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
+      message += `Totale: €${totalPrice}\n`;
+      message += `Pagamento: ${paymentInfo}\n\n`;
+      message += `Cordiali Saluti,\nDR7`;
     } else if (serviceType === 'mechanical') {
       const appointmentDate = new Date(booking.appointment_date);
       const serviceName = booking.service_name || 'Servizio Meccanica';

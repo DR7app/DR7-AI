@@ -707,6 +707,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             customer_name: customerName,
             customer_email: customerEmail,
             customer_phone: customerPhone,
+            vehicle_plate: vehiclePlate || null,
             appointment_date: appointmentDateTime,
             price_total: totalPrice * 100,
             payment_status: paymentStatus,
