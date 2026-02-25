@@ -24,6 +24,8 @@ interface VehicleReport {
   idleRate: number
   bookingsCount: number
   rentalRevenue: number
+  damageRevenue: number
+  damageDetails?: { type: string, amount: number, date: string, description: string }[]
   bookings?: BookingDetail[]
 }
 
@@ -41,6 +43,7 @@ interface VehicleReportData {
   totalBookingsFound: number
   unmatchedBookings?: UnmatchedBooking[]
   totalRentalRevenue: number
+  totalDamageRevenue: number
   avgUtilizationRate: number
   vehicles: VehicleReport[]
 }
@@ -186,10 +189,11 @@ export default function ReportsTab() {
   function getCategorySummary(vehicles: VehicleReport[]) {
     const totalRented = vehicles.reduce((s, v) => s + v.rentedDays, 0)
     const totalRevenue = vehicles.reduce((s, v) => s + v.rentalRevenue, 0)
+    const totalDamage = vehicles.reduce((s, v) => s + (v.damageRevenue || 0), 0)
     const avgUtil = vehicles.length > 0
       ? vehicles.reduce((s, v) => s + v.utilizationRate, 0) / vehicles.length
       : 0
-    return { totalRented, totalRevenue, avgUtil, count: vehicles.length }
+    return { totalRented, totalRevenue, totalDamage, avgUtil, count: vehicles.length }
   }
 
   function formatPercent(rate: number): string {
@@ -232,6 +236,9 @@ export default function ReportsTab() {
       <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('rentalRevenue')}>
         Ricavo {sortField === 'rentalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('damageRevenue')}>
+        Danni {sortField === 'damageRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
     </tr>
   )
 
@@ -257,7 +264,7 @@ export default function ReportsTab() {
           />
         </div>
         {/* Stats grid */}
-        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+        <div className="grid grid-cols-5 gap-2 text-center text-xs">
           <div>
             <p className="text-green-400 font-bold">{v.rentedDays}g</p>
             <p className="text-theme-text-muted">Noleggio</p>
@@ -273,6 +280,12 @@ export default function ReportsTab() {
           <div>
             <p className="text-dr7-gold font-bold">{formatCurrency(v.rentalRevenue)}</p>
             <p className="text-theme-text-muted">Ricavo</p>
+          </div>
+          <div>
+            <p className={`font-bold ${v.damageRevenue > 0 ? 'text-orange-400' : 'text-theme-text-muted'}`}>
+              {v.damageRevenue > 0 ? formatCurrency(v.damageRevenue) : '-'}
+            </p>
+            <p className="text-theme-text-muted">Danni</p>
           </div>
         </div>
       </div>
@@ -307,6 +320,12 @@ export default function ReportsTab() {
         </td>
         <td className="text-center px-4 py-3 text-theme-text-primary">{v.bookingsCount}</td>
         <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(v.rentalRevenue)}</td>
+        <td className="text-right px-4 py-3">
+          {v.damageRevenue > 0
+            ? <span className="text-orange-400 font-semibold">{formatCurrency(v.damageRevenue)}</span>
+            : <span className="text-theme-text-muted">-</span>
+          }
+        </td>
       </tr>
     )
   }
@@ -380,7 +399,7 @@ export default function ReportsTab() {
       {activeReport === 'vehicles' && vehicleData && (
         <div className="space-y-4">
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Veicoli Attivi</p>
               <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.vehicleCount}</p>
@@ -403,10 +422,16 @@ export default function ReportsTab() {
               <p className="text-xs text-theme-text-muted">Ricavo Totale Noleggi</p>
               <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRentalRevenue)}</p>
             </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <p className="text-xs text-theme-text-muted">Incassi Danni</p>
+              <p className={`text-2xl font-bold ${(vehicleData.totalDamageRevenue || 0) > 0 ? 'text-orange-400' : 'text-theme-text-muted'}`}>
+                {formatCurrency(vehicleData.totalDamageRevenue || 0)}
+              </p>
+            </div>
           </div>
 
-          {/* Plate Search */}
-          <div className="flex items-center gap-3">
+          {/* Plate Search & Sort */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <input
               type="text"
               placeholder="Cerca per targa o nome..."
@@ -414,6 +439,20 @@ export default function ReportsTab() {
               onChange={(e) => setPlateSearch(e.target.value)}
               className="px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted w-full max-w-xs"
             />
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-theme-text-muted whitespace-nowrap">Ordina per:</label>
+              <select
+                value={sortField}
+                onChange={(e) => { setSortField(e.target.value as keyof VehicleReport); setSortDir('desc') }}
+                className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm"
+              >
+                <option value="rentalRevenue">Fatturato</option>
+                <option value="rentedDays">Giorni di Noleggio</option>
+                <option value="utilizationRate">Utilizzo</option>
+                <option value="damageRevenue">Danni</option>
+                <option value="label">Nome</option>
+              </select>
+            </div>
             {plateSearch && (
               <span className="text-xs text-theme-text-muted">
                 {filteredVehicles.length} di {vehicleData.vehicleCount} veicoli
@@ -445,6 +484,11 @@ export default function ReportsTab() {
                     <span className="text-theme-text-muted">
                       Ricavo: <span className="font-bold text-dr7-gold">{formatCurrency(summary.totalRevenue)}</span>
                     </span>
+                    {summary.totalDamage > 0 && (
+                      <span className="text-theme-text-muted">
+                        Danni: <span className="font-bold text-orange-400">{formatCurrency(summary.totalDamage)}</span>
+                      </span>
+                    )}
                   </div>
                 </div>
                 {/* Desktop Table - hidden on mobile */}

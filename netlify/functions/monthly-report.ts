@@ -244,6 +244,72 @@ async function generateVehicleReport(
     if (v.display_name) vehicleNameSet.add(v.display_name.trim().toLowerCase())
   })
 
+  // Fetch cauzioni incassate for this month
+  const { data: cauzioni, error: cauzioniError } = await supabase
+    .from('cauzioni')
+    .select('id, veicolo_id, importo, updated_at, note')
+    .eq('stato', 'Incassata')
+    .gte('updated_at', monthStartISO + 'T00:00:00')
+    .lte('updated_at', monthEndISO + 'T23:59:59')
+
+  if (cauzioniError) console.error('Cauzioni fetch error (non-fatal):', cauzioniError)
+
+  // Fetch all fatture for this month, filter penalty invoices in JS
+  const { data: fatture, error: fattureError } = await supabase
+    .from('fatture')
+    .select('id, booking_id, importo_totale, data_emissione, items')
+    .gte('data_emissione', monthStartISO)
+    .lte('data_emissione', monthEndISO)
+
+  if (fattureError) console.error('Fatture fetch error (non-fatal):', fattureError)
+
+  // Filter to penalty invoices (items[0].description starts with "Penale prenotazione")
+  const penaltyInvoices = (fatture || []).filter(f => {
+    const items = f.items as any[]
+    if (!items || items.length === 0) return false
+    return (items[0].description || '').startsWith('Penale prenotazione')
+  })
+
+  // Resolve penalty invoice booking_ids to vehicle plates
+  const penaltyBookingIds = penaltyInvoices.map(f => f.booking_id).filter(Boolean)
+  const penaltyBookingPlates = new Map<string, string>()
+  if (penaltyBookingIds.length > 0) {
+    const { data: penaltyBookings } = await supabase
+      .from('bookings')
+      .select('id, vehicle_plate')
+      .in('id', penaltyBookingIds)
+    ;(penaltyBookings || []).forEach(b => {
+      const plate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
+      if (plate) penaltyBookingPlates.set(b.id, plate)
+    })
+  }
+
+  // Build penalty details grouped by plate
+  const penaltyByPlate = new Map<string, { amount: number, date: string, description: string }[]>()
+  penaltyInvoices.forEach(f => {
+    const plate = penaltyBookingPlates.get(f.booking_id)
+    if (!plate) return
+    const items = f.items as any[]
+    if (!penaltyByPlate.has(plate)) penaltyByPlate.set(plate, [])
+    penaltyByPlate.get(plate)!.push({
+      amount: f.importo_totale || 0,
+      date: f.data_emissione,
+      description: items[0]?.description || 'Penale'
+    })
+  })
+
+  // Build cauzioni details grouped by vehicle_id
+  const cauzioniByVehicleId = new Map<string, { amount: number, date: string, description: string }[]>()
+  ;(cauzioni || []).forEach(c => {
+    if (!c.veicolo_id) return
+    if (!cauzioniByVehicleId.has(c.veicolo_id)) cauzioniByVehicleId.set(c.veicolo_id, [])
+    cauzioniByVehicleId.get(c.veicolo_id)!.push({
+      amount: c.importo || 0,
+      date: (c.updated_at || '').substring(0, 10),
+      description: c.note || 'Cauzione incassata'
+    })
+  })
+
   // Build vehicle report
   const vehicleReports = (vehicles || []).map(vehicle => {
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
@@ -394,6 +460,20 @@ async function generateVehicleReport(
       }
     })
 
+    // Calculate damage revenue for this vehicle
+    const damageDetails: { type: string, amount: number, date: string, description: string }[] = []
+    // Cauzioni incassate matched by veicolo_id
+    const vehicleCauzioni = cauzioniByVehicleId.get(vehicle.id) || []
+    vehicleCauzioni.forEach(c => {
+      damageDetails.push({ type: 'cauzione', amount: c.amount, date: c.date, description: c.description })
+    })
+    // Fatture penali matched by plate
+    const vehiclePenalties = penaltyByPlate.get(vPlate) || []
+    vehiclePenalties.forEach(p => {
+      damageDetails.push({ type: 'penale', amount: p.amount, date: p.date, description: p.description })
+    })
+    const damageRevenue = damageDetails.reduce((sum, d) => sum + d.amount, 0)
+
     // Calculate maintenance days from vehicle metadata (unavailability)
     const maintenanceDays = new Set<number>()
     const meta = vehicle.metadata || {}
@@ -431,6 +511,8 @@ async function generateVehicleReport(
       idleRate: Math.round((Math.max(0, idleCount) / daysInMonth) * 100) / 100,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
+      damageRevenue: Math.round(damageRevenue * 100) / 100,
+      damageDetails: damageDetails.length > 0 ? damageDetails : undefined,
       bookings: bookingDetailsList,
       _bookingIds: vehicleBookings.map(b => b.id)
     }
@@ -488,6 +570,7 @@ async function generateVehicleReport(
       totalBookingsFound: rentalBookings.length,
       unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
+      totalDamageRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + (v.damageRevenue || 0), 0) * 100) / 100,
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
     })
