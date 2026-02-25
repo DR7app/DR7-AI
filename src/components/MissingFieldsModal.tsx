@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabaseClient'
 import toast from 'react-hot-toast'
 
 interface MissingFieldsModalProps {
@@ -102,124 +101,45 @@ export default function MissingFieldsModal({
         try {
             console.log('[MissingFieldsModal] Saving missing fields:', formData)
 
-            // Only update the fields the user just filled in (+ special mappings)
-            const updatePayload: any = {
-                ...formData,
-                updated_at: new Date().toISOString()
-            }
+            // Build the payload: merge existing customer data with new form values
+            const savePayload: any = { ...customerData, ...formData }
 
             // Handle special field mappings
             if (formData.patente || formData.numero_patente) {
-                updatePayload.patente = formData.patente || formData.numero_patente
-                updatePayload.numero_patente = formData.patente || formData.numero_patente
+                savePayload.patente = formData.patente || formData.numero_patente
+                savePayload.numero_patente = formData.patente || formData.numero_patente
             }
 
-            console.log('[MissingFieldsModal] Saving for customer:', customerId, updatePayload)
-
-            // Try update first, fall back to insert if customer doesn't exist yet
-            let data: any = null
-            const { data: updated, error: updateError } = await supabase
-                .from('customers_extended')
-                .update(updatePayload)
-                .eq('id', customerId)
-                .select()
-
-            if (updateError) {
-                console.error('[MissingFieldsModal] Update error:', updateError)
-                throw updateError
+            // Ensure tipo_cliente is set
+            if (!savePayload.tipo_cliente) {
+                savePayload.tipo_cliente = 'persona_fisica'
             }
 
-            if (updated && updated.length > 0) {
-                data = updated[0]
-                console.log('[MissingFieldsModal] Customer updated:', data)
-            } else {
-                // Customer doesn't exist in customers_extended yet — insert
-                console.log('[MissingFieldsModal] Customer not found, inserting new row')
+            // Remove non-column fields that may be in customerData
+            delete savePayload.bookings
+            delete savePayload.booking_details
+            delete savePayload.full_name
 
-                // Build a clean insert payload with only known columns
-                const merged = { ...customerData, ...formData }
-                const insertPayload: any = {
-                    id: customerId,
-                    tipo_cliente: merged.tipo_cliente || 'persona_fisica',
-                    nome: merged.nome || merged.full_name?.split(' ')[0] || '',
-                    cognome: merged.cognome || merged.full_name?.split(' ').slice(1).join(' ') || '',
-                    email: merged.email || null,
-                    telefono: merged.telefono || merged.phone || null,
-                    codice_fiscale: merged.codice_fiscale || null,
-                    data_nascita: merged.data_nascita || null,
-                    luogo_nascita: merged.luogo_nascita || null,
-                    sesso: merged.sesso || null,
-                    indirizzo: merged.indirizzo || null,
-                    numero_civico: merged.numero_civico || null,
-                    citta_residenza: merged.citta_residenza || null,
-                    provincia_residenza: merged.provincia_residenza || null,
-                    codice_postale: merged.codice_postale || null,
-                    patente: merged.patente || merged.numero_patente || null,
-                    numero_patente: merged.numero_patente || merged.patente || null,
-                    ragione_sociale: merged.ragione_sociale || merged.denominazione || null,
-                    partita_iva: merged.partita_iva || null,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                }
+            console.log('[MissingFieldsModal] Saving via save-customer:', customerId, savePayload)
 
-                const { data: inserted, error: insertError } = await supabase
-                    .from('customers_extended')
-                    .insert(insertPayload)
-                    .select()
-                    .single()
+            // Use save-customer Netlify function (bypasses RLS, handles update-or-insert)
+            const response = await fetch('/.netlify/functions/save-customer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customerData: savePayload,
+                    customerId: customerId
+                })
+            })
 
-                if (insertError) {
-                    console.error('[MissingFieldsModal] Insert error:', insertError)
-                    throw insertError
-                }
-                data = inserted
-                console.log('[MissingFieldsModal] Customer inserted:', data)
+            const result = await response.json()
+            if (!response.ok) {
+                console.error('[MissingFieldsModal] Save error:', result)
+                throw new Error(result.error || 'Errore nel salvataggio')
             }
 
-            // 2. ALSO update the basic 'customers' table to ensure the main list view updates
-            // We merge existing data with updates to ensure we have full name components
-            // 2. ALSO update the basic 'customers' table to ensure the main list view updates
-            // We merge existing data with updates to ensure we have full name components
-            const mergedData = { ...customerData, ...formData }
-
-            const basicData: any = {
-                updated_at: new Date().toISOString()
-            }
-
-            // Reconstruct full name if relevant fields changed or exist
-            if (mergedData.tipo_cliente === 'persona_fisica') {
-                const nome = mergedData.nome || ''
-                const cognome = mergedData.cognome || ''
-                if (nome || cognome) {
-                    basicData.full_name = `${nome} ${cognome}`.trim()
-                }
-            } else {
-                const companyName = mergedData.ragione_sociale || mergedData.denominazione
-                if (companyName) {
-                    basicData.full_name = companyName
-                }
-            }
-
-            // Sync other common fields if they are in the update
-            if (formData.email) basicData.email = formData.email
-            if (formData.telefono) basicData.phone = formData.telefono
-            if (formData.patente || formData.numero_patente) {
-                basicData.driver_license_number = formData.patente || formData.numero_patente
-            }
-
-            if (Object.keys(basicData).length > 1) { // more than just updated_at
-                console.log('[MissingFieldsModal] Syncing basic customers table:', basicData)
-                const { error: basicError } = await supabase
-                    .from('customers')
-                    .update(basicData)
-                    .eq('id', customerId)
-
-                if (basicError) {
-                    console.warn('[MissingFieldsModal] Warning: Could not sync basic customers table:', basicError)
-                } else {
-                    console.log('[MissingFieldsModal] Basic customers table synced')
-                }
-            }
+            const data = result.customer
+            console.log('[MissingFieldsModal] Customer saved:', data)
 
             toast.success('Dati aggiornati con successo!')
 
