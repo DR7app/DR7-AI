@@ -30,7 +30,7 @@ import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
 import PlaceholderTab from './components/PlaceholderTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -97,8 +97,8 @@ export default function AdminDashboard() {
     'vehicles': 'Veicoli',
     'fleet': 'Gestione Flotta',
     'gps-keyless': 'GPS & Keyless',
-    'unpaid': 'Da Saldare',
-    'customers': 'Clienti',
+    'unpaid': 'In attesa di pagamento',
+    'customers': 'Lead',
     'birthdays': 'Compleanni',
     'reviews': 'Recensioni',
     'marketing': 'Messaggi di Sistema',
@@ -117,6 +117,7 @@ export default function AdminDashboard() {
     'com-sms': 'SMS',
     'com-chiamate': 'Chiamate',
     'com-chatgpt': 'Chat GPT',
+    'com-aruba': 'Aruba',
     'scadenze': 'Scadenze',
     'fattura': 'Fattura',
     'mechanical': 'Prenotazioni Meccanica',
@@ -244,13 +245,10 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('fleet'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
               <button onClick={() => { setActiveTab('gps-keyless'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
 
-              {/* DA SALDARE */}
-              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Da Saldare</div>
-              <button onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'unpaid')}>Da Saldare</button>
-
               {/* CLIENTI */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Clienti</div>
-              <button onClick={() => { setActiveTab('customers'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'customers')}>Clienti</button>
+              <button onClick={() => { setActiveTab('customers'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'customers')}>Lead</button>
+              <button onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
 
               {/* MARKETING */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Marketing</div>
@@ -293,6 +291,7 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('com-sms'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-sms')}>SMS</button>
               <button onClick={() => { setActiveTab('com-chiamate'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
               <button onClick={() => { setActiveTab('com-chatgpt'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
+              <button onClick={() => { setActiveTab('com-aruba'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-aruba')}>Aruba</button>
 
               {/* SCADENZE */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Scadenze</div>
@@ -365,15 +364,17 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* DA SALDARE - standalone */}
-              <button onClick={() => setActiveTab('unpaid')} className={standaloneBtnClass(activeTab === 'unpaid')}>
-                Da Saldare
-              </button>
-
-              {/* CLIENTI - standalone */}
-              <button onClick={() => setActiveTab('customers')} className={standaloneBtnClass(activeTab === 'customers')}>
-                Clienti
-              </button>
+              {/* CLIENTI Dropdown */}
+              <div className="relative group">
+                <button className={dropdownBtnClass(['customers', 'unpaid'].includes(activeTab))}>
+                  Clienti
+                  <span className="text-xs">▼</span>
+                </button>
+                <div className="absolute left-0 mt-0 w-56 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
+                  <button onClick={() => setActiveTab('customers')} className={dropdownItemClass(activeTab === 'customers')}>Lead</button>
+                  <button onClick={() => setActiveTab('unpaid')} className={dropdownItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
+                </div>
+              </div>
 
               {/* MARKETING Dropdown */}
               <div className="relative group">
@@ -429,7 +430,7 @@ export default function AdminDashboard() {
 
               {/* COMUNICAZIONE Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['com-email', 'com-pec', 'com-whatsapp', 'com-sms', 'com-chiamate', 'com-chatgpt'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['com-email', 'com-pec', 'com-whatsapp', 'com-sms', 'com-chiamate', 'com-chatgpt', 'com-aruba'].includes(activeTab))}>
                   Comunicazione
                   <span className="text-xs">▼</span>
                 </button>
@@ -440,6 +441,7 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('com-sms')} className={dropdownItemClass(activeTab === 'com-sms')}>SMS</button>
                   <button onClick={() => setActiveTab('com-chiamate')} className={dropdownItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
                   <button onClick={() => setActiveTab('com-chatgpt')} className={dropdownItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
+                  <button onClick={() => setActiveTab('com-aruba')} className={dropdownItemClass(activeTab === 'com-aruba')}>Aruba</button>
                 </div>
               </div>
 
@@ -519,6 +521,7 @@ export default function AdminDashboard() {
           {activeTab === 'com-sms' && <PlaceholderTab title="SMS" />}
           {activeTab === 'com-chiamate' && <PlaceholderTab title="Chiamate" />}
           {activeTab === 'com-chatgpt' && <PlaceholderTab title="Chat GPT" />}
+          {activeTab === 'com-aruba' && <PlaceholderTab title="Aruba" />}
         </div>
       </main>
 
