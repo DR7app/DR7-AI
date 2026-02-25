@@ -728,11 +728,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const fmtTime = apptDt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
         const totalEur = totalPrice.toFixed(2)
         const bookingIdShort = (data.id || '').substring(0, 8).toUpperCase()
-        const paymentMethod = formData.payment_method || ''
 
         let paymentLabel = ''
         if (paymentStatus === 'paid') {
-          paymentLabel = `Pagato${paymentMethod ? ` (${paymentMethod})` : ''}`
+          paymentLabel = 'Pagato'
         } else if (amountPaid > 0) {
           paymentLabel = `${(amountPaid / 100).toFixed(2)}€ pagati - ${((totalPrice * 100 - amountPaid) / 100).toFixed(2)}€ da pagare`
         } else {

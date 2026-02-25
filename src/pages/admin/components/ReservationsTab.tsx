@@ -1942,7 +1942,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       new_return_time: romeTime.toISOString().split('T')[1].substring(0, 5),
       additional_amount: '0',
       extension_payment_status: 'pending',
-      extension_payment_method: booking.payment_method || '',
+      extension_payment_method: '',
       notes: ''
     })
     setShowExtendModal(true)
