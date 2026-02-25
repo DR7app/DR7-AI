@@ -1137,8 +1137,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
   // Validate customer data before contract generation
+  // Uses save-customer Netlify function to read (bypasses RLS)
   async function validateCustomerData(booking: Booking): Promise<string[]> {
-    // Check multiple possible locations for customer ID
     const customerId = booking.user_id ||
       booking.booking_details?.customer?.customerId ||
       booking.booking_details?.customer?.id ||
@@ -1146,82 +1146,66 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     let customer = null
 
-    // Try to fetch customer by ID first
+    // Fetch customer via Netlify function (bypasses RLS)
     if (customerId) {
-      const { data: cData, error } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .eq('id', customerId)
-        .single()
-
-      if (cData) {
-        console.log('[validateCustomerData] ✅ Found customer by ID:', customerId)
-        customer = cData
-      } else if (error) {
-        console.error('[validateCustomerData] Error fetching customer by ID:', error)
+      try {
+        const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+        if (resp.ok) {
+          const result = await resp.json()
+          if (result.customer) {
+            console.log('[validateCustomerData] ✅ Found customer by ID:', customerId)
+            customer = result.customer
+          }
+        }
+      } catch (e) {
+        console.error('[validateCustomerData] get-customer fetch error:', e)
       }
     }
 
-    // Resolve email/phone from booking or booking_details.customer (fallback for older bookings)
+    // Fallback: try by email
     const resolvedEmail = booking.customer_email || booking.booking_details?.customer?.email
     const resolvedPhone = booking.customer_phone || booking.booking_details?.customer?.phone
 
-    // Fallback: Try by email if no customer found yet
     if (!customer && resolvedEmail) {
-      console.log('[validateCustomerData] Fallback: Fetching by email from customers_extended...')
-      const { data: cData, error } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .eq('email', resolvedEmail)
-        .maybeSingle()
-
-      if (cData) {
-        console.log('[validateCustomerData] ✅ Found customer by email:', resolvedEmail)
-        customer = cData
-      } else if (error) {
-        console.error('[validateCustomerData] Error fetching by email:', error)
+      try {
+        const resp = await fetch(`/.netlify/functions/get-customer?email=${encodeURIComponent(resolvedEmail)}`)
+        if (resp.ok) {
+          const result = await resp.json()
+          if (result.customer) {
+            console.log('[validateCustomerData] ✅ Found customer by email:', resolvedEmail)
+            customer = result.customer
+          }
+        }
+      } catch (e) {
+        console.error('[validateCustomerData] get-customer by email error:', e)
       }
     }
 
-    // Fallback: Try by phone if still no customer found
+    // Fallback: try by phone
     if (!customer && resolvedPhone) {
-      console.log('[validateCustomerData] Fallback: Fetching by phone from customers_extended...')
-      let normPhone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
-      if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
-      if (normPhone.length === 10) normPhone = '39' + normPhone
-      const { data: cData, error } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .eq('telefono', normPhone)
-        .maybeSingle()
-
-      if (cData) {
-        console.log('[validateCustomerData] ✅ Found customer by phone:', resolvedPhone)
-        customer = cData
-      } else if (error) {
-        console.error('[validateCustomerData] Error fetching by phone:', error)
+      try {
+        let normPhone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
+        if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
+        if (normPhone.length === 10) normPhone = '39' + normPhone
+        const resp = await fetch(`/.netlify/functions/get-customer?phone=${encodeURIComponent(normPhone)}`)
+        if (resp.ok) {
+          const result = await resp.json()
+          if (result.customer) {
+            console.log('[validateCustomerData] ✅ Found customer by phone:', resolvedPhone)
+            customer = result.customer
+          }
+        }
+      } catch (e) {
+        console.error('[validateCustomerData] get-customer by phone error:', e)
       }
     }
 
-    // If still no customer found, check if we have basic booking info to proceed
     if (!customer) {
-      const missing: string[] = []
-
-      // Only add fields that are truly missing from booking data
-      if (!booking.customer_name && !booking.booking_details?.customer?.fullName) {
-        missing.push('nome', 'cognome')
-      }
-      if (!resolvedEmail) missing.push('email')
-      if (!resolvedPhone) missing.push('telefono')
-
-      // If we have basic contact info, let the backend handle it (it has the same fallback logic)
       if (resolvedEmail || resolvedPhone) {
         console.log('[validateCustomerData] No customer record found, but booking has contact info. Backend will handle fallback.')
         return []
       }
-
-      // If we are here, we truly have no way to identify the customer
-      console.error('[validateCustomerData] ❌ No customer found by any method and no contact info in booking')
+      console.error('[validateCustomerData] ❌ No customer found by any method')
       throw new Error('Impossibile recuperare i dati del cliente dal database. Verifica che il cliente esista nella tab Clienti.')
     }
 
@@ -1277,9 +1261,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let customerData = {}
 
       if (customerId) {
-        const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
-        console.log('[handleGenerateContract] Fetched customer for ID:', customerId, customer)
-        customerData = customer || { id: customerId } // CRITICAL: Always include the ID even if fetch fails
+        try {
+          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+          if (resp.ok) {
+            const result = await resp.json()
+            customerData = result.customer || { id: customerId }
+          } else {
+            customerData = { id: customerId }
+          }
+        } catch (e) {
+          console.error('[handleGenerateContract] get-customer error:', e)
+          customerData = { id: customerId }
+        }
+        console.log('[handleGenerateContract] Fetched customer for ID:', customerId, customerData)
       } else {
         // No customer ID, but we might have data from booking
         const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
@@ -1349,8 +1343,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let customerData = {}
 
       if (customerId) {
-        const { data: customer } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
-        customerData = customer || { id: customerId }
+        try {
+          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+          if (resp.ok) {
+            const result = await resp.json()
+            customerData = result.customer || { id: customerId }
+          } else {
+            customerData = { id: customerId }
+          }
+        } catch (e) {
+          console.error('[handleGenerateInvoice] get-customer error:', e)
+          customerData = { id: customerId }
+        }
       } else {
         // No customer ID, but we might have data from booking
         const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
