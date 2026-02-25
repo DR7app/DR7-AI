@@ -135,16 +135,32 @@ export default function MissingFieldsModal({
             } else {
                 // Customer doesn't exist in customers_extended yet — insert
                 console.log('[MissingFieldsModal] Customer not found, inserting new row')
+
+                // Build a clean insert payload with only known columns
+                const merged = { ...customerData, ...formData }
                 const insertPayload: any = {
                     id: customerId,
-                    ...customerData,
-                    ...formData,
+                    tipo_cliente: merged.tipo_cliente || 'persona_fisica',
+                    nome: merged.nome || merged.full_name?.split(' ')[0] || '',
+                    cognome: merged.cognome || merged.full_name?.split(' ').slice(1).join(' ') || '',
+                    email: merged.email || null,
+                    telefono: merged.telefono || merged.phone || null,
+                    codice_fiscale: merged.codice_fiscale || null,
+                    data_nascita: merged.data_nascita || null,
+                    luogo_nascita: merged.luogo_nascita || null,
+                    sesso: merged.sesso || null,
+                    indirizzo: merged.indirizzo || null,
+                    numero_civico: merged.numero_civico || null,
+                    citta_residenza: merged.citta_residenza || null,
+                    provincia_residenza: merged.provincia_residenza || null,
+                    codice_postale: merged.codice_postale || null,
+                    patente: merged.patente || merged.numero_patente || null,
+                    numero_patente: merged.numero_patente || merged.patente || null,
+                    ragione_sociale: merged.ragione_sociale || merged.denominazione || null,
+                    partita_iva: merged.partita_iva || null,
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }
-                // Remove fields that aren't table columns
-                delete insertPayload.bookings
-                delete insertPayload.booking_details
 
                 const { data: inserted, error: insertError } = await supabase
                     .from('customers_extended')
