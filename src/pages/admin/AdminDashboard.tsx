@@ -113,7 +113,7 @@ export default function AdminDashboard() {
     'report-noleggio': 'Report Noleggio',
     'report-lavaggio': 'Report Lavaggio',
     'report-clienti': 'Report Clienti',
-    'report-danni': 'Report Danni',
+    'report-danni': 'Report Penali',
     'reports': 'Report',
     'com-email': 'E-mail',
     'com-pec': 'PEC',
@@ -286,7 +286,7 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('report-noleggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
               <button onClick={() => { setActiveTab('report-lavaggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
               <button onClick={() => { setActiveTab('report-clienti'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-clienti')}>Clienti</button>
-              <button onClick={() => { setActiveTab('report-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-danni')}>Danni</button>
+              <button onClick={() => { setActiveTab('report-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-danni')}>Penali</button>
 
               {/* COMUNICAZIONE */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Comunicazione</div>
@@ -430,7 +430,7 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('report-noleggio')} className={dropdownItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
                   <button onClick={() => setActiveTab('report-lavaggio')} className={dropdownItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
                   <button onClick={() => setActiveTab('report-clienti')} className={dropdownItemClass(activeTab === 'report-clienti')}>Clienti</button>
-                  <button onClick={() => setActiveTab('report-danni')} className={dropdownItemClass(activeTab === 'report-danni')}>Danni</button>
+                  <button onClick={() => setActiveTab('report-danni')} className={dropdownItemClass(activeTab === 'report-danni')}>Penali</button>
                 </div>
               </div>
 

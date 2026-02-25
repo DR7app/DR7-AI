@@ -54,7 +54,7 @@ export default function ReportDanniTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Report Danni</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">Report Penali</h2>
       </div>
 
       {error && (
@@ -74,11 +74,11 @@ export default function ReportDanniTab() {
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Veicoli con Danni</p>
+              <p className="text-xs text-theme-text-muted">Veicoli con Penali</p>
               <p className="text-2xl font-bold text-theme-text-primary">{danniData.totalVehiclesWithDamages}</p>
             </div>
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Totale Danni</p>
+              <p className="text-xs text-theme-text-muted">Totale Penali</p>
               <p className="text-2xl font-bold text-red-400">{danniData.totalDamages}</p>
             </div>
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
@@ -96,7 +96,7 @@ export default function ReportDanniTab() {
               className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
             >
               <option value="totalAmount">Importo totale</option>
-              <option value="penaltyCount">N. Danni</option>
+              <option value="penaltyCount">N. Penali</option>
             </select>
           </div>
 
@@ -109,7 +109,7 @@ export default function ReportDanniTab() {
                     <th className="text-left px-4 py-3">Veicolo</th>
                     <th className="text-left px-4 py-3">Targa</th>
                     <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setDanniSort('penaltyCount')}>
-                      N. Danni {danniSort === 'penaltyCount' && '↓'}
+                      N. Penali {danniSort === 'penaltyCount' && '↓'}
                     </th>
                     <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setDanniSort('totalAmount')}>
                       Importo Totale {danniSort === 'totalAmount' && '↓'}
@@ -148,7 +148,7 @@ export default function ReportDanniTab() {
                   <div className="grid grid-cols-2 gap-3 text-center">
                     <div>
                       <p className="text-lg font-bold text-red-400">{v.penaltyCount}</p>
-                      <p className="text-xs text-theme-text-muted">Danni</p>
+                      <p className="text-xs text-theme-text-muted">Penali</p>
                     </div>
                     <div>
                       <p className="text-lg font-bold text-dr7-gold">{formatCurrency(v.totalAmount)}</p>
@@ -163,7 +163,7 @@ export default function ReportDanniTab() {
                 <div className="grid grid-cols-2 gap-3 text-center">
                   <div>
                     <p className="text-lg font-bold text-red-400">{danniData.totalDamages}</p>
-                    <p className="text-xs text-theme-text-muted">Danni</p>
+                    <p className="text-xs text-theme-text-muted">Penali</p>
                   </div>
                   <div>
                     <p className="text-lg font-bold text-dr7-gold">{formatCurrency(danniData.totalAmount)}</p>
@@ -176,7 +176,7 @@ export default function ReportDanniTab() {
 
           {sortedDanni.length === 0 && (
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-8 text-center">
-              <p className="text-theme-text-muted">Nessun danno registrato.</p>
+              <p className="text-theme-text-muted">Nessuna penale registrata.</p>
             </div>
           )}
         </div>
@@ -188,7 +188,7 @@ export default function ReportDanniTab() {
           <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
-          <p className="text-theme-text-muted text-lg mb-2">Caricamento report danni...</p>
+          <p className="text-theme-text-muted text-lg mb-2">Caricamento report penali...</p>
         </div>
       )}
     </div>
