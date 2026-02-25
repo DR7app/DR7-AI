@@ -125,20 +125,6 @@ const reminderHandler: Handler = async (event) => {
 
     console.log(`Italy today: ${todayItaly}, tomorrow: ${tomorrowItaly}`);
 
-    // Load vehicles to determine category (exotic vs urban/aziendali)
-    const { data: allVehicles } = await supabase
-      .from('vehicles')
-      .select('id, plate, category')
-
-    const vehicleMap = new Map<string, string>() // vehicle_id -> category
-    const plateMap = new Map<string, string>()   // plate (normalized) -> category
-    if (allVehicles) {
-      allVehicles.forEach((v: any) => {
-        vehicleMap.set(v.id, v.category || 'urban')
-        if (v.plate) plateMap.set(v.plate.replace(/\s/g, '').toUpperCase(), v.category || 'urban')
-      })
-    }
-
     const { data: endingTomorrow, error: dayBeforeError } = await supabase
       .from('bookings')
       .select('*')
@@ -182,27 +168,9 @@ const reminderHandler: Handler = async (event) => {
             continue;
           }
 
-          // Determine vehicle category from vehicles table
-          let category = 'urban'; // default
-          if (booking.vehicle_id && vehicleMap.has(booking.vehicle_id)) {
-            category = vehicleMap.get(booking.vehicle_id)!;
-          } else if (booking.vehicle_plate) {
-            const normPlate = booking.vehicle_plate.replace(/\s/g, '').toUpperCase();
-            if (plateMap.has(normPlate)) category = plateMap.get(normPlate)!;
-          }
-
-          let message = '';
-
-          if (category === 'exotic') {
-            const template = getTemplate('supercar_day_before',
-              `Buongiorno {nome},\n\nVorrebbe valutare una promo in continuazione super vantaggiosa?\n\nCordiali saluti,\nDR7`);
-            message = template.replace(/\{nome\}/g, firstName);
-          } else {
-            // urban + aziendali
-            const template = getTemplate('utilitaria_day_before',
-              `Buongiorno {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`);
-            message = template.replace(/\{nome\}/g, firstName);
-          }
+          const defaultDayBefore = `Buongiorno,\n\nla contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nRestiamo in attesa di un suo cortese riscontro.\nGrazie.\n\nCordiali saluti,\n\nDR7`;
+          const template = getTemplate('day_before_extension', defaultDayBefore);
+          const message = template.replace(/\{nome\}/g, firstName);
 
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
 
@@ -218,7 +186,7 @@ const reminderHandler: Handler = async (event) => {
               .update({ booking_details: updatedDetails })
               .eq('id', booking.id);
 
-            console.log(`Day-before reminder sent for booking ${booking.id} (${category})`);
+            console.log(`Day-before reminder sent for booking ${booking.id}`);
             sent++;
           } else {
             failed++;
