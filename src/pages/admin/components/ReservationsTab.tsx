@@ -3313,7 +3313,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const dropoffDt = new Date(returnDateTime)
           const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
           const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
-          const totalEur = ((insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) / 100).toFixed(2)
+          const _totalEur = ((insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) / 100).toFixed(2)
           const depositEur = parseFloat(formData.deposit) || 0
           const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : 'Nessuna'
           const kmLabel = formData.unlimited_km ? 'Illimitati' : (formData.km_limit ? `${formData.km_limit} km` : '-')
