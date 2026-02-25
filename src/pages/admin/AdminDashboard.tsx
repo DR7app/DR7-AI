@@ -28,12 +28,13 @@ import ReportsTab from './components/ReportsTab'
 import ReportLavaggioTab from './components/ReportLavaggioTab'
 import ReportClientiTab from './components/ReportClientiTab'
 import ReportDanniTab from './components/ReportDanniTab'
+import ReportPenaliTab from './components/ReportPenaliTab'
 import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
 import PlaceholderTab from './components/PlaceholderTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-danni' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-danni' | 'report-penali' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -113,7 +114,8 @@ export default function AdminDashboard() {
     'report-noleggio': 'Report Noleggio',
     'report-lavaggio': 'Report Lavaggio',
     'report-clienti': 'Report Clienti',
-    'report-danni': 'Report Penali',
+    'report-danni': 'Report Danni',
+    'report-penali': 'Report Penali',
     'reports': 'Report',
     'com-email': 'E-mail',
     'com-pec': 'PEC',
@@ -286,7 +288,8 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('report-noleggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
               <button onClick={() => { setActiveTab('report-lavaggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
               <button onClick={() => { setActiveTab('report-clienti'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-clienti')}>Clienti</button>
-              <button onClick={() => { setActiveTab('report-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-danni')}>Penali</button>
+              <button onClick={() => { setActiveTab('report-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-danni')}>Danni</button>
+              <button onClick={() => { setActiveTab('report-penali'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-penali')}>Penali</button>
 
               {/* COMUNICAZIONE */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Comunicazione</div>
@@ -422,7 +425,7 @@ export default function AdminDashboard() {
 
               {/* REPORT Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-danni', 'reports'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-danni', 'report-penali', 'reports'].includes(activeTab))}>
                   Report
                   <span className="text-xs">▼</span>
                 </button>
@@ -430,7 +433,8 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('report-noleggio')} className={dropdownItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
                   <button onClick={() => setActiveTab('report-lavaggio')} className={dropdownItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
                   <button onClick={() => setActiveTab('report-clienti')} className={dropdownItemClass(activeTab === 'report-clienti')}>Clienti</button>
-                  <button onClick={() => setActiveTab('report-danni')} className={dropdownItemClass(activeTab === 'report-danni')}>Penali</button>
+                  <button onClick={() => setActiveTab('report-danni')} className={dropdownItemClass(activeTab === 'report-danni')}>Danni</button>
+                  <button onClick={() => setActiveTab('report-penali')} className={dropdownItemClass(activeTab === 'report-penali')}>Penali</button>
                 </div>
               </div>
 
@@ -522,6 +526,7 @@ export default function AdminDashboard() {
           {activeTab === 'report-lavaggio' && <ReportLavaggioTab />}
           {activeTab === 'report-clienti' && <ReportClientiTab />}
           {activeTab === 'report-danni' && <ReportDanniTab />}
+          {activeTab === 'report-penali' && <ReportPenaliTab />}
           {activeTab === 'com-email' && <PlaceholderTab title="E-mail" />}
           {activeTab === 'com-pec' && <PlaceholderTab title="PEC" />}
           {activeTab === 'com-whatsapp' && <PlaceholderTab title="WhatsApp" />}

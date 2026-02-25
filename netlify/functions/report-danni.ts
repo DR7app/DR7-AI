@@ -5,11 +5,89 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Keywords from PenaltyModal labels that indicate PHYSICAL DAMAGE to the vehicle
+// Matches: fermo_incidente, fermo_alto_valore, fermo_utilitarie, fermo_furgoni,
+// foro_sigaretta, gonfia_ripara, sporco, igienizzazione, controlli_elettronici, cani, pista
+const DANNI_KEYWORDS = [
+  'fermo veicolo',
+  'fermo del veicolo',
+  'foro da sigaretta',
+  'foro sigaretta',
+  'gonfia e ripara',
+  'bomboletta',
+  'veicolo sporco',
+  'igienizzazione',
+  'controlli elettronici',
+  'disattivazione controlli',
+  'cani',
+  'pelo di cane',
+  'pista',
+  'competizioni',
+  'incidente',
+  'danni',
+]
+
+// Keywords from PenaltyModal labels that indicate CONTRACTUAL VIOLATIONS
+// Matches: fumo, guidatore_non_indicato, carburante_*, multe, assenza_intestatario,
+// ritardo_checkout_*, subnoleggio, neopatentati, patente_mancante, ritardo_riconsegna
+const PENALI_KEYWORDS = [
+  'fumo',
+  'odore',
+  'cenere',
+  'guidatore non',
+  'carburante',
+  'multe',
+  'sanzioni',
+  'assenza intestatario',
+  'ritardo',
+  'check-out',
+  'checkout',
+  'subnoleggio',
+  'neopatentati',
+  'non abilitati',
+  'patente',
+  'riconsegna',
+]
+
+function classifyInvoice(items: any[]): 'danni' | 'penali' | null {
+  for (const item of items) {
+    const desc = (item.description || '').toLowerCase()
+    if (!desc.includes('penale prenotazione')) continue
+
+    // Extract the motivo part after the booking ID prefix
+    // Format: "Penale prenotazione XXXXXXXX - {motivo}"
+    const dashIdx = desc.indexOf(' - ')
+    const motivo = dashIdx >= 0 ? desc.substring(dashIdx + 3) : desc
+
+    // Check danni keywords first (physical damage)
+    for (const kw of DANNI_KEYWORDS) {
+      if (motivo.includes(kw.toLowerCase())) return 'danni'
+    }
+
+    // Check penali keywords (contractual violations)
+    for (const kw of PENALI_KEYWORDS) {
+      if (motivo.includes(kw.toLowerCase())) return 'penali'
+    }
+  }
+  // No motivo or unrecognized — default to penali
+  return 'penali'
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,
       body: JSON.stringify({ error: 'Method not allowed' })
+    }
+  }
+
+  const params = event.queryStringParameters || {}
+  const reportType = params.type || 'danni' // 'danni' or 'penali'
+
+  if (reportType !== 'danni' && reportType !== 'penali') {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: 'Invalid type. Use "danni" or "penali"' })
     }
   }
 
@@ -21,23 +99,24 @@ export const handler: Handler = async (event) => {
 
     if (fattureError) throw fattureError
 
-    // Filter to penalty invoices only: items array where description contains "Penale prenotazione"
-    const penaltyInvoices = (fatture || []).filter(f => {
+    // Filter to penalty invoices, then classify as danni or penali
+    const matchingInvoices = (fatture || []).filter(f => {
       if (!f.items || !Array.isArray(f.items)) return false
-      return f.items.some((item: any) =>
+      const hasPenalty = f.items.some((item: any) =>
         item.description && item.description.includes('Penale prenotazione')
       )
+      if (!hasPenalty) return false
+      return classifyInvoice(f.items) === reportType
     })
 
     // Get booking IDs to resolve vehicle info
-    const bookingIds = penaltyInvoices
+    const bookingIds = matchingInvoices
       .map(f => f.booking_id)
       .filter((id): id is string => !!id)
 
-    let bookingLookup = new Map<string, { vehicle_name: string; vehicle_plate: string }>()
+    const bookingLookup = new Map<string, { vehicle_name: string; vehicle_plate: string }>()
 
     if (bookingIds.length > 0) {
-      // Fetch in chunks of 100
       const CHUNK_SIZE = 100
       for (let i = 0; i < bookingIds.length; i += CHUNK_SIZE) {
         const chunk = bookingIds.slice(i, i + CHUNK_SIZE)
@@ -61,11 +140,11 @@ export const handler: Handler = async (event) => {
     const vehicleMap: Record<string, {
       vehicleName: string
       vehiclePlate: string
-      penaltyCount: number
+      count: number
       totalAmount: number
     }> = {}
 
-    penaltyInvoices.forEach(f => {
+    matchingInvoices.forEach(f => {
       const booking = f.booking_id ? bookingLookup.get(f.booking_id) : null
       const plate = (booking?.vehicle_plate || 'Sconosciuto').replace(/\s/g, '').toUpperCase()
       const name = booking?.vehicle_name || 'Sconosciuto'
@@ -74,43 +153,41 @@ export const handler: Handler = async (event) => {
         vehicleMap[plate] = {
           vehicleName: name,
           vehiclePlate: plate,
-          penaltyCount: 0,
+          count: 0,
           totalAmount: 0,
         }
       }
 
-      vehicleMap[plate].penaltyCount += 1
-      // importo_totale for penalties is already in EUR (not cents)
+      vehicleMap[plate].count += 1
       vehicleMap[plate].totalAmount += (f.importo_totale || 0)
-      // Update name if we have a better one
       if (vehicleMap[plate].vehicleName === 'Sconosciuto' && name !== 'Sconosciuto') {
         vehicleMap[plate].vehicleName = name
       }
     })
 
     const vehicleList = Object.values(vehicleMap)
-    // Sort by total amount descending
     vehicleList.sort((a, b) => b.totalAmount - a.totalAmount)
 
-    const totalDamages = vehicleList.reduce((s, v) => s + v.penaltyCount, 0)
+    const totalCount = vehicleList.reduce((s, v) => s + v.count, 0)
     const totalAmount = vehicleList.reduce((s, v) => s + v.totalAmount, 0)
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        totalVehiclesWithDamages: vehicleList.length,
-        totalDamages,
+        type: reportType,
+        totalVehicles: vehicleList.length,
+        totalCount,
         totalAmount: Math.round(totalAmount * 100) / 100,
         vehicles: vehicleList.map(v => ({
           vehicleName: v.vehicleName,
           vehiclePlate: v.vehiclePlate,
-          penaltyCount: v.penaltyCount,
+          count: v.count,
           totalAmount: Math.round(v.totalAmount * 100) / 100,
         }))
       })
     }
   } catch (error: any) {
-    console.error('Report danni error:', error)
+    console.error('Report danni/penali error:', error)
     return {
       statusCode: 500,
       body: JSON.stringify({ error: 'Internal server error', details: error.message })
