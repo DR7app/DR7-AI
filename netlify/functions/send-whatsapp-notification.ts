@@ -137,18 +137,15 @@ const handler: Handler = async (event) => {
       message += `ID: DR7-${bookingId}\n`;
       message += `Servizio: ${serviceName}\n`;
       if (vehiclePlate) {
-        message += `Targa:${vehiclePlate}\n`;
+        message += `Targa: ${vehiclePlate}\n`;
       }
       message += `Data e Ora: ${formattedDate} alle ${formattedTime}\n`;
-      if (additionalService) {
-        message += `Servizio Aggiuntivo: ${additionalService}\n`;
-      }
+      message += `Totale: €${totalPrice}\n`;
+      message += `Pagamento: ${paymentInfo}\n`;
       if (notes) {
         message += `Note: ${notes}\n`;
       }
-      message += `Totale: €${totalPrice}\n`;
-      message += `Pagamento: ${paymentInfo}\n\n`;
-      message += `Cordiali Saluti,\nDR7`;
+      message += `\nCordiali Saluti,\nDR7`;
     } else if (serviceType === 'mechanical') {
       const appointmentDate = new Date(booking.appointment_date);
       const serviceName = booking.service_name || 'Servizio Meccanica';
@@ -184,22 +181,20 @@ const handler: Handler = async (event) => {
         paymentInfo = `Da saldare`;
       }
 
+      const firstName = customerName.split(' ')[0];
       const isEditMech = booking.isEdit;
-      message = isEditMech ? `*MODIFICA PRENOTAZIONE MECCANICA*\n\n` : `*NUOVA PRENOTAZIONE MECCANICA*\n\n`;
-      message += `*ID:* DR7-${bookingId}\n`;
-      message += `*Cliente:* ${customerName}\n`;
-      message += `*Email:* ${customerEmail}\n`;
-      message += `*Telefono:* ${customerPhone}\n`;
-      message += `*Servizio:* ${serviceName}\n`;
-      if (vehicleInfo.brand || vehicleInfo.model) {
-        message += `*Veicolo:* ${vehicleInfo.brand || ''} ${vehicleInfo.model || ''}\n`;
-      }
-      message += `*Data e Ora:* ${formattedDate} alle ${formattedTime}\n`;
+      message = `Salve ${firstName},\n\n`;
+      message += `Confermiamo il suo appuntamento.\n\n`;
+      message += isEditMech ? `MODIFICA PRENOTAZIONE MECCANICA\n\n` : `NUOVA PRENOTAZIONE MECCANICA\n\n`;
+      message += `ID: DR7-${bookingId}\n`;
+      message += `Servizio: ${serviceName}\n`;
+      message += `Data e Ora: ${formattedDate} alle ${formattedTime}\n`;
+      message += `Totale: €${totalPrice}\n`;
+      message += `Pagamento: ${paymentInfo}\n`;
       if (notes) {
-        message += `*Note:* ${notes}\n`;
+        message += `Note: ${notes}\n`;
       }
-      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
+      message += `\nCordiali Saluti,\nDR7`;
     } else {
       // Car Rental Booking
       const vehicleName = booking.vehicle_name;

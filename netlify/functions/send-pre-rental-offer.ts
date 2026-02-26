@@ -6,7 +6,18 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
-const URBAN_MESSAGE = `Buongiorno {nome},
+const URBAN_MESSAGE = `Salve {nome},
+
+La contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.
+
+In caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.
+
+Qualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.
+
+Cordiali saluti,
+DR7`;
+
+const EXOTIC_MESSAGE = `Salve,
 
 la contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.
 
@@ -18,13 +29,6 @@ Restiamo in attesa di un suo cortese riscontro.
 Grazie.
 
 Cordiali saluti,
-DR7`;
-
-const EXOTIC_MESSAGE = `Buongiorno {nome},
-
-Vuole valutare una promo in continuazione super vantaggiosa?
-
-Ci faccia sapere, grazie.
 DR7`;
 
 // Map all vehicle category variants to the two message types

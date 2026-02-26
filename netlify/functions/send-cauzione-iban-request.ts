@@ -6,7 +6,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
-const IBAN_REQUEST_MESSAGE = `Buongiorno {nome},
+const IBAN_REQUEST_MESSAGE = `Salve {nome},
 
 La ringraziamo per aver scelto i nostri servizi.
 
@@ -14,10 +14,8 @@ Al fine di procedere con la restituzione della cauzione, Le chiediamo cortesemen
 
 Il rimborso verrà effettuato tramite bonifico ordinario entro il quattordicesimo giorno lavorativo, come da condizioni contrattuali.
 
-Restiamo a disposizione per qualsiasi ulteriore necessità.
-
 Cordiali saluti,
-Team DR7`;
+DR7`;
 
 function cleanPhone(phone: string): string {
   let cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
