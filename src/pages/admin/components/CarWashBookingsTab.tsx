@@ -1159,9 +1159,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   Annulla
                 </button>
                 <div className="flex gap-2 items-center">
-                  {!targaVehicleInfo && vehiclePlate.length < 5 && (
-                    <span className="text-xs text-red-400">Inserisci la targa e clicca Cerca</span>
-                  )}
                   <button
                     type="button"
                     disabled={!targaVehicleInfo}
