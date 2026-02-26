@@ -164,7 +164,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [vehicleMakeModel, setVehicleMakeModel] = useState('')
   const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory | null>(null)
-  const [classifying, setClassifying] = useState(false)
   const [classificationSource, setClassificationSource] = useState<'local' | 'api' | 'manual' | null>(null)
   const [lookingUpTarga, setLookingUpTarga] = useState(false)
   const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
@@ -253,7 +252,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setVehiclePlate('')
     setVehicleMakeModel('')
     setVehicleCategory(null)
-    setClassifying(false)
     setClassificationSource(null)
     setLookingUpTarga(false)
     setTargaVehicleInfo(null)
@@ -1131,60 +1129,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               )}
 
-              {/* Make/Model + Classify */}
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Marca e Modello</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={vehicleMakeModel}
-                    onChange={(e) => {
-                      setVehicleMakeModel(e.target.value)
-                      // Auto-classify locally on each change
-                      const local = classifyVehicleLocally(e.target.value)
-                      if (local && local.confidence === 'high') {
-                        setVehicleCategory(local.category)
-                        setClassificationSource('local')
-                      } else if (!e.target.value.trim()) {
-                        setVehicleCategory(null)
-                        setClassificationSource(null)
-                      }
-                    }}
-                    placeholder="es. Fiat Panda, BMW X3..."
-                    className="flex-1 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && vehicleMakeModel.trim()) {
-                        e.preventDefault()
-                        setClassifying(true)
-                        classifyVehicle(vehicleMakeModel).then(result => {
-                          setVehicleCategory(result.category)
-                          setClassificationSource(result.source === 'local' ? 'local' : 'api')
-                        }).finally(() => setClassifying(false))
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={!vehicleMakeModel.trim() || classifying}
-                    onClick={() => {
-                      setClassifying(true)
-                      classifyVehicle(vehicleMakeModel).then(result => {
-                        setVehicleCategory(result.category)
-                        setClassificationSource(result.source === 'local' ? 'local' : 'api')
-                      }).finally(() => setClassifying(false))
-                    }}
-                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
-                      !vehicleMakeModel.trim() || classifying
-                        ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                        : 'bg-dr7-gold hover:bg-yellow-500 text-black'
-                    }`}
-                  >
-                    {classifying ? 'Analisi...' : 'Classifica'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Classification Result */}
+              {/* Classification Result (auto from targa) */}
               {vehicleCategory && (
                 <div className={`p-4 rounded-lg border-2 ${
                   vehicleCategory === 'urban'
@@ -1200,14 +1145,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       }`}>
                         {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                       </span>
-                      <div>
-                        <span className="text-theme-text-primary font-medium">{vehicleMakeModel}</span>
-                        {classificationSource && (
-                          <span className="text-xs text-theme-text-muted ml-2">
-                            ({classificationSource === 'local' ? 'riconosciuto' : classificationSource === 'api' ? 'AI' : 'manuale'})
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-theme-text-primary font-medium">{vehicleMakeModel}</span>
                     </div>
                     {/* Manual override buttons */}
                     <div className="flex gap-2">
