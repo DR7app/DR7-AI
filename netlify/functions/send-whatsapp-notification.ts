@@ -209,14 +209,14 @@ const handler: Handler = async (event) => {
       }
 
       const isEdit = booking.isEdit;
-      message = isEdit ? `MODIFICA PRENOTAZIONE NOLEGGIO\n\n` : `NUOVA PRENOTAZIONE NOLEGGIO\n\n`;
-      message += `ID: DR7-${bookingId}\n`;
-      message += `Cliente: ${customerName}\n`;
-      message += `Email: ${customerEmail}\n`;
-      message += `Telefono: ${customerPhone}\n`;
-      message += `Veicolo: ${vehicleName}\n`;
-      message += `Ritiro: ${pickupDateFormatted} alle ${pickupTimeFormatted}\n`;
-      message += `Riconsegna: ${dropoffDateFormatted} alle ${dropoffTimeFormatted}\n`;
+      message = isEdit ? `*MODIFICA PRENOTAZIONE NOLEGGIO*\n\n` : `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
+      message += `*ID:* DR7-${bookingId}\n`;
+      message += `*Cliente:* ${customerName}\n`;
+      message += `*Email:* ${customerEmail}\n`;
+      message += `*Telefono:* ${customerPhone}\n`;
+      message += `*Veicolo:* ${vehicleName}\n`;
+      message += `*Ritiro:* ${pickupDateFormatted} alle ${pickupTimeFormatted}\n`;
+      message += `*Riconsegna:* ${dropoffDateFormatted} alle ${dropoffTimeFormatted}\n`;
 
       // Show delivery address if enabled, otherwise show standard pickup location
       const deliveryEnabled = booking.booking_details?.delivery_enabled;
@@ -227,23 +227,23 @@ const handler: Handler = async (event) => {
       if (deliveryEnabled && deliveryAddress) {
         const addr = [deliveryAddress.street, deliveryAddress.zip, deliveryAddress.city, deliveryAddress.province].filter(Boolean).join(', ');
         const deliveryFee = booking.booking_details?.delivery_fee || '0';
-        message += `Consegna a domicilio: ${addr}`;
+        message += `*Consegna a domicilio:* ${addr}`;
         if (parseFloat(deliveryFee) > 0) message += ` (+€${deliveryFee})`;
         message += `\n`;
       } else {
-        message += `Luogo Ritiro: ${pickupLocation}\n`;
+        message += `*Luogo Ritiro:* ${pickupLocation}\n`;
       }
 
       if (pickupEnabled && pickupAddress) {
         const addr = [pickupAddress.street, pickupAddress.zip, pickupAddress.city, pickupAddress.province].filter(Boolean).join(', ');
         const pickupFee = booking.booking_details?.pickup_fee || '0';
-        message += `Ritiro a domicilio: ${addr}`;
+        message += `*Ritiro a domicilio:* ${addr}`;
         if (parseFloat(pickupFee) > 0) message += ` (+€${pickupFee})`;
         message += `\n`;
       }
 
-      message += `Assicurazione: ${insuranceOption}\n`;
-      message += `Totale: €${totalPrice}\n`;
+      message += `*Assicurazione:* ${insuranceOption}\n`;
+      message += `*Totale:* €${totalPrice}\n`;
 
       // Cauzione (deposit) info with status — always show, default to €0
       const depositAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
@@ -251,25 +251,25 @@ const handler: Handler = async (event) => {
       const depositStatus = booking.booking_details?.deposit_status;
       if (depositOption === 'no_deposit') {
         const surcharge = Number(booking.booking_details?.noDepositSurcharge ?? 0);
-        message += `Cauzione: Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`;
+        message += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`;
       } else if (depositAmount > 0) {
         const statusLabel = depositStatus === 'incassata' ? 'Pagata' : 'Da saldare';
-        message += `Cauzione: €${depositAmount.toFixed(2)} - ${statusLabel}\n`;
+        message += `*Cauzione:* €${depositAmount.toFixed(2)} - ${statusLabel}\n`;
       } else {
-        message += `Cauzione: €0\n`;
+        message += `*Cauzione:* €0\n`;
       }
 
       // KM limit info
       const unlimitedKm = booking.booking_details?.unlimited_km;
       const kmLimit = booking.booking_details?.km_limit;
       if (unlimitedKm || kmLimit === 'Illimitati') {
-        message += `KM: Illimitati\n`;
+        message += `*KM:* Illimitati\n`;
       } else if (kmLimit && kmLimit !== '0') {
-        message += `KM: ${kmLimit} km\n`;
+        message += `*KM:* ${kmLimit} km\n`;
       }
 
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `Pagamento: ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
+      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
     }
   } else {
     return {
