@@ -5,7 +5,10 @@ interface CustomerReport {
   name: string
   email: string
   totalSpend: number
-  bookingsCount: number
+  rentalCount: number
+  carWashCount: number
+  mechanicalCount: number
+  totalCount: number
   totalRentalDays: number
   avgDailyRate: number
 }
@@ -14,8 +17,13 @@ interface CustomerReportData {
   totalCustomers: number
   totalRevenue: number
   totalBookings: number
+  totalRentals: number
+  totalCarWashes: number
+  totalMechanical: number
   customers: CustomerReport[]
 }
+
+type SortField = 'totalSpend' | 'totalCount' | 'rentalCount' | 'carWashCount' | 'mechanicalCount' | 'totalRentalDays' | 'avgDailyRate'
 
 function formatCurrency(amount: number): string {
   return `€${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -26,7 +34,7 @@ export default function ReportClientiTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [sortField, setSortField] = useState<'totalSpend' | 'bookingsCount' | 'totalRentalDays' | 'avgDailyRate'>('totalSpend')
+  const [sortField, setSortField] = useState<SortField>('totalSpend')
 
   async function fetchClienti() {
     setLoading(true)
@@ -51,12 +59,7 @@ export default function ReportClientiTab() {
       })
     : []
 
-  const sortedClienti = [...filteredClienti].sort((a, b) => {
-    if (sortField === 'totalSpend') return b.totalSpend - a.totalSpend
-    if (sortField === 'totalRentalDays') return b.totalRentalDays - a.totalRentalDays
-    if (sortField === 'avgDailyRate') return b.avgDailyRate - a.avgDailyRate
-    return b.bookingsCount - a.bookingsCount
-  })
+  const sortedClienti = [...filteredClienti].sort((a, b) => b[sortField] - a[sortField])
 
   return (
     <div className="space-y-6">
@@ -97,6 +100,9 @@ export default function ReportClientiTab() {
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Prenotazioni Totali</p>
               <p className="text-2xl font-bold text-theme-text-primary">{clientiData.totalBookings}</p>
+              <p className="text-xs text-theme-text-muted mt-1">
+                {clientiData.totalRentals} noleggi, {clientiData.totalCarWashes} lavaggi, {clientiData.totalMechanical} meccanica
+              </p>
             </div>
           </div>
 
@@ -113,11 +119,14 @@ export default function ReportClientiTab() {
               <label className="text-xs text-theme-text-muted">Ordina per:</label>
               <select
                 value={sortField}
-                onChange={(e) => setSortField(e.target.value as typeof sortField)}
+                onChange={(e) => setSortField(e.target.value as SortField)}
                 className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
               >
                 <option value="totalSpend">Spesa totale</option>
-                <option value="bookingsCount">N. Prenotazioni</option>
+                <option value="totalCount">Totale prenotazioni</option>
+                <option value="rentalCount">N. Noleggi</option>
+                <option value="carWashCount">N. Lavaggi</option>
+                <option value="mechanicalCount">N. Meccanica</option>
                 <option value="totalRentalDays">Giorni noleggio</option>
                 <option value="avgDailyRate">Tariffa media</option>
               </select>
@@ -140,8 +149,14 @@ export default function ReportClientiTab() {
                     <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalSpend')}>
                       Spesa Totale {sortField === 'totalSpend' && '↓'}
                     </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('bookingsCount')}>
-                      N. Prenotazioni {sortField === 'bookingsCount' && '↓'}
+                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('rentalCount')}>
+                      Noleggi {sortField === 'rentalCount' && '↓'}
+                    </th>
+                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('carWashCount')}>
+                      Lavaggi {sortField === 'carWashCount' && '↓'}
+                    </th>
+                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('mechanicalCount')}>
+                      Meccanica {sortField === 'mechanicalCount' && '↓'}
                     </th>
                     <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalRentalDays')}>
                       Giorni Noleggio {sortField === 'totalRentalDays' && '↓'}
@@ -157,7 +172,9 @@ export default function ReportClientiTab() {
                       <td className="px-4 py-3 font-medium text-theme-text-primary">{c.name}</td>
                       <td className="px-4 py-3 text-theme-text-muted text-xs">{c.email}</td>
                       <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(c.totalSpend)}</td>
-                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.bookingsCount}</td>
+                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.rentalCount}</td>
+                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.carWashCount}</td>
+                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.mechanicalCount}</td>
                       <td className="text-center px-4 py-3 text-theme-text-primary">{c.totalRentalDays}</td>
                       <td className="text-right px-4 py-3 text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</td>
                     </tr>
@@ -173,14 +190,22 @@ export default function ReportClientiTab() {
                     <p className="font-semibold text-theme-text-primary text-sm">{c.name}</p>
                     <p className="text-xs text-theme-text-muted">{c.email}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-center">
+                  <div className="grid grid-cols-3 gap-3 text-center">
                     <div>
                       <p className="text-lg font-bold text-dr7-gold">{formatCurrency(c.totalSpend)}</p>
                       <p className="text-xs text-theme-text-muted">Spesa</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-theme-text-primary">{c.bookingsCount}</p>
-                      <p className="text-xs text-theme-text-muted">Prenotazioni</p>
+                      <p className="text-lg font-bold text-theme-text-primary">{c.rentalCount}</p>
+                      <p className="text-xs text-theme-text-muted">Noleggi</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-theme-text-primary">{c.carWashCount}</p>
+                      <p className="text-xs text-theme-text-muted">Lavaggi</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-theme-text-primary">{c.mechanicalCount}</p>
+                      <p className="text-xs text-theme-text-muted">Meccanica</p>
                     </div>
                     <div>
                       <p className="text-lg font-bold text-theme-text-primary">{c.totalRentalDays}</p>
@@ -211,7 +236,7 @@ export default function ReportClientiTab() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <p className="text-theme-text-muted text-lg mb-2">Clicca "Genera Report" per visualizzare i dati</p>
-          <p className="text-theme-text-muted text-sm">Il report include spesa totale e numero prenotazioni per cliente</p>
+          <p className="text-theme-text-muted text-sm">Il report include noleggi, lavaggi e meccanica per cliente</p>
         </div>
       )}
     </div>

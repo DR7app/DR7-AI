@@ -22,16 +22,24 @@ export const handler: Handler = async (event) => {
 
     if (bookingsError) throw bookingsError
 
-    // Filter to rental bookings only (same logic as monthly-report.ts)
-    const rentalBookings = (allBookings || []).filter(b => {
-      if (!b.pickup_date || !b.dropoff_date) return false
-      const st = (b.service_type || '').trim().toLowerCase()
-      if (st === 'car_wash' || st === 'mechanical_service' || st === 'mechanical') return false
+    // Classify bookings by type, excluding internals
+    type BookingType = 'rental' | 'car_wash' | 'mechanical'
+
+    function classifyBooking(b: any): BookingType | null {
       const details = b.booking_details || {}
-      if (details.internal === true) return false
-      if (details.createdBy === 'automatic_system') return false
-      return true
-    })
+      if (details.internal === true) return null
+      if (details.createdBy === 'automatic_system') return null
+
+      const name = (b.customer_name || '').trim().toUpperCase()
+      if (name.startsWith('INTERNO') || name.startsWith('LAVAGGIO RIENTRO')) return null
+
+      const st = (b.service_type || '').trim().toLowerCase()
+      if (st === 'car_wash') return 'car_wash'
+      if (st === 'mechanical_service' || st === 'mechanical') return 'mechanical'
+      // Rental: no service_type and has pickup+dropoff dates
+      if (!st && b.pickup_date && b.dropoff_date) return 'rental'
+      return null
+    }
 
     // Group by customer
     const customerMap: Record<string, {
@@ -39,15 +47,24 @@ export const handler: Handler = async (event) => {
       name: string
       email: string
       totalSpendCents: number
-      bookingsCount: number
+      rentalSpendCents: number
+      rentalCount: number
+      carWashCount: number
+      mechanicalCount: number
       totalRentalDays: number
     }> = {}
 
-    rentalBookings.forEach(b => {
-      // Resolve customer ID: column first, then booking_details fallback
+    let totalRentals = 0
+    let totalCarWashes = 0
+    let totalMechanical = 0
+
+    ;(allBookings || []).forEach(b => {
+      const type = classifyBooking(b)
+      if (!type) return
+
+      // Resolve customer key
       const custId = b.customer_id || b.booking_details?.customer?.customerId || ''
       const custEmail = b.customer_email || b.booking_details?.customer?.email || ''
-      // Use customer_id as primary key, fallback to email
       const key = custId || custEmail || b.id
 
       if (!customerMap[key]) {
@@ -56,21 +73,35 @@ export const handler: Handler = async (event) => {
           name: b.customer_name || b.booking_details?.customer?.fullName || '',
           email: custEmail,
           totalSpendCents: 0,
-          bookingsCount: 0,
+          rentalSpendCents: 0,
+          rentalCount: 0,
+          carWashCount: 0,
+          mechanicalCount: 0,
           totalRentalDays: 0,
         }
       }
 
-      customerMap[key].totalSpendCents += (b.price_total || 0)
-      customerMap[key].bookingsCount += 1
+      const priceCents = b.price_total || 0
+      customerMap[key].totalSpendCents += priceCents
 
-      // Compute rental days for this booking
-      if (b.pickup_date && b.dropoff_date) {
-        const pickup = new Date(b.pickup_date)
-        const dropoff = new Date(b.dropoff_date)
-        const diffMs = dropoff.getTime() - pickup.getTime()
-        const days = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)))
-        customerMap[key].totalRentalDays += days
+      if (type === 'rental') {
+        customerMap[key].rentalCount += 1
+        customerMap[key].rentalSpendCents += priceCents
+        totalRentals += 1
+        // Compute rental days
+        if (b.pickup_date && b.dropoff_date) {
+          const pickup = new Date(b.pickup_date)
+          const dropoff = new Date(b.dropoff_date)
+          const diffMs = dropoff.getTime() - pickup.getTime()
+          const days = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)))
+          customerMap[key].totalRentalDays += days
+        }
+      } else if (type === 'car_wash') {
+        customerMap[key].carWashCount += 1
+        totalCarWashes += 1
+      } else if (type === 'mechanical') {
+        customerMap[key].mechanicalCount += 1
+        totalMechanical += 1
       }
 
       // Update name/email if better data is available
@@ -122,7 +153,7 @@ export const handler: Handler = async (event) => {
 
     // Convert cents to EUR
     const totalRevenue = customerList.reduce((s, c) => s + c.totalSpendCents, 0) / 100
-    const totalBookings = customerList.reduce((s, c) => s + c.bookingsCount, 0)
+    const totalBookings = totalRentals + totalCarWashes + totalMechanical
 
     return {
       statusCode: 200,
@@ -130,15 +161,21 @@ export const handler: Handler = async (event) => {
         totalCustomers: customerList.length,
         totalRevenue: Math.round(totalRevenue * 100) / 100,
         totalBookings,
+        totalRentals,
+        totalCarWashes,
+        totalMechanical,
         customers: customerList.map(c => ({
           customerId: c.customerId,
           name: c.name || 'Sconosciuto',
           email: c.email || '-',
           totalSpend: Math.round(c.totalSpendCents / 100 * 100) / 100,
-          bookingsCount: c.bookingsCount,
+          rentalCount: c.rentalCount,
+          carWashCount: c.carWashCount,
+          mechanicalCount: c.mechanicalCount,
+          totalCount: c.rentalCount + c.carWashCount + c.mechanicalCount,
           totalRentalDays: c.totalRentalDays,
           avgDailyRate: c.totalRentalDays > 0
-            ? Math.round(c.totalSpendCents / c.totalRentalDays) / 100
+            ? Math.round(c.rentalSpendCents / c.totalRentalDays) / 100
             : 0,
         }))
       })
