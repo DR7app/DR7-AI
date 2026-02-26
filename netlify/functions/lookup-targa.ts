@@ -37,9 +37,10 @@ export const handler: Handler = async (event) => {
     }
 
     console.log('[lookup-targa] Looking up plate:', cleanTarga)
+    console.log('[lookup-targa] Token present:', !!OPENAPI_TOKEN, 'length:', OPENAPI_TOKEN.length, 'starts:', OPENAPI_TOKEN.substring(0, 4))
 
-    const response = await fetch(`https://automotive.openapi.com/IT-car/${encodeURIComponent(cleanTarga)}`, {
-      headers: { Authorization: `Bearer ${OPENAPI_TOKEN}` },
+    const response = await fetch(`https://automotive.openapi.com/IT-car/${cleanTarga}`, {
+      headers: { 'Authorization': `Bearer ${OPENAPI_TOKEN}` },
     })
 
     console.log('[lookup-targa] API status:', response.status)
@@ -54,7 +55,7 @@ export const handler: Handler = async (event) => {
       return {
         statusCode: 502,
         headers,
-        body: JSON.stringify({ error: `Errore API (${response.status}). Riprova.` }),
+        body: JSON.stringify({ error: `Errore API (${response.status}): ${errBody || 'Riprova.'}` }),
       }
     }
 
