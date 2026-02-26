@@ -190,6 +190,26 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // Add customers who have danni but no bookings
+    for (const [clienteId] of danniMap.entries()) {
+      const alreadyExists = customerList.some(c => c.customerId === clienteId)
+      if (!alreadyExists && clienteId) {
+        customerList.push({
+          customerId: clienteId,
+          name: '',
+          email: '',
+          totalSpendCents: 0,
+          rentalSpendCents: 0,
+          supercarCount: 0,
+          urbanCount: 0,
+          aziendaliCount: 0,
+          carWashCount: 0,
+          mechanicalCount: 0,
+          totalRentalDays: 0,
+        })
+      }
+    }
+
     // Sort by total spend descending
     customerList.sort((a, b) => b.totalSpendCents - a.totalSpendCents)
 

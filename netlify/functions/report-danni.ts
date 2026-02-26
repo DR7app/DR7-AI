@@ -165,6 +165,54 @@ export const handler: Handler = async (event) => {
       }
     })
 
+    // For danni report: also include cashed cauzioni (stato='Bloccata')
+    if (reportType === 'danni') {
+      const { data: cauzioni } = await supabase
+        .from('cauzioni')
+        .select('veicolo_id, importo')
+        .eq('stato', 'Bloccata')
+
+      if (cauzioni && cauzioni.length > 0) {
+        // Resolve vehicle info for cauzioni
+        const veicoloIds = [...new Set(cauzioni.map(c => c.veicolo_id).filter(Boolean))]
+        const veicoloLookup = new Map<string, { display_name: string; plate: string }>()
+
+        if (veicoloIds.length > 0) {
+          const { data: vehicles } = await supabase
+            .from('vehicles')
+            .select('id, display_name, plate')
+            .in('id', veicoloIds)
+
+          if (vehicles) {
+            vehicles.forEach(v => {
+              veicoloLookup.set(v.id, { display_name: v.display_name || '', plate: v.plate || '' })
+            })
+          }
+        }
+
+        cauzioni.forEach(c => {
+          const vehicle = c.veicolo_id ? veicoloLookup.get(c.veicolo_id) : null
+          const plate = (vehicle?.plate || 'Sconosciuto').replace(/\s/g, '').toUpperCase()
+          const name = vehicle?.display_name || 'Sconosciuto'
+
+          if (!vehicleMap[plate]) {
+            vehicleMap[plate] = {
+              vehicleName: name,
+              vehiclePlate: plate,
+              count: 0,
+              totalAmount: 0,
+            }
+          }
+
+          vehicleMap[plate].count += 1
+          vehicleMap[plate].totalAmount += Number(c.importo) || 0
+          if (vehicleMap[plate].vehicleName === 'Sconosciuto' && name !== 'Sconosciuto') {
+            vehicleMap[plate].vehicleName = name
+          }
+        })
+      }
+    }
+
     const vehicleList = Object.values(vehicleMap)
     vehicleList.sort((a, b) => b.totalAmount - a.totalAmount)
 
