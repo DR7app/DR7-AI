@@ -565,7 +565,7 @@ export default function VehiclesTab() {
       </div>
 
       {multiSelectMode && selectedVehicles.size > 0 && (
-        <div className="bg-blue-900/30 border border-blue-700/50 rounded-full p-4 mb-6 flex items-center justify-between">
+        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4 mb-6 flex items-center justify-between">
           <div className="text-blue-200">
             <strong>{selectedVehicles.size}</strong> veicoli selezionati
           </div>
@@ -595,8 +595,8 @@ export default function VehiclesTab() {
       )}
 
       {/* Price Adjustment Section - Compact */}
-      <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-full p-4 mb-6">
-        <div className="flex items-end gap-3">
+      <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-lg p-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
           <div className="flex-1">
             <label className="block text-xs text-theme-text-muted mb-1">Veicolo</label>
             <select
@@ -651,7 +651,7 @@ export default function VehiclesTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-full mb-6 border border-theme-border">
+        <form onSubmit={handleSubmit} className="bg-theme-bg-secondary p-6 rounded-lg mb-6 border border-theme-border">
           <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
             {editingId ? 'Modifica Veicolo' : 'Nuovo Veicolo'}
           </h3>
@@ -707,7 +707,7 @@ export default function VehiclesTab() {
 
           {/* Date Range for Unavailability */}
           {formData.status === 'unavailable' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
               <div>
                 <label className="block text-sm text-yellow-200 mb-1 font-semibold">📅 Non Disponibile Dal *</label>
                 <EuropeanDateInput
@@ -754,7 +754,7 @@ export default function VehiclesTab() {
                 />
                 <p className="text-xs text-yellow-100 mt-1">Formato 24 ore: HH:MM (es: 14:00, 18:00, 23:30)</p>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm text-yellow-200 mb-1 font-semibold">🔧 Motivo *</label>
                 <select
                   value={formData.unavailable_reason}
@@ -770,7 +770,7 @@ export default function VehiclesTab() {
                   <option value="Elettrauto">Elettrauto</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1 md:col-span-2">
                 <p className="text-xs text-yellow-200">
                   <strong>IMPORTANTE:</strong> Entrambe le date sono obbligatorie per sincronizzare con Google Calendar. Le ore sono opzionali - se specificate, il veicolo sarà non disponibile solo in quell'orario.
                 </p>
@@ -802,7 +802,60 @@ export default function VehiclesTab() {
               <span className="text-sm text-theme-text-muted">({urbanCount} veicoli)</span>
             </h3>
           </div>
-          <div className="overflow-x-auto">
+          {/* Mobile Card View */}
+          <div className="lg:hidden divide-y divide-theme-border">
+            {urbanVehicles.map((vehicle) => (
+              <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {multiSelectMode && (
+                      <input
+                        type="checkbox"
+                        checked={selectedVehicles.has(vehicle.id)}
+                        onChange={() => toggleVehicleSelection(vehicle.id)}
+                        className="w-5 h-5 flex-shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
+                      <div className="text-xs text-theme-text-muted">{vehicle.plate || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
+                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                          vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                            'bg-theme-bg-tertiary text-theme-text-secondary'
+                    }`}>
+                      {vehicle.status === 'available' ? 'Disponibile' :
+                        vehicle.status === 'unavailable' ? 'Non Disp.' :
+                          vehicle.status === 'rented' ? 'Noleggiato' :
+                            vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3 flex-1">
+                    Modifica
+                  </Button>
+                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800">
+                    Sync
+                  </Button>
+                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800">
+                    ×
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {urbanVehicles.length === 0 && (
+              <div className="p-8 text-center text-theme-text-muted">
+                Nessun veicolo Urban trovato
+              </div>
+            )}
+          </div>
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
               <thead className="">
                 <tr>
@@ -900,7 +953,60 @@ export default function VehiclesTab() {
               <span className="text-sm text-theme-text-muted">({exoticCount} veicoli)</span>
             </h3>
           </div>
-          <div className="overflow-x-auto">
+          {/* Mobile Card View */}
+          <div className="lg:hidden divide-y divide-theme-border">
+            {exoticVehicles.map((vehicle) => (
+              <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {multiSelectMode && (
+                      <input
+                        type="checkbox"
+                        checked={selectedVehicles.has(vehicle.id)}
+                        onChange={() => toggleVehicleSelection(vehicle.id)}
+                        className="w-5 h-5 flex-shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
+                      <div className="text-xs text-theme-text-muted">{vehicle.plate || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
+                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                          vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                            'bg-theme-bg-tertiary text-theme-text-secondary'
+                    }`}>
+                      {vehicle.status === 'available' ? 'Disponibile' :
+                        vehicle.status === 'unavailable' ? 'Non Disp.' :
+                          vehicle.status === 'rented' ? 'Noleggiato' :
+                            vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3 flex-1">
+                    Modifica
+                  </Button>
+                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800">
+                    Sync
+                  </Button>
+                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800">
+                    ×
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {exoticVehicles.length === 0 && (
+              <div className="p-8 text-center text-theme-text-muted">
+                Nessun veicolo Exotic trovato
+              </div>
+            )}
+          </div>
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
               <thead className="">
                 <tr>
@@ -998,7 +1104,60 @@ export default function VehiclesTab() {
               <span className="text-sm text-theme-text-muted">({aziendaliCount} veicoli)</span>
             </h3>
           </div>
-          <div className="overflow-x-auto">
+          {/* Mobile Card View */}
+          <div className="lg:hidden divide-y divide-theme-border">
+            {aziendaliVehicles.map((vehicle) => (
+              <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {multiSelectMode && (
+                      <input
+                        type="checkbox"
+                        checked={selectedVehicles.has(vehicle.id)}
+                        onChange={() => toggleVehicleSelection(vehicle.id)}
+                        className="w-5 h-5 flex-shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
+                      <div className="text-xs text-theme-text-muted">{vehicle.plate || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                      vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
+                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                          vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                            'bg-theme-bg-tertiary text-theme-text-secondary'
+                    }`}>
+                      {vehicle.status === 'available' ? 'Disponibile' :
+                        vehicle.status === 'unavailable' ? 'Non Disp.' :
+                          vehicle.status === 'rented' ? 'Noleggiato' :
+                            vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3 flex-1">
+                    Modifica
+                  </Button>
+                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800">
+                    Sync
+                  </Button>
+                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800">
+                    ×
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {aziendaliVehicles.length === 0 && (
+              <div className="p-8 text-center text-theme-text-muted">
+                Nessun veicolo Aziendali trovato
+              </div>
+            )}
+          </div>
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
               <thead className="">
                 <tr>

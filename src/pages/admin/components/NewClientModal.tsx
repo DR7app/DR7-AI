@@ -706,15 +706,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-lg w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
-          <h2 className="text-2xl font-bold text-theme-text-primary">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
-          <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none">&times;</button>
+        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-4 sm:p-6 flex justify-between items-center z-10 flex-shrink-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-theme-text-primary">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
+          <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none min-h-[44px] min-w-[44px] flex items-center justify-center">&times;</button>
         </div>
 
-        <div className="p-6 space-y-8">
+        <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 flex-1">
 
           {/* 1. TIPO CLIENTE SELECTION */}
           <div>
@@ -1440,18 +1440,18 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           </div>
 
           {/* FOOTER ACTIONS */}
-          <div className="flex justify-end gap-3 pt-6 border-t border-theme-border">
+          <div className="sticky bottom-0 bg-theme-bg-secondary flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4 sm:pt-6 border-t border-theme-border flex-shrink-0">
             <button
               onClick={handleClose}
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-full text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
+              className="px-6 py-3 sm:py-2.5 min-h-[44px] rounded-full text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
             >
               Annulla
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-8 py-2.5 rounded-full bg-dr7-gold text-black font-bold hover:bg-yellow-500 transition-colors shadow-lg disabled:opacity-50"
+              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-black font-bold hover:bg-yellow-500 transition-colors shadow-lg disabled:opacity-50"
             >
               {isSaving ? 'Salvataggio...' : (initialData ? 'Aggiorna Cliente' : 'Crea Cliente')}
             </button>
