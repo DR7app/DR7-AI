@@ -14,15 +14,19 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    // Fetch all bookings and vehicles in parallel
-    const [bookingsRes, vehiclesRes] = await Promise.all([
+    // Fetch all bookings, vehicles, and cashed cauzioni in parallel
+    const [bookingsRes, vehiclesRes, cauzioniRes] = await Promise.all([
       supabase
         .from('bookings')
         .select('id, user_id, customer_name, customer_email, price_total, status, service_type, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id')
         .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active']),
       supabase
         .from('vehicles')
-        .select('id, category')
+        .select('id, category'),
+      supabase
+        .from('cauzioni')
+        .select('cliente_id, importo')
+        .eq('stato', 'Bloccata')
     ])
 
     if (bookingsRes.error) throw bookingsRes.error
@@ -32,6 +36,16 @@ export const handler: Handler = async (event) => {
     if (vehiclesRes.data) {
       vehiclesRes.data.forEach(v => {
         if (v.id && v.category) vehicleCategoryMap.set(v.id, v.category)
+      })
+    }
+
+    // Build danni (cashed cauzioni) lookup by cliente_id
+    const danniMap = new Map<string, number>()
+    if (cauzioniRes.data) {
+      cauzioniRes.data.forEach((c: any) => {
+        if (c.cliente_id) {
+          danniMap.set(c.cliente_id, (danniMap.get(c.cliente_id) || 0) + Number(c.importo))
+        }
       })
     }
 
@@ -183,6 +197,7 @@ export const handler: Handler = async (event) => {
     const totalRevenue = customerList.reduce((s, c) => s + c.totalSpendCents, 0) / 100
     const totalRentals = totalSupercar + totalUrban + totalAziendali
     const totalBookings = totalRentals + totalCarWashes + totalMechanical
+    const totalDanni = Array.from(danniMap.values()).reduce((s, v) => s + v, 0)
 
     return {
       statusCode: 200,
@@ -196,6 +211,7 @@ export const handler: Handler = async (event) => {
         totalAziendali,
         totalCarWashes,
         totalMechanical,
+        totalDanni: Math.round(totalDanni * 100) / 100,
         customers: customerList.map(c => ({
           customerId: c.customerId,
           name: c.name || 'Sconosciuto',
@@ -212,6 +228,7 @@ export const handler: Handler = async (event) => {
           avgDailyRate: c.totalRentalDays > 0
             ? Math.round(c.rentalSpendCents / c.totalRentalDays) / 100
             : 0,
+          danniTotal: Math.round((danniMap.get(c.customerId) || 0) * 100) / 100,
         }))
       })
     }
