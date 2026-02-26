@@ -14,6 +14,7 @@ interface CustomerReport {
   totalCount: number
   totalRentalDays: number
   avgDailyRate: number
+  danniTotal: number
 }
 
 interface CustomerReportData {
@@ -26,10 +27,11 @@ interface CustomerReportData {
   totalAziendali: number
   totalCarWashes: number
   totalMechanical: number
+  totalDanni: number
   customers: CustomerReport[]
 }
 
-type SortField = 'totalSpend' | 'totalCount' | 'supercarCount' | 'urbanCount' | 'aziendaliCount' | 'carWashCount' | 'mechanicalCount' | 'totalRentalDays' | 'avgDailyRate'
+type SortField = 'totalSpend' | 'totalCount' | 'supercarCount' | 'urbanCount' | 'aziendaliCount' | 'carWashCount' | 'mechanicalCount' | 'totalRentalDays' | 'avgDailyRate' | 'danniTotal'
 
 function formatCurrency(amount: number): string {
   return `€${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -119,6 +121,9 @@ export default function ReportClientiTab() {
               <p className="text-xs text-theme-text-muted mt-1">
                 {clientiData.totalSupercar} supercar, {clientiData.totalUrban} urban, {clientiData.totalAziendali} aziendali, {clientiData.totalCarWashes} lavaggi, {clientiData.totalMechanical} meccanica
               </p>
+              {clientiData.totalDanni > 0 && (
+                <p className="text-xs text-red-400 mt-1">Danni totali: {formatCurrency(clientiData.totalDanni)}</p>
+              )}
             </div>
           </div>
 
@@ -145,6 +150,7 @@ export default function ReportClientiTab() {
                 <option value="aziendaliCount">N. Aziendali</option>
                 <option value="carWashCount">N. Lavaggi</option>
                 <option value="mechanicalCount">N. Meccanica</option>
+                <option value="danniTotal">Danni</option>
                 <option value="totalRentalDays">Giorni noleggio</option>
                 <option value="avgDailyRate">Tariffa media</option>
               </select>
@@ -182,6 +188,9 @@ export default function ReportClientiTab() {
                     <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('mechanicalCount')}>
                       Meccanica {sortField === 'mechanicalCount' && (sortAsc ? '↑' : '↓')}
                     </th>
+                    <th className="text-right px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('danniTotal')}>
+                      Danni {sortField === 'danniTotal' && (sortAsc ? '↑' : '↓')}
+                    </th>
                     <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('totalRentalDays')}>
                       Giorni {sortField === 'totalRentalDays' && (sortAsc ? '↑' : '↓')}
                     </th>
@@ -201,6 +210,7 @@ export default function ReportClientiTab() {
                       <td className="text-center px-2 py-3 text-theme-text-primary">{c.aziendaliCount || '-'}</td>
                       <td className="text-center px-2 py-3 text-theme-text-primary">{c.carWashCount || '-'}</td>
                       <td className="text-center px-2 py-3 text-theme-text-primary">{c.mechanicalCount || '-'}</td>
+                      <td className="text-right px-2 py-3 text-red-400 font-semibold">{c.danniTotal > 0 ? formatCurrency(c.danniTotal) : '-'}</td>
                       <td className="text-center px-2 py-3 text-theme-text-primary">{c.totalRentalDays}</td>
                       <td className="text-right px-3 py-3 text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</td>
                     </tr>
@@ -240,6 +250,10 @@ export default function ReportClientiTab() {
                     <div>
                       <p className="text-base font-bold text-theme-text-primary">{c.mechanicalCount}</p>
                       <p className="text-[10px] text-theme-text-muted">Meccanica</p>
+                    </div>
+                    <div>
+                      <p className={`text-base font-bold ${c.danniTotal > 0 ? 'text-red-400' : 'text-theme-text-primary'}`}>{c.danniTotal > 0 ? formatCurrency(c.danniTotal) : '-'}</p>
+                      <p className="text-[10px] text-theme-text-muted">Danni</p>
                     </div>
                     <div>
                       <p className="text-base font-bold text-theme-text-primary">{c.totalRentalDays}</p>

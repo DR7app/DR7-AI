@@ -40,11 +40,12 @@ export default function CauzioniTab() {
     // KPI Stats
     const [stats, setStats] = useState({
         incassate: 0,
-        bloccate: 0,
+        in_cassa: 0,
         da_incassare: 0,
         scadute: 0,
         totale_incassate: 0,
-        totale_da_incassare: 0
+        totale_da_incassare: 0,
+        totale_in_cassa: 0
     })
 
     useEffect(() => {
@@ -109,21 +110,23 @@ export default function CauzioniTab() {
     }
 
     const calculateStats = () => {
-        const visible = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata')
-        const incassateList = visible.filter(c => c.data_incasso && c.stato !== 'Bloccata')
-        const daIncassareList = visible.filter(c => !c.data_incasso && c.stato !== 'Bloccata')
+        const visible = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata' && c.stato !== 'Bloccata')
+        const incassateList = visible.filter(c => c.data_incasso)
+        const daIncassareList = visible.filter(c => !c.data_incasso)
         const incassate = incassateList.length
-        const bloccate = visible.filter(c => c.stato === 'Bloccata').length
+        const inCassaList = cauzioni.filter(c => c.stato === 'Bloccata')
+        const in_cassa = inCassaList.length
         const da_incassare = daIncassareList.length
         const scadute = visible.filter(c => c.is_overdue).length
         const totale_incassate = incassateList.reduce((sum, c) => sum + Number(c.importo), 0)
         const totale_da_incassare = daIncassareList.reduce((sum, c) => sum + Number(c.importo), 0)
+        const totale_in_cassa = inCassaList.reduce((sum, c) => sum + Number(c.importo), 0)
 
-        setStats({ incassate, bloccate, da_incassare, scadute, totale_incassate, totale_da_incassare })
+        setStats({ incassate, in_cassa, da_incassare, scadute, totale_incassate, totale_da_incassare, totale_in_cassa })
     }
 
     // --- Section Filters ---
-    const visibleCauzioni = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata')
+    const visibleCauzioni = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata' && c.stato !== 'Bloccata')
 
     const applySearch = (list: Cauzione[]) => list.filter(c => {
         const matchesSearch = searchTerm === '' ||
@@ -145,13 +148,10 @@ export default function CauzioniTab() {
     }
 
     const incassate = sortByUrgency(applySearch(
-        visibleCauzioni.filter(c => c.data_incasso && c.stato !== 'Bloccata')
+        visibleCauzioni.filter(c => c.data_incasso)
     ))
-    const bloccate = applySearch(
-        visibleCauzioni.filter(c => c.stato === 'Bloccata')
-    ).sort((a, b) => a.days_until_deadline - b.days_until_deadline)
     const daIncassare = applySearch(
-        visibleCauzioni.filter(c => !c.data_incasso && c.stato !== 'Bloccata')
+        visibleCauzioni.filter(c => !c.data_incasso)
     ).sort((a, b) => a.days_until_deadline - b.days_until_deadline)
 
     // --- Handlers ---
@@ -340,7 +340,7 @@ export default function CauzioniTab() {
     }
 
     const handleBlocca = async (cauzione: Cauzione) => {
-        const note = prompt('Motivo del blocco (contestazione, verifica danni, ecc.):')
+        const note = prompt('Motivo della trattenuta (danni, contestazione, ecc.):')
         if (note === null) return
 
         try {
@@ -348,13 +348,13 @@ export default function CauzioniTab() {
                 .from('cauzioni')
                 .update({
                     stato: 'Bloccata',
-                    note: note || 'Bloccata',
+                    note: note || 'Trattenuta per danni',
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', cauzione.id)
 
             if (error) throw error
-            toast.success('Cauzione bloccata')
+            toast.success('Cauzione messa in cassa')
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error blocking cauzione:', error)
@@ -503,9 +503,10 @@ export default function CauzioniTab() {
                     <div className="text-sm text-theme-text-secondary">Da Incassare</div>
                     <div className="text-3xl font-bold text-yellow-500">{stats.da_incassare}</div>
                 </div>
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Bloccate</div>
-                    <div className="text-3xl font-bold text-orange-500">{stats.bloccate}</div>
+                <div className="bg-theme-bg-tertiary border border-red-500/30 rounded-3xl p-4">
+                    <div className="text-sm text-theme-text-secondary">In Cassa</div>
+                    <div className="text-3xl font-bold text-red-500">{stats.in_cassa}</div>
+                    <div className="text-sm text-red-400 mt-1">€{stats.totale_in_cassa.toFixed(2)}</div>
                 </div>
             </div>
             {/* Totali Cards */}
@@ -581,62 +582,15 @@ export default function CauzioniTab() {
                                             </button>
                                             <button
                                                 onClick={() => handleBlocca(cauzione)}
-                                                className="px-3 py-1 bg-orange-600 text-white text-xs rounded-full hover:bg-orange-700 transition-colors"
+                                                className="px-3 py-1 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors"
                                             >
-                                                BLOCCA
+                                                CASSA
                                             </button>
                                             <button
                                                 onClick={() => handleMarkRestituita(cauzione)}
                                                 className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
                                             >
                                                 RESTITUITA
-                                            </button>
-                                        </>)
-                                    )
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            {/* === SECTION: BLOCCATE === */}
-            <div className="mb-8">
-                <h3 className="text-lg font-bold text-orange-500 mb-3 flex items-center gap-2">
-                    BLOCCATE
-                    <span className="text-sm font-normal text-theme-text-secondary">({bloccate.length})</span>
-                </h3>
-                <div className="border border-theme-border rounded-3xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            {tableHeader}
-                            <tbody>
-                                {bloccate.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="px-4 py-6 text-center text-theme-text-secondary">
-                                            Nessuna cauzione bloccata
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    bloccate.map((cauzione) =>
-                                        renderRow(cauzione, <>
-                                            <button
-                                                onClick={() => handleEdit(cauzione)}
-                                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
-                                            >
-                                                Modifica
-                                            </button>
-                                            <button
-                                                onClick={() => handleSblocca(cauzione)}
-                                                className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
-                                            >
-                                                SBLOCCA
-                                            </button>
-                                            <button
-                                                onClick={() => handleIncassa(cauzione)}
-                                                className="px-3 py-1 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors font-semibold"
-                                            >
-                                                INCASSA
                                             </button>
                                         </>)
                                     )
