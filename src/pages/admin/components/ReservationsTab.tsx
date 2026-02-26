@@ -1954,8 +1954,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setIsExtending(true)
 
     try {
-      // Build new dropoff datetime - store as-is (the date picker gives local Rome time)
-      const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00`)
+      // Build new dropoff datetime with explicit Rome timezone offset
+      function getRomeOffsetForDate(dateString: string): string {
+        const date = new Date(dateString)
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Europe/Rome',
+          timeZoneName: 'short'
+        })
+        const parts = formatter.formatToParts(date)
+        const tzPart = parts.find(p => p.type === 'timeZoneName')
+        return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+      }
+      const dropoffOffset = getRomeOffsetForDate(extendData.new_return_date)
+      const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00${dropoffOffset}`)
 
       // Calculate new total
       const additionalAmount = parseFloat(extendData.additional_amount) || 0
