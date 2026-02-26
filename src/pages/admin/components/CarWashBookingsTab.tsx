@@ -1136,42 +1136,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     ? 'bg-blue-900/20 border-blue-500/50'
                     : 'bg-orange-900/20 border-orange-500/50'
                 }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
-                        vehicleCategory === 'urban'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-orange-600 text-white'
-                      }`}>
-                        {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
-                      </span>
-                      <span className="text-theme-text-primary font-medium">{vehicleMakeModel}</span>
-                    </div>
-                    {/* Manual override buttons */}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setVehicleCategory('urban'); setClassificationSource('manual') }}
-                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                          vehicleCategory === 'urban'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-transparent text-blue-400 border-blue-500/50 hover:bg-blue-600/20'
-                        }`}
-                      >
-                        URBAN
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setVehicleCategory('maxi'); setClassificationSource('manual') }}
-                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                          vehicleCategory === 'maxi'
-                            ? 'bg-orange-600 text-white border-orange-600'
-                            : 'bg-transparent text-orange-400 border-orange-500/50 hover:bg-orange-600/20'
-                        }`}
-                      >
-                        MAXI
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
+                      vehicleCategory === 'urban'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-orange-600 text-white'
+                    }`}>
+                      {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                    </span>
+                    <span className="text-theme-text-primary font-medium">{vehicleMakeModel}</span>
                   </div>
                 </div>
               )}
