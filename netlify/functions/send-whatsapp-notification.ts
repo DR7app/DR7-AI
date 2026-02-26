@@ -17,7 +17,7 @@ const handler: Handler = async (event) => {
   }
 
   const body = JSON.parse(event.body || '{}');
-  const { booking, ticket, type, ticketNumbers, customerInfo, customPhone } = body;
+  const { booking, type, customPhone } = body;
   // Accept both 'message' and 'customMessage' for flexibility
   const customMessage = body.customMessage || body.message;
 
@@ -48,36 +48,6 @@ const handler: Handler = async (event) => {
   // Handle custom message (from admin lottery ticket sales, birthdays, etc.)
   if (customMessage) {
     message = customMessage;
-  }
-  // Handle lottery ticket notifications
-  else if (type === 'lottery_ticket' && ticketNumbers && customerInfo) {
-    const ticketList = ticketNumbers.map((n: number) => `#${String(n).padStart(4, '0')}`).join(', ');
-    message = `🎰 *NUOVA VENDITA BIGLIETTO LOTTERIA!*\n\n`;
-    message += `*Biglietto${ticketNumbers.length > 1 ? 'i' : ''}:* ${ticketList}\n`;
-    message += `*Cliente:* ${customerInfo.fullName}\n`;
-    message += `*Email:* ${customerInfo.email}\n`;
-    message += `*Telefono:* ${customerInfo.phone}\n`;
-    message += `*Tipo:* Vendita Manuale (Admin)\n`;
-    message += `*Data:* ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`;
-  }
-  // Handle ticket purchase notifications (from website)
-  else if (ticket || type === 'ticket') {
-    const ticketData = ticket || {};
-    const customerName = ticketData.customer_name || ticketData.name || 'Cliente';
-    const customerEmail = ticketData.customer_email || ticketData.email;
-    const ticketQuantity = ticketData.quantity || 1;
-    const totalPrice = ticketData.total_price ? (ticketData.total_price / 100).toFixed(2) : 'N/A';
-    const ticketNumbersList = ticketData.ticket_numbers || [];
-
-    message = `🎟️ *NUOVA VENDITA BIGLIETTI*\n\n`;
-    message += `*Cliente:* ${customerName}\n`;
-    message += `*Email:* ${customerEmail}\n`;
-    message += `*Quantità:* ${ticketQuantity} bigliett${ticketQuantity > 1 ? 'i' : 'o'}\n`;
-    message += `*Totale:* €${totalPrice}\n`;
-    if (ticketNumbersList.length > 0) {
-      message += `*Numeri:* ${ticketNumbersList.join(', ')}\n`;
-    }
-    message += `*Data:* ${new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })}`;
   }
   // Handle booking notifications
   else if (booking) {
