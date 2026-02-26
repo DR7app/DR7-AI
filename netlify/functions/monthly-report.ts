@@ -244,13 +244,13 @@ async function generateVehicleReport(
     if (v.display_name) vehicleNameSet.add(v.display_name.trim().toLowerCase())
   })
 
-  // Fetch cauzioni incassate for this month
+  // Fetch cauzioni incassate for this month (data_incasso not null = deposit was collected)
   const { data: cauzioni, error: cauzioniError } = await supabase
     .from('cauzioni')
-    .select('id, veicolo_id, importo, updated_at, note')
-    .eq('stato', 'Incassata')
-    .gte('updated_at', monthStartISO + 'T00:00:00')
-    .lte('updated_at', monthEndISO + 'T23:59:59')
+    .select('id, veicolo_id, importo, data_incasso, note')
+    .not('data_incasso', 'is', null)
+    .gte('data_incasso', monthStartISO)
+    .lte('data_incasso', monthEndISO)
 
   if (cauzioniError) console.error('Cauzioni fetch error (non-fatal):', cauzioniError)
 
@@ -305,7 +305,7 @@ async function generateVehicleReport(
     if (!cauzioniByVehicleId.has(c.veicolo_id)) cauzioniByVehicleId.set(c.veicolo_id, [])
     cauzioniByVehicleId.get(c.veicolo_id)!.push({
       amount: c.importo || 0,
-      date: (c.updated_at || '').substring(0, 10),
+      date: (c.data_incasso || '').substring(0, 10),
       description: c.note || 'Cauzione incassata'
     })
   })

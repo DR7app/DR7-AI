@@ -2011,30 +2011,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const newTimeStr = newDropoffDateTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
         const bookingIdShort = extendingBooking.id.substring(0, 8).toUpperCase()
 
-        let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
-        extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
-        extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
-        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
-        extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
-        extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
-        extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
-        extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
-        // Cauzione info
-        const depositAmt = parseFloat(extendingBooking.booking_details?.deposit) || extendingBooking.deposit_amount || 0
-        const depositOpt = extendingBooking.booking_details?.depositOption
-        const depositSts = extendingBooking.booking_details?.deposit_status
-        if (depositOpt === 'no_deposit') {
-          const surcharge = parseFloat(extendingBooking.booking_details?.noDepositSurcharge || 0)
-          extensionMsg += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`
-        } else if (depositAmt > 0) {
-          const cauzioneLabel = depositSts === 'incassata' ? 'Pagata' : 'Da saldare'
-          extensionMsg += `*Cauzione:* €${depositAmt.toFixed(2)} - ${cauzioneLabel}\n`
-        }
         const adminExtPayLabel = extendData.extension_payment_status === 'paid'
-          ? `Pagato${extendData.extension_payment_method ? ` con ${extendData.extension_payment_method.toLowerCase()}` : ''}`
+          ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
           : 'Da saldare'
-        extensionMsg += `*Pagamento estensione:* ${adminExtPayLabel}`
-        if (extendData.notes) extensionMsg += `\n*Note:* ${extendData.notes}`
+
+        let extensionMsg = `ESTENSIONE PRENOTAZIONE NOLEGGIO\n\n`
+        extensionMsg += `ID: DR7-${bookingIdShort}\n`
+        extensionMsg += `Cliente: ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
+        extensionMsg += `Veicolo: ${extendingBooking.vehicle_name || 'N/A'}\n`
+        extensionMsg += `Riconsegna precedente: ${prevDropoffStr} alle ${prevTimeStr}\n`
+        extensionMsg += `Nuova riconsegna: ${newDropoffStr} alle ${newTimeStr}\n`
+        extensionMsg += `Importo aggiuntivo: €${additionalAmount.toFixed(2)}\n`
+        extensionMsg += `Nuovo totale: €${(newTotal / 100).toFixed(2)}\n`
+        extensionMsg += `Pagamento estensione: ${adminExtPayLabel}`
 
         // Send to admin notification phone
         await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -2066,37 +2055,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             || extendingBooking.customer_name?.split(' ')[0]
             || 'Cliente'
 
-          const kmLabel = extendingBooking.booking_details?.unlimited_km ? 'Illimitati' : (extendingBooking.booking_details?.km_limit ? `${extendingBooking.booking_details.km_limit} km` : '-')
-          const insuranceOpt = extendingBooking.booking_details?.insuranceOption || extendingBooking.booking_details?.insurance_option
-          const insuranceLabel = insuranceOpt === 'KASKO_BASE' ? 'Kasko Base'
-            : insuranceOpt === 'KASKO_BLACK' ? 'Kasko Black'
-            : insuranceOpt === 'KASKO_SIGNATURE' ? 'Kasko Signature'
-            : insuranceOpt === 'DR7' ? 'Kasko DR7'
-            : insuranceOpt || ''
-          let cauzioneLabel = ''
-          if (depositOpt === 'no_deposit') {
-            cauzioneLabel = 'Senza cauzione'
-          } else if (depositAmt > 0) {
-            cauzioneLabel = `€${depositAmt.toFixed(2)} (${depositSts === 'incassata' ? 'Pagata' : 'Da saldare'})`
-          }
-          const extPayLabel = extendData.extension_payment_status === 'paid'
-            ? `Pagato${extendData.extension_payment_method ? ` con ${extendData.extension_payment_method.toLowerCase()}` : ''}`
+          const custExtPayLabel = extendData.extension_payment_status === 'paid'
+            ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
             : 'Da saldare'
 
           let customerMsg = `Salve ${customerFirstName},\n\n`
-            + `Confermiamo la sua prenotazione.\n\n`
-            + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
-            + `*ID:* DR7-${bookingIdShort}\n`
-            + `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
-            + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
-            + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
-            + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
-            + `*Pagamento estensione:* ${extPayLabel}\n`
-            + `*Km:* ${kmLabel}\n`
-          if (cauzioneLabel) customerMsg += `*Cauzione:* ${cauzioneLabel}\n`
-          if (insuranceLabel) customerMsg += `*Assicurazione:* ${insuranceLabel}\n`
-          if (extendData.notes) customerMsg += `*Note:* ${extendData.notes}\n`
-          customerMsg += `\nCordiali Saluti,\nDR7`
+            + `Confermiamo l'estensione della sua prenotazione.\n\n`
+            + `ESTENSIONE PRENOTAZIONE NOLEGGIO\n\n`
+            + `ID: DR7-${bookingIdShort}\n`
+            + `Veicolo: ${extendingBooking.vehicle_name || 'N/A'}\n`
+            + `Riconsegna precedente: ${prevDropoffStr} alle ${prevTimeStr}\n`
+            + `Nuova riconsegna: ${newDropoffStr} alle ${newTimeStr}\n`
+            + `Importo aggiuntivo: €${additionalAmount.toFixed(2)}\n`
+            + `Nuovo totale: €${(newTotal / 100).toFixed(2)}\n`
+            + `Pagamento estensione: ${custExtPayLabel}\n`
+            + `\nCordiali Saluti,\nDR7`
 
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
