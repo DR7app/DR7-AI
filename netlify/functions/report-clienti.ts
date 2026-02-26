@@ -17,7 +17,7 @@ export const handler: Handler = async (event) => {
     // Fetch all bookings with valid statuses
     const { data: allBookings, error: bookingsError } = await supabase
       .from('bookings')
-      .select('id, customer_id, customer_name, customer_email, price_total, status, service_type, booking_details, pickup_date, dropoff_date, appointment_date')
+      .select('id, user_id, customer_name, customer_email, price_total, status, service_type, booking_details, pickup_date, dropoff_date, appointment_date')
       .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
 
     if (bookingsError) throw bookingsError
@@ -63,7 +63,7 @@ export const handler: Handler = async (event) => {
       if (!type) return
 
       // Resolve customer key
-      const custId = b.customer_id || b.booking_details?.customer?.customerId || ''
+      const custId = b.user_id || b.booking_details?.customer?.customerId || ''
       const custEmail = b.customer_email || b.booking_details?.customer?.email || ''
       const key = custId || custEmail || b.id
 
