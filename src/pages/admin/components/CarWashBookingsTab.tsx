@@ -1044,7 +1044,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Lavaggio</h2>
+        <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Prime Wash</h2>
         <div className="flex items-center gap-4">
           <div className="text-sm text-theme-text-muted">
             {bookings.length} prenotazion{bookings.length !== 1 ? 'i' : 'e'}

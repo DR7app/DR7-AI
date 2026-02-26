@@ -104,8 +104,8 @@ export default function AdminDashboard() {
     'cargos': 'Cargos',
     'gestione-danni': 'Gestione Danni',
     'gestione-multe': 'Gestione Multe',
-    'carwash': 'Prenotazioni Lavaggio',
-    'carwash-calendar': 'Calendario Lavaggio',
+    'carwash': 'Prenotazioni Prime Wash',
+    'carwash-calendar': 'Calendario Prime Wash',
     'vehicles': 'Veicoli',
     'fleet': 'Gestione Flotta',
     'gps-keyless': 'GPS & Keyless',
@@ -246,8 +246,8 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Gestione Danni</button>
               <button onClick={() => { setActiveTab('gestione-multe'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
 
-              {/* LAVAGGIO */}
-              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Lavaggio</div>
+              {/* PRIME WASH */}
+              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Prime Wash</div>
               <button onClick={() => { setActiveTab('carwash'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash')}>Prenotazioni</button>
               <button onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
 
@@ -341,10 +341,10 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* LAVAGGIO Dropdown */}
+              {/* PRIME WASH Dropdown */}
               <div className="relative group">
                 <button className={dropdownBtnClass(activeTab === 'carwash' || activeTab === 'carwash-calendar')}>
-                  Lavaggio
+                  Prime Wash
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">

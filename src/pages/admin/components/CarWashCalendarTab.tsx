@@ -618,7 +618,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
-                    Prenotazione Lavaggio
+                    Prenotazione Prime Wash
                   </h3>
                   <p className="text-theme-text-muted">{new Date(selectedBooking.appointment_date).toLocaleDateString('it-IT')} - {selectedBooking.appointment_time}</p>
                 </div>
