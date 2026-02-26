@@ -158,6 +158,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [selectedPriceOption, setSelectedPriceOption] = useState<{ label: string; price: number } | null>(null)
   const [selectedExtras, setSelectedExtras] = useState<CarWashService[]>([])
   const [extraPriceOptions, setExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
+  const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({})
   const [showNewClientModal, setShowNewClientModal] = useState(false)
 
   // Vehicle classification state (Step 0)
@@ -202,7 +203,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
     for (const extra of selectedExtras) {
       const ep = extraPriceOptions[extra.id]
-      total += ep?.price ?? extra.price
+      const qty = extraQuantities[extra.id] || 1
+      total += (ep?.price ?? extra.price) * qty
     }
     return total
   }
@@ -221,7 +223,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       duration += selectedService.durationMinutes || parseDurationToMinutes(selectedService.duration)
     }
     for (const extra of selectedExtras) {
-      duration += extra.durationMinutes || parseDurationToMinutes(extra.duration)
+      const qty = extraQuantities[extra.id] || 1
+      duration += (extra.durationMinutes || parseDurationToMinutes(extra.duration)) * qty
     }
     return duration
   }
@@ -237,6 +240,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       let name = extra.name
       const ep = extraPriceOptions[extra.id]
       if (ep) name += ` (${ep.label})`
+      const qty = extraQuantities[extra.id] || 1
+      if (qty > 1) name += ` x${qty}`
       parts.push(name)
     }
     return parts.join(' + ')
@@ -248,6 +253,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setSelectedPriceOption(null)
     setSelectedExtras([])
     setExtraPriceOptions({})
+    setExtraQuantities({})
     setManualPrice(null)
     setVehiclePlate('')
     setVehicleMakeModel('')
@@ -596,13 +602,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
     for (const extra of selectedExtras) {
       const ep = extraPriceOptions[extra.id]
+      const qty = extraQuantities[extra.id] || 1
+      const unitPrice = ep?.price ?? extra.price
       cartItems.push({
         serviceId: extra.id,
         serviceName: extra.name,
-        quantity: 1,
-        price: ep?.price ?? extra.price,
+        quantity: qty,
+        price: unitPrice,
         option: ep?.label || null,
-        subtotal: ep?.price ?? extra.price
+        subtotal: unitPrice * qty
       })
     }
 
@@ -1168,6 +1176,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       setSelectedPriceOption(null)
                       setSelectedExtras([])
                       setExtraPriceOptions({})
+    setExtraQuantities({})
                       setCurrentStep(1)
                     }}
                     className={`px-6 py-2 rounded-full font-semibold transition-colors ${
@@ -1196,6 +1205,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setSelectedPriceOption(null)
                     setSelectedExtras([])
                     setExtraPriceOptions({})
+    setExtraQuantities({})
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'lavaggio'
@@ -1213,6 +1223,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setSelectedPriceOption(null)
                     setSelectedExtras([])
                     setExtraPriceOptions({})
+    setExtraQuantities({})
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'meccanica'
@@ -1380,6 +1391,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             ))}
                           </div>
                         )}
+                        {/* Quantity selector for per-unit extras (e.g. seat clean) */}
+                        {isToggled && extra.price_unit && (
+                          <div className="flex items-center gap-2 ml-2">
+                            <span className="text-xs text-theme-text-muted">{extra.price_unit}:</span>
+                            <button
+                              type="button"
+                              onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.max(1, (prev[extra.id] || 1) - 1) }))}
+                              className="w-7 h-7 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-sm"
+                            >-</button>
+                            <span className="text-sm font-bold text-theme-text-primary w-6 text-center">{extraQuantities[extra.id] || 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.min(10, (prev[extra.id] || 1) + 1) }))}
+                              className="w-7 h-7 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-sm"
+                            >+</button>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1407,6 +1435,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     onClick={() => {
                       setSelectedExtras([])
                       setExtraPriceOptions({})
+    setExtraQuantities({})
                       setCurrentStep(3)
                     }}
                     className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
