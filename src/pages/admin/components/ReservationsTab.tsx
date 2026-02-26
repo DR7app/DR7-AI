@@ -2015,15 +2015,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
           : 'Da saldare'
 
-        let extensionMsg = `ESTENSIONE PRENOTAZIONE NOLEGGIO\n\n`
-        extensionMsg += `ID: DR7-${bookingIdShort}\n`
-        extensionMsg += `Cliente: ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
-        extensionMsg += `Veicolo: ${extendingBooking.vehicle_name || 'N/A'}\n`
-        extensionMsg += `Riconsegna precedente: ${prevDropoffStr} alle ${prevTimeStr}\n`
-        extensionMsg += `Nuova riconsegna: ${newDropoffStr} alle ${newTimeStr}\n`
-        extensionMsg += `Importo aggiuntivo: €${additionalAmount.toFixed(2)}\n`
-        extensionMsg += `Nuovo totale: €${(newTotal / 100).toFixed(2)}\n`
-        extensionMsg += `Pagamento estensione: ${adminExtPayLabel}`
+        let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
+        extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
+        extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
+        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
+        extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+        extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
+        extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
+        extensionMsg += `*Pagamento estensione:* ${adminExtPayLabel}`
 
         // Send to admin notification phone
         await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -2061,14 +2061,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           let customerMsg = `Salve ${customerFirstName},\n\n`
             + `Confermiamo l'estensione della sua prenotazione.\n\n`
-            + `ESTENSIONE PRENOTAZIONE NOLEGGIO\n\n`
-            + `ID: DR7-${bookingIdShort}\n`
-            + `Veicolo: ${extendingBooking.vehicle_name || 'N/A'}\n`
-            + `Riconsegna precedente: ${prevDropoffStr} alle ${prevTimeStr}\n`
-            + `Nuova riconsegna: ${newDropoffStr} alle ${newTimeStr}\n`
-            + `Importo aggiuntivo: €${additionalAmount.toFixed(2)}\n`
-            + `Nuovo totale: €${(newTotal / 100).toFixed(2)}\n`
-            + `Pagamento estensione: ${custExtPayLabel}\n`
+            + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
+            + `*ID:* DR7-${bookingIdShort}\n`
+            + `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+            + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
+            + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+            + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
+            + `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
+            + `*Pagamento estensione:* ${custExtPayLabel}\n`
             + `\nCordiali Saluti,\nDR7`
 
           await fetch('/.netlify/functions/send-whatsapp-notification', {
