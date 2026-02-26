@@ -362,26 +362,6 @@ export default function CauzioniTab() {
         }
     }
 
-    const handleSblocca = async (cauzione: Cauzione) => {
-        try {
-            const { error } = await supabase
-                .from('cauzioni')
-                .update({
-                    stato: 'Attiva',
-                    note: 'Sbloccata - tornata in Incassate',
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', cauzione.id)
-
-            if (error) throw error
-            toast.success('Cauzione sbloccata')
-            fetchCauzioni()
-        } catch (error: any) {
-            console.error('Error unblocking cauzione:', error)
-            toast.error(`Errore: ${error.message}`)
-        }
-    }
-
     const handleEdit = (cauzione: Cauzione) => {
         setSelectedCauzione(cauzione)
         setShowModal(true)
