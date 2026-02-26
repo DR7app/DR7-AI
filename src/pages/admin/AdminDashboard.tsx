@@ -65,6 +65,16 @@ export default function AdminDashboard() {
     setActiveTab('carwash')
   }
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [mobileMenuOpen])
+
   useEffect(() => {
     const handleOpenBookingForm = (event: CustomEvent) => {
       const { vehicleId, date, bookingId } = event.detail
@@ -144,11 +154,11 @@ export default function AdminDashboard() {
       <header className="bg-theme-bg-primary backdrop-blur-md relative">
         <div className="absolute bottom-0 left-0 right-0 h-px bg-theme-border/50 z-10"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-24">
-            <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex justify-between items-center py-2 lg:py-0 lg:h-24">
+            <div className="flex items-center gap-1 sm:gap-4 min-w-0">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden text-theme-text-primary p-2 hover:bg-theme-bg-hover rounded-3xl transition-colors"
+                className="lg:hidden text-theme-text-primary p-2 min-h-[44px] min-w-[44px] flex-shrink-0 flex items-center justify-center hover:bg-theme-bg-hover rounded-3xl transition-colors"
                 aria-label="Toggle menu"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,10 +169,10 @@ export default function AdminDashboard() {
                   )}
                 </svg>
               </button>
-              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className="h-20 sm:h-28" />
-              <h1 className="text-sm sm:text-base font-normal text-theme-text-primary tracking-widest">Operating Platform <span className="text-xs">A.I.</span></h1>
+              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className="h-10 sm:h-20 lg:h-28 flex-shrink-0" />
+              <h1 className="hidden sm:block text-sm sm:text-base font-normal text-theme-text-primary tracking-widest">Operating Platform <span className="text-xs">A.I.</span></h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {!alarmState.audioEnabled && (
                 <button
                   onClick={enableAudio}
@@ -213,12 +223,17 @@ export default function AdminDashboard() {
       </header>
 
       {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-theme-overlay backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
-          <div className="bg-theme-bg-primary/95 backdrop-blur-xl w-64 h-full shadow-2xl overflow-y-auto border-r border-theme-border/50" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`lg:hidden fixed inset-0 z-50 transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      >
+        <div className="absolute inset-0 bg-theme-overlay backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+        <div
+          className={`relative bg-theme-bg-primary/95 backdrop-blur-xl w-72 h-full shadow-2xl overflow-y-auto border-r border-theme-border/50 transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          onClick={(e) => e.stopPropagation()}
+        >
             <div className="p-4 border-b border-theme-border/50 flex justify-between items-center">
               <h2 className="text-theme-text-primary font-semibold">Menu</h2>
-              <button onClick={() => setMobileMenuOpen(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+              <button onClick={() => setMobileMenuOpen(false)} className="text-theme-text-muted hover:text-theme-text-primary min-h-[44px] min-w-[44px] flex items-center justify-center">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -309,11 +324,10 @@ export default function AdminDashboard() {
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Fattura</div>
               <button onClick={() => { setActiveTab('fattura'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'fattura')}>Fattura</button>
             </nav>
-          </div>
         </div>
-      )}
+      </div>
 
-      <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-8 py-4 lg:py-8">
         {/* Desktop Tabs */}
         <div className="mb-6 hidden lg:block relative z-50">
           <div>
@@ -475,7 +489,7 @@ export default function AdminDashboard() {
           </h2>
         </div>
 
-        <div className="mt-8">
+        <div className="mt-4 lg:mt-8">
           {activeTab === 'reservations' && (
             <ReservationsTab
               initialData={initialReservationData}

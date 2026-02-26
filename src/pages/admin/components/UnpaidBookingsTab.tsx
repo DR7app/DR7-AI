@@ -368,9 +368,9 @@ export default function UnpaidBookingsTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-theme-text-primary">Prenotazioni Da Saldare</h2>
@@ -382,35 +382,35 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Totale Da Saldare</div>
-          <div className="text-2xl font-bold text-red-400">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
+        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
+          <div className="text-xs lg:text-sm text-theme-text-muted">Totale Da Saldare</div>
+          <div className="text-xl lg:text-2xl font-bold text-red-400">
             €{(totalUnpaid / 100).toFixed(2)}
           </div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Prenotazioni</div>
-          <div className="text-2xl font-bold text-theme-text-primary">{filteredBookings.length}</div>
+        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
+          <div className="text-xs lg:text-sm text-theme-text-muted">Prenotazioni</div>
+          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">{filteredBookings.length}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Noleggio</div>
-          <div className="text-2xl font-bold text-theme-text-primary">
+        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
+          <div className="text-xs lg:text-sm text-theme-text-muted">Noleggio</div>
+          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">
             {bookings.filter(b => b.service_type === 'rental').length}
           </div>
         </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Lavaggio + Meccanica</div>
-          <div className="text-2xl font-bold text-theme-text-primary">
+        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
+          <div className="text-xs lg:text-sm text-theme-text-muted">Lavaggio + Meccanica</div>
+          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">
             {bookings.filter(b => b.service_type === 'car_wash' || b.service_type === 'mechanical_service').length}
           </div>
         </div>
       </div>
 
       {/* Filter and Actions */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
-        <div className="flex flex-col lg:flex-row justify-between gap-4">
-          <div className="flex gap-2 flex-wrap">
+      <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4 border border-theme-border">
+        <div className="flex flex-col lg:flex-row justify-between gap-3 lg:gap-4">
+          <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0 lg:flex-wrap">
             <button
               onClick={() => setFilterService('all')}
               className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'all'
@@ -482,8 +482,112 @@ export default function UnpaidBookingsTab() {
         </div>
       </div>
 
-      {/* Bookings Table */}
-      <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-3">
+        {filteredBookings.map((booking) => (
+          <div key={booking.id} className={`bg-theme-bg-secondary rounded-lg border border-theme-border p-3 ${selectedBookings.has(booking.id) ? 'ring-2 ring-blue-500' : ''}`}>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {multiSelectMode && (
+                  <input
+                    type="checkbox"
+                    checked={selectedBookings.has(booking.id)}
+                    onChange={() => toggleBookingSelection(booking.id)}
+                    className="w-5 h-5 cursor-pointer"
+                  />
+                )}
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                  booking.service_type === 'rental' ? 'bg-blue-900 text-blue-200' :
+                  booking.service_type === 'car_wash' ? 'bg-cyan-900 text-cyan-200' :
+                  'bg-orange-900 text-orange-200'
+                }`}>
+                  {getServiceLabel(booking)}
+                </span>
+                <span className="text-sm font-semibold text-theme-text-primary">
+                  {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
+                </span>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 ${booking.payment_status === 'pending'
+                ? 'bg-yellow-600 text-black'
+                : 'bg-red-600 text-theme-text-primary'
+              }`}>
+                {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm text-theme-text-muted">
+                {booking.service_type === 'rental' ? (
+                  <>
+                    <div>{booking.vehicle_name}</div>
+                    <div className="text-xs">
+                      {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} - {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>{booking.service_name}</div>
+                    <div className="text-xs">
+                      {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="text-red-400 font-bold text-lg">
+                  €{(getRemainingAmount(booking) / 100).toFixed(2)}
+                </span>
+                {booking.booking_details?.amountPaid > 0 && (
+                  <div className="text-xs text-theme-text-muted">
+                    su €{(booking.price_total / 100).toFixed(2)}
+                  </div>
+                )}
+                {getPendingExtensions(booking).length > 0 && (
+                  <div className="text-xs text-purple-400">
+                    incl. {getPendingExtensions(booking).length} estensione/i
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 flex-wrap pt-2 border-t border-theme-border/50">
+              {(booking.payment_status === 'pending' || booking.payment_status === 'unpaid') && (
+                <button
+                  onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                  className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                >
+                  Segna Pagato
+                </button>
+              )}
+              {getPendingExtensions(booking).length > 0 && (
+                <button
+                  onClick={() => markExtensionsPaid(booking)}
+                  className="px-3 py-2 min-h-[44px] bg-purple-600 hover:bg-purple-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                >
+                  Estensioni Pagate
+                </button>
+              )}
+              <button
+                onClick={() => deleteSingleBooking(booking.id)}
+                className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ))}
+        {filteredBookings.length === 0 && (
+          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-8 text-center text-theme-text-muted">
+            {filterService === 'all'
+              ? 'Nessuna prenotazione da saldare!'
+              : `Nessuna prenotazione ${getServiceTypeLabel(filterService).toLowerCase()} da saldare`
+            }
+          </div>
+        )}
+      </div>
+
+      {/* Bookings Table (Desktop) */}
+      <div className="hidden lg:block bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">

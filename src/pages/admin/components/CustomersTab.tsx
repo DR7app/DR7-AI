@@ -1084,7 +1084,7 @@ export default function CustomersTab() {
       {/* Bulk Delete Confirmation Modal */}
       {showBulkDeleteModal && (
         <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary border border-red-600/50 rounded-lg max-w-lg w-full overflow-hidden">
+          <div className="bg-theme-bg-secondary border border-red-600/50 rounded-none sm:rounded-lg w-full sm:max-w-lg h-full sm:h-auto overflow-hidden flex flex-col">
             <div className="bg-red-900/30 border-b border-red-600/30 p-6">
               <h3 className="text-xl font-bold text-red-400 flex items-center gap-2">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1143,7 +1143,7 @@ export default function CustomersTab() {
       {/* Customer Details Modal - For Fattura Generation */}
       {viewingCustomerDetails && (
         <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-lg w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
               <h3 className="text-xl font-bold text-theme-text-primary">
                 Dettagli Cliente Completi - {viewingCustomerDetails.full_name}
@@ -1540,7 +1540,7 @@ export default function CustomersTab() {
       {
         viewingDocuments && (
           <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-lg w-full sm:max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-theme-text-primary">
                   Documenti - {viewingDocuments.full_name}
@@ -1826,24 +1826,24 @@ export default function CustomersTab() {
         )
       }
       {/* Stats Card */}
-      <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-full p-6">
+      <div className="mb-4 lg:mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-lg lg:rounded-full p-3 lg:p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
-            <p className="text-4xl font-bold text-dr7-gold">{allCustomers.length}</p>
+            <p className="text-2xl lg:text-4xl font-bold text-dr7-gold">{totalCustomers}</p>
           </div>
           <div className="text-dr7-gold">
-            <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-10 h-10 lg:w-16 lg:h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 lg:gap-4 mb-4 lg:mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <h2 className="text-2xl font-bold text-theme-text-primary">Clienti</h2>
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-2 lg:gap-3 items-center flex-wrap">
             <button
               onClick={() => selectedCustomerIds.size > 0 && setShowBulkDeleteModal(true)}
               disabled={selectedCustomerIds.size === 0}
@@ -1859,7 +1859,7 @@ export default function CustomersTab() {
               Elimina Multipla{selectedCustomerIds.size > 0 ? ` (${selectedCustomerIds.size})` : ''}
             </button>
             {selectedCustomerIds.size > 0 && (
-              <div className="flex gap-2 items-center border-l border-theme-border-light pl-4">
+              <div className="flex gap-2 items-center border-l border-theme-border-light pl-4 overflow-x-auto">
                 <span className="text-sm text-theme-text-muted">Status:</span>
                 <button
                   onClick={() => handleBulkStatusUpdate('blacklist')}
@@ -1932,7 +1932,118 @@ export default function CustomersTab() {
 
 
 
-      <div className="rounded-lg overflow-hidden">
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-3">
+        {customers.map((customer) => (
+          <div
+            key={customer.id}
+            className={`bg-theme-bg-secondary rounded-lg border border-theme-border p-3 ${customer.status === 'blacklist'
+              ? 'border-l-4 border-l-red-500 bg-red-900/30'
+              : customer.status === 'elite'
+                ? 'border-l-4 border-l-amber-500 bg-amber-500/20'
+                : customer.status === 'member'
+                  ? 'border-l-4 border-l-blue-500 bg-blue-500/20'
+                  : ''
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <input
+                  type="checkbox"
+                  checked={selectedCustomerIds.has(customer.id)}
+                  onChange={(e) => {
+                    const newSet = new Set(selectedCustomerIds)
+                    if (e.target.checked) {
+                      newSet.add(customer.id)
+                    } else {
+                      newSet.delete(customer.id)
+                    }
+                    setSelectedCustomerIds(newSet)
+                  }}
+                  className="w-5 h-5 flex-shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-theme-text-primary truncate">{customer.full_name}</div>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    {customer.tipo_cliente && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${customer.tipo_cliente === 'persona_fisica'
+                        ? 'bg-blue-500/20 text-blue-400'
+                        : customer.tipo_cliente === 'azienda'
+                          ? 'bg-purple-500/20 text-purple-400'
+                          : 'bg-green-500/20 text-green-400'
+                      }`}>
+                        {customer.tipo_cliente === 'persona_fisica' ? 'PF' : customer.tipo_cliente === 'azienda' ? 'AZ' : 'PA'}
+                      </span>
+                    )}
+                    {(customer as any).active_membership && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${(customer as any).active_membership.package_name === 'Argento' ? 'bg-theme-bg-hover text-black' :
+                        (customer as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500 text-black' :
+                          (customer as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-theme-text-primary' :
+                            'bg-blue-600 text-theme-text-primary'
+                      }`}>
+                        {(customer as any).active_membership.package_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-1 flex-shrink-0">
+                <button
+                  onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
+                  className={`px-1.5 py-1 rounded-full text-[10px] font-bold border ${
+                    customer.status === 'blacklist'
+                      ? 'bg-red-600 text-white border-red-400'
+                      : 'bg-red-900/80 text-red-100 border-red-600'
+                  }`}
+                >BL</button>
+                <button
+                  onClick={() => handleUpdateCustomerStatus(customer.id, 'member')}
+                  className={`px-1.5 py-1 rounded-full text-[10px] font-bold border ${
+                    customer.status === 'member'
+                      ? 'bg-blue-600 text-white border-blue-400'
+                      : 'bg-blue-900/80 text-blue-100 border-blue-600'
+                  }`}
+                >MEM</button>
+                <button
+                  onClick={() => handleUpdateCustomerStatus(customer.id, 'elite')}
+                  className={`px-1.5 py-1 rounded-full text-[10px] font-bold border ${
+                    customer.status === 'elite'
+                      ? 'bg-amber-500 text-white border-amber-300'
+                      : 'bg-amber-900/80 text-amber-100 border-amber-600'
+                  }`}
+                >ELT</button>
+              </div>
+            </div>
+
+            <div className="text-xs text-theme-text-muted space-y-0.5 mb-2">
+              {customer.email && <div className="truncate">{customer.email}</div>}
+              {customer.phone && <div>{customer.phone}</div>}
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={() => handleViewCustomerDetails(customer)} variant="secondary" className="text-xs py-1 px-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold flex-1">
+                Dettagli
+              </Button>
+              <Button onClick={() => handleViewDocuments(customer)} variant="secondary" className="text-xs py-1 px-2 bg-blue-900 hover:bg-blue-800 flex-1">
+                Documenti
+              </Button>
+              <Button onClick={() => handleEdit(customer)} variant="secondary" className="text-xs py-1 px-2 bg-green-900 hover:bg-green-800 flex-1">
+                Modifica
+              </Button>
+              <Button onClick={() => handleDelete(customer.id)} variant="secondary" className="text-xs py-1 px-2 bg-red-900 hover:bg-red-800">
+                ×
+              </Button>
+            </div>
+          </div>
+        ))}
+        {customers.length === 0 && (
+          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-8 text-center text-theme-text-muted">
+            {searchQuery ? `Nessun cliente trovato per "${searchQuery}"` : 'Nessun cliente trovato'}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden lg:block rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">
@@ -2126,8 +2237,8 @@ export default function CustomersTab() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-theme-border">
-          <div className="text-sm text-theme-text-muted">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 lg:px-6 py-3 lg:py-4 border-t border-theme-border">
+          <div className="hidden sm:block text-sm text-theme-text-muted">
             Mostrando {((currentPage - 1) * CUSTOMERS_PER_PAGE) + 1} - {Math.min(currentPage * CUSTOMERS_PER_PAGE, totalCustomers)} di {totalCustomers} clienti
           </div>
           <div className="flex gap-2">
