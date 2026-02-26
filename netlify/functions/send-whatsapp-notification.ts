@@ -133,21 +133,21 @@ const handler: Handler = async (event) => {
 
       message = `Salve ${firstName},\n\n`;
       message += `Confermiamo il suo appuntamento.\n\n`;
-      message += isEditCarWash ? `MODIFICA PRENOTAZIONE AUTOLAVAGGIO\n\n` : `NUOVA PRENOTAZIONE AUTOLAVAGGIO\n\n`;
-      message += `ID: DR7-${bookingId}\n`;
-      message += `Servizio: ${serviceName}\n`;
+      message += isEditCarWash ? `*MODIFICA PRENOTAZIONE AUTOLAVAGGIO*\n\n` : `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
+      message += `*ID:* DR7-${bookingId}\n`;
+      message += `*Servizio:* ${serviceName}\n`;
       if (vehiclePlate) {
-        message += `Targa: ${vehiclePlate}\n`;
+        message += `*Targa:* ${vehiclePlate}\n`;
       }
-      message += `Data e Ora: ${formattedDate} alle ${formattedTime}\n`;
+      message += `*Data e Ora:* ${formattedDate} alle ${formattedTime}\n`;
       if (additionalService) {
-        message += `Servizio Aggiuntivo: ${additionalService}\n`;
+        message += `*Servizio Aggiuntivo:* ${additionalService}\n`;
       }
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `Totale: €${totalPrice}\n`;
-      message += `Pagamento: ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
+      message += `*Totale:* €${totalPrice}\n`;
+      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
       if (notes) {
-        message += `Note: ${notes}\n`;
+        message += `*Note:* ${notes}\n`;
       }
       message += `\nCordiali Saluti,\nDR7`;
     } else if (serviceType === 'mechanical') {
@@ -189,15 +189,15 @@ const handler: Handler = async (event) => {
       const isEditMech = booking.isEdit;
       message = `Salve ${firstName},\n\n`;
       message += `Confermiamo il suo appuntamento.\n\n`;
-      message += isEditMech ? `MODIFICA PRENOTAZIONE MECCANICA\n\n` : `NUOVA PRENOTAZIONE MECCANICA\n\n`;
-      message += `ID: DR7-${bookingId}\n`;
-      message += `Servizio: ${serviceName}\n`;
-      message += `Data e Ora: ${formattedDate} alle ${formattedTime}\n`;
+      message += isEditMech ? `*MODIFICA PRENOTAZIONE MECCANICA*\n\n` : `*NUOVA PRENOTAZIONE MECCANICA*\n\n`;
+      message += `*ID:* DR7-${bookingId}\n`;
+      message += `*Servizio:* ${serviceName}\n`;
+      message += `*Data e Ora:* ${formattedDate} alle ${formattedTime}\n`;
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `Totale: €${totalPrice}\n`;
-      message += `Pagamento: ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
+      message += `*Totale:* €${totalPrice}\n`;
+      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
       if (notes) {
-        message += `Note: ${notes}\n`;
+        message += `*Note:* ${notes}\n`;
       }
       message += `\nCordiali Saluti,\nDR7`;
     } else {
