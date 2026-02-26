@@ -3315,7 +3315,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
           const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
           const depositEur = parseFloat(formData.deposit) || 0
-          const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : 'Nessuna'
+          const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
           const kmLabel = formData.unlimited_km ? 'Illimitati' : (formData.km_limit ? `${formData.km_limit} km` : '-')
           const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
             : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
@@ -3324,6 +3324,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             : formData.insurance_option || '-'
           const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
           const bookingNotes = insertedBooking?.booking_details?.notes || ''
+
+          const totalEur = insertedBooking?.price_total ? (insertedBooking.price_total / 100).toFixed(2) : parseFloat(formData.total_amount).toFixed(2)
 
           let custMsg = editingId
             ? `Salve ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
@@ -3334,10 +3336,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           custMsg += `*Ritiro:* ${fmtDate(pickupDt)} alle ${fmtTime(pickupDt)}\n`
           custMsg += `*Riconsegna:* ${fmtDate(dropoffDt)} alle ${fmtTime(dropoffDt)}\n`
           custMsg += `*Luogo ritiro:* ${pickupLocationLabel}\n`
-          custMsg += `*Pagamento:* ${paymentLabel}\n`
-          custMsg += `*Km:* ${kmLabel}\n`
-          custMsg += `*Cauzione:* ${depositLabel}\n`
           custMsg += `*Assicurazione:* ${insuranceLabel}\n`
+          custMsg += `*Totale:* €${totalEur}\n`
+          custMsg += `*Cauzione:* ${depositLabel}\n`
+          custMsg += `*KM:* ${kmLabel}\n`
+          custMsg += `*Pagamento:* ${paymentLabel}\n`
           if (bookingNotes) custMsg += `*Note:* ${bookingNotes}\n`
           custMsg += `\nCordiali Saluti,\nDR7`
 
