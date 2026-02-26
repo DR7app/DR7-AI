@@ -9,8 +9,6 @@ import VehiclesTab from './components/VehiclesTab'
 import CalendarTab from './components/CalendarTab'
 import CarWashBookingsTab from './components/CarWashBookingsTab'
 import CarWashCalendarTab from './components/CarWashCalendarTab'
-import MechanicalBookingTab from './components/MechanicalBookingTab'
-import MechanicalCalendarTab from './components/MechanicalCalendarTab'
 import UnpaidBookingsTab from './components/UnpaidBookingsTab'
 import MarketingTab from './components/MarketingTab'
 import ReviewsTab from './components/ReviewsTab'
@@ -34,7 +32,7 @@ import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
 import PlaceholderTab from './components/PlaceholderTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'mechanical' | 'mechanical-calendar' | 'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-danni' | 'report-penali' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' |'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-danni' | 'report-penali' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -136,8 +134,6 @@ export default function AdminDashboard() {
     'com-aruba': 'Aruba',
     'scadenze': 'Scadenze',
     'fattura': 'Fattura',
-    'mechanical': 'Prenotazioni Meccanica',
-    'mechanical-calendar': 'Calendario Meccanica',
   }
 
   return (
@@ -255,10 +251,6 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('carwash'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash')}>Prenotazioni</button>
               <button onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
 
-              {/* MECCANICA */}
-              <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Meccanica</div>
-              <button onClick={() => { setActiveTab('mechanical'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'mechanical')}>Prenotazioni</button>
-              <button onClick={() => { setActiveTab('mechanical-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'mechanical-calendar')}>Calendario</button>
 
               {/* FLOTTA */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Flotta</div>
@@ -358,18 +350,6 @@ export default function AdminDashboard() {
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                   <button onClick={() => setActiveTab('carwash')} className={dropdownItemClass(activeTab === 'carwash')}>Prenotazioni</button>
                   <button onClick={() => setActiveTab('carwash-calendar')} className={dropdownItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
-                </div>
-              </div>
-
-              {/* MECCANICA Dropdown */}
-              <div className="relative group">
-                <button className={dropdownBtnClass(activeTab === 'mechanical' || activeTab === 'mechanical-calendar')}>
-                  Meccanica
-                  <span className="text-xs">▼</span>
-                </button>
-                <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
-                  <button onClick={() => setActiveTab('mechanical')} className={dropdownItemClass(activeTab === 'mechanical')}>Prenotazioni</button>
-                  <button onClick={() => setActiveTab('mechanical-calendar')} className={dropdownItemClass(activeTab === 'mechanical-calendar')}>Calendario</button>
                 </div>
               </div>
 
@@ -515,8 +495,6 @@ export default function AdminDashboard() {
               onNewBooking={handleCarWashCalendarBooking}
             />
           )}
-          {activeTab === 'mechanical' && <MechanicalBookingTab />}
-          {activeTab === 'mechanical-calendar' && <MechanicalCalendarTab />}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cargos' && <CargosTab />}
