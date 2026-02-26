@@ -1870,14 +1870,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       status: booking.status,
       payment_status: booking.payment_status || 'paid',
       payment_method: booking.payment_method || 'Contanti',
-      amount_paid: booking.booking_details?.amountPaid ? (booking.booking_details.amountPaid / 100).toString() : '0',
+      amount_paid: booking.booking_details?.amountPaid ? (booking.booking_details.amountPaid / 100).toFixed(2) : '0',
       // Subtract delivery/pickup fees to get BASE rental amount only
       // (fees are re-added on save at price_total calculation)
       // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
       total_amount: ((booking.price_total
         - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
         - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
-      ) / 100).toString(),
+      ) / 100).toFixed(2),
       currency: booking.currency.toUpperCase(),
       source: 'admin',
       // 2nd Driver
