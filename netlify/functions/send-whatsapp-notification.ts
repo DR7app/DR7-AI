@@ -140,8 +140,12 @@ const handler: Handler = async (event) => {
         message += `Targa: ${vehiclePlate}\n`;
       }
       message += `Data e Ora: ${formattedDate} alle ${formattedTime}\n`;
+      if (additionalService) {
+        message += `Servizio Aggiuntivo: ${additionalService}\n`;
+      }
+      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
       message += `Totale: €${totalPrice}\n`;
-      message += `Pagamento: ${paymentInfo}\n`;
+      message += `Pagamento: ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
       if (notes) {
         message += `Note: ${notes}\n`;
       }
@@ -189,8 +193,9 @@ const handler: Handler = async (event) => {
       message += `ID: DR7-${bookingId}\n`;
       message += `Servizio: ${serviceName}\n`;
       message += `Data e Ora: ${formattedDate} alle ${formattedTime}\n`;
+      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
       message += `Totale: €${totalPrice}\n`;
-      message += `Pagamento: ${paymentInfo}\n`;
+      message += `Pagamento: ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
       if (notes) {
         message += `Note: ${notes}\n`;
       }
