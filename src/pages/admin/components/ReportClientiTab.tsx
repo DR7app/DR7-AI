@@ -5,6 +5,9 @@ interface CustomerReport {
   name: string
   email: string
   totalSpend: number
+  supercarCount: number
+  urbanCount: number
+  aziendaliCount: number
   rentalCount: number
   carWashCount: number
   mechanicalCount: number
@@ -18,12 +21,15 @@ interface CustomerReportData {
   totalRevenue: number
   totalBookings: number
   totalRentals: number
+  totalSupercar: number
+  totalUrban: number
+  totalAziendali: number
   totalCarWashes: number
   totalMechanical: number
   customers: CustomerReport[]
 }
 
-type SortField = 'totalSpend' | 'totalCount' | 'rentalCount' | 'carWashCount' | 'mechanicalCount' | 'totalRentalDays' | 'avgDailyRate'
+type SortField = 'totalSpend' | 'totalCount' | 'supercarCount' | 'urbanCount' | 'aziendaliCount' | 'carWashCount' | 'mechanicalCount' | 'totalRentalDays' | 'avgDailyRate'
 
 function formatCurrency(amount: number): string {
   return `€${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -101,7 +107,7 @@ export default function ReportClientiTab() {
               <p className="text-xs text-theme-text-muted">Prenotazioni Totali</p>
               <p className="text-2xl font-bold text-theme-text-primary">{clientiData.totalBookings}</p>
               <p className="text-xs text-theme-text-muted mt-1">
-                {clientiData.totalRentals} noleggi, {clientiData.totalCarWashes} lavaggi, {clientiData.totalMechanical} meccanica
+                {clientiData.totalSupercar} supercar, {clientiData.totalUrban} urban, {clientiData.totalAziendali} aziendali, {clientiData.totalCarWashes} lavaggi, {clientiData.totalMechanical} meccanica
               </p>
             </div>
           </div>
@@ -124,7 +130,9 @@ export default function ReportClientiTab() {
               >
                 <option value="totalSpend">Spesa totale</option>
                 <option value="totalCount">Totale prenotazioni</option>
-                <option value="rentalCount">N. Noleggi</option>
+                <option value="supercarCount">N. Supercar</option>
+                <option value="urbanCount">N. Urban</option>
+                <option value="aziendaliCount">N. Aziendali</option>
                 <option value="carWashCount">N. Lavaggi</option>
                 <option value="mechanicalCount">N. Meccanica</option>
                 <option value="totalRentalDays">Giorni noleggio</option>
@@ -144,39 +152,47 @@ export default function ReportClientiTab() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
-                    <th className="text-left px-4 py-3">Nome</th>
-                    <th className="text-left px-4 py-3">Email</th>
-                    <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalSpend')}>
-                      Spesa Totale {sortField === 'totalSpend' && '↓'}
+                    <th className="text-left px-3 py-3">Nome</th>
+                    <th className="text-left px-3 py-3">Email</th>
+                    <th className="text-right px-3 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalSpend')}>
+                      Spesa {sortField === 'totalSpend' && '↓'}
                     </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('rentalCount')}>
-                      Noleggi {sortField === 'rentalCount' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('supercarCount')}>
+                      Supercar {sortField === 'supercarCount' && '↓'}
                     </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('carWashCount')}>
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('urbanCount')}>
+                      Urban {sortField === 'urbanCount' && '↓'}
+                    </th>
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('aziendaliCount')}>
+                      Aziendali {sortField === 'aziendaliCount' && '↓'}
+                    </th>
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('carWashCount')}>
                       Lavaggi {sortField === 'carWashCount' && '↓'}
                     </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('mechanicalCount')}>
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('mechanicalCount')}>
                       Meccanica {sortField === 'mechanicalCount' && '↓'}
                     </th>
-                    <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalRentalDays')}>
-                      Giorni Noleggio {sortField === 'totalRentalDays' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalRentalDays')}>
+                      Giorni {sortField === 'totalRentalDays' && '↓'}
                     </th>
-                    <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('avgDailyRate')}>
-                      Tariffa Media {sortField === 'avgDailyRate' && '↓'}
+                    <th className="text-right px-3 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('avgDailyRate')}>
+                      Tariffa {sortField === 'avgDailyRate' && '↓'}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedClienti.map((c, i) => (
                     <tr key={c.customerId || i} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-theme-text-primary">{c.name}</td>
-                      <td className="px-4 py-3 text-theme-text-muted text-xs">{c.email}</td>
-                      <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(c.totalSpend)}</td>
-                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.rentalCount}</td>
-                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.carWashCount}</td>
-                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.mechanicalCount}</td>
-                      <td className="text-center px-4 py-3 text-theme-text-primary">{c.totalRentalDays}</td>
-                      <td className="text-right px-4 py-3 text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</td>
+                      <td className="px-3 py-3 font-medium text-theme-text-primary">{c.name}</td>
+                      <td className="px-3 py-3 text-theme-text-muted text-xs">{c.email}</td>
+                      <td className="text-right px-3 py-3 text-dr7-gold font-semibold">{formatCurrency(c.totalSpend)}</td>
+                      <td className="text-center px-2 py-3 text-theme-text-primary">{c.supercarCount || '-'}</td>
+                      <td className="text-center px-2 py-3 text-theme-text-primary">{c.urbanCount || '-'}</td>
+                      <td className="text-center px-2 py-3 text-theme-text-primary">{c.aziendaliCount || '-'}</td>
+                      <td className="text-center px-2 py-3 text-theme-text-primary">{c.carWashCount || '-'}</td>
+                      <td className="text-center px-2 py-3 text-theme-text-primary">{c.mechanicalCount || '-'}</td>
+                      <td className="text-center px-2 py-3 text-theme-text-primary">{c.totalRentalDays}</td>
+                      <td className="text-right px-3 py-3 text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -190,30 +206,38 @@ export default function ReportClientiTab() {
                     <p className="font-semibold text-theme-text-primary text-sm">{c.name}</p>
                     <p className="text-xs text-theme-text-muted">{c.email}</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <p className="text-lg font-bold text-dr7-gold">{formatCurrency(c.totalSpend)}</p>
-                      <p className="text-xs text-theme-text-muted">Spesa</p>
+                      <p className="text-base font-bold text-dr7-gold">{formatCurrency(c.totalSpend)}</p>
+                      <p className="text-[10px] text-theme-text-muted">Spesa</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-theme-text-primary">{c.rentalCount}</p>
-                      <p className="text-xs text-theme-text-muted">Noleggi</p>
+                      <p className="text-base font-bold text-theme-text-primary">{c.supercarCount}</p>
+                      <p className="text-[10px] text-theme-text-muted">Supercar</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-theme-text-primary">{c.carWashCount}</p>
-                      <p className="text-xs text-theme-text-muted">Lavaggi</p>
+                      <p className="text-base font-bold text-theme-text-primary">{c.urbanCount}</p>
+                      <p className="text-[10px] text-theme-text-muted">Urban</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-theme-text-primary">{c.mechanicalCount}</p>
-                      <p className="text-xs text-theme-text-muted">Meccanica</p>
+                      <p className="text-base font-bold text-theme-text-primary">{c.aziendaliCount}</p>
+                      <p className="text-[10px] text-theme-text-muted">Aziendali</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-theme-text-primary">{c.totalRentalDays}</p>
-                      <p className="text-xs text-theme-text-muted">Giorni</p>
+                      <p className="text-base font-bold text-theme-text-primary">{c.carWashCount}</p>
+                      <p className="text-[10px] text-theme-text-muted">Lavaggi</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</p>
-                      <p className="text-xs text-theme-text-muted">Tariffa Media</p>
+                      <p className="text-base font-bold text-theme-text-primary">{c.mechanicalCount}</p>
+                      <p className="text-[10px] text-theme-text-muted">Meccanica</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-theme-text-primary">{c.totalRentalDays}</p>
+                      <p className="text-[10px] text-theme-text-muted">Giorni</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-theme-text-muted">{formatCurrency(c.avgDailyRate)}</p>
+                      <p className="text-[10px] text-theme-text-muted">Tariffa</p>
                     </div>
                   </div>
                 </div>
@@ -236,7 +260,7 @@ export default function ReportClientiTab() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <p className="text-theme-text-muted text-lg mb-2">Clicca "Genera Report" per visualizzare i dati</p>
-          <p className="text-theme-text-muted text-sm">Il report include noleggi, lavaggi e meccanica per cliente</p>
+          <p className="text-theme-text-muted text-sm">Il report include supercar, urban, aziendali, lavaggi e meccanica per cliente</p>
         </div>
       )}
     </div>
