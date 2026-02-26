@@ -1391,10 +1391,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             ))}
                           </div>
                         )}
-                        {/* Quantity selector */}
-                        {isToggled && (
+                        {/* Quantity selector for per-unit extras */}
+                        {isToggled && extra.price_unit && (
                           <div className="flex items-center gap-2 ml-2">
-                            <span className="text-xs text-theme-text-muted">Qtà:</span>
+                            <span className="text-xs text-theme-text-muted">{extra.price_unit}:</span>
                             <button
                               type="button"
                               onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.max(1, (prev[extra.id] || 1) - 1) }))}
