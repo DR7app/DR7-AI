@@ -41,6 +41,16 @@ export default function ReportClientiTab() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState<SortField>('totalSpend')
+  const [sortAsc, setSortAsc] = useState(false)
+
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortAsc(!sortAsc)
+    } else {
+      setSortField(field)
+      setSortAsc(false)
+    }
+  }
 
   async function fetchClienti() {
     setLoading(true)
@@ -65,7 +75,7 @@ export default function ReportClientiTab() {
       })
     : []
 
-  const sortedClienti = [...filteredClienti].sort((a, b) => b[sortField] - a[sortField])
+  const sortedClienti = [...filteredClienti].sort((a, b) => sortAsc ? a[sortField] - b[sortField] : b[sortField] - a[sortField])
 
   return (
     <div className="space-y-6">
@@ -125,7 +135,7 @@ export default function ReportClientiTab() {
               <label className="text-xs text-theme-text-muted">Ordina per:</label>
               <select
                 value={sortField}
-                onChange={(e) => setSortField(e.target.value as SortField)}
+                onChange={(e) => { setSortField(e.target.value as SortField); setSortAsc(false) }}
                 className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
               >
                 <option value="totalSpend">Spesa totale</option>
@@ -154,29 +164,29 @@ export default function ReportClientiTab() {
                   <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
                     <th className="text-left px-3 py-3">Nome</th>
                     <th className="text-left px-3 py-3">Email</th>
-                    <th className="text-right px-3 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalSpend')}>
-                      Spesa {sortField === 'totalSpend' && '↓'}
+                    <th className="text-right px-3 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('totalSpend')}>
+                      Spesa {sortField === 'totalSpend' && (sortAsc ? '↑' : '↓')}
                     </th>
-                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('supercarCount')}>
-                      Supercar {sortField === 'supercarCount' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('supercarCount')}>
+                      Supercar {sortField === 'supercarCount' && (sortAsc ? '↑' : '↓')}
                     </th>
-                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('urbanCount')}>
-                      Urban {sortField === 'urbanCount' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('urbanCount')}>
+                      Urban {sortField === 'urbanCount' && (sortAsc ? '↑' : '↓')}
                     </th>
-                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('aziendaliCount')}>
-                      Aziendali {sortField === 'aziendaliCount' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('aziendaliCount')}>
+                      Aziendali {sortField === 'aziendaliCount' && (sortAsc ? '↑' : '↓')}
                     </th>
-                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('carWashCount')}>
-                      Lavaggi {sortField === 'carWashCount' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('carWashCount')}>
+                      Lavaggi {sortField === 'carWashCount' && (sortAsc ? '↑' : '↓')}
                     </th>
-                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('mechanicalCount')}>
-                      Meccanica {sortField === 'mechanicalCount' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('mechanicalCount')}>
+                      Meccanica {sortField === 'mechanicalCount' && (sortAsc ? '↑' : '↓')}
                     </th>
-                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('totalRentalDays')}>
-                      Giorni {sortField === 'totalRentalDays' && '↓'}
+                    <th className="text-center px-2 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('totalRentalDays')}>
+                      Giorni {sortField === 'totalRentalDays' && (sortAsc ? '↑' : '↓')}
                     </th>
-                    <th className="text-right px-3 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('avgDailyRate')}>
-                      Tariffa {sortField === 'avgDailyRate' && '↓'}
+                    <th className="text-right px-3 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('avgDailyRate')}>
+                      Tariffa {sortField === 'avgDailyRate' && (sortAsc ? '↑' : '↓')}
                     </th>
                   </tr>
                 </thead>
