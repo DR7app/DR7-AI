@@ -14,16 +14,29 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    // Fetch all bookings with valid statuses
-    const { data: allBookings, error: bookingsError } = await supabase
-      .from('bookings')
-      .select('id, user_id, customer_name, customer_email, price_total, status, service_type, booking_details, pickup_date, dropoff_date, appointment_date')
-      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
+    // Fetch all bookings and vehicles in parallel
+    const [bookingsRes, vehiclesRes] = await Promise.all([
+      supabase
+        .from('bookings')
+        .select('id, user_id, customer_name, customer_email, price_total, status, service_type, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id')
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active']),
+      supabase
+        .from('vehicles')
+        .select('id, category')
+    ])
 
-    if (bookingsError) throw bookingsError
+    if (bookingsRes.error) throw bookingsRes.error
+
+    // Build vehicle category lookup
+    const vehicleCategoryMap = new Map<string, string>()
+    if (vehiclesRes.data) {
+      vehiclesRes.data.forEach(v => {
+        if (v.id && v.category) vehicleCategoryMap.set(v.id, v.category)
+      })
+    }
 
     // Classify bookings by type, excluding internals
-    type BookingType = 'rental' | 'car_wash' | 'mechanical'
+    type BookingType = 'supercar' | 'urban' | 'aziendali' | 'car_wash' | 'mechanical'
 
     function classifyBooking(b: any): BookingType | null {
       const details = b.booking_details || {}
@@ -36,8 +49,15 @@ export const handler: Handler = async (event) => {
       const st = (b.service_type || '').trim().toLowerCase()
       if (st === 'car_wash') return 'car_wash'
       if (st === 'mechanical_service' || st === 'mechanical') return 'mechanical'
+
       // Rental: no service_type and has pickup+dropoff dates
-      if (!st && b.pickup_date && b.dropoff_date) return 'rental'
+      if (!st && b.pickup_date && b.dropoff_date) {
+        const vid = b.vehicle_id || details.vehicle_id || ''
+        const cat = vehicleCategoryMap.get(vid) || ''
+        if (cat === 'aziendali') return 'aziendali'
+        if (cat === 'urban') return 'urban'
+        return 'supercar' // exotic or unknown defaults to supercar
+      }
       return null
     }
 
@@ -48,17 +68,21 @@ export const handler: Handler = async (event) => {
       email: string
       totalSpendCents: number
       rentalSpendCents: number
-      rentalCount: number
+      supercarCount: number
+      urbanCount: number
+      aziendaliCount: number
       carWashCount: number
       mechanicalCount: number
       totalRentalDays: number
     }> = {}
 
-    let totalRentals = 0
+    let totalSupercar = 0
+    let totalUrban = 0
+    let totalAziendali = 0
     let totalCarWashes = 0
     let totalMechanical = 0
 
-    ;(allBookings || []).forEach(b => {
+    ;(bookingsRes.data || []).forEach(b => {
       const type = classifyBooking(b)
       if (!type) return
 
@@ -74,7 +98,9 @@ export const handler: Handler = async (event) => {
           email: custEmail,
           totalSpendCents: 0,
           rentalSpendCents: 0,
-          rentalCount: 0,
+          supercarCount: 0,
+          urbanCount: 0,
+          aziendaliCount: 0,
           carWashCount: 0,
           mechanicalCount: 0,
           totalRentalDays: 0,
@@ -84,10 +110,12 @@ export const handler: Handler = async (event) => {
       const priceCents = b.price_total || 0
       customerMap[key].totalSpendCents += priceCents
 
-      if (type === 'rental') {
-        customerMap[key].rentalCount += 1
+      const isRental = type === 'supercar' || type === 'urban' || type === 'aziendali'
+      if (isRental) {
         customerMap[key].rentalSpendCents += priceCents
-        totalRentals += 1
+        if (type === 'supercar') { customerMap[key].supercarCount += 1; totalSupercar += 1 }
+        else if (type === 'urban') { customerMap[key].urbanCount += 1; totalUrban += 1 }
+        else { customerMap[key].aziendaliCount += 1; totalAziendali += 1 }
         // Compute rental days
         if (b.pickup_date && b.dropoff_date) {
           const pickup = new Date(b.pickup_date)
@@ -153,6 +181,7 @@ export const handler: Handler = async (event) => {
 
     // Convert cents to EUR
     const totalRevenue = customerList.reduce((s, c) => s + c.totalSpendCents, 0) / 100
+    const totalRentals = totalSupercar + totalUrban + totalAziendali
     const totalBookings = totalRentals + totalCarWashes + totalMechanical
 
     return {
@@ -162,6 +191,9 @@ export const handler: Handler = async (event) => {
         totalRevenue: Math.round(totalRevenue * 100) / 100,
         totalBookings,
         totalRentals,
+        totalSupercar,
+        totalUrban,
+        totalAziendali,
         totalCarWashes,
         totalMechanical,
         customers: customerList.map(c => ({
@@ -169,10 +201,13 @@ export const handler: Handler = async (event) => {
           name: c.name || 'Sconosciuto',
           email: c.email || '-',
           totalSpend: Math.round(c.totalSpendCents / 100 * 100) / 100,
-          rentalCount: c.rentalCount,
+          supercarCount: c.supercarCount,
+          urbanCount: c.urbanCount,
+          aziendaliCount: c.aziendaliCount,
+          rentalCount: c.supercarCount + c.urbanCount + c.aziendaliCount,
           carWashCount: c.carWashCount,
           mechanicalCount: c.mechanicalCount,
-          totalCount: c.rentalCount + c.carWashCount + c.mechanicalCount,
+          totalCount: c.supercarCount + c.urbanCount + c.aziendaliCount + c.carWashCount + c.mechanicalCount,
           totalRentalDays: c.totalRentalDays,
           avgDailyRate: c.totalRentalDays > 0
             ? Math.round(c.rentalSpendCents / c.totalRentalDays) / 100
