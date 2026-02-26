@@ -150,6 +150,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [submitting, setSubmitting] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
+  const [editService, setEditService] = useState<CarWashService | null>(null)
+  const [editExtras, setEditExtras] = useState<CarWashService[]>([])
   const [selectedMainTab, setSelectedMainTab] = useState<'lavaggio' | 'meccanica'>('lavaggio')
 
   // Wizard state
@@ -159,6 +161,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [selectedExtras, setSelectedExtras] = useState<CarWashService[]>([])
   const [extraPriceOptions, setExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
   const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({})
+  const [customPrice, setCustomPrice] = useState('')
   const [showNewClientModal, setShowNewClientModal] = useState(false)
 
   // Vehicle classification state (Step 0)
@@ -199,7 +202,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const getTotal = () => {
     let total = 0
     if (selectedService) {
-      total += selectedPriceOption?.price ?? selectedService.price
+      if (selectedService.price_unit === 'custom') {
+        total += parseFloat(customPrice) || 0
+      } else {
+        total += selectedPriceOption?.price ?? selectedService.price
+      }
     }
     for (const extra of selectedExtras) {
       const ep = extraPriceOptions[extra.id]
@@ -247,6 +254,28 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     return parts.join(' + ')
   }
 
+  // Edit modal computed values
+  const getEditTotalDuration = () => {
+    let d = 0
+    if (editService) d += editService.durationMinutes || parseDurationToMinutes(editService.duration)
+    for (const e of editExtras) d += e.durationMinutes || parseDurationToMinutes(e.duration)
+    return d
+  }
+
+  const getEditTotal = () => {
+    let total = 0
+    if (editService) total += editService.price
+    for (const e of editExtras) total += e.price
+    return total
+  }
+
+  const buildEditServiceNames = () => {
+    const parts: string[] = []
+    if (editService) parts.push(editService.name)
+    for (const e of editExtras) parts.push(e.name)
+    return parts.join(' + ')
+  }
+
   const resetWizard = () => {
     setCurrentStep(0)
     setSelectedService(null)
@@ -255,6 +284,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setExtraPriceOptions({})
     setExtraQuantities({})
     setManualPrice(null)
+    setCustomPrice('')
     setVehiclePlate('')
     setVehicleMakeModel('')
     setVehicleCategory(null)
@@ -405,6 +435,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     }
   }, [initialData, onDataConsumed])
+
+  // Populate edit service/extras when editing a booking
+  useEffect(() => {
+    if (editingBooking && carWashServices.length > 0) {
+      const cartItems = editingBooking.booking_details?.cartItems || []
+      if (cartItems.length > 0) {
+        const mainItem = cartItems[0]
+        const found = carWashServices.find((s: CarWashService) => s.id === mainItem.serviceId) || null
+        setEditService(found)
+        const extras: CarWashService[] = []
+        for (let i = 1; i < cartItems.length; i++) {
+          const foundExtra = carWashServices.find((s: CarWashService) => s.id === cartItems[i].serviceId)
+          if (foundExtra) extras.push(foundExtra)
+        }
+        setEditExtras(extras)
+      } else {
+        setEditService(null)
+        setEditExtras([])
+      }
+    } else if (!editingBooking) {
+      setEditService(null)
+      setEditExtras([])
+    }
+  }, [editingBooking, carWashServices])
 
   async function loadData() {
     setLoading(true)
@@ -591,13 +645,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Build cart items for booking details (backward compatible format)
     const cartItems: any[] = []
     if (selectedService) {
+      const servicePrice = selectedService.price_unit === 'custom'
+        ? parseFloat(customPrice)
+        : (selectedPriceOption?.price ?? selectedService.price)
       cartItems.push({
         serviceId: selectedService.id,
         serviceName: selectedService.name,
         quantity: 1,
-        price: selectedPriceOption?.price ?? selectedService.price,
+        price: servicePrice,
         option: selectedPriceOption?.label || null,
-        subtotal: selectedPriceOption?.price ?? selectedService.price
+        subtotal: servicePrice
       })
     }
     for (const extra of selectedExtras) {
@@ -1177,6 +1234,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       setSelectedExtras([])
                       setExtraPriceOptions({})
     setExtraQuantities({})
+                      setCustomPrice('')
                       setCurrentStep(1)
                     }}
                     className={`px-6 py-2 rounded-full font-semibold transition-colors ${
@@ -1206,6 +1264,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setSelectedExtras([])
                     setExtraPriceOptions({})
     setExtraQuantities({})
+                    setCustomPrice('')
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'lavaggio'
@@ -1224,6 +1283,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setSelectedExtras([])
                     setExtraPriceOptions({})
     setExtraQuantities({})
+                    setCustomPrice('')
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'meccanica'
@@ -1245,6 +1305,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     const service = allServices.find(s => s.id === e.target.value) || null
                     setSelectedService(service)
                     setSelectedPriceOption(null)
+                    setCustomPrice('')
                   }}
                   className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                 >
@@ -1253,7 +1314,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
                       {services.map(service => (
                         <option key={service.id} value={service.id}>
-                          {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
+                          {service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
                         </option>
                       ))}
                     </optgroup>
@@ -1283,6 +1344,29 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               )}
 
+              {/* Custom price input for services with price_unit === 'custom' */}
+              {selectedService?.price_unit === 'custom' && (
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Prezzo (EUR) — Minimo €{selectedService.price.toFixed(0)}
+                  </label>
+                  <input
+                    type="number"
+                    min={selectedService.price}
+                    step="0.01"
+                    value={customPrice}
+                    onChange={(e) => setCustomPrice(e.target.value)}
+                    placeholder={`Minimo ${selectedService.price.toFixed(2)}`}
+                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none"
+                  />
+                  {customPrice && parseFloat(customPrice) < selectedService.price && (
+                    <p className="text-red-400 text-sm mt-1">
+                      Il prezzo deve essere almeno €{selectedService.price.toFixed(0)}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Category badge reminder */}
               {vehicleCategory && (
                 <div className="flex items-center gap-2 text-sm">
@@ -1307,10 +1391,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
                 <button
                   type="button"
-                  disabled={!selectedService || (selectedService.price_options && selectedService.price_options.length > 0 && !selectedPriceOption)}
+                  disabled={
+                    !selectedService ||
+                    (selectedService.price_options && selectedService.price_options.length > 0 && !selectedPriceOption) ||
+                    (selectedService?.price_unit === 'custom' && (!customPrice || parseFloat(customPrice) < selectedService.price))
+                  }
                   onClick={() => setCurrentStep(2)}
                   className={`px-6 py-2 rounded-full font-semibold transition-colors ${
-                    selectedService && (!selectedService.price_options?.length || selectedPriceOption)
+                    selectedService &&
+                    (!selectedService.price_options?.length || selectedPriceOption) &&
+                    !(selectedService.price_unit === 'custom' && (!customPrice || parseFloat(customPrice) < selectedService.price))
                       ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
                       : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                   }`}
@@ -1481,7 +1571,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       {selectedPriceOption && <span className="text-theme-text-muted ml-1">({selectedPriceOption.label})</span>}
                     </span>
                     <span className="text-theme-text-primary font-medium">
-                      EUR {(selectedPriceOption?.price ?? selectedService?.price ?? 0).toFixed(2)}
+                      EUR {selectedService?.price_unit === 'custom'
+                        ? (parseFloat(customPrice) || 0).toFixed(2)
+                        : (selectedPriceOption?.price ?? selectedService?.price ?? 0).toFixed(2)}
                     </span>
                   </div>
                   {selectedExtras.map(extra => {
@@ -1856,14 +1948,79 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </div>
                 </div>
 
+                {/* Main Service Dropdown */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Servizio</label>
-                  <input
-                    type="text"
-                    value={editingBooking.service_name}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, service_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                  />
+                  <select
+                    value={editService?.id || ''}
+                    onChange={(e) => {
+                      const service = carWashServices.find(s => s.id === e.target.value) || null
+                      setEditService(service)
+                    }}
+                    className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                  >
+                    <option value="">Seleziona servizio...</option>
+                    {Object.entries(
+                      carWashServices
+                        .filter(s => s.category !== 'extra' && s.category !== 'experience')
+                        .reduce<Record<string, CarWashService[]>>((acc, s) => {
+                          if (!acc[s.category]) acc[s.category] = []
+                          acc[s.category].push(s)
+                          return acc
+                        }, {})
+                    ).map(([category, services]) => (
+                      <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                        {services.map(service => (
+                          <option key={service.id} value={service.id}>
+                            {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Extras Checkboxes */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Extra</label>
+                  <div className="flex flex-wrap gap-2">
+                    {carWashServices
+                      .filter(s => (s.category === 'extra' || s.category === 'experience') && s.id !== editService?.id)
+                      .map(extra => {
+                        const isSelected = editExtras.some(e => e.id === extra.id)
+                        return (
+                          <button
+                            key={extra.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setEditExtras(prev => prev.filter(e => e.id !== extra.id))
+                              } else {
+                                setEditExtras(prev => [...prev, extra])
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold'
+                                : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-dr7-gold'
+                            }`}
+                          >
+                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${
+                              isSelected ? 'bg-dr7-gold border-dr7-gold text-black' : 'border-theme-text-muted'
+                            }`}>
+                              {isSelected && '✓'}
+                            </span>
+                            {extra.name} - EUR {extra.price.toFixed(2)}
+                          </button>
+                        )
+                      })}
+                  </div>
+                </div>
+
+                {/* Duration + Price summary */}
+                <div className="p-3 bg-theme-bg-tertiary/50 rounded-lg flex justify-between items-center">
+                  <span className="text-sm text-theme-text-muted">Durata: ~{getEditTotalDuration()} min</span>
+                  <span className="text-lg font-bold text-dr7-gold">Totale: EUR {getEditTotal().toFixed(2)}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1885,17 +2042,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo (€)</label>
-                  <input
-                    type="number"
-                    value={editingBooking.price_total / 100}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, price_total: parseFloat(e.target.value) * 100 })}
-                    step="0.01"
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1931,24 +2077,87 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <button
                   onClick={async () => {
                     try {
+                      // Rebuild cart items from edit selections
+                      const editCartItems: any[] = []
+                      if (editService) {
+                        editCartItems.push({
+                          serviceId: editService.id,
+                          serviceName: editService.name,
+                          quantity: 1,
+                          price: editService.price,
+                          option: null,
+                          subtotal: editService.price
+                        })
+                      }
+                      for (const extra of editExtras) {
+                        editCartItems.push({
+                          serviceId: extra.id,
+                          serviceName: extra.name,
+                          quantity: 1,
+                          price: extra.price,
+                          option: null,
+                          subtotal: extra.price
+                        })
+                      }
+
+                      const updatedServiceName = editService ? buildEditServiceNames() : editingBooking.service_name
+                      const updatedPrice = editService ? Math.round(getEditTotal() * 100) : editingBooking.price_total
+                      const updatedDuration = editService ? getEditTotalDuration() : (editingBooking.booking_details?.totalDuration || 0)
+
+                      const updatedDetails = {
+                        ...(editingBooking.booking_details || {}),
+                        cartItems: editService ? editCartItems : (editingBooking.booking_details?.cartItems || []),
+                        totalDuration: updatedDuration,
+                      }
+
                       const { error } = await supabase
                         .from('bookings')
                         .update({
                           customer_name: editingBooking.customer_name,
                           customer_email: editingBooking.customer_email,
                           customer_phone: editingBooking.customer_phone,
-                          service_name: editingBooking.service_name,
+                          service_name: updatedServiceName,
                           appointment_date: editingBooking.appointment_date,
                           appointment_time: editingBooking.appointment_time,
-                          price_total: editingBooking.price_total,
+                          price_total: updatedPrice,
                           status: editingBooking.status,
                           payment_status: editingBooking.payment_status,
+                          booking_details: updatedDetails,
                         })
                         .eq('id', editingBooking.id)
 
                       if (error) throw error
 
-                      // Success — UI updates automatically
+                      // Send WhatsApp modification notification
+                      try {
+                        await fetch('/.netlify/functions/send-whatsapp-notification', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            booking: {
+                              id: editingBooking.id,
+                              service_type: 'car_wash',
+                              isEdit: true,
+                              service_name: updatedServiceName,
+                              customer_name: editingBooking.customer_name,
+                              customer_email: editingBooking.customer_email,
+                              customer_phone: editingBooking.customer_phone,
+                              appointment_date: editingBooking.appointment_date,
+                              price_total: updatedPrice,
+                              payment_status: editingBooking.payment_status,
+                              booking_details: {
+                                serviceName: updatedServiceName,
+                                amountPaid: updatedDetails.amountPaid || 0,
+                                notes: updatedDetails.notes || ''
+                              }
+                            }
+                          })
+                        })
+                      } catch (whatsappError) {
+                        console.error('WhatsApp notification failed:', whatsappError)
+                      }
+
+                      toast.success('Prenotazione aggiornata')
                       setEditingBooking(null)
                       loadData()
                     } catch (error) {
