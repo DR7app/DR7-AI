@@ -1158,21 +1158,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 >
                   Annulla
                 </button>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  {!targaVehicleInfo && vehiclePlate.length < 5 && (
+                    <span className="text-xs text-red-400">Inserisci la targa e clicca Cerca</span>
+                  )}
                   <button
                     type="button"
-                    onClick={() => {
-                      // Skip classification — show all services
-                      setVehicleCategory(null)
-                      setClassificationSource(null)
-                      setCurrentStep(1)
-                    }}
-                    className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                  >
-                    Salta
-                  </button>
-                  <button
-                    type="button"
+                    disabled={!targaVehicleInfo}
                     onClick={() => {
                       // Clear service selection when changing step from 0 to 1 (category may have changed)
                       setSelectedService(null)
@@ -1181,7 +1173,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       setExtraPriceOptions({})
                       setCurrentStep(1)
                     }}
-                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-yellow-500 text-black transition-colors"
+                    className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+                      targaVehicleInfo
+                        ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                        : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
+                    }`}
                   >
                     Avanti
                   </button>
