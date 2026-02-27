@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 
 // --- Configuration ---
 const CELL_WIDTH = 52 // Balanced width: fits full month on screen while maintaining readability
-const CELL_HEIGHT = 28 // Height for each 15-minute time slot (compact)
+const CELL_HEIGHT = 10 // Height for each 5-minute time slot
 
 interface CarWashBooking {
   id: string
@@ -425,27 +425,30 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
         {/* B. Time Slots Grid */}
         <div className="min-w-max relative">
-          {/* Generate time slots from 09:00 to 18:00 in 15-minute intervals (37 slots) */}
-          {Array.from({ length: 37 }, (_, i) => {
-            const totalMinutes = 9 * 60 + i * 15 // Start at 09:00
+          {/* Generate time slots from 09:00 to 18:00 in 5-minute intervals (109 slots) */}
+          {Array.from({ length: 109 }, (_, i) => {
+            const totalMinutes = 9 * 60 + i * 5 // Start at 09:00
             const hours = Math.floor(totalMinutes / 60)
             const minutes = totalMinutes % 60
             const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
             const isFullHour = minutes === 0
+            const is15Min = minutes % 15 === 0
 
             return (
               <div
                 key={timeString}
-                className={`flex ${isFullHour ? 'border-t-2 border-theme-border/70' : 'border-t border-theme-border/20'}`}
+                className={`flex ${isFullHour ? 'border-t-2 border-theme-border/70' : is15Min ? 'border-t border-theme-border/30' : ''}`}
                 style={{ height: CELL_HEIGHT }}
               >
-                {/* Time Label Column (Sticky Left) */}
+                {/* Time Label Column (Sticky Left) - only show label at 15-min intervals */}
                 <div
                   className={`sticky left-0 w-[70px] z-[30] bg-theme-bg-primary/98 border-r border-theme-border/50 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_var(--color-theme-shadow)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
                 >
-                  <span className={`text-xs ${isFullHour ? 'text-theme-text-primary/95 text-sm' : 'text-theme-text-primary/60'}`}>
-                    {timeString}
-                  </span>
+                  {is15Min ? (
+                    <span className={`text-xs ${isFullHour ? 'text-theme-text-primary/95 text-sm' : 'text-theme-text-primary/60'}`}>
+                      {timeString}
+                    </span>
+                  ) : null}
                 </div>
 
                 {/* Day Cells */}
@@ -507,7 +510,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                             key={startEvt.booking.id}
                             className={`absolute inset-x-0 ${isRientro ? 'bg-blue-800 border-blue-600/30' : 'bg-red-800 border-red-700/30'} border rounded shadow-md hover:shadow-xl hover:brightness-110 transition-all cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking`}
                             style={{
-                              height: `${(startEvt.duration / 15) * CELL_HEIGHT - 2}px`,
+                              height: `${(startEvt.duration / 5) * CELL_HEIGHT - 2}px`,
                               top: `${topOffset}px`
                             }}
                             onClick={(e) => {
