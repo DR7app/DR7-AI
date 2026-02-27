@@ -140,6 +140,7 @@ export const handler: Handler = async (event) => {
     const vehicleMap: Record<string, {
       vehicleName: string
       vehiclePlate: string
+      customerName: string
       count: number
       totalAmount: number
     }> = {}
@@ -153,6 +154,7 @@ export const handler: Handler = async (event) => {
         vehicleMap[plate] = {
           vehicleName: name,
           vehiclePlate: plate,
+          customerName: f.customer_name || '',
           count: 0,
           totalAmount: 0,
         }
@@ -163,13 +165,16 @@ export const handler: Handler = async (event) => {
       if (vehicleMap[plate].vehicleName === 'Sconosciuto' && name !== 'Sconosciuto') {
         vehicleMap[plate].vehicleName = name
       }
+      if (!vehicleMap[plate].customerName && f.customer_name) {
+        vehicleMap[plate].customerName = f.customer_name
+      }
     })
 
     // For danni report: also include cashed cauzioni (stato='Bloccata')
     if (reportType === 'danni') {
       const { data: cauzioni } = await supabase
         .from('cauzioni')
-        .select('veicolo_id, importo')
+        .select('veicolo_id, cliente_id, importo')
         .eq('stato', 'Bloccata')
 
       if (cauzioni && cauzioni.length > 0) {
@@ -190,15 +195,34 @@ export const handler: Handler = async (event) => {
           }
         }
 
+        // Resolve customer names for cauzioni
+        const clienteIds = [...new Set(cauzioni.map(c => c.cliente_id).filter(Boolean))]
+        const clienteLookup = new Map<string, string>()
+
+        if (clienteIds.length > 0) {
+          const { data: customers } = await supabase
+            .from('customers_extended')
+            .select('id, nome, cognome')
+            .in('id', clienteIds)
+
+          if (customers) {
+            customers.forEach(c => {
+              clienteLookup.set(c.id, [c.nome, c.cognome].filter(Boolean).join(' '))
+            })
+          }
+        }
+
         cauzioni.forEach(c => {
           const vehicle = c.veicolo_id ? veicoloLookup.get(c.veicolo_id) : null
           const plate = (vehicle?.plate || 'Sconosciuto').replace(/\s/g, '').toUpperCase()
           const name = vehicle?.display_name || 'Sconosciuto'
+          const custName = c.cliente_id ? (clienteLookup.get(c.cliente_id) || '') : ''
 
           if (!vehicleMap[plate]) {
             vehicleMap[plate] = {
               vehicleName: name,
               vehiclePlate: plate,
+              customerName: custName,
               count: 0,
               totalAmount: 0,
             }
@@ -208,6 +232,9 @@ export const handler: Handler = async (event) => {
           vehicleMap[plate].totalAmount += Number(c.importo) || 0
           if (vehicleMap[plate].vehicleName === 'Sconosciuto' && name !== 'Sconosciuto') {
             vehicleMap[plate].vehicleName = name
+          }
+          if (!vehicleMap[plate].customerName && custName) {
+            vehicleMap[plate].customerName = custName
           }
         })
       }
@@ -229,6 +256,7 @@ export const handler: Handler = async (event) => {
         vehicles: vehicleList.map(v => ({
           vehicleName: v.vehicleName,
           vehiclePlate: v.vehiclePlate,
+          customerName: v.customerName || '-',
           count: v.count,
           totalAmount: Math.round(v.totalAmount * 100) / 100,
         }))
