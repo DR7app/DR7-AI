@@ -157,6 +157,26 @@ export const handler: Handler = async (event) => {
 
     const customerList = Object.values(customerMap)
 
+    // Add customers who have danni but no bookings (before enrichment so they get names too)
+    for (const [clienteId] of danniMap.entries()) {
+      const alreadyExists = customerList.some(c => c.customerId === clienteId)
+      if (!alreadyExists && clienteId) {
+        customerList.push({
+          customerId: clienteId,
+          name: '',
+          email: '',
+          totalSpendCents: 0,
+          rentalSpendCents: 0,
+          supercarCount: 0,
+          urbanCount: 0,
+          aziendaliCount: 0,
+          carWashCount: 0,
+          mechanicalCount: 0,
+          totalRentalDays: 0,
+        })
+      }
+    }
+
     // Enrich names from customers_extended (batch in chunks of 100)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     const customerIds = customerList
@@ -187,26 +207,6 @@ export const handler: Handler = async (event) => {
         } catch (enrichErr) {
           console.warn('Customer enrichment failed for chunk, skipping:', enrichErr)
         }
-      }
-    }
-
-    // Add customers who have danni but no bookings
-    for (const [clienteId] of danniMap.entries()) {
-      const alreadyExists = customerList.some(c => c.customerId === clienteId)
-      if (!alreadyExists && clienteId) {
-        customerList.push({
-          customerId: clienteId,
-          name: '',
-          email: '',
-          totalSpendCents: 0,
-          rentalSpendCents: 0,
-          supercarCount: 0,
-          urbanCount: 0,
-          aziendaliCount: 0,
-          carWashCount: 0,
-          mechanicalCount: 0,
-          totalRentalDays: 0,
-        })
       }
     }
 
