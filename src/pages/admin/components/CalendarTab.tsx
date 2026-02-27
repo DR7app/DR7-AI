@@ -125,35 +125,21 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             .map(b => b.user_id)
             .filter((id): id is string => !!id)
 
-          // Try both email and id lookups
-          const lookups: Promise<any>[] = []
-          if (emails.length > 0) {
-            lookups.push(
-              supabase.from('customers_extended')
-                .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
-                .in('email', emails)
-                .then(res => res)
-            )
-          }
-          if (userIds.length > 0) {
-            lookups.push(
-              supabase.from('customers_extended')
-                .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
-                .in('id', userIds)
-                .then(res => res)
-            )
-          }
-
-          const results = await Promise.all(lookups)
+          // Lookup by email and id separately
           const customersByEmail = new Map<string, any>()
           const customersById = new Map<string, any>()
-          for (const { data } of results) {
-            if (data) {
-              for (const c of data) {
-                if (c.email) customersByEmail.set(c.email, c)
-                customersById.set(c.id, c)
-              }
-            }
+
+          if (emails.length > 0) {
+            const { data } = await supabase.from('customers_extended')
+              .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+              .in('email', emails)
+            if (data) for (const c of data) { if (c.email) customersByEmail.set(c.email, c) }
+          }
+          if (userIds.length > 0) {
+            const { data } = await supabase.from('customers_extended')
+              .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+              .in('id', userIds)
+            if (data) for (const c of data) { customersById.set(c.id, c) }
           }
 
           for (const b of needsEnrichment) {
