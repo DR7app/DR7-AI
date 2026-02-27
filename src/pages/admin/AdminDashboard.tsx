@@ -31,8 +31,9 @@ import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
 import PlaceholderTab from './components/PlaceholderTab'
+import CarWashCatalogTab from './components/CarWashCatalogTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' |'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-danni' | 'report-penali' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-danni' | 'report-penali' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -106,6 +107,7 @@ export default function AdminDashboard() {
     'gestione-multe': 'Gestione Multe',
     'carwash': 'Prenotazioni Prime Wash',
     'carwash-calendar': 'Calendario Prime Wash',
+    'carwash-catalog': 'Catalogo Prime Wash',
     'vehicles': 'Veicoli',
     'fleet': 'Gestione Flotta',
     'gps-keyless': 'GPS & Keyless',
@@ -250,6 +252,7 @@ export default function AdminDashboard() {
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Prime Wash</div>
               <button onClick={() => { setActiveTab('carwash'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash')}>Prenotazioni</button>
               <button onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
+              <button onClick={() => { setActiveTab('carwash-catalog'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
 
 
               {/* FLOTTA */}
@@ -343,13 +346,15 @@ export default function AdminDashboard() {
 
               {/* PRIME WASH Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(activeTab === 'carwash' || activeTab === 'carwash-calendar')}>
+                <button className={dropdownBtnClass(['carwash', 'carwash-calendar', 'carwash-catalog'].includes(activeTab))}>
+
                   Prime Wash
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                   <button onClick={() => setActiveTab('carwash')} className={dropdownItemClass(activeTab === 'carwash')}>Prenotazioni</button>
                   <button onClick={() => setActiveTab('carwash-calendar')} className={dropdownItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
+                  <button onClick={() => setActiveTab('carwash-catalog')} className={dropdownItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
                 </div>
               </div>
 
@@ -495,6 +500,7 @@ export default function AdminDashboard() {
               onNewBooking={handleCarWashCalendarBooking}
             />
           )}
+          {activeTab === 'carwash-catalog' && <CarWashCatalogTab />}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cargos' && <CargosTab />}
