@@ -24,10 +24,16 @@ export function checkTimeOverlap(
 
 /**
  * Get duration in minutes for a service
+ * Prefers totalDuration from booking_details when available
  */
-export function getBookingDuration(serviceName: string, serviceType: 'car_wash' | 'mechanical_service'): number {
+export function getBookingDuration(serviceName: string, serviceType: 'car_wash' | 'mechanical_service', bookingDetails?: any): number {
+    // Prefer stored totalDuration from booking time (always in sync with catalog)
+    if (bookingDetails?.totalDuration && bookingDetails.totalDuration > 0) {
+        return bookingDetails.totalDuration
+    }
+
     if (serviceType === 'car_wash') {
-        // Car wash service durations
+        // Fallback: hardcoded durations for legacy bookings without totalDuration
         const carWashServices = [
             { name: 'Lavaggio Completo', durationMinutes: 45 },
             { name: 'Lavaggio Esterno', durationMinutes: 30 },
@@ -49,7 +55,7 @@ export function getBookingDuration(serviceName: string, serviceType: 'car_wash' 
 export async function fetchConflictingBookings(date: string, excludeBookingId?: string) {
     const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('id, service_type, service_name, appointment_date, appointment_time, customer_name')
+        .select('id, service_type, service_name, appointment_date, appointment_time, customer_name, booking_details')
         .in('service_type', ['car_wash', 'mechanical_service'])
         .neq('status', 'cancelled')
         .gte('appointment_date', date)
@@ -116,7 +122,8 @@ export function filterAvailableTimeSlots(
             const bookingTime = booking.appointment_time || '00:00'
             const bookingDuration = getBookingDuration(
                 booking.service_name,
-                booking.service_type
+                booking.service_type,
+                booking.booking_details
             )
 
             if (checkTimeOverlap(timeSlot, newBookingDuration, bookingTime, bookingDuration)) {

@@ -244,9 +244,28 @@ export default function DailyCalendarTab() {
         <div className="space-y-4">
             {/* Header */}
             <div className="bg-theme-bg-secondary rounded-lg p-3 border border-theme-border shadow-lg">
-                <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-xl font-bold text-theme-text-primary">Calendario Giornaliero</h2>
-                    <div className="flex gap-2">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="hidden md:block text-xl font-bold text-theme-text-primary">Calendario Giornaliero</h2>
+                        <p className="text-theme-text-primary font-semibold text-sm md:text-xs md:text-theme-text-muted md:mt-1">
+                            <span className="md:hidden">
+                                {selectedDate.toLocaleDateString('it-IT', {
+                                    weekday: 'short',
+                                    day: 'numeric',
+                                    month: 'short'
+                                })}
+                            </span>
+                            <span className="hidden md:inline">
+                                {selectedDate.toLocaleDateString('it-IT', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}
+                            </span>
+                        </p>
+                    </div>
+                    <div className="flex gap-1.5 md:gap-2">
                         <button
                             onClick={() => navigateDay('prev')}
                             className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded text-xs font-semibold"
@@ -267,18 +286,10 @@ export default function DailyCalendarTab() {
                         </button>
                     </div>
                 </div>
-                <p className="text-theme-text-muted text-xs mb-2">
-                    {selectedDate.toLocaleDateString('it-IT', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                    })}
-                </p>
             </div>
 
-            {/* Calendar Grid */}
-            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-x-auto">
+            {/* Calendar Grid — Desktop */}
+            <div className="hidden md:block bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-x-auto">
                 {/* Header Row with Categories */}
                 <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-theme-border bg-theme-bg-tertiary sticky top-0">
                     <div className="p-2 text-xs font-bold text-theme-text-muted">ORA</div>
@@ -392,6 +403,106 @@ export default function DailyCalendarTab() {
                                 {/* Varie Column */}
                                 <div className="p-1.5 border-l border-theme-border">
                                     {renderBookings(varieBookings, 'bg-purple-600')}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* Calendar — Mobile Timeline */}
+            <div className="md:hidden bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-hidden">
+                {/* Category legend */}
+                <div className="flex flex-wrap gap-3 px-3 py-2 border-b border-theme-border bg-theme-bg-tertiary">
+                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-green-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Noleggio</span></div>
+                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-blue-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Lavaggio</span></div>
+                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-orange-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Meccanica</span></div>
+                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-purple-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Varie</span></div>
+                </div>
+
+                <div className="divide-y divide-white/[0.06]">
+                    {TIME_SLOTS.map((slot) => {
+                        const slotBookings = getSlotBookings(slot)
+                        const isCurrentSlot = isToday && slot === currentSlot
+                        const hasBookings = slotBookings.length > 0
+
+                        // Skip empty slots on mobile (unless it's the current time slot)
+                        if (!hasBookings && !isCurrentSlot) return null
+
+                        const getCategoryColor = (type: Booking['type']) => {
+                            switch (type) {
+                                case 'check-in':
+                                case 'check-out':
+                                    return 'border-green-600'
+                                case 'lavaggio':
+                                    return 'border-blue-600'
+                                case 'meccanica':
+                                    return 'border-orange-600'
+                                case 'varie':
+                                    return 'border-purple-600'
+                            }
+                        }
+
+                        const getDotColor = (type: Booking['type']) => {
+                            switch (type) {
+                                case 'check-in':
+                                case 'check-out':
+                                    return 'bg-green-600'
+                                case 'lavaggio':
+                                    return 'bg-blue-600'
+                                case 'meccanica':
+                                    return 'bg-orange-600'
+                                case 'varie':
+                                    return 'bg-purple-600'
+                            }
+                        }
+
+                        const getLabel = (type: Booking['type']) => {
+                            switch (type) {
+                                case 'check-in': return 'USCITE'
+                                case 'check-out': return 'RIENTRI'
+                                case 'lavaggio': return 'LAVAGGIO'
+                                case 'meccanica': return 'MECCANICA'
+                                case 'varie': return 'VARIE'
+                            }
+                        }
+
+                        return (
+                            <div
+                                key={slot}
+                                ref={isCurrentSlot ? currentTimeRef : null}
+                                className={isCurrentSlot ? 'bg-theme-bg-tertiary/50' : ''}
+                            >
+                                {/* Time label */}
+                                <div className={`px-3 pt-2.5 pb-1 flex items-center gap-2 ${isCurrentSlot ? 'text-dr7-gold' : 'text-theme-text-muted'}`}>
+                                    <span className="font-mono text-xs font-bold">{slot}</span>
+                                    {isCurrentSlot && <div className="h-px flex-1 bg-dr7-gold/40" />}
+                                </div>
+
+                                {/* Event cards */}
+                                <div className="px-3 pb-2.5 space-y-1.5">
+                                    {slotBookings.map((booking) => (
+                                        <div
+                                            key={`${booking.id}-${booking.type}`}
+                                            className={`border-l-4 ${getCategoryColor(booking.type)} bg-theme-bg-tertiary rounded-r-lg px-3 py-2`}
+                                        >
+                                            <div className="flex items-center gap-1.5 mb-0.5">
+                                                <div className={`w-2 h-2 rounded-full ${getDotColor(booking.type)}`} />
+                                                <span className="text-[10px] font-bold text-theme-text-muted tracking-wide">{getLabel(booking.type)}</span>
+                                            </div>
+                                            <div className="font-bold text-sm text-theme-text-primary leading-tight">{parseCustomerName(booking.customer_name)}</div>
+                                            <div className="text-xs text-theme-text-primary/80 mt-0.5">
+                                                {booking.vehicle_name}
+                                                {booking.type !== 'lavaggio' && <span className="font-mono ml-1.5">{getTarga(booking)}</span>}
+                                            </div>
+                                            {booking.service_name && (
+                                                <div className="text-[10px] text-theme-text-primary/60 mt-1 italic">{booking.service_name}</div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {!hasBookings && isCurrentSlot && (
+                                        <p className="text-xs text-theme-text-muted italic">Nessun evento</p>
+                                    )}
                                 </div>
                             </div>
                         )
