@@ -1091,20 +1091,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       setCustomers(customersArray)
 
-      // Enrich bookings missing customer_phone from customers_extended
+      // Enrich bookings missing customer data from customers_extended
       setBookings(prev => prev.map(b => {
-        if (b.customer_phone) return b
         const custId = b.user_id || b.booking_details?.customer?.customerId || b.booking_details?.customer_id
         const cust = custId ? customerMap.get(custId) : null
-        if (cust?.phone) {
-          return { ...b, customer_phone: cust.phone }
+        const details = b.booking_details?.customer || {}
+        const updates: Partial<Booking> = {}
+
+        if (!b.customer_name || b.customer_name === 'Cliente Sconosciuto') {
+          const name = cust?.full_name || details.fullName || details.name
+          if (name) updates.customer_name = name
         }
-        // Also try booking_details.customer.phone
-        const detailsPhone = b.booking_details?.customer?.phone
-        if (detailsPhone) {
-          return { ...b, customer_phone: detailsPhone }
+        if (!b.customer_phone) {
+          const phone = cust?.phone || details.phone
+          if (phone) updates.customer_phone = phone
         }
-        return b
+        if (!b.customer_email) {
+          const email = cust?.email || details.email
+          if (email) updates.customer_email = email
+        }
+
+        return Object.keys(updates).length > 0 ? { ...b, ...updates } : b
       }))
 
       const { data: vehiclesData, error: vehiclesError } = await supabase

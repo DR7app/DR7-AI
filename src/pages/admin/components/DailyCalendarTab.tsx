@@ -193,11 +193,13 @@ export default function DailyCalendarTab() {
         })
     }
 
-    // Parse customer name
-    const parseCustomerName = (fullName: string | null) => {
-        if (!fullName) return 'N/A'
-        const parts = fullName.trim().split(' ')
-        if (parts.length === 1) return parts[0]
+    // Parse customer name with fallback to booking_details
+    const parseCustomerName = (booking: Booking) => {
+        const fullName = booking.customer_name
+            || booking.booking_details?.customer?.fullName
+            || booking.booking_details?.customer?.name
+            || booking.booking_details?.guest_name
+        if (!fullName || fullName === 'Cliente Sconosciuto') return 'N/A'
         return fullName
     }
 
@@ -360,7 +362,7 @@ export default function DailyCalendarTab() {
                                         >
                                             {label}
                                         </div>
-                                        <div className="font-bold text-sm leading-tight">{parseCustomerName(booking.customer_name)}</div>
+                                        <div className="font-bold text-sm leading-tight">{parseCustomerName(booking)}</div>
                                         <div className="text-theme-text-primary/90 text-xs mt-0.5">{booking.vehicle_name}</div>
                                         {booking.type !== 'lavaggio' && (
                                             <div className="text-theme-text-primary/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
@@ -490,7 +492,7 @@ export default function DailyCalendarTab() {
                                                 <div className={`w-2 h-2 rounded-full ${getDotColor(booking.type)}`} />
                                                 <span className="text-[10px] font-bold text-theme-text-muted tracking-wide">{getLabel(booking.type)}</span>
                                             </div>
-                                            <div className="font-bold text-sm text-theme-text-primary leading-tight">{parseCustomerName(booking.customer_name)}</div>
+                                            <div className="font-bold text-sm text-theme-text-primary leading-tight">{parseCustomerName(booking)}</div>
                                             <div className="text-xs text-theme-text-primary/80 mt-0.5">
                                                 {booking.vehicle_name}
                                                 {booking.type !== 'lavaggio' && <span className="font-mono ml-1.5">{getTarga(booking)}</span>}
