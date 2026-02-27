@@ -133,15 +133,30 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       const startDate = new Date(year, month, 1, 0, 0, 0)
       const endDate = new Date(year, month + 1, 0, 23, 59, 59)
 
-      // Load ALL car wash bookings - client-side filtering
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('service_type', 'car_wash')
-        .neq('status', 'cancelled')
-        .order('appointment_date', { ascending: true })
+      // Fetch ALL bookings via Netlify function (bypasses RLS)
+      let bookingsData: any[] | null = null
+      try {
+        const res = await fetch('/.netlify/functions/list-bookings')
+        const result = await res.json()
+        if (res.ok && result.bookings) {
+          bookingsData = result.bookings.filter((b: any) =>
+            b.service_type === 'car_wash' && b.status !== 'cancelled'
+          )
+        }
+      } catch {
+        // Netlify function unavailable, fallback to direct query
+      }
 
-      if (bookingsError) throw bookingsError
+      if (!bookingsData) {
+        const { data, error: bookingsError } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('service_type', 'car_wash')
+          .neq('status', 'cancelled')
+          .order('appointment_date', { ascending: true })
+        if (bookingsError) throw bookingsError
+        bookingsData = data
+      }
 
       // Client-side filter for current month
       const filteredBookings = (bookingsData || []).filter(b => {
