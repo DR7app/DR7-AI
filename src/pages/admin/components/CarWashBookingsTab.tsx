@@ -98,7 +98,7 @@ function getAllowedTimeRanges(durationMinutes: number, isSaturday: boolean = fal
 }
 
 
-// Generate time slots for car wash, every 15 minutes
+// Generate time slots for car wash, every 5 minutes
 // Weekdays: 9h-13h and 15h-18h | Saturday: 9h-17h continuous
 const generateTimeSlots = (isSaturday: boolean = false) => {
   const slots: string[] = []
@@ -106,7 +106,7 @@ const generateTimeSlots = (isSaturday: boolean = false) => {
   if (isSaturday) {
     // Saturday: continuous 9:00-17:00
     for (let hour = 9; hour <= 17; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
+      for (let minute = 0; minute < 60; minute += 5) {
         if (hour === 17 && minute > 0) break // Stop at 17:00
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         slots.push(time)
@@ -115,7 +115,7 @@ const generateTimeSlots = (isSaturday: boolean = false) => {
   } else {
     // Weekdays: Morning 9h-13h
     for (let hour = 9; hour < 13; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
+      for (let minute = 0; minute < 60; minute += 5) {
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         slots.push(time)
       }
@@ -123,7 +123,7 @@ const generateTimeSlots = (isSaturday: boolean = false) => {
 
     // Weekdays: Afternoon 15h-18h (18:00 is the maximum/last slot)
     for (let hour = 15; hour < 19; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
+      for (let minute = 0; minute < 60; minute += 5) {
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         if (hour === 18 && minute > 0) break
         slots.push(time)
