@@ -48,6 +48,11 @@ const PENALI_KEYWORDS = [
 function classifyInvoice(items: any[]): 'danni' | 'penali' | null {
   for (const item of items) {
     const desc = (item.description || '').toLowerCase()
+
+    // New format: "Danno prenotazione XXXXXXXX - ..." → always danni
+    if (desc.includes('danno prenotazione')) return 'danni'
+
+    // Legacy format: "Penale prenotazione XXXXXXXX - ..." → classify by keywords
     if (!desc.includes('penale prenotazione')) continue
 
     const dashIdx = desc.indexOf(' - ')
@@ -243,7 +248,7 @@ export const handler: Handler = async (event) => {
       fattureRes.data.forEach((f: any) => {
         if (!f.items || !Array.isArray(f.items)) return
         const hasPenalty = f.items.some((item: any) =>
-          item.description && item.description.includes('Penale prenotazione')
+          item.description && (item.description.includes('Penale prenotazione') || item.description.includes('Danno prenotazione'))
         )
         if (!hasPenalty) return
 
