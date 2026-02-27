@@ -14,7 +14,8 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, customerId, amount, motivo, note } = JSON.parse(event.body || '{}')
+        const body = JSON.parse(event.body || '{}')
+        const { bookingId, customerId, note } = body
 
         // Validation
         if (!bookingId) {
@@ -24,10 +25,29 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        if (!amount || amount <= 0) {
+        // Support both new cart format (items[]) and legacy single-item format (amount + motivo)
+        interface CartItem { label: string; amount: number; quantity: number }
+        let cartItems: CartItem[] = []
+
+        if (body.items && Array.isArray(body.items) && body.items.length > 0) {
+            cartItems = body.items.filter((item: any) => item.amount > 0 && item.quantity > 0)
+        } else if (body.amount && body.amount > 0) {
+            cartItems = [{ label: body.motivo || '', amount: body.amount, quantity: 1 }]
+        }
+
+        if (cartItems.length === 0) {
             return {
                 statusCode: 400,
-                body: JSON.stringify({ error: 'Importo valido richiesto' })
+                body: JSON.stringify({ error: 'Almeno una penale con importo valido richiesta' })
+            }
+        }
+
+        const totalAmount = cartItems.reduce((sum, item) => sum + item.amount * item.quantity, 0)
+
+        if (totalAmount <= 0) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Importo totale deve essere maggiore di zero' })
             }
         }
 
@@ -168,25 +188,28 @@ export const handler: Handler = async (event) => {
         const padded = String(nextNumber).padStart(4, '0')
         const invoiceNumber = `DR7-${currentYear}-${padded}`
 
-        // Create invoice item for penalty
+        // Create invoice items from cart
         // IMPORTANT: Amount is NET (without IVA), VAT rate is 0
-        const description = motivo
-            ? `Penale prenotazione ${booking.id.substring(0, 8).toUpperCase()} - ${motivo}`
-            : `Penale prenotazione ${booking.id.substring(0, 8).toUpperCase()}`
+        const bookingPrefix = `Penale prenotazione ${booking.id.substring(0, 8).toUpperCase()}`
 
-        const items = [{
-            description,
-            unit_price: amount,
-            quantity: 1,
-            vat_rate: 0, // No IVA for penalties
-            total: amount
-        }]
+        const items = cartItems.map(item => {
+            const description = item.label
+                ? `${bookingPrefix} - ${item.label}`
+                : bookingPrefix
+            return {
+                description,
+                unit_price: item.amount,
+                quantity: item.quantity,
+                vat_rate: 0,
+                total: Math.round(item.amount * item.quantity * 100) / 100
+            }
+        })
 
-        // Calculate totals (penalty is exempt from VAT)
+        // Calculate totals (penalties are exempt from VAT)
         const subtotal = 0
         const vatAmount = 0
-        const exemptAmount = amount
-        const total = amount
+        const exemptAmount = totalAmount
+        const total = totalAmount
 
         // Create invoice
         const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
