@@ -1,6 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
+
+/** Convert EUR string to integer cents without floating point drift */
+function eurToCents(eur: string): number {
+  const n = parseFloat(eur || '0')
+  return Math.round((n + Number.EPSILON) * 100)
+}
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
 import { validateRentalBooking } from '../../../utils/schedulingRules'
@@ -3036,9 +3042,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
-        price_total: Math.round(parseFloat(formData.total_amount) * 100) // Convert to cents (base rental)
-          + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
-          + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
+        price_total: eurToCents(formData.total_amount) // Convert to cents (base rental)
+          + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
+          + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
@@ -3058,7 +3064,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           province: formData.delivery_province,
           notes: formData.delivery_notes
         } : null,
-        delivery_fee: formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0,
+        delivery_fee: formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0,
         pickup_enabled: formData.pickup_enabled,
         pickup_address: formData.pickup_enabled ? {
           street: formData.pickup_street,
@@ -3067,7 +3073,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           province: formData.pickup_province,
           notes: formData.pickup_notes
         } : null,
-        pickup_fee: formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0,
+        pickup_fee: formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0,
         booking_details: {
           // When editing, preserve metadata that the form doesn't manage
           // (extension history, contracts, deposit options, etc.)
@@ -3091,7 +3097,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           vehicle_id: formData.vehicle_id, // Also store in booking_details for backward compatibility
           pickupLocation: formData.pickup_location,
           dropoffLocation: formData.dropoff_location,
-          amountPaid: Math.round(parseFloat(formData.amount_paid) * 100), // Store amount paid in cents
+          amountPaid: eurToCents(formData.amount_paid), // Store amount paid in cents
           source: 'admin_manual',
           // Kasko & Deposit
           insuranceOption: formData.insurance_option,
@@ -3222,29 +3228,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {
                   description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
                   quantity: 1,
-                  unitPrice: Math.round(parseFloat(formData.total_amount) * 100),
-                  total: Math.round(parseFloat(formData.total_amount) * 100)
+                  unitPrice: eurToCents(formData.total_amount),
+                  total: eurToCents(formData.total_amount)
                 },
                 ...(formData.delivery_enabled ? [{
                   description: 'Consegna a domicilio',
                   quantity: 1,
-                  unitPrice: Math.round(parseFloat(formData.delivery_fee) * 100),
-                  total: Math.round(parseFloat(formData.delivery_fee) * 100)
+                  unitPrice: eurToCents(formData.delivery_fee),
+                  total: eurToCents(formData.delivery_fee)
                 }] : []),
                 ...(formData.pickup_enabled ? [{
                   description: 'Ritiro a domicilio',
                   quantity: 1,
-                  unitPrice: Math.round(parseFloat(formData.pickup_fee) * 100),
-                  total: Math.round(parseFloat(formData.pickup_fee) * 100)
+                  unitPrice: eurToCents(formData.pickup_fee),
+                  total: eurToCents(formData.pickup_fee)
                 }] : [])
               ],
-              subtotal: Math.round(parseFloat(formData.total_amount) * 100)
-                + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
-                + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
+              subtotal: eurToCents(formData.total_amount)
+                + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
+                + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
               tax: 0,
-              total: Math.round(parseFloat(formData.total_amount) * 100)
-                + (formData.delivery_enabled ? Math.round(parseFloat(formData.delivery_fee) * 100) : 0)
-                + (formData.pickup_enabled ? Math.round(parseFloat(formData.pickup_fee) * 100) : 0),
+              total: eurToCents(formData.total_amount)
+                + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
+                + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
               paymentStatus: formData.payment_status || 'pending',
               bookingDate: new Date().toISOString(),
               serviceDate: `${formData.pickup_date}T${formData.pickup_time}:00`,
@@ -3281,13 +3287,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               dropoff_date: returnDateTime,
               pickup_location: pickupLocationLabel,
               insurance_option: 'KASKO_BASE',
-              price_total: insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100),
+              price_total: insertedBooking?.price_total || eurToCents(formData.total_amount),
               payment_status: paymentStatus,
               payment_method: formData.payment_method || '',
               deposit_amount: parseFloat(formData.deposit) || 0,
               km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
               booking_details: {
-                amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || Math.round(parseFloat(formData.total_amount) * 100)) : 0,
+                amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || eurToCents(formData.total_amount)) : 0,
                 insuranceOption: 'KASKO_BASE',
                 deposit: parseFloat(formData.deposit) || 0,
                 deposit_status: formData.deposit_status,
