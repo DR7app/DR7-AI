@@ -404,13 +404,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   useEffect(() => {
     loadData()
 
-    // Real-time subscription for new bookings
+    // Real-time subscription for new bookings AND catalog price changes
     const subscription = supabase
       .channel('carwash-bookings-updates')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
         (payload) => {
           console.log('🔄 CarWashBookingsTab: Real-time update received', payload)
+          loadData()
+        }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'car_wash_services' },
+        (payload) => {
+          console.log('🔄 CarWashBookingsTab: Catalog price update received', payload)
           loadData()
         }
       )

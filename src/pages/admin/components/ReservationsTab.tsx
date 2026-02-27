@@ -1938,14 +1938,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   function handleExtendBooking(booking: Booking) {
     console.log('[handleExtendBooking] Opening extend modal for booking:', booking.id)
 
-    // Pre-populate with current return date
+    // Pre-populate with current return date in Rome timezone
     const currentReturnDate = new Date(booking.dropoff_date)
-    const romeTime = new Date(currentReturnDate.getTime() + (currentReturnDate.getTimezoneOffset() * 60000) + (60 * 60000))
+    const romeDateStr = currentReturnDate.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }) // YYYY-MM-DD
+    const romeTimeStr = currentReturnDate.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
 
     setExtendingBooking(booking)
     setExtendData({
-      new_return_date: romeTime.toISOString().split('T')[0],
-      new_return_time: romeTime.toISOString().split('T')[1].substring(0, 5),
+      new_return_date: romeDateStr,
+      new_return_time: romeTimeStr,
       additional_amount: '0',
       extension_payment_status: 'pending',
       extension_payment_method: '',

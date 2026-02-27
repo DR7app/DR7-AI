@@ -194,7 +194,7 @@ async function fetchWashEvents(
 ): Promise<SchedulingEvent[]> {
     const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('id, appointment_date, appointment_time, pickup_date, dropoff_date, vehicle_name, vehicle_plate, service_name')
+        .select('id, appointment_date, appointment_time, pickup_date, dropoff_date, vehicle_name, vehicle_plate, service_name, booking_details')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
         .gte('appointment_date', startDate.toISOString().split('T')[0])
@@ -219,8 +219,8 @@ async function fetchWashEvents(
                 washDateTime = new Date(b.appointment_date)
             }
 
-            // Calculate duration based on service name
-            const durationMinutes = getWashDuration(b.service_name)
+            // Prefer totalDuration from booking_details, fallback to name-based lookup
+            const durationMinutes = b.booking_details?.totalDuration || getWashDuration(b.service_name)
 
             return {
                 id: b.id,

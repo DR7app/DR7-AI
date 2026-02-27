@@ -47,7 +47,12 @@ const SERVICE_DURATIONS_MAXI: Record<string, number> = {
   luxury: 280,
 }
 
-const getServiceDuration = (serviceName: string, vehicleCategory?: string): number => {
+const getServiceDuration = (serviceName: string, vehicleCategory?: string, bookingDetails?: any): number => {
+  // Prefer totalDuration saved at booking time (always in sync with catalog)
+  if (bookingDetails?.totalDuration && bookingDetails.totalDuration > 0) {
+    return bookingDetails.totalDuration
+  }
+
   const name = serviceName.toLowerCase()
   const isMaxi = vehicleCategory?.toLowerCase() === 'maxi'
   const durations = isMaxi ? SERVICE_DURATIONS_MAXI : SERVICE_DURATIONS_URBAN
@@ -57,6 +62,7 @@ const getServiceDuration = (serviceName: string, vehicleCategory?: string): numb
   if (name.includes('moto')) return 20
 
   // Match service patterns (check more specific patterns first)
+  if (name.includes('absolute')) return isMaxi ? 480 : 480
   if (name.includes('luxury') || name.includes('dr7')) return durations.luxury
   if (name.includes('vip')) return durations.vip
   if (name.includes('top')) return durations.top_shine
@@ -207,7 +213,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         }
 
         // Rientro washes always occupy only 15 minutes (1 slot)
-        const duration = isRientroBooking(booking) ? 15 : getServiceDuration(booking.service_name, booking.booking_details?.vehicleCategory)
+        const duration = isRientroBooking(booking) ? 15 : getServiceDuration(booking.service_name, booking.booking_details?.vehicleCategory, booking.booking_details)
 
         // Calculate position
         const dayIndex = day - 1
