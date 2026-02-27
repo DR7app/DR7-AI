@@ -112,6 +112,62 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         const validBookings = allBookings.filter(b =>
           !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
         )
+
+        // Enrich bookings missing customer_name from customers_extended
+        const needsEnrichment = validBookings.filter(b =>
+          !b.customer_name || b.customer_name === 'Cliente Sconosciuto'
+        )
+        if (needsEnrichment.length > 0) {
+          const emails = needsEnrichment
+            .map(b => b.customer_email || b.booking_details?.customer?.email)
+            .filter((e): e is string => !!e)
+          const userIds = needsEnrichment
+            .map(b => b.user_id)
+            .filter((id): id is string => !!id)
+
+          // Try both email and id lookups
+          const lookups: Promise<any>[] = []
+          if (emails.length > 0) {
+            lookups.push(
+              supabase.from('customers_extended')
+                .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+                .in('email', emails)
+            )
+          }
+          if (userIds.length > 0) {
+            lookups.push(
+              supabase.from('customers_extended')
+                .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+                .in('id', userIds)
+            )
+          }
+
+          const results = await Promise.all(lookups)
+          const customersByEmail = new Map<string, any>()
+          const customersById = new Map<string, any>()
+          for (const { data } of results) {
+            if (data) {
+              for (const c of data) {
+                if (c.email) customersByEmail.set(c.email, c)
+                customersById.set(c.id, c)
+              }
+            }
+          }
+
+          for (const b of needsEnrichment) {
+            const email = b.customer_email || b.booking_details?.customer?.email
+            const cust = (email && customersByEmail.get(email)) || (b.user_id && customersById.get(b.user_id))
+            if (cust) {
+              const fullName = cust.tipo_cliente === 'azienda'
+                ? cust.denominazione
+                : `${cust.nome || ''} ${cust.cognome || ''}`.trim()
+              if (fullName) b.customer_name = fullName
+              if (!b.customer_phone && cust.telefono) b.customer_phone = cust.telefono
+              if (!b.customer_email && cust.email) b.customer_email = cust.email
+            }
+          }
+        }
+
         setBookings(validBookings)
       }
     } catch (e) {
@@ -512,7 +568,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {evt.booking.customer_name || 'Cliente Sconosciuto'} • {(() => {
+                              {evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
                                 // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                 const endHours = evt.endLocal.getHours()
                                 const endMinutes = evt.endLocal.getMinutes()
