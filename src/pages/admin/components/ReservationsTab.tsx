@@ -22,6 +22,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
+import DanniModal from './DanniModal'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -556,6 +557,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Penalty Modal State
   const [penaltyModalOpen, setPenaltyModalOpen] = useState(false)
   const [selectedBookingForPenalty, setSelectedBookingForPenalty] = useState<Booking | null>(null)
+
+  // Danni Modal State
+  const [danniModalOpen, setDanniModalOpen] = useState(false)
+  const [selectedBookingForDanni, setSelectedBookingForDanni] = useState<Booking | null>(null)
 
   // Confirmation Modal State (commented out - unused, causing build errors)
   // const [confirmationModalOpen, setConfirmationModalOpen] = useState(false)
@@ -3665,6 +3670,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           />
         )}
 
+        {/* Danni Modal */}
+        {selectedBookingForDanni && (
+          <DanniModal
+            isOpen={danniModalOpen}
+            booking={{
+              id: selectedBookingForDanni.id,
+              customer_name: selectedBookingForDanni.customer_name || 'Cliente',
+              customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || undefined,
+              user_id: selectedBookingForDanni.user_id || undefined
+            }}
+            onClose={() => {
+              setDanniModalOpen(false)
+              setSelectedBookingForDanni(null)
+            }}
+            onSuccess={() => {
+              loadData()
+            }}
+            onEditCustomer={(customerId) => {
+              openEditCustomer(customerId)
+              setDanniModalOpen(false)
+            }}
+          />
+        )}
+
         {showForm && (
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-lg mb-6 border border-theme-border/30">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
@@ -4775,6 +4804,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
                           >
                             Penali
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanni(booking); setDanniModalOpen(true) }}
+                            className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
+                          >
+                            Danni
                           </button>
                         </div>
                       </td>
