@@ -71,16 +71,27 @@ export default function DailyCalendarTab() {
         try {
             console.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
 
-            // Load all bookings - client-side filtering
-            const { data, error } = await supabase
-                .from('bookings')
-                .select('*')
-                .neq('status', 'cancelled')
-                .order('created_at', { ascending: false })
+            // Fetch ALL bookings via Netlify function (bypasses RLS)
+            let bookingsToProcess: any[] = []
+            try {
+                const res = await fetch('/.netlify/functions/list-bookings')
+                const result = await res.json()
+                if (res.ok && result.bookings) {
+                    bookingsToProcess = result.bookings.filter((b: any) => b.status !== 'cancelled')
+                }
+            } catch {
+                // Netlify function unavailable, fallback
+            }
 
-            if (error) throw error
-
-            const bookingsToProcess = data || []
+            if (bookingsToProcess.length === 0) {
+                const { data, error } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .neq('status', 'cancelled')
+                    .order('created_at', { ascending: false })
+                if (error) throw error
+                bookingsToProcess = data || []
+            }
             console.log('📋 Daily Calendar loaded:', bookingsToProcess.length, 'bookings')
 
             const categorized: Booking[] = []
