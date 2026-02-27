@@ -193,7 +193,7 @@ export default function ReportClientiTab() {
     return t
   }, [sortedClienti])
 
-  const totalColCount = COLUMN_GROUPS.reduce((s, g) => s + g.columns.length, 0)
+
 
   return (
     <div className="space-y-6">
