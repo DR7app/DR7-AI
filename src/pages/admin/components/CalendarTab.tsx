@@ -132,6 +132,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
               supabase.from('customers_extended')
                 .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
                 .in('email', emails)
+                .then(res => res)
             )
           }
           if (userIds.length > 0) {
@@ -139,6 +140,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
               supabase.from('customers_extended')
                 .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
                 .in('id', userIds)
+                .then(res => res)
             )
           }
 
