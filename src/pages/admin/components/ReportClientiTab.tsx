@@ -31,7 +31,7 @@ interface CustomerReportData {
   customers: CustomerReport[]
 }
 
-type SortField = 'totale_spesa' | 'totale_prenotazioni' | 'totale_giorni' | 'supercar_spesa' | 'urban_spesa' | 'aziendali_spesa' | 'danni_spesa' | 'penali_spesa'
+type SortField = keyof Omit<CustomerReport, 'customerId' | 'name' | 'email'>
 
 function formatCurrency(amount: number): string {
   return `€${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -153,6 +153,20 @@ export default function ReportClientiTab() {
   const [sortField, setSortField] = useState<SortField>('totale_spesa')
   const [sortAsc, setSortAsc] = useState(false)
 
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortAsc(!sortAsc)
+    } else {
+      setSortField(field)
+      setSortAsc(false)
+    }
+  }
+
+  function sortArrow(field: string) {
+    if (sortField !== field) return ''
+    return sortAsc ? ' \u2191' : ' \u2193'
+  }
+
   async function fetchClienti() {
     setLoading(true)
     setError('')
@@ -261,6 +275,13 @@ export default function ReportClientiTab() {
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
+              <button
+                onClick={() => setSortAsc(!sortAsc)}
+                className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm hover:bg-theme-bg-hover transition-colors"
+                title={sortAsc ? 'Crescente' : 'Decrescente'}
+              >
+                {sortAsc ? '\u2191' : '\u2193'}
+              </button>
             </div>
             {search && (
               <span className="text-xs text-theme-text-muted">
@@ -294,15 +315,16 @@ export default function ReportClientiTab() {
                       </th>
                     ))}
                   </tr>
-                  {/* Row 2: Sub-column labels */}
+                  {/* Row 2: Sub-column labels (clickable for sort) */}
                   <tr className="bg-theme-bg-primary/30 text-theme-text-muted text-[11px]">
                     {COLUMN_GROUPS.map((g, gi) =>
                       g.columns.map((col, ci) => (
                         <th
                           key={col.key}
-                          className={`px-2 py-1 ${col.type === 'eur' ? 'text-right' : 'text-center'} ${gi > 0 && ci === 0 ? 'border-l border-theme-border/50' : ''} ${g.bg || ''}`}
+                          onClick={() => handleSort(col.key as SortField)}
+                          className={`px-2 py-1 cursor-pointer select-none hover:text-theme-text-primary transition-colors whitespace-nowrap ${col.type === 'eur' ? 'text-right' : 'text-center'} ${gi > 0 && ci === 0 ? 'border-l border-theme-border/50' : ''} ${g.bg || ''} ${sortField === col.key ? 'text-dr7-gold font-semibold' : ''}`}
                         >
-                          {col.label}
+                          {col.label}{sortArrow(col.key)}
                         </th>
                       ))
                     )}
