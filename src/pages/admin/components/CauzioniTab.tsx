@@ -339,25 +339,22 @@ export default function CauzioniTab() {
         }
     }
 
-    const handleBlocca = async (cauzione: Cauzione) => {
-        const note = prompt('Motivo della trattenuta (danni, contestazione, ecc.):')
-        if (note === null) return
-
+    const handleCassa = async (cauzione: Cauzione) => {
         try {
             const { error } = await supabase
                 .from('cauzioni')
                 .update({
-                    stato: 'Bloccata',
-                    note: note || 'Trattenuta per danni',
+                    stato: 'Danno',
+                    note: 'CASSA: Danno',
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', cauzione.id)
 
             if (error) throw error
-            toast.success('Cauzione messa in cassa')
+            toast.success('Cauzione incassata come danno')
             fetchCauzioni()
         } catch (error: any) {
-            console.error('Error blocking cauzione:', error)
+            console.error('Error marking cauzione as danno:', error)
             toast.error(`Errore: ${error.message}`)
         }
     }
@@ -561,7 +558,7 @@ export default function CauzioniTab() {
                                                 DA INCASSARE
                                             </button>
                                             <button
-                                                onClick={() => handleBlocca(cauzione)}
+                                                onClick={() => handleCassa(cauzione)}
                                                 className="px-3 py-1 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors"
                                             >
                                                 CASSA
