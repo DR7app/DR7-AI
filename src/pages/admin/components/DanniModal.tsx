@@ -74,7 +74,8 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     bookingId: booking.id,
                     customerId: booking.customer_id || booking.user_id,
                     items: cart.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
-                    note: note || undefined
+                    note: note || undefined,
+                    type: 'danni'
                 })
             })
 

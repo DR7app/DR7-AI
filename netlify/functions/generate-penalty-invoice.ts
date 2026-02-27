@@ -15,7 +15,7 @@ export const handler: Handler = async (event) => {
 
     try {
         const body = JSON.parse(event.body || '{}')
-        const { bookingId, customerId, note } = body
+        const { bookingId, customerId, note, type } = body
 
         // Validation
         if (!bookingId) {
@@ -190,7 +190,8 @@ export const handler: Handler = async (event) => {
 
         // Create invoice items from cart
         // IMPORTANT: Amount is NET (without IVA), VAT rate is 0
-        const bookingPrefix = `Penale prenotazione ${booking.id.substring(0, 8).toUpperCase()}`
+        const isDanni = type === 'danni'
+        const bookingPrefix = `${isDanni ? 'Danno' : 'Penale'} prenotazione ${booking.id.substring(0, 8).toUpperCase()}`
 
         const items = cartItems.map(item => {
             const description = item.label
