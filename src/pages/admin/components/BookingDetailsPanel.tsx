@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { supabase } from '../../../supabaseClient'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 
@@ -13,15 +14,46 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const [generatingLink, setGeneratingLink] = useState(false)
   const [paymentLink, setPaymentLink] = useState<string | null>(booking.payment_link || null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [resolvedCustomer, setResolvedCustomer] = useState<{ name?: string; phone?: string; email?: string } | null>(null)
+
+  // Fetch customer data from customers_extended when booking is missing info
+  useEffect(() => {
+    const custId = booking.user_id || booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id
+    const needsName = !booking.customer_name || booking.customer_name === 'Cliente Sconosciuto'
+    const needsPhone = !booking.customer_phone
+    const needsEmail = !booking.customer_email
+
+    if (custId && (needsName || needsPhone || needsEmail)) {
+      supabase
+        .from('customers_extended')
+        .select('nome, cognome, telefono, email, denominazione, tipo_cliente')
+        .eq('id', custId)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            const fullName = data.tipo_cliente === 'azienda'
+              ? data.denominazione
+              : `${data.nome || ''} ${data.cognome || ''}`.trim()
+            setResolvedCustomer({
+              name: fullName || undefined,
+              phone: data.telefono || undefined,
+              email: data.email || undefined
+            })
+          }
+        })
+    }
+  }, [booking.id])
   // MONETARY UNIT CONTRACT: All price fields are stored in CENTS (integer)
   // Example: price_total = 60000 means €600.00
 
   // Raw values (in cents)
   const totalCents = booking.price_total || 0
+  // If payment_status indicates paid but amount_paid is missing, treat total as paid
+  const bookingPaidStatus = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
   const paidCents = booking.amount_paid ||
     booking.booking_details?.amount_paid ||
     booking.booking_details?.amountPaid ||
-    0
+    (bookingPaidStatus ? totalCents : 0)
 
   // Convert to euros for calculations
   const totalEur = centsToEuros(totalCents)
@@ -90,12 +122,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           {/* Customer Info */}
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Cliente</h3>
-            <div className="text-2xl font-bold text-theme-text-primary">{booking.customer_name || 'Cliente Sconosciuto'}</div>
-            {booking.customer_email && (
-              <div className="text-sm text-theme-text-muted">{booking.customer_email}</div>
+            <div className="text-2xl font-bold text-theme-text-primary">{booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || booking.guest_name || 'Cliente Sconosciuto'}</div>
+            {(booking.customer_email || resolvedCustomer?.email) && (
+              <div className="text-sm text-theme-text-muted">{booking.customer_email || resolvedCustomer?.email}</div>
             )}
-            {booking.customer_phone && (
-              <div className="text-sm text-theme-text-muted">{booking.customer_phone}</div>
+            {(booking.customer_phone || resolvedCustomer?.phone) && (
+              <div className="text-sm text-theme-text-muted">{booking.customer_phone || resolvedCustomer?.phone}</div>
             )}
           </div>
 

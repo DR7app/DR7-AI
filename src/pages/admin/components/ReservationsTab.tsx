@@ -4536,7 +4536,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <div className="font-semibold text-theme-text-primary mb-1">
                       {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                     </div>
-                    <div className="text-sm text-theme-text-muted">{booking.customer_phone || '-'}</div>
+                    <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                     booking.payment_status === 'paid' ||
@@ -4679,7 +4679,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
-                        {booking.customer_phone || '-'}
+                        {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {isCarWash ? (
@@ -4829,11 +4829,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <div><span className="text-theme-text-muted">Nome:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.customer?.fullName || selectedBooking.customer_name || 'N/A'}</span></div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{selectedBooking.customer_phone || '-'}</span>
+                        <span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone || '-'}</span>
                       </div>
-                      {selectedBooking.customer_phone && (
+                      {(selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone) && (
                         <a
-                          href={`tel:${selectedBooking.customer_phone}`}
+                          href={`tel:${selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone}`}
                           className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary rounded-full text-xs font-medium transition-colors"
                         >
                           Chiama
