@@ -304,30 +304,30 @@ export default function DailyCalendarTab() {
             {/* Calendar Grid — Desktop */}
             <div className="hidden md:block bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-x-auto">
                 {/* Header Row with Categories */}
-                <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-theme-border bg-theme-bg-tertiary sticky top-0">
-                    <div className="p-2 text-xs font-bold text-theme-text-muted">ORA</div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
-                        <div className="flex items-center justify-center gap-1.5">
-                            <div className="w-3 h-3 bg-green-600 rounded"></div>
-                            <span className="text-theme-text-secondary">NOLEGGIO</span>
+                <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr] border-b-2 border-theme-border bg-theme-bg-tertiary sticky top-0">
+                    <div className="p-1.5 lg:p-2 text-[10px] lg:text-xs font-bold text-theme-text-muted">ORA</div>
+                    <div className="p-1.5 lg:p-2 text-[10px] lg:text-xs font-bold text-center border-l border-theme-border">
+                        <div className="flex items-center justify-center gap-1">
+                            <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 bg-green-600 rounded shrink-0"></div>
+                            <span className="text-theme-text-secondary truncate">NOLEGGIO</span>
                         </div>
                     </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
-                        <div className="flex items-center justify-center gap-1.5">
-                            <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                            <span className="text-theme-text-secondary">LAVAGGIO</span>
+                    <div className="p-1.5 lg:p-2 text-[10px] lg:text-xs font-bold text-center border-l border-theme-border">
+                        <div className="flex items-center justify-center gap-1">
+                            <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 bg-blue-600 rounded shrink-0"></div>
+                            <span className="text-theme-text-secondary truncate">LAVAGGIO</span>
                         </div>
                     </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
-                        <div className="flex items-center justify-center gap-1.5">
-                            <div className="w-3 h-3 bg-orange-600 rounded"></div>
-                            <span className="text-theme-text-secondary">MECCANICA</span>
+                    <div className="p-1.5 lg:p-2 text-[10px] lg:text-xs font-bold text-center border-l border-theme-border">
+                        <div className="flex items-center justify-center gap-1">
+                            <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 bg-orange-600 rounded shrink-0"></div>
+                            <span className="text-theme-text-secondary truncate">MECCANICA</span>
                         </div>
                     </div>
-                    <div className="p-2 text-xs font-bold text-center border-l border-theme-border">
-                        <div className="flex items-center justify-center gap-1.5">
-                            <div className="w-3 h-3 bg-purple-600 rounded"></div>
-                            <span className="text-theme-text-secondary">VARIE</span>
+                    <div className="p-1.5 lg:p-2 text-[10px] lg:text-xs font-bold text-center border-l border-theme-border">
+                        <div className="flex items-center justify-center gap-1">
+                            <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 bg-purple-600 rounded shrink-0"></div>
+                            <span className="text-theme-text-secondary truncate">VARIE</span>
                         </div>
                     </div>
                 </div>
@@ -365,7 +365,7 @@ export default function DailyCalendarTab() {
                                 return (
                                     <div
                                         key={booking.id}
-                                        className={`${bgColor} text-theme-text-primary rounded px-2 py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow`}
+                                        className={`${bgColor} text-theme-text-primary rounded px-1.5 lg:px-2 py-1 lg:py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow overflow-hidden`}
                                     >
                                         <div
                                             className={`font-bold text-[10px] mb-0.5 ${labelColor}`}
@@ -373,8 +373,8 @@ export default function DailyCalendarTab() {
                                         >
                                             {label}
                                         </div>
-                                        <div className="font-bold text-sm leading-tight">{parseCustomerName(booking)}</div>
-                                        <div className="text-theme-text-primary/90 text-xs mt-0.5">{booking.vehicle_name}</div>
+                                        <div className="font-bold text-xs lg:text-sm leading-tight truncate">{parseCustomerName(booking)}</div>
+                                        <div className="text-theme-text-primary/90 text-[10px] lg:text-xs mt-0.5 truncate">{booking.vehicle_name}</div>
                                         {booking.type !== 'lavaggio' && (
                                             <div className="text-theme-text-primary/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
                                         )}
@@ -390,7 +390,7 @@ export default function DailyCalendarTab() {
                             <div
                                 key={slot}
                                 ref={isCurrentSlot ? currentTimeRef : null}
-                                className={`grid grid-cols-[80px_1fr_1fr_1fr_1fr] ${isCurrentSlot ? 'bg-theme-bg-tertiary/50 border-l-2 border-dr7-gold' : ''
+                                className={`grid grid-cols-[60px_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr] ${isCurrentSlot ? 'bg-theme-bg-tertiary/50 border-l-2 border-dr7-gold' : ''
                                     } hover:bg-theme-bg-tertiary/30 transition-colors`}
                             >
                                 {/* Time Column */}
