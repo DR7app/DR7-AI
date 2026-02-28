@@ -812,13 +812,13 @@ export default function VehiclesTab() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3 flex-1">
+                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">
                     Modifica
                   </Button>
-                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800">
+                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">
                     Sync
                   </Button>
-                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800">
+                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">
                     ×
                   </Button>
                 </div>
@@ -892,7 +892,7 @@ export default function VehiclesTab() {
                         <Button
                           onClick={() => syncToGoogleCalendar(vehicle)}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
+                          className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800"
                           title="Sincronizza con Google Calendar"
                         >
                           📅 Sync
@@ -900,7 +900,7 @@ export default function VehiclesTab() {
                         <Button
                           onClick={() => handleDelete(vehicle.id)}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                          className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800"
                         >
                           ×
                         </Button>
@@ -963,13 +963,13 @@ export default function VehiclesTab() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3 flex-1">
+                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">
                     Modifica
                   </Button>
-                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800">
+                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">
                     Sync
                   </Button>
-                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800">
+                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">
                     ×
                   </Button>
                 </div>
@@ -1043,7 +1043,7 @@ export default function VehiclesTab() {
                         <Button
                           onClick={() => syncToGoogleCalendar(vehicle)}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
+                          className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800"
                           title="Sincronizza con Google Calendar"
                         >
                           📅 Sync
@@ -1051,7 +1051,7 @@ export default function VehiclesTab() {
                         <Button
                           onClick={() => handleDelete(vehicle.id)}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                          className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800"
                         >
                           ×
                         </Button>
@@ -1114,13 +1114,13 @@ export default function VehiclesTab() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3 flex-1">
+                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">
                     Modifica
                   </Button>
-                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800">
+                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">
                     Sync
                   </Button>
-                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800">
+                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">
                     ×
                   </Button>
                 </div>
@@ -1194,7 +1194,7 @@ export default function VehiclesTab() {
                         <Button
                           onClick={() => syncToGoogleCalendar(vehicle)}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
+                          className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800"
                           title="Sincronizza con Google Calendar"
                         >
                           📅 Sync
@@ -1202,7 +1202,7 @@ export default function VehiclesTab() {
                         <Button
                           onClick={() => handleDelete(vehicle.id)}
                           variant="secondary"
-                          className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                          className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800"
                         >
                           ×
                         </Button>

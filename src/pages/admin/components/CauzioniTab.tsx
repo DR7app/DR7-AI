@@ -471,34 +471,34 @@ export default function CauzioniTab() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Incassate</div>
-                    <div className="text-3xl font-bold text-green-500">{stats.incassate}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
+                    <div className="text-xs sm:text-sm text-theme-text-secondary">Incassate</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-green-500">{stats.incassate}</div>
                 </div>
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Da Incassare</div>
-                    <div className="text-3xl font-bold text-yellow-500">{stats.da_incassare}</div>
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
+                    <div className="text-xs sm:text-sm text-theme-text-secondary">Da Incassare</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-yellow-500">{stats.da_incassare}</div>
                 </div>
-                <div className="bg-theme-bg-tertiary border border-red-500/30 rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">In Cassa</div>
-                    <div className="text-3xl font-bold text-red-500">{stats.in_cassa}</div>
-                    <div className="text-sm text-red-400 mt-1">€{stats.totale_in_cassa.toFixed(2)}</div>
+                <div className="bg-theme-bg-tertiary border border-red-500/30 rounded-3xl p-3 sm:p-4">
+                    <div className="text-xs sm:text-sm text-theme-text-secondary">In Cassa</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-red-500">{stats.in_cassa}</div>
+                    <div className="text-xs sm:text-sm text-red-400 mt-1">€{stats.totale_in_cassa.toFixed(2)}</div>
                 </div>
             </div>
             {/* Totali Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-theme-bg-tertiary border border-green-500/30 rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Totale Incassate</div>
-                    <div className="text-3xl font-bold text-green-500">€{stats.totale_incassate.toFixed(2)}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-6">
+                <div className="bg-theme-bg-tertiary border border-green-500/30 rounded-3xl p-3 sm:p-4">
+                    <div className="text-xs sm:text-sm text-theme-text-secondary">Totale Incassate</div>
+                    <div className="text-xl sm:text-3xl font-bold text-green-500">€{stats.totale_incassate.toFixed(2)}</div>
                 </div>
-                <div className="bg-theme-bg-tertiary border border-yellow-500/30 rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Totale Da Incassare</div>
-                    <div className="text-3xl font-bold text-yellow-500">€{stats.totale_da_incassare.toFixed(2)}</div>
+                <div className="bg-theme-bg-tertiary border border-yellow-500/30 rounded-3xl p-3 sm:p-4">
+                    <div className="text-xs sm:text-sm text-theme-text-secondary">Totale Da Incassare</div>
+                    <div className="text-xl sm:text-3xl font-bold text-yellow-500">€{stats.totale_da_incassare.toFixed(2)}</div>
                 </div>
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
-                    <div className="text-sm text-theme-text-secondary">Scadute</div>
-                    <div className="text-3xl font-bold text-red-500">{stats.scadute}</div>
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
+                    <div className="text-xs sm:text-sm text-theme-text-secondary">Scadute</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-red-500">{stats.scadute}</div>
                 </div>
             </div>
 
@@ -547,25 +547,25 @@ export default function CauzioniTab() {
                                         renderRow(cauzione, <>
                                             <button
                                                 onClick={() => handleEdit(cauzione)}
-                                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
+                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
                                             >
                                                 Modifica
                                             </button>
                                             <button
                                                 onClick={() => handleSegnaDaIncassare(cauzione)}
-                                                className="px-3 py-1 bg-yellow-600 text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                className="px-3 py-2 bg-yellow-600 text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
                                             >
                                                 DA INCASSARE
                                             </button>
                                             <button
                                                 onClick={() => handleCassa(cauzione)}
-                                                className="px-3 py-1 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors"
+                                                className="px-3 py-2 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors"
                                             >
                                                 CASSA
                                             </button>
                                             <button
                                                 onClick={() => handleMarkRestituita(cauzione)}
-                                                className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
+                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
                                             >
                                                 RESTITUITA
                                             </button>
@@ -600,20 +600,20 @@ export default function CauzioniTab() {
                                         renderRow(cauzione, <>
                                             <button
                                                 onClick={() => handleEdit(cauzione)}
-                                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
+                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
                                             >
                                                 Modifica
                                             </button>
                                             <button
                                                 onClick={() => handleSegnaIncassata(cauzione)}
-                                                className="px-3 py-1 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
                                             >
                                                 INCASSA
                                             </button>
                                             {cauzione.metodo === 'preautorizzazione' && !cauzione.nexi_transaction_id && (
                                                 <button
                                                     onClick={() => handleCreatePreauth(cauzione)}
-                                                    className="px-3 py-1 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors font-semibold"
+                                                    className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors font-semibold"
                                                 >
                                                     CREA PREAUTH
                                                 </button>
@@ -622,13 +622,13 @@ export default function CauzioniTab() {
                                                 <>
                                                     <button
                                                         onClick={() => handleIncassa(cauzione)}
-                                                        className="px-3 py-1 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors"
+                                                        className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors"
                                                     >
                                                         INCASSA
                                                     </button>
                                                     <button
                                                         onClick={() => handleMarkSbloccataPreauth(cauzione)}
-                                                        className="px-3 py-1 bg-theme-bg-hover text-theme-text-primary text-xs rounded-full hover:bg-theme-bg-tertiary transition-colors"
+                                                        className="px-3 py-2 bg-theme-bg-hover text-theme-text-primary text-xs rounded-full hover:bg-theme-bg-tertiary transition-colors"
                                                     >
                                                         SBLOCCA PREAUTH
                                                     </button>

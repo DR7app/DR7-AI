@@ -281,21 +281,21 @@ export default function DailyCalendarTab() {
                     <div className="flex gap-1.5 md:gap-2">
                         <button
                             onClick={() => navigateDay('prev')}
-                            className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded text-xs font-semibold"
+                            className="px-3 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded text-xs font-semibold"
                         >
-                            ← Prec
+                            ←
                         </button>
                         <button
                             onClick={() => setSelectedDate(new Date())}
-                            className="px-3 py-1 bg-dr7-gold hover:bg-yellow-500 text-black rounded text-xs font-bold"
+                            className="px-3 py-2 bg-dr7-gold hover:bg-yellow-500 text-black rounded text-xs font-bold"
                         >
                             Oggi
                         </button>
                         <button
                             onClick={() => navigateDay('next')}
-                            className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded text-xs font-semibold"
+                            className="px-3 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded text-xs font-semibold"
                         >
-                            Succ →
+                            →
                         </button>
                     </div>
                 </div>

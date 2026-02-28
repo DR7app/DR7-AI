@@ -319,25 +319,24 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
 
       {/* 1. Control Bar */}
-      <div className="flex justify-between items-center p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <h2 className="text-base sm:text-xl font-light text-theme-text-primary capitalize w-32 sm:w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
-          <div className="flex gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">◄ Mese</button>
-            <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Mese ►</button>
+          <div className="flex gap-1.5 sm:gap-2">
+            <button onClick={() => navigateMonth('prev')} className="px-2 sm:px-3 py-2 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-xs sm:text-sm text-theme-text-primary/90 hover:text-theme-text-primary">◄</button>
+            <button onClick={() => navigateMonth('next')} className="px-2 sm:px-3 py-2 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-xs sm:text-sm text-theme-text-primary/90 hover:text-theme-text-primary">►</button>
           </div>
-
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-theme-text-muted">Questo Mese:</span>
-            <span className="text-dr7-gold font-bold text-sm">
+            <span className="text-xs text-theme-text-muted">Mese:</span>
+            <span className="text-dr7-gold font-bold text-xs sm:text-sm">
               {bookings.filter(b => {
                 const bookingDate = new Date(b.appointment_date)
                 return bookingDate.getMonth() === currentDate.getMonth() &&
@@ -348,7 +347,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           {canViewFinancials && !hideFinancials && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-theme-text-muted">Fatturato:</span>
-              <span className="text-green-400 font-bold text-sm">
+              <span className="text-green-400 font-bold text-xs sm:text-sm">
                 <FinancialData type="total">
                   €{(bookings
                     .filter(b => {
@@ -364,7 +363,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           {canViewFinancials && (
             <button
               onClick={() => setHideFinancials(!hideFinancials)}
-              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
+              className={`px-3 py-2 rounded text-xs font-semibold transition-colors ${hideFinancials
                 ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
                 : 'bg-yellow-600 text-black hover:bg-yellow-700'
                 }`}
@@ -374,8 +373,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           )}
           <input
             type="text"
-            placeholder="Cerca cliente o servizio..."
-            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold/50"
+            placeholder="Cerca..."
+            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-2 text-sm w-full sm:w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />

@@ -104,11 +104,11 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
-          <h2 className="text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
+        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-4 sm:p-6 flex justify-between items-center z-10">
+          <h2 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
           <button
             onClick={onClose}
-            className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-2 hover:bg-theme-text-primary/5 rounded"
+            className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-3 hover:bg-theme-text-primary/5 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -117,12 +117,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6">
 
           {/* Customer Info */}
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Cliente</h3>
-            <div className="text-2xl font-bold text-theme-text-primary">{booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || booking.guest_name || 'Cliente Sconosciuto'}</div>
+            <div className="text-xl sm:text-2xl font-bold text-theme-text-primary">{booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || booking.guest_name || 'Cliente Sconosciuto'}</div>
             {(booking.customer_email || resolvedCustomer?.email) && (
               <div className="text-sm text-theme-text-muted">{booking.customer_email || resolvedCustomer?.email}</div>
             )}
@@ -147,10 +147,10 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           {/* Rental Period */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Periodo Noleggio</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <div className="text-xs text-theme-text-muted">Ritiro</div>
-                <div className="font-mono text-theme-text-primary">
+                <div className="font-mono text-sm sm:text-base text-theme-text-primary">
                   {formatRomeDate(pickupDate, { dateStyle: 'long' })}
                 </div>
                 <div className="font-mono text-sm text-theme-text-muted">
@@ -159,7 +159,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
               </div>
               <div className="space-y-1">
                 <div className="text-xs text-theme-text-muted">Rientro</div>
-                <div className="font-mono text-theme-text-primary">
+                <div className="font-mono text-sm sm:text-base text-theme-text-primary">
                   {formatRomeDate(dropoffDate, { dateStyle: 'long' })}
                 </div>
                 <div className="font-mono text-sm text-theme-text-muted">
@@ -206,7 +206,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                         }
                       }}
                       disabled={generatingLink}
-                      className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                      className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -221,7 +221,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                           setLinkCopied(true)
                           setTimeout(() => setLinkCopied(false), 2000)
                         }}
-                        className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1"
+                        className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition-colors flex items-center gap-1"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
@@ -230,7 +230,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                       </button>
                       <button
                         onClick={() => window.open(paymentLink, '_blank')}
-                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors flex items-center gap-1"
+                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition-colors flex items-center gap-1"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
