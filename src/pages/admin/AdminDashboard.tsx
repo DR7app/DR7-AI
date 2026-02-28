@@ -37,6 +37,11 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   // State to pass data from Calendar to Reservations tab
   const [initialReservationData, setInitialReservationData] = useState<{ vehicleId?: string, pickupDate?: Date, bookingId?: string } | null>(null)
   // State to pass data from Car Wash Calendar to Car Wash Bookings tab
@@ -50,6 +55,32 @@ export default function AdminDashboard() {
   async function handleSignOut() {
     await supabase.auth.signOut()
     navigate('/login')
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault()
+    setPasswordMsg(null)
+    if (newPassword.length < 6) {
+      setPasswordMsg({ type: 'error', text: 'La password deve avere almeno 6 caratteri.' })
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'error', text: 'Le password non corrispondono.' })
+      return
+    }
+    setPasswordLoading(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      if (error) throw error
+      setPasswordMsg({ type: 'success', text: 'Password aggiornata con successo!' })
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => setShowPasswordModal(false), 1500)
+    } catch (err: any) {
+      setPasswordMsg({ type: 'error', text: err.message || 'Errore durante l\'aggiornamento.' })
+    } finally {
+      setPasswordLoading(false)
+    }
   }
 
   function handleCalendarBooking(vehicleId: string, date: Date, bookingId?: string) {
@@ -204,6 +235,16 @@ export default function AdminDashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                   </svg>
                 )}
+              </button>
+              <button
+                onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); }}
+                className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                title="Cambia password"
+                aria-label="Cambia password"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
               </button>
               <button
                 onClick={handleSignOut}
@@ -530,6 +571,61 @@ export default function AdminDashboard() {
         isOpen={isCalendarModalOpen}
         onClose={() => setIsCalendarModalOpen(false)}
       />
+
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowPasswordModal(false)} />
+          <div className="relative bg-theme-bg-primary border border-theme-border rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-theme-text-primary">Cambia Password</h3>
+              <button onClick={() => setShowPasswordModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuova password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
+                  placeholder="Min. 6 caratteri"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Conferma password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
+                  placeholder="Ripeti password"
+                />
+              </div>
+              {passwordMsg && (
+                <div className={`px-4 py-3 rounded-full text-sm ${passwordMsg.type === 'success' ? 'bg-green-500/10 border border-green-500/30 text-green-500' : 'bg-red-500/10 border border-red-500/30 text-red-500'}`}>
+                  {passwordMsg.text}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={passwordLoading}
+                className="w-full bg-dr7-gold hover:bg-yellow-500 text-black font-medium py-3 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
+              >
+                {passwordLoading ? 'Aggiornamento...' : 'Aggiorna Password'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
