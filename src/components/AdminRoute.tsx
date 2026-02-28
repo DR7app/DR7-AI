@@ -32,17 +32,25 @@ export default function AdminRoute({ children }: AdminRouteProps) {
         return
       }
 
-      const { data: profile, error } = await supabase
+      // Check user_profiles table first
+      const { data: profile } = await supabase
         .from('user_profiles')
         .select('role')
         .eq('user_id', session.user.id)
         .single<UserProfile>()
 
-      if (error || !profile) {
-        setAuthorized(false)
-      } else {
+      if (profile) {
         const allowedRoles = ['admin', 'staff', 'viewer']
         setAuthorized(allowedRoles.includes(profile.role))
+      } else {
+        // Fallback: check admins table
+        const { data: admin } = await supabase
+          .from('admins')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single()
+
+        setAuthorized(!!admin)
       }
     } catch (error) {
       console.error('Auth check error:', error)
