@@ -79,6 +79,17 @@ const isRientroBooking = (booking: CarWashBooking): boolean => {
   return booking.customer_name === 'Lavaggio Rientro'
 }
 
+const isPaidBooking = (booking: CarWashBooking): boolean => {
+  return booking.payment_status === 'paid' ||
+    booking.payment_status === 'completed' ||
+    booking.payment_status === 'succeeded' ||
+    (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+}
+
+const hasNotes = (booking: CarWashBooking): boolean => {
+  return !!(booking.booking_details?.notes && booking.booking_details.notes.trim())
+}
+
 const formatDuration = (minutes: number): string => {
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -501,17 +512,27 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         {/* Render booking blocks for all bookings starting at this slot */}
                         {startingBookings.map(startEvt => {
                           const isRientro = isRientroBooking(startEvt.booking)
+                          const isPaid = !isRientro && isPaidBooking(startEvt.booking)
+                          const bookingHasNotes = !isRientro && hasNotes(startEvt.booking)
                           // If rientro overlaps with a client wash at same time, shift rientro up one slot
                           const hasClientOverlap = isRientro && startingBookings.some(b => !isRientroBooking(b.booking))
                           const topOffset = hasClientOverlap ? -(CELL_HEIGHT - 1) : 1
 
+                          // Color logic: rientro=blue, paid=green, unpaid=red
+                          const bgColor = isRientro
+                            ? 'bg-blue-800 border-blue-600/30'
+                            : isPaid
+                              ? 'bg-emerald-600 border-emerald-400/30'
+                              : 'bg-red-800 border-red-700/30'
+
                           return (
                           <div
                             key={startEvt.booking.id}
-                            className={`absolute inset-x-0 ${isRientro ? 'bg-blue-800 border-blue-600/30' : 'bg-red-800 border-red-700/30'} border rounded shadow-md hover:shadow-xl hover:brightness-110 transition-all cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking`}
+                            className={`absolute inset-x-0 ${bgColor} border rounded shadow-md hover:shadow-xl hover:brightness-110 transition-all cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking`}
                             style={{
                               height: `${(startEvt.duration / 5) * CELL_HEIGHT - 2}px`,
-                              top: `${topOffset}px`
+                              top: `${topOffset}px`,
+                              ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {})
                             }}
                             onClick={(e) => {
                               e.stopPropagation()
@@ -523,7 +544,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
                             {/* Content */}
                             <div className="relative px-2 py-1.5 flex flex-col justify-center h-full items-center gap-0.5 text-center">
-                              <span className="font-bold text-[11px] leading-tight truncate max-w-full text-theme-text-primary drop-shadow-md">
+                              <span className="font-bold text-[11px] leading-tight truncate max-w-full text-white drop-shadow-md">
                                 {(() => {
                                   if (isRientro) {
                                     // Show vehicle plate or "Rientro" for compact display
@@ -540,10 +561,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                   return name
                                 })()}
                               </span>
-                              <span className="font-bold text-[12px] leading-tight text-theme-text-primary drop-shadow-md">
+                              <span className="font-bold text-[12px] leading-tight text-white drop-shadow-md">
                                 {startEvt.booking.appointment_time}
                               </span>
-                              <span className="text-[9px] leading-tight text-theme-text-primary/90 drop-shadow-sm">
+                              <span className="text-[9px] leading-tight text-white/90 drop-shadow-sm">
                                 {(() => {
                                   if (isRientro) return 'Rientro'
                                   const svc = startEvt.booking.service_name.toLowerCase()
@@ -560,9 +581,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                             </div>
 
                             {/* Left accent bar */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : 'bg-theme-text-primary/40'}`} />
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : isPaid ? 'bg-emerald-300/60' : 'bg-white/40'}`} />
                             {/* Right accent bar */}
-                            <div className={`absolute right-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : 'bg-theme-text-primary/40'}`} />
+                            <div className={`absolute right-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : isPaid ? 'bg-emerald-300/60' : 'bg-white/40'}`} />
 
                             {/* Tooltip on hover */}
                             <div className="hidden group-hover/booking:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs p-3 rounded-lg shadow-2xl w-max z-[100] pointer-events-none min-w-[220px]">
