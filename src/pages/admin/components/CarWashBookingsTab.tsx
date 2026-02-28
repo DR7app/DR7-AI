@@ -1838,10 +1838,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           </>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-theme-text-primary">
-                        <div className="font-medium">{booking.service_name}</div>
+                      <td className="px-4 py-3 text-sm text-theme-text-primary max-w-[180px]">
+                        <div className="font-medium truncate">{booking.service_name}</div>
                         {booking.booking_details?.additionalService && (
-                          <div className="text-xs text-theme-text-muted">
+                          <div className="text-xs text-theme-text-muted truncate">
                             + {booking.booking_details.additionalService}
                           </div>
                         )}
