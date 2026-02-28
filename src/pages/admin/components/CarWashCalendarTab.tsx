@@ -649,134 +649,142 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
       </div>
 
-      {/* Booking Details Modal */}
-      {selectedBooking && (
+      {/* Booking Details Modal — Apple style */}
+      {selectedBooking && (() => {
+        const paid = isPaidBooking(selectedBooking)
+        return (
         <div
-          className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/40 backdrop-blur-xl flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedBooking(null)}
         >
           <div
-            className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-theme-border shadow-2xl"
+            className="bg-theme-bg-secondary rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5)] border border-theme-border/30"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6 border-b border-theme-border">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
-                    Prenotazione Prime Wash
-                  </h3>
-                  <p className="text-theme-text-muted">{new Date(selectedBooking.appointment_date).toLocaleDateString('it-IT')} - {selectedBooking.appointment_time}</p>
-                </div>
-                <button
-                  onClick={() => setSelectedBooking(null)}
-                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors text-3xl leading-none"
-                >
-                  ×
-                </button>
+            {/* Header */}
+            <div className="relative rounded-t-2xl px-6 pt-8 pb-6 bg-theme-bg-tertiary border-b border-theme-border/30">
+              <button
+                onClick={() => setSelectedBooking(null)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-theme-text-muted/10 hover:bg-theme-text-muted/20 flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-all text-lg"
+              >
+                ×
+              </button>
+              <div className="text-theme-text-muted text-xs font-medium uppercase tracking-widest mb-1">Prime Wash</div>
+              <h3 className="text-2xl font-bold text-theme-text-primary tracking-tight">
+                {selectedBooking.customer_name || selectedBooking.booking_details?.customer?.fullName || 'N/A'}
+              </h3>
+              <p className="text-theme-text-muted text-sm mt-1">
+                {new Date(selectedBooking.appointment_date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })} · {selectedBooking.appointment_time}
+              </p>
+              {/* Status pills */}
+              <div className="flex items-center gap-2 mt-3">
+                <span className={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide ${paid ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'}`}>
+                  {paid ? 'Pagato' : 'Non Pagato'}
+                </span>
+                <span className="px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-theme-text-muted/10 text-theme-text-muted uppercase">
+                  {selectedBooking.status}
+                </span>
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="bg-theme-bg-tertiary/50 rounded-lg p-5 border border-red-500/30">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <div className="text-theme-text-primary font-bold text-lg mb-1">{selectedBooking.customer_name || selectedBooking.booking_details?.customer?.fullName || 'N/A'}</div>
-                    <div className="text-theme-text-muted text-sm">{selectedBooking.customer_email || selectedBooking.booking_details?.customer?.email || 'N/A'}</div>
-                    <div className="text-theme-text-muted text-sm">{selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone || 'N/A'}</div>
-                    {/* Vehicle info */}
-                    {(selectedBooking.booking_details?.vehicleMakeModel || selectedBooking.vehicle_plate) && (
-                      <div className="flex items-center gap-2 mt-2">
-                        {selectedBooking.vehicle_plate && (
-                          <span className="font-mono font-bold text-dr7-gold text-sm">{selectedBooking.vehicle_plate}</span>
-                        )}
-                        {selectedBooking.booking_details?.vehicleMakeModel && (
-                          <span className="text-theme-text-primary text-sm">{selectedBooking.booking_details.vehicleMakeModel}</span>
-                        )}
-                        {selectedBooking.booking_details?.vehicleCategory && (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            selectedBooking.booking_details.vehicleCategory === 'urban'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-orange-600 text-white'
-                          }`}>
-                            {selectedBooking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
-                    {selectedBooking.status}
-                  </span>
-                </div>
+            <div className="px-6 py-5 space-y-4">
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-theme-text-muted">Servizio:</span>
-                    <span className="text-theme-text-primary font-medium">{selectedBooking.service_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-theme-text-muted">Durata:</span>
-                    <span className="text-theme-text-primary font-medium">{formatDuration(getServiceDuration(selectedBooking.service_name, selectedBooking.booking_details?.vehicleCategory))}</span>
-                  </div>
-                  {selectedBooking.booking_details?.additionalService && (
-                    <div className="flex justify-between">
-                      <span className="text-theme-text-muted">Servizio Aggiuntivo:</span>
-                      <span className="text-theme-text-primary font-medium text-xs">{selectedBooking.booking_details.additionalService}</span>
+              {/* Contact card */}
+              <div className="rounded-xl bg-theme-bg-tertiary/60 overflow-hidden">
+                <div className="px-4 py-3 flex items-center justify-between border-b border-theme-border/20">
+                  <span className="text-theme-text-muted text-sm">Email</span>
+                  <span className="text-theme-text-primary text-sm font-medium">{selectedBooking.customer_email || selectedBooking.booking_details?.customer?.email || '—'}</span>
+                </div>
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-theme-text-muted text-sm">Telefono</span>
+                  <span className="text-theme-text-primary text-sm font-medium">{selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone || '—'}</span>
+                </div>
+              </div>
+
+              {/* Vehicle card */}
+              {(selectedBooking.booking_details?.vehicleMakeModel || selectedBooking.vehicle_plate) && (
+                <div className="rounded-xl bg-theme-bg-tertiary/60 overflow-hidden">
+                  {selectedBooking.vehicle_plate && (
+                    <div className={`px-4 py-3 flex items-center justify-between ${selectedBooking.booking_details?.vehicleMakeModel ? 'border-b border-theme-border/20' : ''}`}>
+                      <span className="text-theme-text-muted text-sm">Targa</span>
+                      <span className="font-mono font-bold text-dr7-gold text-sm tracking-wider">{selectedBooking.vehicle_plate}</span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-2 border-t border-theme-border">
-                    <span className="text-theme-text-muted">Prezzo Totale:</span>
-                    <span className="text-dr7-gold font-bold text-lg">
-                      €{(selectedBooking.price_total / 100).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-theme-text-muted">Stato Pagamento:</span>
-                    <span className={`font-medium ${selectedBooking.payment_status === 'paid' ||
-                      selectedBooking.payment_status === 'completed' ||
-                      selectedBooking.payment_status === 'succeeded' ||
-                      (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
-                      ? 'text-green-400'
-                      : 'text-red-400'
+                  {selectedBooking.booking_details?.vehicleMakeModel && (
+                    <div className={`px-4 py-3 flex items-center justify-between ${selectedBooking.booking_details?.vehicleCategory ? 'border-b border-theme-border/20' : ''}`}>
+                      <span className="text-theme-text-muted text-sm">Veicolo</span>
+                      <span className="text-theme-text-primary text-sm font-medium">{selectedBooking.booking_details.vehicleMakeModel}</span>
+                    </div>
+                  )}
+                  {selectedBooking.booking_details?.vehicleCategory && (
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <span className="text-theme-text-muted text-sm">Categoria</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                        selectedBooking.booking_details.vehicleCategory === 'urban'
+                          ? 'bg-blue-500/15 text-blue-500'
+                          : 'bg-orange-500/15 text-orange-500'
                       }`}>
-                      {selectedBooking.payment_status === 'paid' ||
-                        selectedBooking.payment_status === 'completed' ||
-                        selectedBooking.payment_status === 'succeeded' ||
-                        (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
-                        ? 'Pagato'
-                        : 'Non Pagato'}
-                    </span>
-                  </div>
+                        {selectedBooking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                      </span>
+                    </div>
+                  )}
                 </div>
+              )}
 
-                {selectedBooking.booking_details?.notes && (
-                  <div className="mt-3 pt-3 border-t border-theme-border/50">
-                    <span className="text-theme-text-muted text-xs font-bold uppercase tracking-wider">Note:</span>
-                    <p className="text-theme-text-primary text-sm mt-1 bg-theme-text-primary/5 p-2 rounded border border-theme-border/50">{selectedBooking.booking_details.notes}</p>
+              {/* Service card */}
+              <div className="rounded-xl bg-theme-bg-tertiary/60 overflow-hidden">
+                <div className="px-4 py-3 flex items-center justify-between border-b border-theme-border/20">
+                  <span className="text-theme-text-muted text-sm">Servizio</span>
+                  <span className="text-theme-text-primary text-sm font-medium text-right max-w-[60%]">{selectedBooking.service_name}</span>
+                </div>
+                <div className={`px-4 py-3 flex items-center justify-between ${selectedBooking.booking_details?.additionalService ? 'border-b border-theme-border/20' : ''}`}>
+                  <span className="text-theme-text-muted text-sm">Durata</span>
+                  <span className="text-theme-text-primary text-sm font-medium">{formatDuration(getServiceDuration(selectedBooking.service_name, selectedBooking.booking_details?.vehicleCategory, selectedBooking.booking_details))}</span>
+                </div>
+                {selectedBooking.booking_details?.additionalService && (
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-theme-text-muted text-sm">Extra</span>
+                    <span className="text-theme-text-primary text-sm font-medium text-right max-w-[60%]">{selectedBooking.booking_details.additionalService}</span>
                   </div>
                 )}
+              </div>
 
-                <div className="mt-3 text-xs text-theme-text-muted">
-                  ID: DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
+              {/* Price card */}
+              <div className="rounded-xl bg-theme-bg-tertiary/60 px-4 py-4 flex items-center justify-between">
+                <span className="text-theme-text-primary text-base font-semibold">Totale</span>
+                <span className="text-dr7-gold font-bold text-2xl tracking-tight">
+                  €{(selectedBooking.price_total / 100).toFixed(2)}
+                </span>
+              </div>
+
+              {/* Notes card */}
+              {selectedBooking.booking_details?.notes && (
+                <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3">
+                  <div className="text-yellow-500 text-xs font-semibold uppercase tracking-wider mb-1.5">Note</div>
+                  <p className="text-theme-text-primary text-sm leading-relaxed">{selectedBooking.booking_details.notes}</p>
                 </div>
+              )}
+
+              {/* Booking ID */}
+              <div className="text-center text-xs text-theme-text-muted/50 font-mono pt-1">
+                DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t border-theme-border">
-                <button
-                  onClick={() => {
-                    setEditingBooking(selectedBooking)
-                    setSelectedBooking(null)
-                  }}
-                  className="flex-1 px-4 py-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold rounded border border-dr7-gold/30 font-medium transition-colors"
-                >
-                  Modifica Prenotazione
-                </button>
-              </div>
+              {/* Action button */}
+              <button
+                onClick={() => {
+                  setEditingBooking(selectedBooking)
+                  setSelectedBooking(null)
+                }}
+                className="w-full py-3 rounded-xl bg-dr7-gold/15 hover:bg-dr7-gold/25 text-dr7-gold font-semibold text-[15px] transition-all active:scale-[0.98]"
+              >
+                Modifica Prenotazione
+              </button>
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Edit Booking Modal */}
       {editingBooking && (
