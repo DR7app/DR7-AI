@@ -303,9 +303,9 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="sticky top-0 z-10 bg-gradient-to-r from-theme-bg-primary/90 to-theme-bg-secondary/90 backdrop-blur-lg border-b border-theme-border/50 px-6 py-4">
-                    <div className="flex justify-between items-center mb-3">
-                        <h2 className="text-2xl font-light text-theme-text-primary">
+                <div className="sticky top-0 z-10 bg-gradient-to-r from-theme-bg-primary/90 to-theme-bg-secondary/90 backdrop-blur-lg border-b border-theme-border/50 px-4 sm:px-6 py-3 sm:py-4">
+                    <div className="flex justify-between items-start sm:items-center gap-3 mb-3">
+                        <h2 className="text-lg sm:text-2xl font-light text-theme-text-primary leading-tight">
                             {selectedDate.toLocaleDateString('it-IT', {
                                 weekday: 'long',
                                 day: 'numeric',
@@ -314,23 +314,23 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                             })}
                         </h2>
 
-                        <div className="flex items-center gap-3">
-                            <div className="flex gap-2">
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                            <div className="flex gap-1.5 sm:gap-2">
                                 <button
                                     onClick={() => navigateDay('prev')}
-                                    className="px-4 py-2 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+                                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 text-theme-text-primary text-xs sm:text-sm transition-all duration-200"
                                 >
                                     Prec
                                 </button>
                                 <button
                                     onClick={() => setSelectedDate(new Date())}
-                                    className="px-4 py-2 rounded-full bg-dr7-gold/20 hover:bg-dr7-gold/30 border border-dr7-gold/30 text-dr7-gold text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-dr7-gold/30"
+                                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-dr7-gold/20 hover:bg-dr7-gold/30 border border-dr7-gold/30 text-dr7-gold text-xs sm:text-sm font-semibold transition-all duration-200"
                                 >
                                     Oggi
                                 </button>
                                 <button
                                     onClick={() => navigateDay('next')}
-                                    className="px-4 py-2 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 text-theme-text-primary text-sm transition-all duration-200 hover:shadow-lg hover:shadow-white/20"
+                                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 text-theme-text-primary text-xs sm:text-sm transition-all duration-200"
                                 >
                                     Succ
                                 </button>
@@ -338,7 +338,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
 
                             <button
                                 onClick={onClose}
-                                className="w-10 h-10 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-theme-text-primary text-xl"
+                                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-theme-text-primary/5 hover:bg-theme-text-primary/10 border border-theme-border/50 flex items-center justify-center transition-all duration-200 hover:rotate-90 text-theme-text-primary text-lg sm:text-xl"
                             >
                                 ✕
                             </button>
@@ -346,22 +346,22 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     </div>
 
                     {/* Category Legend */}
-                    <div className="flex justify-center gap-6 py-2">
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50" />
-                            <span className="text-sm text-theme-text-secondary font-light">Noleggio</span>
+                    <div className="flex flex-wrap justify-center gap-3 sm:gap-6 py-1 sm:py-2">
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50" />
+                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Noleggio</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/50" />
-                            <span className="text-sm text-theme-text-secondary font-light">Lavaggio</span>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/50" />
+                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Lavaggio</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/50" />
-                            <span className="text-sm text-theme-text-secondary font-light">Meccanica</span>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/50" />
+                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Meccanica</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/50" />
-                            <span className="text-sm text-theme-text-secondary font-light">Varie</span>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/50" />
+                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Varie</span>
                         </div>
                     </div>
                 </div>
@@ -372,80 +372,78 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dr7-gold" />
                     </div>
                 ) : (
-                    <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                    <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                         {TIME_SLOTS.map((slot) => {
                             const slotBookings = getSlotBookings(slot)
                             const isCurrentSlot = isToday && slot === currentSlot
+                            const hasBookings = slotBookings.length > 0
 
                             const noleggioBookings = slotBookings.filter(b => b.type === 'check-in' || b.type === 'check-out')
                             const lavaggioBookings = slotBookings.filter(b => b.type === 'lavaggio')
                             const meccanicaBookings = slotBookings.filter(b => b.type === 'meccanica')
                             const varieBookings = slotBookings.filter(b => b.type === 'varie')
 
+                            // On mobile, skip empty slots (unless current time)
+                            const mobileHidden = !hasBookings && !isCurrentSlot ? 'hidden sm:flex' : 'flex'
+
                             return (
                                 <div
                                     key={slot}
                                     ref={isCurrentSlot ? currentTimeRef : null}
-                                    className={`relative flex gap-4 mb-3 ${isCurrentSlot ? 'py-2' : ''}`}
+                                    className={`relative ${mobileHidden} gap-3 sm:gap-4 mb-3 ${isCurrentSlot ? 'py-2' : ''}`}
                                 >
                                     {isCurrentSlot && (
                                         <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-dr7-gold to-transparent shadow-lg shadow-dr7-gold/50" />
                                     )}
 
-                                    <div className="w-16 flex-shrink-0 pt-2">
-                                        <span className={`text-sm font-mono ${isCurrentSlot ? 'text-dr7-gold font-semibold' : 'text-theme-text-muted'}`}>
+                                    <div className="w-12 sm:w-16 flex-shrink-0 pt-2">
+                                        <span className={`text-xs sm:text-sm font-mono ${isCurrentSlot ? 'text-dr7-gold font-semibold' : 'text-theme-text-muted'}`}>
                                             {slot}
                                         </span>
                                     </div>
 
-                                    <div className="flex-1 grid grid-cols-4 gap-3">
+                                    {/* Desktop: 4-column grid */}
+                                    <div className="hidden sm:grid flex-1 grid-cols-4 gap-3">
                                         <div className="space-y-2">
                                             {noleggioBookings.map(booking => (
-                                                <ActivityCard
-                                                    key={booking.id}
-                                                    booking={booking}
-                                                    colorClass="border-green-500"
-                                                    gradientClass="from-green-500/20 to-green-600/10"
-                                                    glowClass="hover:shadow-green-500/30"
-                                                />
+                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-green-500" gradientClass="from-green-500/20 to-green-600/10" glowClass="hover:shadow-green-500/30" />
                                             ))}
                                         </div>
-
                                         <div className="space-y-2">
                                             {lavaggioBookings.map(booking => (
-                                                <ActivityCard
-                                                    key={booking.id}
-                                                    booking={booking}
-                                                    colorClass="border-blue-500"
-                                                    gradientClass="from-blue-500/20 to-blue-600/10"
-                                                    glowClass="hover:shadow-blue-500/30"
-                                                />
+                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-blue-500" gradientClass="from-blue-500/20 to-blue-600/10" glowClass="hover:shadow-blue-500/30" />
                                             ))}
                                         </div>
-
                                         <div className="space-y-2">
                                             {meccanicaBookings.map(booking => (
-                                                <ActivityCard
-                                                    key={booking.id}
-                                                    booking={booking}
-                                                    colorClass="border-orange-500"
-                                                    gradientClass="from-orange-500/20 to-orange-600/10"
-                                                    glowClass="hover:shadow-orange-500/30"
-                                                />
+                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-orange-500" gradientClass="from-orange-500/20 to-orange-600/10" glowClass="hover:shadow-orange-500/30" />
                                             ))}
                                         </div>
-
                                         <div className="space-y-2">
                                             {varieBookings.map(booking => (
-                                                <ActivityCard
-                                                    key={booking.id}
-                                                    booking={booking}
-                                                    colorClass="border-purple-500"
-                                                    gradientClass="from-purple-500/20 to-purple-600/10"
-                                                    glowClass="hover:shadow-purple-500/30"
-                                                />
+                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-purple-500" gradientClass="from-purple-500/20 to-purple-600/10" glowClass="hover:shadow-purple-500/30" />
                                             ))}
                                         </div>
+                                    </div>
+
+                                    {/* Mobile: single column stacked */}
+                                    <div className="sm:hidden flex-1 space-y-1.5">
+                                        {slotBookings.map(booking => {
+                                            const colorMap: Record<string, { color: string; gradient: string; glow: string }> = {
+                                                'check-in': { color: 'border-green-500', gradient: 'from-green-500/20 to-green-600/10', glow: 'hover:shadow-green-500/30' },
+                                                'check-out': { color: 'border-green-500', gradient: 'from-green-500/20 to-green-600/10', glow: 'hover:shadow-green-500/30' },
+                                                'lavaggio': { color: 'border-blue-500', gradient: 'from-blue-500/20 to-blue-600/10', glow: 'hover:shadow-blue-500/30' },
+                                                'meccanica': { color: 'border-orange-500', gradient: 'from-orange-500/20 to-orange-600/10', glow: 'hover:shadow-orange-500/30' },
+                                                'varie': { color: 'border-purple-500', gradient: 'from-purple-500/20 to-purple-600/10', glow: 'hover:shadow-purple-500/30' },
+                                            }
+                                            const colors = colorMap[booking.type] || colorMap['varie']
+                                            return (
+                                                <ActivityCard key={`${booking.id}-${booking.type}`} booking={booking} colorClass={colors.color} gradientClass={colors.gradient} glowClass={colors.glow} />
+                                            )
+                                        })}
+                                        {!hasBookings && isCurrentSlot && (
+                                            <p className="text-xs text-theme-text-muted italic py-1">Nessun evento</p>
+                                        )}
                                     </div>
                                 </div>
                             )
