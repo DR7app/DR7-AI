@@ -1776,10 +1776,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             Nessuna prenotazione lavaggio trovata
           </div>
         ) : (
-          <div className=" rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="rounded-lg overflow-hidden">
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full min-w-max">
-                <thead className="er">
+                <thead>
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Servizio</th>
@@ -1791,27 +1792,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </thead>
                 <tbody>
                   {bookings.filter(booking => {
-
-                    // Search filter
                     if (!bookingSearchQuery) return true
                     const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
                     const customerName = (booking.customer_name || '').toLowerCase()
                     return words.every(word => customerName.includes(word))
                   }).map((booking) => (
-                    <tr key={booking.id} className="border-t border-theme-border hover:er/50">
+                    <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-hover/50">
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         {booking.customer_name === 'Lavaggio Rientro' ? (
                           <>
                             <div className="font-medium">Lavaggio Rientro</div>
                             {booking.vehicle_name && (
-                              <div className="text-xs text-theme-text-primary mt-1">
-                                {booking.vehicle_name}
-                              </div>
+                              <div className="text-xs text-theme-text-primary mt-1">{booking.vehicle_name}</div>
                             )}
                             {booking.vehicle_plate && (
-                              <div className="text-xs text-dr7-gold font-mono">
-                                {booking.vehicle_plate}
-                              </div>
+                              <div className="text-xs text-dr7-gold font-mono">{booking.vehicle_plate}</div>
                             )}
                           </>
                         ) : (
@@ -1819,7 +1814,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             <div className="font-medium">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
-                            {/* Vehicle info */}
                             {(booking.booking_details?.vehicleMakeModel || (booking.vehicle_name && booking.vehicle_name !== 'Car Wash Service')) && (
                               <div className="flex items-center gap-1.5 mt-1">
                                 <span className="text-xs text-theme-text-primary">{booking.booking_details?.vehicleMakeModel || booking.vehicle_name}</span>
@@ -1841,66 +1835,144 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <td className="px-4 py-3 text-sm text-theme-text-primary max-w-[180px]">
                         <div className="font-medium truncate">{booking.service_name}</div>
                         {booking.booking_details?.additionalService && (
-                          <div className="text-xs text-theme-text-muted truncate">
-                            + {booking.booking_details.additionalService}
-                          </div>
+                          <div className="text-xs text-theme-text-muted truncate">+ {booking.booking_details.additionalService}</div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div>
                           {booking.appointment_date
-                            ? new Date(booking.appointment_date).toLocaleDateString('it-IT', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              timeZone: 'Europe/Rome'
-                            })
+                            ? new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
                             : '-'}
                         </div>
-                        <div className="text-xs text-theme-text-muted">
-                          {booking.appointment_time || '-'}
-                        </div>
+                        <div className="text-xs text-theme-text-muted">{booking.appointment_time || '-'}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary font-bold">
                         EUR {(booking.price_total / 100).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
-                            ? 'bg-green-900 text-green-300'
-                            : 'bg-red-900 text-red-300'
-                            }`}
-                        >
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
+                            ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                        }`}>
                           {booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded' ? 'Pagato' : 'Non Pagato'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditingBooking(booking)}
-                            className="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                          >
-                            Modifica
-                          </button>
-                          <button
-                            onClick={() => handleGenerateInvoice(booking)}
-                            disabled={generatingInvoice}
-                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
-                          >
+                          <button onClick={() => setEditingBooking(booking)} className="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors">Modifica</button>
+                          <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}>
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
-                          <button
-                            onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                            className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                          >
-                            ×
-                          </button>
+                          <button onClick={() => handleDeleteBooking(booking.id, booking.customer_name)} className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors">×</button>
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile cards — Apple style */}
+            <div className="lg:hidden space-y-3">
+              {bookings.filter(booking => {
+                if (!bookingSearchQuery) return true
+                const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
+                const customerName = (booking.customer_name || '').toLowerCase()
+                return words.every(word => customerName.includes(word))
+              }).map((booking) => {
+                const bPaid = booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
+                const isRientro = booking.customer_name === 'Lavaggio Rientro'
+                return (
+                  <div key={booking.id} className="rounded-2xl bg-theme-bg-secondary border border-theme-border/30 shadow-sm overflow-hidden">
+                    {/* Card header */}
+                    <div className="px-4 pt-4 pb-3 flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-theme-text-primary text-[15px] truncate">
+                          {isRientro ? 'Lavaggio Rientro' : (booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A')}
+                        </div>
+                        {!isRientro && (
+                          <div className="text-xs text-theme-text-muted mt-0.5">
+                            {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 ml-2 ${
+                        bPaid ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'
+                      }`}>
+                        {bPaid ? 'Pagato' : 'Non Pagato'}
+                      </span>
+                    </div>
+
+                    {/* Card body — grouped rows */}
+                    <div className="mx-4 rounded-xl bg-theme-bg-tertiary/60 overflow-hidden mb-3">
+                      <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-theme-border/20">
+                        <span className="text-theme-text-muted text-xs">Servizio</span>
+                        <span className="text-theme-text-primary text-xs font-medium text-right max-w-[60%] truncate">{booking.service_name}</span>
+                      </div>
+                      <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-theme-border/20">
+                        <span className="text-theme-text-muted text-xs">Data</span>
+                        <span className="text-theme-text-primary text-xs font-medium">
+                          {booking.appointment_date
+                            ? new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+                            : '-'} · {booking.appointment_time || '-'}
+                        </span>
+                      </div>
+                      {(booking.vehicle_plate || booking.booking_details?.vehicleMakeModel) && (
+                        <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-theme-border/20">
+                          <span className="text-theme-text-muted text-xs">Veicolo</span>
+                          <div className="flex items-center gap-1.5">
+                            {booking.vehicle_plate && (
+                              <span className="font-mono font-bold text-dr7-gold text-xs">{booking.vehicle_plate}</span>
+                            )}
+                            {booking.booking_details?.vehicleCategory && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-500' : 'bg-orange-500/15 text-orange-500'
+                              }`}>
+                                {booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="px-3.5 py-2.5 flex items-center justify-between">
+                        <span className="text-theme-text-primary text-sm font-semibold">Totale</span>
+                        <span className="text-dr7-gold font-bold text-base">€{(booking.price_total / 100).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    {booking.booking_details?.notes && (
+                      <div className="mx-4 mb-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-3.5 py-2.5">
+                        <div className="text-yellow-500 text-[10px] font-semibold uppercase tracking-wider mb-1">Note</div>
+                        <p className="text-theme-text-primary text-xs leading-relaxed">{booking.booking_details.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="px-4 pb-4 flex gap-2">
+                      <button
+                        onClick={() => setEditingBooking(booking)}
+                        className="flex-1 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                      >
+                        Modifica
+                      </button>
+                      <button
+                        onClick={() => handleGenerateInvoice(booking)}
+                        disabled={generatingInvoice}
+                        className="flex-1 py-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                      >
+                        {generatingInvoice ? '...' : 'Fattura'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
+                        className="py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )
