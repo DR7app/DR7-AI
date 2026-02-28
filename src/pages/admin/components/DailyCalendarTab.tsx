@@ -426,11 +426,11 @@ export default function DailyCalendarTab() {
             {/* Calendar — Mobile Timeline */}
             <div className="md:hidden bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-hidden">
                 {/* Category legend */}
-                <div className="flex flex-wrap gap-3 px-3 py-2 border-b border-theme-border bg-theme-bg-tertiary">
-                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-green-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Noleggio</span></div>
-                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-blue-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Lavaggio</span></div>
-                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-orange-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Meccanica</span></div>
-                    <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-purple-600 rounded-sm" /><span className="text-[10px] text-theme-text-muted">Varie</span></div>
+                <div className="flex flex-wrap gap-2 px-3 py-2.5 border-b border-theme-border bg-theme-bg-tertiary">
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-green-600 rounded-sm shrink-0" /><span className="text-[11px] text-theme-text-muted">Noleggio</span></div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-blue-600 rounded-sm shrink-0" /><span className="text-[11px] text-theme-text-muted">Lavaggio</span></div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-orange-600 rounded-sm shrink-0" /><span className="text-[11px] text-theme-text-muted">Meccanica</span></div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-purple-600 rounded-sm shrink-0" /><span className="text-[11px] text-theme-text-muted">Varie</span></div>
                 </div>
 
                 <div className="divide-y divide-white/[0.06]">
@@ -497,14 +497,14 @@ export default function DailyCalendarTab() {
                                     {slotBookings.map((booking) => (
                                         <div
                                             key={`${booking.id}-${booking.type}`}
-                                            className={`border-l-4 ${getCategoryColor(booking.type)} bg-theme-bg-tertiary rounded-r-lg px-3 py-2`}
+                                            className={`border-l-4 ${getCategoryColor(booking.type)} bg-theme-bg-tertiary rounded-r-lg px-2.5 py-2 overflow-hidden`}
                                         >
                                             <div className="flex items-center gap-1.5 mb-0.5">
-                                                <div className={`w-2 h-2 rounded-full ${getDotColor(booking.type)}`} />
+                                                <div className={`w-2 h-2 rounded-full shrink-0 ${getDotColor(booking.type)}`} />
                                                 <span className="text-[10px] font-bold text-theme-text-muted tracking-wide">{getLabel(booking.type)}</span>
                                             </div>
-                                            <div className="font-bold text-sm text-theme-text-primary leading-tight">{parseCustomerName(booking)}</div>
-                                            <div className="text-xs text-theme-text-primary/80 mt-0.5">
+                                            <div className="font-bold text-sm text-theme-text-primary leading-tight truncate">{parseCustomerName(booking)}</div>
+                                            <div className="text-xs text-theme-text-primary/80 mt-0.5 truncate">
                                                 {booking.vehicle_name}
                                                 {booking.type !== 'lavaggio' && <span className="font-mono ml-1.5">{getTarga(booking)}</span>}
                                             </div>
