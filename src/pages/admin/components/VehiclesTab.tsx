@@ -290,7 +290,12 @@ export default function VehiclesTab() {
     if (!confirmed) return
 
     try {
-      // Only delete the vehicle record — keep all bookings, contracts, fatture, cauzioni
+      // Nullify FK references — keep all records, just unlink the vehicle
+      await supabase.from('cauzioni').update({ veicolo_id: null }).eq('veicolo_id', id)
+      await supabase.from('bookings').update({ vehicle_id: null }).eq('vehicle_id', id)
+      await supabase.from('reservations').delete().eq('vehicle_id', id)
+
+      // Now delete the vehicle record
       const { data: deletedVehicle, error: vehicleError } = await supabase
         .from('vehicles')
         .delete()
