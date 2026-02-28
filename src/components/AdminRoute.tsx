@@ -2,14 +2,6 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
-interface UserProfile {
-  user_id: string
-  full_name: string | null
-  phone: string | null
-  role: 'admin' | 'staff' | 'viewer'
-  created_at: string
-}
-
 interface AdminRouteProps {
   children: React.ReactNode
 }
@@ -32,26 +24,13 @@ export default function AdminRoute({ children }: AdminRouteProps) {
         return
       }
 
-      // Check user_profiles table first
-      const { data: profile } = await supabase
-        .from('user_profiles')
+      const { data: admin } = await supabase
+        .from('admins')
         .select('role')
         .eq('user_id', session.user.id)
-        .single<UserProfile>()
+        .single()
 
-      if (profile) {
-        const allowedRoles = ['admin', 'staff', 'viewer']
-        setAuthorized(allowedRoles.includes(profile.role))
-      } else {
-        // Fallback: check admins table
-        const { data: admin } = await supabase
-          .from('admins')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single()
-
-        setAuthorized(!!admin)
-      }
+      setAuthorized(!!admin)
     } catch (error) {
       console.error('Auth check error:', error)
       setAuthorized(false)
