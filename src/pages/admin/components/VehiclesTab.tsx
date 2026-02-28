@@ -290,7 +290,8 @@ export default function VehiclesTab() {
     if (!confirmed) return
 
     try {
-      // Nullify FK references — keep all records, just unlink the vehicle
+      // Nullify FK references (UUID only) — keep all records intact
+      // vehicle_name and vehicle_plate are text fields on bookings, they stay untouched
       await supabase.from('cauzioni').update({ veicolo_id: null }).eq('veicolo_id', id)
       await supabase.from('bookings').update({ vehicle_id: null }).eq('vehicle_id', id)
       await supabase.from('reservations').delete().eq('vehicle_id', id)
