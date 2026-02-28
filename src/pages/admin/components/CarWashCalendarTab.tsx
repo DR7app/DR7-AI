@@ -749,6 +749,13 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   </div>
                 </div>
 
+                {selectedBooking.booking_details?.notes && (
+                  <div className="mt-3 pt-3 border-t border-theme-border/50">
+                    <span className="text-theme-text-muted text-xs font-bold uppercase tracking-wider">Note:</span>
+                    <p className="text-theme-text-primary text-sm mt-1 bg-theme-text-primary/5 p-2 rounded border border-theme-border/50">{selectedBooking.booking_details.notes}</p>
+                  </div>
+                )}
+
                 <div className="mt-3 text-xs text-theme-text-muted">
                   ID: DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
                 </div>
