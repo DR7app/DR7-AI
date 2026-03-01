@@ -159,6 +159,15 @@ const reminderHandler: Handler = async (event) => {
             continue;
           }
 
+          // Skip short rentals (< 24h) — handled by 4h-after-pickup logic
+          if (booking.pickup_date && booking.dropoff_date) {
+            const durationHours = (new Date(booking.dropoff_date).getTime() - new Date(booking.pickup_date).getTime()) / (1000 * 60 * 60);
+            if (durationHours < 24) {
+              console.log(`Skipping booking ${booking.id} — short rental (${durationHours.toFixed(1)}h), handled by 4h-after-pickup`);
+              continue;
+            }
+          }
+
           const firstName = booking.booking_details?.customer?.firstName
             || booking.customer_name?.split(' ')[0]
             || 'Cliente';
@@ -231,6 +240,127 @@ const reminderHandler: Handler = async (event) => {
     }
   } catch (err: any) {
     console.error('Day-before reminders error:', err.message);
+  }
+
+  // ──────────────────────────────────────────────
+  // 2b. SHORT RENTAL EXTENSION OFFER (< 1 day bookings)
+  // Send 4 hours after pickup_date instead of day-before
+  // ──────────────────────────────────────────────
+  try {
+    // Find bookings where pickup was ~4 hours ago (±5 min window)
+    const fourHoursMinusFive = new Date(now.getTime() - (4 * 60 + 5) * 60 * 1000);
+    const fourHoursPlusFive = new Date(now.getTime() - (4 * 60 - 5) * 60 * 1000);
+
+    const { data: recentPickups, error: shortRentalError } = await supabase
+      .from('bookings')
+      .select('*')
+      .gte('pickup_date', fourHoursMinusFive.toISOString())
+      .lte('pickup_date', fourHoursPlusFive.toISOString())
+      .in('status', ['confirmed', 'active'])
+      .is('service_type', null);
+
+    if (shortRentalError) {
+      console.error('Error querying short rental bookings:', shortRentalError);
+    } else if (recentPickups && recentPickups.length > 0) {
+      // Filter to only short rentals (< 24 hours)
+      const shortRentals = recentPickups.filter(b => {
+        if (!b.pickup_date || !b.dropoff_date) return false;
+        const pickup = new Date(b.pickup_date).getTime();
+        const dropoff = new Date(b.dropoff_date).getTime();
+        const durationHours = (dropoff - pickup) / (1000 * 60 * 60);
+        return durationHours < 24;
+      });
+
+      console.log(`Found ${shortRentals.length} short rental(s) eligible for 4h extension offer (from ${recentPickups.length} recent pickups)`);
+
+      // Load vehicles for category
+      const { data: allVehiclesShort } = await supabase.from('vehicles').select('id, plate, category');
+      const vehicleMapShort = new Map<string, string>();
+      const plateMapShort = new Map<string, string>();
+      if (allVehiclesShort) {
+        allVehiclesShort.forEach((v: any) => {
+          vehicleMapShort.set(v.id, v.category || 'urban');
+          if (v.plate) plateMapShort.set(v.plate.replace(/\s/g, '').toUpperCase(), v.category || 'urban');
+        });
+      }
+
+      for (const booking of shortRentals) {
+        try {
+          if (booking.booking_details?.day_before_reminder_sent) {
+            console.log(`Skipping short rental ${booking.id} — extension offer already sent`);
+            continue;
+          }
+
+          const firstName = booking.booking_details?.customer?.firstName
+            || booking.customer_name?.split(' ')[0]
+            || 'Cliente';
+
+          let phone = booking.customer_phone || booking.booking_details?.customer?.phone;
+          if (!phone) {
+            const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
+            if (custId) {
+              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle();
+              if (cust?.telefono) phone = cust.telefono;
+            }
+            if (!phone && booking.customer_email) {
+              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('email', booking.customer_email).maybeSingle();
+              if (cust?.telefono) phone = cust.telefono;
+            }
+          }
+
+          if (!phone) {
+            console.log(`Skipping short rental ${booking.id} (${booking.customer_name}) — no phone number`);
+            continue;
+          }
+
+          let category = 'urban';
+          if (booking.vehicle_id && vehicleMapShort.has(booking.vehicle_id)) {
+            category = vehicleMapShort.get(booking.vehicle_id)!;
+          } else if (booking.vehicle_plate) {
+            const normPlate = booking.vehicle_plate.replace(/\s/g, '').toUpperCase();
+            if (plateMapShort.has(normPlate)) category = plateMapShort.get(normPlate)!;
+          }
+
+          let message = '';
+          if (category === 'exotic') {
+            const template = getTemplate('supercar_day_before',
+              `Salve,\n\nla contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nRestiamo in attesa di un suo cortese riscontro.\nGrazie.\n\nCordiali saluti,\nDR7`);
+            message = template.replace(/\{nome\}/g, firstName);
+          } else {
+            const template = getTemplate('utilitaria_day_before',
+              `Salve {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`);
+            message = template.replace(/\{nome\}/g, firstName);
+          }
+
+          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
+
+          if (success) {
+            const updatedDetails = {
+              ...(booking.booking_details || {}),
+              day_before_reminder_sent: true,
+              day_before_reminder_sent_at: now.toISOString(),
+            };
+
+            await supabase
+              .from('bookings')
+              .update({ booking_details: updatedDetails })
+              .eq('id', booking.id);
+
+            console.log(`Short rental extension offer sent for booking ${booking.id} (4h after pickup, ${category})`);
+            sent++;
+          } else {
+            failed++;
+          }
+        } catch (err: any) {
+          console.error(`Error processing short rental extension for booking ${booking.id}:`, err.message);
+          failed++;
+        }
+      }
+    } else {
+      console.log('No short rentals eligible for 4h extension offer');
+    }
+  } catch (err: any) {
+    console.error('Short rental extension error:', err.message);
   }
 
   // ──────────────────────────────────────────────
