@@ -1423,8 +1423,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const data = await response.json()
       if (!response.ok) {
         if (data.invoiceNumber) {
-          // Invoice already exists - Send to SDI automatically
-          await sendInvoiceToAruba(data.invoice?.id || data.invoiceId)
+          // Invoice already exists — backend auto-sends to SDI
           return
         } else {
           // Show detailed error from backend
@@ -1456,9 +1455,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.warn('PDF auto-open failed, continuing flow:', err)
       }
 
-      // Automatically send to SDI (no confirmation)
-      await sendInvoiceToAruba(invoice.id)
-
+      // SDI send is now handled automatically by the backend
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)
@@ -1466,10 +1463,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
+        // Show full error with debug info so we can diagnose
+        alert('Dati cliente incompleti per la fattura:\n\n' + errorMessage)
         if (booking.user_id) {
           openEditCustomer(booking.user_id)
           return
         }
+        return
       }
 
       alert('Errore nella generazione della fattura:\n\n' + errorMessage)

@@ -180,15 +180,35 @@ export const handler: Handler = async (event) => {
         const taxCode = customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || ''
         const vatNumber = customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || ''
 
+        // Debug: log what was found for diagnostics
+        const debugInfo = {
+            customerId,
+            customerFound: !!customerData,
+            customerTable: customerData ? 'customers_extended' : 'none',
+            dbFields: customerData ? {
+                indirizzo: customerData.indirizzo || null,
+                numero_civico: customerData.numero_civico || null,
+                codice_postale: customerData.codice_postale || null,
+                citta_residenza: customerData.citta_residenza || null,
+                provincia_residenza: customerData.provincia_residenza || null,
+                codice_fiscale: customerData.codice_fiscale || null,
+                partita_iva: customerData.partita_iva || null,
+            } : null,
+            resolvedAddress: fullAddress,
+            resolvedTaxCode: taxCode,
+            resolvedVat: vatNumber,
+            bookingCustomerKeys: Object.keys(bookingCustomer),
+        }
+        console.log('[Invoice] Validation debug:', JSON.stringify(debugInfo))
+
         // VALIDATION: Mandatory fields check
-        // User Requirement: "Client data incomplete: address and tax code are required."
         if (!fullAddress || fullAddress.trim() === '') {
             return {
                 statusCode: 400,
                 body: JSON.stringify({
                     error: 'Client data incomplete',
                     message: 'Indirizzo cliente obbligatorio. Aggiorna il profilo cliente o la prenotazione.',
-                    details: 'Address is missing'
+                    details: `Address is missing. Debug: customerId=${customerId}, customerFound=${!!customerData}, dbIndirizzo=${customerData?.indirizzo || 'NULL'}, dbCitta=${customerData?.citta_residenza || 'NULL'}`
                 })
             }
         }
@@ -198,7 +218,7 @@ export const handler: Handler = async (event) => {
                 body: JSON.stringify({
                     error: 'Client data incomplete',
                     message: 'Codice Fiscale cliente obbligatorio. Aggiorna il profilo cliente o la prenotazione.',
-                    details: 'Tax Code (Codice Fiscale) is missing'
+                    details: `Tax Code missing. Debug: customerId=${customerId}, customerFound=${!!customerData}, dbCF=${customerData?.codice_fiscale || 'NULL'}, dbPIVA=${customerData?.partita_iva || 'NULL'}`
                 })
             }
         }
