@@ -1,6 +1,8 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { generateInvoicetronicPayload } from './invoicetronic-utils'
+import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
+import { uploadInvoiceToAruba } from './aruba-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -400,10 +402,29 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // --- AUTOMATIC SDI SENDING REMOVED ---
-        // We now rely on explicit "Invia SDI" button which uses Aruba API
-        // Status remains 'draft' until user manually sends it
-        console.log('[Invoice] Generated in draft status. Ready for Aruba upload.')
+        // Auto-send to SDI via Aruba if customer has tax code
+        if (invoice.customer_tax_code) {
+            try {
+                const xmlContent = generateFatturaXML(invoice as any)
+                const filename = generateInvoiceFilename(invoice as any)
+                const arubaResult = await uploadInvoiceToAruba(xmlContent, filename)
+
+                await supabase.from('fatture').update({
+                    sdi_status: 'sending',
+                    aruba_invoice_id: arubaResult.id,
+                    xml_filename: filename,
+                    aruba_upload_filename: arubaResult.filename,
+                    sdi_sent_at: new Date().toISOString()
+                }).eq('id', invoice.id)
+
+                console.log('[Invoice] Auto-sent to SDI via Aruba:', arubaResult.id)
+            } catch (sdiError: any) {
+                console.error('[Invoice] Auto-SDI failed (invoice still saved as draft):', sdiError.message)
+                // Invoice is saved, SDI send failed — user can retry via "Invia SDI" button
+            }
+        } else {
+            console.log('[Invoice] No tax code — saved as draft. Ready for manual Aruba upload.')
+        }
 
         return {
             statusCode: 200,
