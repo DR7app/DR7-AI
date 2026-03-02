@@ -119,6 +119,15 @@ const reviewHandler: Handler = async (event) => {
           continue;
         }
 
+        // Check blacklist status
+        if (booking.customer_id) {
+          const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', booking.customer_id).maybeSingle();
+          if (custCheck?.status === 'blacklist') {
+            console.log(`[Review WhatsApp] Skipping ${booking.customer_name} — customer is blacklisted`);
+            continue;
+          }
+        }
+
         // Get first name (split on space, take first part)
         const firstName = (booking.customer_name || 'Cliente').split(' ')[0];
 

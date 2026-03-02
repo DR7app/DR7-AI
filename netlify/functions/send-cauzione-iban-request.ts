@@ -164,6 +164,17 @@ const cauzioneIbanHandler: Handler = async () => {
           continue;
         }
 
+        // Check blacklist status
+        const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || (booking as any).user_id;
+        if (custId) {
+          const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId).maybeSingle();
+          if (custCheck?.status === 'blacklist') {
+            console.log(`[Cauzione IBAN] Skipping ${booking.id} — customer is blacklisted`);
+            skipped++;
+            continue;
+          }
+        }
+
         // Get customer first name
         const firstName = booking.customer_name?.split(' ')[0] || booking.booking_details?.customer?.fullName?.split(' ')[0] || 'Cliente';
 

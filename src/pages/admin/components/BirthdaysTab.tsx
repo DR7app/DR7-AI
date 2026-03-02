@@ -123,8 +123,9 @@ export default function BirthdaysTab() {
             // Load customers with birthdays
             const { data: customersData, error: customersError } = await supabase
                 .from('customers_extended')
-                .select('id, nome, cognome, email, telefono, data_nascita, ragione_sociale, denominazione, tipo_cliente')
+                .select('id, nome, cognome, email, telefono, data_nascita, ragione_sociale, denominazione, tipo_cliente, status')
                 .not('data_nascita', 'is', null)
+                .neq('status', 'blacklist')
 
             if (customersError) throw customersError
 

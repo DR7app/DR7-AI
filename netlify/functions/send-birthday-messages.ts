@@ -94,7 +94,7 @@ const birthdayHandler: Handler = async (event) => {
     // Get all customers with birthdays
     const { data: customers, error: customersError } = await supabase
       .from('customers_extended')
-      .select('id, nome, cognome, telefono, data_nascita, email')
+      .select('id, nome, cognome, telefono, data_nascita, email, status')
       .not('data_nascita', 'is', null)
       .not('telefono', 'is', null);
 
@@ -122,6 +122,7 @@ const birthdayHandler: Handler = async (event) => {
 
     for (const customer of customers || []) {
       if (!customer.data_nascita || !customer.telefono) continue;
+      if ((customer as any).status === 'blacklist') continue; // Skip blacklisted customers
       if (sentCustomerIds.has(customer.id)) continue; // Already sent this year
 
       // Parse birthday

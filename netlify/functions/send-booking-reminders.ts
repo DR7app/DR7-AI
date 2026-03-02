@@ -191,6 +191,16 @@ const reminderHandler: Handler = async (event) => {
             continue;
           }
 
+          // Check blacklist status
+          const custId1 = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
+          if (custId1) {
+            const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId1).maybeSingle();
+            if (custCheck?.status === 'blacklist') {
+              console.log(`Skipping booking ${booking.id} — customer is blacklisted`);
+              continue;
+            }
+          }
+
           // Determine vehicle category from vehicles table
           let category = 'urban';
           if (booking.vehicle_id && vehicleMap.has(booking.vehicle_id)) {
@@ -313,6 +323,16 @@ const reminderHandler: Handler = async (event) => {
             continue;
           }
 
+          // Check blacklist status
+          const custId2 = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
+          if (custId2) {
+            const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId2).maybeSingle();
+            if (custCheck?.status === 'blacklist') {
+              console.log(`Skipping short rental ${booking.id} — customer is blacklisted`);
+              continue;
+            }
+          }
+
           let category = 'urban';
           if (booking.vehicle_id && vehicleMapShort.has(booking.vehicle_id)) {
             category = vehicleMapShort.get(booking.vehicle_id)!;
@@ -433,6 +453,16 @@ const reminderHandler: Handler = async (event) => {
           if (!phone) {
             console.log(`Skipping booking ${booking.id} (${booking.customer_name}) — no phone number`);
             continue;
+          }
+
+          // Check blacklist status
+          const custId3 = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
+          if (custId3) {
+            const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId3).maybeSingle();
+            if (custCheck?.status === 'blacklist') {
+              console.log(`Skipping deposit reminder ${booking.id} — customer is blacklisted`);
+              continue;
+            }
           }
 
           const template = getTemplate('deposit_return_iban',

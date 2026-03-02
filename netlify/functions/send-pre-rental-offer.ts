@@ -164,6 +164,17 @@ const preRentalOfferHandler: Handler = async () => {
           continue;
         }
 
+        // Check blacklist status
+        const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || (booking as any).user_id;
+        if (custId) {
+          const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId).maybeSingle();
+          if (custCheck?.status === 'blacklist') {
+            console.log(`[Pre-Rental Offer] Skipping ${booking.id} — customer is blacklisted`);
+            skipped++;
+            continue;
+          }
+        }
+
         // Get vehicle category type (urban or exotic/supercar)
         const rawCategory = vehicleMap.get(booking.vehicle_id);
         const categoryType = getCategoryType(rawCategory);
