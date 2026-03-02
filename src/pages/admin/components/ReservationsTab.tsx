@@ -1478,34 +1478,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  // Helper to send to Aruba directly from Reservations Tab
-  async function sendInvoiceToAruba(invoiceId: string) {
-    if (!invoiceId) {
-      console.error('❌ No invoice ID provided')
-      return
-    }
-
-    console.log('📤 Sending invoice to Aruba SDI...', invoiceId)
-
-    try {
-      const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId: invoiceId })
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        console.log('✅ SDI send successful:', result)
-      } else {
-        console.error('❌ SDI send failed:', result.error, result.details)
-      }
-    } catch (error) {
-      console.error('❌ Aruba send error:', error)
-    }
-  }
-
   // Handle creating Nexi pre-authorization for cauzione
   async function handleCreatePreAuth(booking: Booking) {
     if (!booking.id) return
