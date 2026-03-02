@@ -29,14 +29,16 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Invoice not found' }) }
         }
 
-        if (!invoice.xml_filename) {
+        // Use Aruba's upload filename (with .p7m) for status lookup, fallback to xml_filename
+        const lookupFilename = invoice.aruba_upload_filename || invoice.xml_filename
+        if (!lookupFilename) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Invoice has not been sent to Aruba yet (missing filename)' }) }
         }
 
         // Check status from Aruba API
         let remoteInvoice
         try {
-            remoteInvoice = await checkArubaStatus(invoice.xml_filename)
+            remoteInvoice = await checkArubaStatus(lookupFilename)
         } catch (apiError: any) {
             console.error('Aruba Status Check Error:', apiError)
             return {
@@ -46,11 +48,12 @@ export const handler: Handler = async (event) => {
         }
 
         // Map Aruba status to our internal status
-        // From official docs: status is in invoices[].status field
-        // Possible values: Inviata, Consegnata, Mancata Consegna, Scartata, etc.
+        // getByFilename may return invoice directly or inside invoices[] array
         let sdiStatus = 'sent' // Default
-        const invoiceStatus = remoteInvoice.invoices && remoteInvoice.invoices[0] ? remoteInvoice.invoices[0].status : ''
+        const invoiceObj = remoteInvoice.invoices?.[0] || remoteInvoice
+        const invoiceStatus = invoiceObj.status || invoiceObj.invoiceStatus || ''
         const remoteStatus = invoiceStatus.toLowerCase()
+        console.log('[SDI Status] Remote status:', remoteStatus, 'Full response keys:', Object.keys(remoteInvoice))
 
         if (remoteStatus === 'consegnata') {
             sdiStatus = 'accepted'

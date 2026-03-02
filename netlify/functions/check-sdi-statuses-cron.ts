@@ -17,7 +17,7 @@ const statusCheckHandler: Handler = async () => {
         // Fetch all invoices awaiting SDI response
         const { data: pendingInvoices, error: fetchError } = await supabase
             .from('fatture')
-            .select('id, xml_filename, sdi_status, numero_fattura')
+            .select('id, xml_filename, aruba_upload_filename, sdi_status, numero_fattura')
             .in('sdi_status', ['sending', 'sent'])
             .not('xml_filename', 'is', null)
 
@@ -38,10 +38,13 @@ const statusCheckHandler: Handler = async () => {
 
         for (const invoice of pendingInvoices) {
             try {
-                const remoteInvoice = await checkArubaStatus(invoice.xml_filename)
+                const lookupFilename = invoice.aruba_upload_filename || invoice.xml_filename
+                const remoteInvoice = await checkArubaStatus(lookupFilename)
 
                 // Map Aruba status to internal status
-                const invoiceStatus = remoteInvoice.invoices?.[0]?.status || ''
+                // getByFilename may return invoice directly or inside invoices[] array
+                const invoiceObj = remoteInvoice.invoices?.[0] || remoteInvoice
+                const invoiceStatus = invoiceObj.status || invoiceObj.invoiceStatus || ''
                 const remoteStatus = invoiceStatus.toLowerCase()
 
                 let sdiStatus = invoice.sdi_status // Keep current if unknown

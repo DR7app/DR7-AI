@@ -132,7 +132,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
         <PrezzoUnitario>${formatAmount(item.unit_price)}</PrezzoUnitario>
         <PrezzoTotale>${formatAmount(lineTotal)}</PrezzoTotale>
         <AliquotaIVA>${formatAmount(item.vat_rate)}</AliquotaIVA>${item.vat_rate === 0 ? `
-        <Natura>N1</Natura>` : ''}
+        <Natura>N2.2</Natura>` : ''}
       </DettaglioLinee>`
   })
 
@@ -158,10 +158,11 @@ export function generateFatturaXML(invoice: InvoiceData): string {
     datiRiepilogo += `
       <DatiRiepilogo>
         <AliquotaIVA>${formatAmount(rate)}</AliquotaIVA>${rate === 0 ? `
-        <Natura>N1</Natura>` : ''}
+        <Natura>N2.2</Natura>
+        <RiferimentoNormativo>Art. 7 DPR 633/72</RiferimentoNormativo>` : ''}
         <ImponibileImporto>${formatAmount(amounts.imponibile)}</ImponibileImporto>
-        <Imposta>${formatAmount(amounts.imposta)}</Imposta>
-        <EsigibilitaIVA>I</EsigibilitaIVA>
+        <Imposta>${formatAmount(amounts.imposta)}</Imposta>${rate > 0 ? `
+        <EsigibilitaIVA>I</EsigibilitaIVA>` : ''}
       </DatiRiepilogo>`
   })
 
@@ -277,10 +278,11 @@ export function generateInvoiceFilename(invoice: InvoiceData): string {
   const countryCode = 'IT'
   const companyVAT = '04104640927'
 
-  // Extract just the sequential number from invoice number (e.g., DR7-2026-0013 → 0013)
+  // Extract sequential number + add random suffix to prevent Aruba error 0034 on re-upload
   const match = invoice.numero_fattura.match(/(\d+)$/)
   const seqNum = match ? match[1] : '1'
-  const progressive = seqNum.padStart(5, '0')
+  const randomSuffix = Math.random().toString(36).substring(2, 4)
+  const progressive = seqNum.padStart(3, '0') + randomSuffix
 
   return `${countryCode}${companyVAT}_${progressive}.xml`
 }

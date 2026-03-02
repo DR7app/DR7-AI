@@ -140,10 +140,11 @@ export async function checkArubaStatus(filename: string): Promise<any> {
 
     const result = await response.json()
 
-    // Check for errors
-    if (result.errorCode) {
+    // Check for errors (0000 = success)
+    if (result.errorCode && result.errorCode !== '0000') {
         throw new Error(`Aruba Error ${result.errorCode}: ${result.errorDescription}`)
     }
 
+    console.log('[Aruba] Status check result:', JSON.stringify(result).substring(0, 500))
     return result
 }
