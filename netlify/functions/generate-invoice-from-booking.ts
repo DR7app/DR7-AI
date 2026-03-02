@@ -58,19 +58,29 @@ export const handler: Handler = async (event) => {
 
         let customerData: any = null
 
-        // 1. Try by ID
-        if (customerId && customerId !== 'undefined') {
+        // 1. Try by all possible IDs (customerId from booking_details, user_id, customer_id)
+        const idsToTry = [
+            bookingDetails.customer?.customerId,
+            booking.user_id,
+            booking.customer_id
+        ].filter((id: any) => id && id !== 'undefined')
+        // Remove duplicates
+        const uniqueIds = [...new Set(idsToTry)]
+
+        for (const tryId of uniqueIds) {
+            if (customerData) break
+            console.log(`[Invoice] Trying customer lookup by ID: ${tryId}`)
             const { data, error: customerError } = await supabase
                 .from('customers_extended')
                 .select('*')
-                .eq('id', customerId)
+                .eq('id', tryId)
                 .single()
 
             if (data) {
                 customerData = data
-                console.log('✅ Found customer by ID')
+                console.log(`✅ Found customer by ID: ${tryId}`)
             } else if (customerError) {
-                console.warn('Customer fetch error by ID:', customerError.message)
+                console.warn(`Customer fetch error for ID ${tryId}:`, customerError.message)
             }
         }
 
