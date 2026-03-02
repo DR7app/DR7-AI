@@ -1,6 +1,5 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { generateInvoicetronicPayload } from './invoicetronic-utils'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
 
