@@ -10,11 +10,14 @@ interface InvoiceData {
   customer_address: string
   customer_tax_code?: string
   customer_vat?: string
+  customer_sdi_code?: string
+  customer_pec?: string
   items: InvoiceItem[]
   subtotal: number
   vat_amount: number
   exempt_amount?: number
   importo_totale: number
+  stato?: string
 }
 
 interface InvoiceItem {
@@ -53,10 +56,10 @@ function parseAddress(address: string): AddressParts {
       .replace(`(${provincia})`, '')
       .trim()
 
-    return { street, cap, comune, provincia }
+    return { street, cap, comune: comune || 'Cagliari', provincia }
   }
 
-  return { street: address, cap: '09100', comune: 'Cagliari', provincia: 'CA' }
+  return { street: address || 'N/A', cap: '09100', comune: 'Cagliari', provincia: 'CA' }
 }
 
 /**
@@ -80,12 +83,12 @@ function formatAmount(amount: number): string {
 }
 
 /**
- * Generate FatturaPA XML for OpenAPI.it SDI
+ * Generate FatturaPA 1.2 compliant XML for Aruba SDI
  */
 export function generateFatturaXML(invoice: InvoiceData): string {
   const customerAddress = parseAddress(invoice.customer_address || '')
 
-  // Company details (CedentePrestatore)
+  // Company details (CedentePrestatore) — Dubai rent 7.0 S.p.A.
   const companyVAT = '04104640927'
   const companyFiscalCode = '04104640927'
   const companyName = 'Dubai rent 7.0 S.p.A.'
@@ -95,37 +98,48 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   const companyProvince = 'CA'
 
   // CRITICAL: IdTrasmittente MUST be Aruba's intermediary code
-  // Per official Aruba API docs (v1.21.1):
-  // "The synchronous check has been introduced for the Sender ID field (tag 1.1.1 <IdTrasmittente>)
-  //  which will have to be filled in with the tax code for the intermediary Aruba PEC S.p.A.: 01879020517"
   const transmitterId = '01879020517'
 
-  // Generate progressive transmission ID
-  const progressivoInvio = invoice.numero_fattura.replace(/\D/g, '') || '1'
+  // Progressive transmission ID (max 10 chars alphanumeric)
+  const rawNum = invoice.numero_fattura.replace(/\D/g, '') || '1'
+  const progressivoInvio = rawNum.substring(0, 10)
 
   // Customer details
   const customerVAT = invoice.customer_vat || ''
   const customerFiscalCode = invoice.customer_tax_code || ''
   const customerName = escapeXml(invoice.customer_name)
 
+  // CodiceDestinatario: use customer's SDI code or default 0000000
+  const codiceDestinatario = invoice.customer_sdi_code || '0000000'
+
+  // Parse items — handle both array and JSON string from DB
+  let items: InvoiceItem[] = []
+  if (Array.isArray(invoice.items)) {
+    items = invoice.items
+  } else if (typeof invoice.items === 'string') {
+    try { items = JSON.parse(invoice.items) } catch { items = [] }
+  }
+
+  // Build DettaglioLinee
   let dettaglioLinee = ''
-  invoice.items.forEach((item, index) => {
+  items.forEach((item, index) => {
     const lineTotal = item.unit_price * item.quantity
     dettaglioLinee += `
-    <DettaglioLinee>
-      <NumeroLinea>${index + 1}</NumeroLinea>
-      <Descrizione>${escapeXml(item.description)}</Descrizione>
-      <Quantita>${formatAmount(item.quantity)}</Quantita>
-      <PrezzoUnitario>${formatAmount(item.unit_price)}</PrezzoUnitario>
-      <PrezzoTotale>${formatAmount(lineTotal)}</PrezzoTotale>
-      <AliquotaIVA>${formatAmount(item.vat_rate)}</AliquotaIVA>
-    </DettaglioLinee>`
+      <DettaglioLinee>
+        <NumeroLinea>${index + 1}</NumeroLinea>
+        <Descrizione>${escapeXml(item.description)}</Descrizione>
+        <Quantita>${formatAmount(item.quantity)}</Quantita>
+        <PrezzoUnitario>${formatAmount(item.unit_price)}</PrezzoUnitario>
+        <PrezzoTotale>${formatAmount(lineTotal)}</PrezzoTotale>
+        <AliquotaIVA>${formatAmount(item.vat_rate)}</AliquotaIVA>${item.vat_rate === 0 ? `
+        <Natura>N1</Natura>` : ''}
+      </DettaglioLinee>`
   })
 
   // Group items by VAT rate for DatiRiepilogo
   const vatGroups = new Map<number, { imponibile: number, imposta: number }>()
 
-  invoice.items.forEach(item => {
+  items.forEach(item => {
     const lineTotal = item.unit_price * item.quantity
     const vatAmount = lineTotal * (item.vat_rate / 100)
 
@@ -142,12 +156,51 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   let datiRiepilogo = ''
   vatGroups.forEach((amounts, rate) => {
     datiRiepilogo += `
-    <DatiRiepilogo>
-      <AliquotaIVA>${formatAmount(rate)}</AliquotaIVA>
-      <ImponibileImporto>${formatAmount(amounts.imponibile)}</ImponibileImporto>
-      <Imposta>${formatAmount(amounts.imposta)}</Imposta>
-    </DatiRiepilogo>`
+      <DatiRiepilogo>
+        <AliquotaIVA>${formatAmount(rate)}</AliquotaIVA>${rate === 0 ? `
+        <Natura>N1</Natura>` : ''}
+        <ImponibileImporto>${formatAmount(amounts.imponibile)}</ImponibileImporto>
+        <Imposta>${formatAmount(amounts.imposta)}</Imposta>
+        <EsigibilitaIVA>I</EsigibilitaIVA>
+      </DatiRiepilogo>`
   })
+
+  // Customer identification section
+  // Per FatturaPA: IdFiscaleIVA for B2B, CodiceFiscale for individuals
+  // If customer has BOTH P.IVA and CF, include both
+  let customerIdSection = ''
+  if (customerVAT) {
+    customerIdSection += `
+          <IdFiscaleIVA>
+            <IdPaese>IT</IdPaese>
+            <IdCodice>${customerVAT}</IdCodice>
+          </IdFiscaleIVA>`
+  }
+  if (customerFiscalCode) {
+    customerIdSection += `
+          <CodiceFiscale>${customerFiscalCode}</CodiceFiscale>`
+  }
+
+  // PECDestinatario: required when CodiceDestinatario is 0000000 and PEC is available
+  let pecSection = ''
+  if (codiceDestinatario === '0000000' && invoice.customer_pec) {
+    pecSection = `
+      <PECDestinatario>${escapeXml(invoice.customer_pec)}</PECDestinatario>`
+  }
+
+  // DatiPagamento section
+  let datiPagamento = ''
+  const paymentStatus = invoice.stato
+  if (paymentStatus === 'paid' || paymentStatus === 'completed') {
+    datiPagamento = `
+    <DatiPagamento>
+      <CondizioniPagamento>TP02</CondizioniPagamento>
+      <DettaglioPagamento>
+        <ModalitaPagamento>MP05</ModalitaPagamento>
+        <ImportoPagamento>${formatAmount(invoice.importo_totale)}</ImportoPagamento>
+      </DettaglioPagamento>
+    </DatiPagamento>`
+  }
 
   // Build complete XML
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -160,7 +213,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
       </IdTrasmittente>
       <ProgressivoInvio>${progressivoInvio}</ProgressivoInvio>
       <FormatoTrasmissione>FPR12</FormatoTrasmissione>
-      <CodiceDestinatario>0000000</CodiceDestinatario>
+      <CodiceDestinatario>${codiceDestinatario}</CodiceDestinatario>${pecSection}
     </DatiTrasmissione>
     <CedentePrestatore>
       <DatiAnagrafici>
@@ -183,12 +236,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
       </Sede>
     </CedentePrestatore>
     <CessionarioCommittente>
-      <DatiAnagrafici>
-        ${customerVAT ? `<IdFiscaleIVA>
-          <IdPaese>IT</IdPaese>
-          <IdCodice>${customerVAT}</IdCodice>
-        </IdFiscaleIVA>` : ''}
-        ${customerFiscalCode && !customerVAT ? `<CodiceFiscale>${customerFiscalCode}</CodiceFiscale>` : ''}
+      <DatiAnagrafici>${customerIdSection}
         <Anagrafica>
           <Denominazione>${customerName}</Denominazione>
         </Anagrafica>
@@ -213,7 +261,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
       </DatiGeneraliDocumento>
     </DatiGenerali>
     <DatiBeniServizi>${dettaglioLinee}${datiRiepilogo}
-    </DatiBeniServizi>
+    </DatiBeniServizi>${datiPagamento}
   </FatturaElettronicaBody>
 </p:FatturaElettronica>`
 
@@ -222,19 +270,17 @@ export function generateFatturaXML(invoice: InvoiceData): string {
 
 /**
  * Generate standard FatturaPA filename
- * Format: IT + VAT (11 chars) + _ + Progressive (5 chars alphanumeric) + .xml
+ * Format: IT + VAT (11 chars) + _ + Progressive (max 5 chars alphanumeric) + .xml
  * Example: IT04104640927_00001.xml
  */
 export function generateInvoiceFilename(invoice: InvoiceData): string {
   const countryCode = 'IT'
-  // Hardcoded company VAT or from invoice if dynamic
-  const transmitterId = '04104640927'
+  const companyVAT = '04104640927'
 
-  // Ensure progressive is at least 5 chars, padded with 0
-  // We use the invoice number's numeric part
-  const rawNum = invoice.numero_fattura.replace(/\D/g, '') || '0'
-  const progressive = rawNum.padStart(5, '0').substring(0, 5) // Max 5 chars for the sequence part usually? 
-  // Actually spec allows more, but standard is often IT + 11 digits + _ + 5 chars
+  // Extract just the sequential number from invoice number (e.g., DR7-2026-0013 → 0013)
+  const match = invoice.numero_fattura.match(/(\d+)$/)
+  const seqNum = match ? match[1] : '1'
+  const progressive = seqNum.padStart(5, '0')
 
-  return `${countryCode}${transmitterId}_${progressive}.xml`
+  return `${countryCode}${companyVAT}_${progressive}.xml`
 }

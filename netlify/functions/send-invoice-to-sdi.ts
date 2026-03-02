@@ -31,6 +31,18 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Invoice not found' }) }
         }
 
+        // Skip if already sent/processing (prevent duplicate uploads to Aruba)
+        if (invoice.sdi_status === 'sending' || invoice.sdi_status === 'sent' || invoice.sdi_status === 'accepted') {
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    success: true,
+                    message: `Invoice already in status: ${invoice.sdi_status}`,
+                    skipped: true
+                })
+            }
+        }
+
         // 1. Generate XML
         // Ensure invoice object matches InvoiceData interface if needed, or cast it
         // The DB columns largely match standard naming
