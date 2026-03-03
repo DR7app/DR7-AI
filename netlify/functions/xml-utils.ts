@@ -101,8 +101,10 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   const transmitterId = '01879020517'
 
   // Progressive transmission ID (max 10 chars alphanumeric)
+  // Add random suffix to prevent Aruba error 0034 on re-upload (content hash dedup)
   const rawNum = invoice.numero_fattura.replace(/\D/g, '') || '1'
-  const progressivoInvio = rawNum.substring(0, 10)
+  const rndSuffix = Math.random().toString(36).substring(2, 5)
+  const progressivoInvio = (rawNum + rndSuffix).substring(0, 10)
 
   // Customer details
   const customerVAT = invoice.customer_vat || ''
