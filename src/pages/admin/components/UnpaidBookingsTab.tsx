@@ -178,6 +178,72 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  async function markPenaltiesDanniPaid(booking: UnpaidBooking) {
+    try {
+      const details = booking.booking_details || {}
+      const pendingPenalties = (details.penalties || []).filter((p: any) => p.paymentStatus === 'pending')
+      const pendingDanni = (details.danni || []).filter((d: any) => d.paymentStatus === 'pending')
+
+      // Generate fattura for pending penalties
+      if (pendingPenalties.length > 0) {
+        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: booking.id,
+            customerId: booking.customer_id || booking.user_id,
+            items: pendingPenalties.map((p: any) => ({ label: p.label, amount: p.amount, quantity: p.quantity || 1 })),
+            paymentStatus: 'paid'
+          })
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.message || err.error || 'Errore generazione fattura penali')
+        }
+      }
+
+      // Generate fattura for pending danni
+      if (pendingDanni.length > 0) {
+        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: booking.id,
+            customerId: booking.customer_id || booking.user_id,
+            items: pendingDanni.map((d: any) => ({ label: d.label, amount: d.amount, quantity: d.quantity || 1 })),
+            type: 'danni',
+            paymentStatus: 'paid'
+          })
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.message || err.error || 'Errore generazione fattura danni')
+        }
+      }
+
+      // Remove pending entries from booking_details
+      const updatedPenalties = (details.penalties || []).filter((p: any) => p.paymentStatus !== 'pending')
+      const updatedDanni = (details.danni || []).filter((d: any) => d.paymentStatus !== 'pending')
+
+      await supabase
+        .from('bookings')
+        .update({
+          booking_details: {
+            ...details,
+            penalties: updatedPenalties,
+            danni: updatedDanni
+          }
+        })
+        .eq('id', booking.id)
+
+      toast.success('Penali/Danni segnati come pagati! Fattura generata e inviata a SDI.')
+      loadUnpaidBookings()
+    } catch (error: any) {
+      console.error('Failed to mark penalties/danni as paid:', error)
+      toast.error('Errore: ' + (error.message || error))
+    }
+  }
+
   async function markExtensionsPaid(booking: UnpaidBooking) {
     try {
       // Update all pending extensions to paid
@@ -670,6 +736,14 @@ export default function UnpaidBookingsTab() {
                   Segna Pagato
                 </button>
               )}
+              {isOnlyPenaltyDanni(booking) && (
+                <button
+                  onClick={() => markPenaltiesDanniPaid(booking)}
+                  className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                >
+                  Segna Pagato
+                </button>
+              )}
               {getPendingExtensions(booking).length > 0 && (
                 <button
                   onClick={() => markExtensionsPaid(booking)}
@@ -818,6 +892,14 @@ export default function UnpaidBookingsTab() {
                       {(booking.payment_status === 'pending' || booking.payment_status === 'unpaid') && (
                         <button
                           onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                        >
+                          Segna Pagato
+                        </button>
+                      )}
+                      {isOnlyPenaltyDanni(booking) && (
+                        <button
+                          onClick={() => markPenaltiesDanniPaid(booking)}
                           className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
                         >
                           Segna Pagato
