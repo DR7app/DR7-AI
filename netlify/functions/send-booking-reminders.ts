@@ -109,21 +109,15 @@ const reminderHandler: Handler = async (event) => {
   const getTemplate = (key: string, fallback: string) => messageTemplates[key] || fallback;
 
   // ──────────────────────────────────────────────
-  // 1 & 2. DAY-BEFORE REMINDERS (supercar + utilitaria)
-  // Find bookings where dropoff_date is tomorrow (Italy time)
+  // 1 & 2. EXTENSION OFFER — 24h before dropoff TIME
+  // Find bookings where dropoff is ~24 hours from now (±5 min window)
   // ──────────────────────────────────────────────
   try {
-    const italyFormatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Rome',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const todayItaly = italyFormatter.format(now);
-    const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const tomorrowItaly = italyFormatter.format(tomorrowDate);
+    // 24h from now ±5 min window (cron runs every 5 min)
+    const twentyFourMinusFive = new Date(now.getTime() + (24 * 60 - 5) * 60 * 1000);
+    const twentyFourPlusFive = new Date(now.getTime() + (24 * 60 + 5) * 60 * 1000);
 
-    console.log(`Italy today: ${todayItaly}, tomorrow: ${tomorrowItaly}`);
+    console.log(`Extension offer window: dropoff between ${twentyFourMinusFive.toISOString()} and ${twentyFourPlusFive.toISOString()}`);
 
     // Load vehicles to determine category (exotic vs urban/aziendali)
     const { data: allVehicles } = await supabase
@@ -142,8 +136,8 @@ const reminderHandler: Handler = async (event) => {
     const { data: endingTomorrow, error: dayBeforeError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('dropoff_date', `${tomorrowItaly}T00:00:00`)
-      .lt('dropoff_date', `${tomorrowItaly}T23:59:59`)
+      .gte('dropoff_date', twentyFourMinusFive.toISOString())
+      .lte('dropoff_date', twentyFourPlusFive.toISOString())
       .in('status', ['confirmed', 'active'])
       .is('service_type', null);
 
