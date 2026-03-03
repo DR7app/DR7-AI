@@ -117,7 +117,7 @@ const reminderHandler: Handler = async (event) => {
     const italyTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
     const italyHour = italyTime.getHours();
     const italyMinute = italyTime.getMinutes();
-    const isNineAM = italyHour === 8 && italyMinute >= 55 || italyHour === 9 && italyMinute <= 5;
+    const isNineAM = italyHour === 9;
 
     // Load vehicles to determine category (exotic vs urban/aziendali)
     const { data: allVehicles } = await supabase
@@ -264,15 +264,15 @@ const reminderHandler: Handler = async (event) => {
   // Send 4 hours after pickup_date instead of day-before
   // ──────────────────────────────────────────────
   try {
-    // Find bookings where pickup was ~4 hours ago (±5 min window)
-    const fourHoursMinusFive = new Date(now.getTime() - (4 * 60 + 5) * 60 * 1000);
-    const fourHoursPlusFive = new Date(now.getTime() - (4 * 60 - 5) * 60 * 1000);
+    // Find bookings where pickup was ~4 hours ago (±30 min window for hourly runs)
+    const fourHoursMinusThirty = new Date(now.getTime() - (4 * 60 + 30) * 60 * 1000);
+    const fourHoursPlusThirty = new Date(now.getTime() - (4 * 60 - 30) * 60 * 1000);
 
     const { data: recentPickups, error: shortRentalError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('pickup_date', fourHoursMinusFive.toISOString())
-      .lte('pickup_date', fourHoursPlusFive.toISOString())
+      .gte('pickup_date', fourHoursMinusThirty.toISOString())
+      .lte('pickup_date', fourHoursPlusThirty.toISOString())
       .in('status', ['confirmed', 'active'])
       .is('service_type', null);
 
@@ -397,15 +397,15 @@ const reminderHandler: Handler = async (event) => {
   // Runs every 5 min → window is 24h ±5 min after dropoff
   // ──────────────────────────────────────────────
   try {
-    const twentyFourHoursMinusFive = new Date(now.getTime() - (24 * 60 + 5) * 60 * 1000);
-    const twentyFourHoursPlusFive = new Date(now.getTime() - (24 * 60 - 5) * 60 * 1000);
+    const twentyFourHoursMinusThirty = new Date(now.getTime() - (24 * 60 + 30) * 60 * 1000);
+    const twentyFourHoursPlusThirty = new Date(now.getTime() - (24 * 60 - 30) * 60 * 1000);
 
     // Fetch bookings that ended ~24h ago (±5 min precision)
     const { data: recentEndedBookings, error: depositError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('dropoff_date', twentyFourHoursMinusFive.toISOString())
-      .lte('dropoff_date', twentyFourHoursPlusFive.toISOString())
+      .gte('dropoff_date', twentyFourHoursMinusThirty.toISOString())
+      .lte('dropoff_date', twentyFourHoursPlusThirty.toISOString())
       .in('status', ['confirmed', 'active', 'completed'])
       .is('service_type', null);
 
@@ -513,5 +513,5 @@ const reminderHandler: Handler = async (event) => {
   return { statusCode: 200, body: `Reminders sent: ${sent}, failed: ${failed}` };
 };
 
-// Run every 5 minutes for precise 1-hour-after-dropoff IBAN delivery
-export const handler = schedule('*/5 * * * *', reminderHandler);
+// Run once per hour — flags ensure each message is sent only once
+export const handler = schedule('0 * * * *', reminderHandler);
