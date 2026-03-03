@@ -142,12 +142,8 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  // Check if booking is only in list because of pending penalties/danni (main booking is paid)
-  function isOnlyPenaltyDanni(booking: UnpaidBooking): boolean {
-    if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return false
-    const extensions = booking.booking_details?.extension_history || []
-    const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
-    if (hasPendingExtension) return false
+  // Check if booking has any pending penalties/danni in booking_details
+  function hasPendingPenaltyDanni(booking: UnpaidBooking): boolean {
     const penalties = booking.booking_details?.penalties || []
     const danni = booking.booking_details?.danni || []
     return penalties.some((p: any) => p.paymentStatus === 'pending') || danni.some((d: any) => d.paymentStatus === 'pending')
@@ -738,7 +734,7 @@ export default function UnpaidBookingsTab() {
                   Segna Pagato
                 </button>
               )}
-              {isOnlyPenaltyDanni(booking) && (
+              {hasPendingPenaltyDanni(booking) && (
                 <button
                   onClick={() => markPenaltiesDanniPaid(booking)}
                   className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
@@ -754,7 +750,7 @@ export default function UnpaidBookingsTab() {
                   Estensioni Pagate
                 </button>
               )}
-              {isOnlyPenaltyDanni(booking) ? (
+              {hasPendingPenaltyDanni(booking) ? (
                 <button
                   onClick={() => removePendingPenaltiesDanni(booking)}
                   className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
@@ -899,7 +895,7 @@ export default function UnpaidBookingsTab() {
                           Segna Pagato
                         </button>
                       )}
-                      {isOnlyPenaltyDanni(booking) && (
+                      {hasPendingPenaltyDanni(booking) && (
                         <button
                           onClick={() => markPenaltiesDanniPaid(booking)}
                           className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
@@ -915,7 +911,7 @@ export default function UnpaidBookingsTab() {
                           Estensioni Pagate
                         </button>
                       )}
-                      {isOnlyPenaltyDanni(booking) ? (
+                      {hasPendingPenaltyDanni(booking) ? (
                         <button
                           onClick={() => removePendingPenaltiesDanni(booking)}
                           className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
