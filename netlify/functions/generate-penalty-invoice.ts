@@ -1,5 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
+import { uploadInvoiceToAruba } from './aruba-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -244,6 +246,27 @@ export const handler: Handler = async (event) => {
         if (insertError) {
             console.error('Insert error:', insertError)
             throw insertError
+        }
+
+        // Auto-send to SDI via Aruba if customer has tax code
+        if (invoice.customer_tax_code) {
+            try {
+                const xmlContent = generateFatturaXML(invoice as any)
+                const filename = generateInvoiceFilename(invoice as any)
+                const arubaResult = await uploadInvoiceToAruba(xmlContent, filename)
+
+                await supabase.from('fatture').update({
+                    sdi_status: 'sending',
+                    aruba_invoice_id: arubaResult.id,
+                    xml_filename: filename,
+                    aruba_upload_filename: arubaResult.filename,
+                    sdi_sent_at: new Date().toISOString()
+                }).eq('id', invoice.id)
+
+                console.log('[Penalty Invoice] Auto-sent to SDI via Aruba:', arubaResult.id)
+            } catch (sdiError: any) {
+                console.error('[Penalty Invoice] Auto-SDI failed (invoice still saved as draft):', sdiError.message)
+            }
         }
 
         return {
