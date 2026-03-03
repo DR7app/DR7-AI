@@ -292,8 +292,8 @@ export const handler: Handler = async (event) => {
     // Scan booking_details.penalties[] and booking_details.danni[] (Da Saldare, no fattura)
     ;(bookingsRes.data || []).forEach(b => {
       const details = b.booking_details || {}
-      const pendingPenalties = details.penalties || []
-      const pendingDanni = details.danni || []
+      const pendingPenalties = (details.penalties || []).filter((p: any) => p.paymentStatus === 'pending')
+      const pendingDanni = (details.danni || []).filter((d: any) => d.paymentStatus === 'pending')
 
       if (pendingPenalties.length === 0 && pendingDanni.length === 0) return
 
