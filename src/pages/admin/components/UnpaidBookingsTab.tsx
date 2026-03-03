@@ -8,6 +8,8 @@ interface UnpaidBooking {
   customer_name: string
   customer_email: string
   customer_phone: string
+  customer_id?: string
+  user_id?: string
   customer_codice_fiscale?: string
   customer_indirizzo?: string
   customer_numero_civico?: string
