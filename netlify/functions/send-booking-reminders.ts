@@ -109,15 +109,15 @@ const reminderHandler: Handler = async (event) => {
   const getTemplate = (key: string, fallback: string) => messageTemplates[key] || fallback;
 
   // ──────────────────────────────────────────────
-  // 1 & 2. EXTENSION OFFER — 24h before dropoff TIME
-  // Find bookings where dropoff is ~24 hours from now (±5 min window)
+  // 1 & 2. EXTENSION OFFER — sent at 9:00 AM Italy time, day before dropoff
+  // Only runs when Italy time is ~9:00 AM (±5 min window)
   // ──────────────────────────────────────────────
   try {
-    // 24h from now ±5 min window (cron runs every 5 min)
-    const twentyFourMinusFive = new Date(now.getTime() + (24 * 60 - 5) * 60 * 1000);
-    const twentyFourPlusFive = new Date(now.getTime() + (24 * 60 + 5) * 60 * 1000);
-
-    console.log(`Extension offer window: dropoff between ${twentyFourMinusFive.toISOString()} and ${twentyFourPlusFive.toISOString()}`);
+    // Check if it's 9:00 AM in Italy (±5 min)
+    const italyTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const italyHour = italyTime.getHours();
+    const italyMinute = italyTime.getMinutes();
+    const isNineAM = italyHour === 8 && italyMinute >= 55 || italyHour === 9 && italyMinute <= 5;
 
     // Load vehicles to determine category (exotic vs urban/aziendali)
     const { data: allVehicles } = await supabase
@@ -133,18 +133,30 @@ const reminderHandler: Handler = async (event) => {
       })
     }
 
+    // Find all bookings ending tomorrow (full day)
+    const italyFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowItaly = italyFormatter.format(tomorrowDate);
+
     const { data: endingTomorrow, error: dayBeforeError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('dropoff_date', twentyFourMinusFive.toISOString())
-      .lte('dropoff_date', twentyFourPlusFive.toISOString())
+      .gte('dropoff_date', `${tomorrowItaly}T00:00:00`)
+      .lt('dropoff_date', `${tomorrowItaly}T23:59:59`)
       .in('status', ['confirmed', 'active'])
       .is('service_type', null);
 
-    if (dayBeforeError) {
+    if (!isNineAM) {
+      console.log(`Extension offer: not 9 AM Italy time (${italyHour}:${italyMinute.toString().padStart(2, '0')}), skipping day-before offers`);
+    } else if (dayBeforeError) {
       console.error('Error querying day-before bookings:', dayBeforeError);
     } else if (endingTomorrow && endingTomorrow.length > 0) {
-      console.log(`Found ${endingTomorrow.length} booking(s) ending tomorrow`);
+      console.log(`Found ${endingTomorrow.length} booking(s) ending tomorrow — sending 9 AM extension offers`);
 
       for (const booking of endingTomorrow) {
         try {
