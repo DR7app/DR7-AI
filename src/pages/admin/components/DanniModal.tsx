@@ -337,7 +337,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                                     </svg>
                                     Generazione...
                                 </span>
-                            ) : `Genera Fattura`}
+                            ) : `Conferma`}
                         </button>
                     </div>
                 </div>

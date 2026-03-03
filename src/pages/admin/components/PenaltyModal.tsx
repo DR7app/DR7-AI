@@ -451,7 +451,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                     </svg>
                                     Generazione...
                                 </span>
-                            ) : `Genera Fattura`}
+                            ) : `Conferma`}
                         </button>
                     </div>
                 </div>
