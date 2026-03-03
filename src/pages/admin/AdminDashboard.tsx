@@ -28,6 +28,7 @@ import ReportClientiTab from './components/ReportClientiTab'
 import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
+import GestioneDanniTab from './components/GestioneDanniTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import CarWashCatalogTab from './components/CarWashCatalogTab'
 
@@ -550,7 +551,7 @@ export default function AdminDashboard() {
           {activeTab === 'bulk-import' && <BulkImportTab />}
           {activeTab === 'referral' && <ReferralProgramTab />}
           {/* Placeholder tabs for new features */}
-          {activeTab === 'gestione-danni' && <PlaceholderTab title="Gestione Danni" />}
+          {activeTab === 'gestione-danni' && <GestioneDanniTab />}
           {activeTab === 'gestione-multe' && <PlaceholderTab title="Gestione Multe" />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
