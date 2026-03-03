@@ -268,10 +268,7 @@ export default function GestioneDanniTab() {
     const pendingItems = (type === 'penali' ? customer.penaliItems : customer.danniItems)
       .filter(i => i.status === 'pending')
 
-    if (pendingItems.length === 0) {
-      toast('Solo voci fatturate — non eliminabili da qui', { icon: 'ℹ️' })
-      return
-    }
+    if (pendingItems.length === 0) return
 
     setSaving(true)
     try {
