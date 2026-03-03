@@ -2,10 +2,21 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 
-/** Convert EUR string to integer cents without floating point drift */
+/** Convert EUR string to integer cents using string parsing (no floating point) */
 function eurToCents(eur: string): number {
-  const n = parseFloat(eur || '0')
-  return Math.round((n + Number.EPSILON) * 100)
+  const s = (eur || '0').trim()
+  const negative = s.startsWith('-')
+  const abs = negative ? s.substring(1) : s
+  const dotIdx = abs.indexOf('.')
+  let totalCents: number
+  if (dotIdx === -1) {
+    totalCents = (parseInt(abs, 10) || 0) * 100
+  } else {
+    const wholePart = parseInt(abs.substring(0, dotIdx), 10) || 0
+    const decimalStr = abs.substring(dotIdx + 1).padEnd(2, '0').substring(0, 2)
+    totalCents = wholePart * 100 + (parseInt(decimalStr, 10) || 0)
+  }
+  return negative ? -totalCents : totalCents
 }
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
@@ -3171,6 +3182,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       console.log(editingId ? 'Updating rental booking' : 'Creating rental booking', 'with data:', bookingData)
+      console.log('💰 PRICE DEBUG: formData.total_amount =', JSON.stringify(formData.total_amount),
+        '→ eurToCents =', eurToCents(formData.total_amount),
+        '→ EUR =', (eurToCents(formData.total_amount) / 100).toFixed(2),
+        '| price_total (with fees) =', bookingData.price_total,
+        '→ EUR =', (bookingData.price_total / 100).toFixed(2))
 
       let insertedBooking
       if (editingId) {
