@@ -17,7 +17,7 @@ export const handler: Handler = async (event) => {
 
     try {
         const body = JSON.parse(event.body || '{}')
-        const { bookingId, customerId, note, type } = body
+        const { bookingId, customerId, note, type, paymentStatus } = body
 
         // Validation
         if (!bookingId) {
@@ -220,7 +220,7 @@ export const handler: Handler = async (event) => {
             numero_fattura: invoiceNumber,
             data_emissione: italyDate,
             importo_totale: total,
-            stato: 'pending', // Use 'pending' as 'unpaid' might violate constraint
+            stato: paymentStatus === 'paid' ? 'paid' : 'pending',
             customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || customerData?.nome || 'Cliente',
             customer_address: fullAddress,
             customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || resolvedPhone || '',
@@ -248,8 +248,8 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // Auto-send to SDI via Aruba if customer has tax code
-        if (invoice.customer_tax_code) {
+        // Auto-send to SDI via Aruba if paid and customer has tax code
+        if (paymentStatus === 'paid' && invoice.customer_tax_code) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
