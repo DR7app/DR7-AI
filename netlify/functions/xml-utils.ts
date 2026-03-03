@@ -129,6 +129,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
         <NumeroLinea>${index + 1}</NumeroLinea>
         <Descrizione>${escapeXml(item.description)}</Descrizione>
         <Quantita>${formatAmount(item.quantity)}</Quantita>
+        <UnitaMisura>NR</UnitaMisura>
         <PrezzoUnitario>${formatAmount(item.unit_price)}</PrezzoUnitario>
         <PrezzoTotale>${formatAmount(lineTotal)}</PrezzoTotale>
         <AliquotaIVA>${formatAmount(item.vat_rate)}</AliquotaIVA>${item.vat_rate === 0 ? `
@@ -153,16 +154,17 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   })
 
   // Generate DatiRiepilogo sections
+  // XSD order: AliquotaIVA, Natura, ImponibileImporto, Imposta, EsigibilitaIVA, RiferimentoNormativo
   let datiRiepilogo = ''
   vatGroups.forEach((amounts, rate) => {
     datiRiepilogo += `
       <DatiRiepilogo>
         <AliquotaIVA>${formatAmount(rate)}</AliquotaIVA>${rate === 0 ? `
-        <Natura>N2.2</Natura>
-        <RiferimentoNormativo>Art. 7 DPR 633/72</RiferimentoNormativo>` : ''}
+        <Natura>N2.2</Natura>` : ''}
         <ImponibileImporto>${formatAmount(amounts.imponibile)}</ImponibileImporto>
         <Imposta>${formatAmount(amounts.imposta)}</Imposta>${rate > 0 ? `
-        <EsigibilitaIVA>I</EsigibilitaIVA>` : ''}
+        <EsigibilitaIVA>I</EsigibilitaIVA>` : ''}${rate === 0 ? `
+        <RiferimentoNormativo>Art. 7 DPR 633/72</RiferimentoNormativo>` : ''}
       </DatiRiepilogo>`
   })
 
@@ -189,11 +191,8 @@ export function generateFatturaXML(invoice: InvoiceData): string {
       <PECDestinatario>${escapeXml(invoice.customer_pec)}</PECDestinatario>`
   }
 
-  // DatiPagamento section
-  let datiPagamento = ''
-  const paymentStatus = invoice.stato
-  if (paymentStatus === 'paid' || paymentStatus === 'completed') {
-    datiPagamento = `
+  // DatiPagamento section — always include per FatturaPA best practice
+  const datiPagamento = `
     <DatiPagamento>
       <CondizioniPagamento>TP02</CondizioniPagamento>
       <DettaglioPagamento>
@@ -201,7 +200,6 @@ export function generateFatturaXML(invoice: InvoiceData): string {
         <ImportoPagamento>${formatAmount(invoice.importo_totale)}</ImportoPagamento>
       </DettaglioPagamento>
     </DatiPagamento>`
-  }
 
   // Build complete XML
   const xml = `<?xml version="1.0" encoding="UTF-8"?>

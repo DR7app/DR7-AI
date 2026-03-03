@@ -159,10 +159,10 @@ const reminderHandler: Handler = async (event) => {
             continue;
           }
 
-          // Skip short rentals (< 24h) — handled by 4h-after-pickup logic
+          // Skip short rentals (≤ 24h) — handled by 4h-after-pickup logic in Section 2b
           if (booking.pickup_date && booking.dropoff_date) {
             const durationHours = (new Date(booking.dropoff_date).getTime() - new Date(booking.pickup_date).getTime()) / (1000 * 60 * 60);
-            if (durationHours < 24) {
+            if (durationHours <= 24) {
               console.log(`Skipping booking ${booking.id} — short rental (${durationHours.toFixed(1)}h), handled by 4h-after-pickup`);
               continue;
             }
@@ -272,13 +272,13 @@ const reminderHandler: Handler = async (event) => {
     if (shortRentalError) {
       console.error('Error querying short rental bookings:', shortRentalError);
     } else if (recentPickups && recentPickups.length > 0) {
-      // Filter to only short rentals (< 24 hours)
+      // Filter to only short rentals (≤ 24 hours)
       const shortRentals = recentPickups.filter(b => {
         if (!b.pickup_date || !b.dropoff_date) return false;
         const pickup = new Date(b.pickup_date).getTime();
         const dropoff = new Date(b.dropoff_date).getTime();
         const durationHours = (dropoff - pickup) / (1000 * 60 * 60);
-        return durationHours < 24;
+        return durationHours <= 24;
       });
 
       console.log(`Found ${shortRentals.length} short rental(s) eligible for 4h extension offer (from ${recentPickups.length} recent pickups)`);
