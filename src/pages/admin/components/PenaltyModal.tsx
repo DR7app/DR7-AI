@@ -82,6 +82,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const [customAmount, setCustomAmount] = useState('')
     const [customLabel, setCustomLabel] = useState('')
     const [note, setNote] = useState('')
+    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
 
@@ -149,7 +150,8 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     bookingId: booking.id,
                     customerId: booking.customer_id || booking.user_id,
                     items: cart.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
-                    note: note || undefined
+                    note: note || undefined,
+                    paymentStatus
                 })
             })
 
@@ -183,7 +185,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     const handleClose = () => {
         if (isGenerating) return
-        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setError(''); onClose()
+        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setError(''); onClose()
     }
 
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
@@ -410,6 +412,20 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             )}
                         </div>
                     )}
+
+                    {/* Payment status */}
+                    <div className="flex items-center gap-3">
+                        <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
+                        <select
+                            value={paymentStatus}
+                            onChange={e => setPaymentStatus(e.target.value as 'paid' | 'pending')}
+                            disabled={isGenerating}
+                            className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                        >
+                            <option value="pending">Da Saldare</option>
+                            <option value="paid">Pagato</option>
+                        </select>
+                    </div>
 
                     {/* CTA buttons */}
                     <div className="flex gap-3 pt-1">
