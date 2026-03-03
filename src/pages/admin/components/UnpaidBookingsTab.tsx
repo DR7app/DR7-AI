@@ -140,6 +140,44 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  // Check if booking is only in list because of pending penalties/danni (main booking is paid)
+  function isOnlyPenaltyDanni(booking: UnpaidBooking): boolean {
+    if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return false
+    const extensions = booking.booking_details?.extension_history || []
+    const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
+    if (hasPendingExtension) return false
+    const penalties = booking.booking_details?.penalties || []
+    const danni = booking.booking_details?.danni || []
+    return penalties.some((p: any) => p.paymentStatus === 'pending') || danni.some((d: any) => d.paymentStatus === 'pending')
+  }
+
+  async function removePendingPenaltiesDanni(booking: UnpaidBooking) {
+    try {
+      const details = booking.booking_details || {}
+      const penalties = (details.penalties || []).filter((p: any) => p.paymentStatus !== 'pending')
+      const danni = (details.danni || []).filter((d: any) => d.paymentStatus !== 'pending')
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          booking_details: {
+            ...details,
+            penalties,
+            danni
+          }
+        })
+        .eq('id', booking.id)
+
+      if (error) throw error
+
+      toast.success('Penali/Danni rimossi!')
+      loadUnpaidBookings()
+    } catch (error: any) {
+      console.error('Failed to remove penalties/danni:', error)
+      toast.error('Errore: ' + (error.message || error))
+    }
+  }
+
   async function markExtensionsPaid(booking: UnpaidBooking) {
     try {
       // Update all pending extensions to paid
@@ -640,12 +678,21 @@ export default function UnpaidBookingsTab() {
                   Estensioni Pagate
                 </button>
               )}
-              <button
-                onClick={() => deleteSingleBooking(booking.id)}
-                className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-              >
-                ×
-              </button>
+              {isOnlyPenaltyDanni(booking) ? (
+                <button
+                  onClick={() => removePendingPenaltiesDanni(booking)}
+                  className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                >
+                  ×
+                </button>
+              ) : (
+                <button
+                  onClick={() => deleteSingleBooking(booking.id)}
+                  className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                >
+                  ×
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -784,12 +831,21 @@ export default function UnpaidBookingsTab() {
                           Estensioni Pagate
                         </button>
                       )}
-                      <button
-                        onClick={() => deleteSingleBooking(booking.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                      >
-                        ×
-                      </button>
+                      {isOnlyPenaltyDanni(booking) ? (
+                        <button
+                          onClick={() => removePendingPenaltiesDanni(booking)}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                        >
+                          ×
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => deleteSingleBooking(booking.id)}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
