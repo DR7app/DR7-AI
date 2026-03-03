@@ -2,10 +2,14 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
+import { generateInvoicePDF } from './invoice-pdf-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
 // Invoicetronic SDI Configuration
 const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || ''
@@ -445,11 +449,70 @@ export const handler: Handler = async (event) => {
             console.log('[Invoice] No tax code — saved as draft. Ready for manual Aruba upload.')
         }
 
+        // --- Generate PDF, upload to storage, send via WhatsApp ---
+        let pdfUrl: string | null = null
+        try {
+            const pdfBytes = await generateInvoicePDF(invoice as any)
+            const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+
+            const { error: uploadError } = await supabase.storage
+                .from('invoices')
+                .upload(pdfFileName, pdfBytes, { contentType: 'application/pdf', upsert: true })
+
+            if (uploadError) {
+                console.error('[Invoice] PDF storage upload failed:', uploadError.message)
+            } else {
+                const { data: { publicUrl } } = supabase.storage
+                    .from('invoices')
+                    .getPublicUrl(pdfFileName)
+
+                pdfUrl = publicUrl
+                console.log('[Invoice] PDF uploaded to storage:', pdfUrl)
+
+                // Save pdf_url to fatture record
+                await supabase.from('fatture').update({ pdf_url: pdfUrl }).eq('id', invoice.id)
+
+                // Send PDF via WhatsApp to customer
+                const customerPhone = invoice.customer_phone || resolvedPhone || ''
+                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    // Normalize phone: strip +, spaces, dashes, parens → remove leading 00 → if 10 digits prepend 39
+                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            urlFile: pdfUrl,
+                            fileName: `Fattura_${invoice.numero_fattura}.pdf`,
+                            caption: `Fattura ${invoice.numero_fattura} - DR7 Empire`
+                        })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && !waResult.error) {
+                        console.log('[Invoice] Fattura PDF sent via WhatsApp:', waResult.idMessage)
+                    } else {
+                        console.error('[Invoice] WhatsApp send failed:', waResult)
+                    }
+                } else {
+                    if (!customerPhone) console.log('[Invoice] No customer phone — skipping WhatsApp PDF send')
+                    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) console.log('[Invoice] Green API not configured — skipping WhatsApp PDF send')
+                }
+            }
+        } catch (pdfError: any) {
+            console.error('[Invoice] PDF generation/send failed (invoice still saved):', pdfError.message)
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
                 invoice: invoice,
+                pdfUrl,
                 message: 'Invoice generated successfully'
             })
         }
