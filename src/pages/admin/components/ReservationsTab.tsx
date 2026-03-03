@@ -4324,9 +4324,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }}
                 options={[
                   { value: 'pending', label: 'Da Saldare' },
-                  { value: 'paid', label: 'Pagato' },
-                  { value: 'unpaid', label: 'Non Pagato' },
-                  { value: 'returned', label: 'Returned' }
+                  { value: 'paid', label: 'Pagato' }
                 ]}
               />
               {formData.payment_status !== 'unpaid' && (

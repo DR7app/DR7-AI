@@ -125,7 +125,7 @@ export default function BirthdaysTab() {
                 .from('customers_extended')
                 .select('id, nome, cognome, email, telefono, data_nascita, ragione_sociale, denominazione, tipo_cliente, status')
                 .not('data_nascita', 'is', null)
-                .neq('status', 'blacklist')
+                .or('status.is.null,status.neq.blacklist')
 
             if (customersError) throw customersError
 
