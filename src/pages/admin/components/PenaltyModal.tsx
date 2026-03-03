@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import { supabase } from '../../../supabaseClient'
 
 interface PenaltyModalProps {
     isOpen: boolean
@@ -143,40 +144,81 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
         setIsGenerating(true)
         try {
-            const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    bookingId: booking.id,
-                    customerId: booking.customer_id || booking.user_id,
-                    items: cart.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
-                    note: note || undefined,
-                    paymentStatus
-                })
-            })
-
-            const data = await response.json()
-            if (!response.ok) throw new Error(data.message || data.error || 'Errore nella generazione.')
-
-            if (data.invoiceId) {
-                const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+            if (paymentStatus === 'paid') {
+                // PAGATO: generate fattura + send to SDI
+                const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ invoiceId: data.invoiceId })
+                    body: JSON.stringify({
+                        bookingId: booking.id,
+                        customerId: booking.customer_id || booking.user_id,
+                        items: cart.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
+                        note: note || undefined,
+                        paymentStatus
+                    })
                 })
-                if (pdfResponse.ok) {
-                    const html = await pdfResponse.text()
-                    const blob = new Blob([html], { type: 'text/html' })
-                    const url = URL.createObjectURL(blob)
-                    const w = window.open(url, '_blank')
-                    if (w) setTimeout(() => URL.revokeObjectURL(url), 3000)
+
+                const data = await response.json()
+                if (!response.ok) throw new Error(data.message || data.error || 'Errore nella generazione.')
+
+                if (data.invoiceId) {
+                    const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ invoiceId: data.invoiceId })
+                    })
+                    if (pdfResponse.ok) {
+                        const html = await pdfResponse.text()
+                        const blob = new Blob([html], { type: 'text/html' })
+                        const url = URL.createObjectURL(blob)
+                        const w = window.open(url, '_blank')
+                        if (w) setTimeout(() => URL.revokeObjectURL(url), 3000)
+                    }
                 }
+
+                toast.success(`Fattura penale generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
+            } else {
+                // DA SALDARE: save to booking_details.penalties[] (no fattura)
+                const { data: currentBooking, error: fetchErr } = await supabase
+                    .from('bookings')
+                    .select('booking_details')
+                    .eq('id', booking.id)
+                    .single()
+
+                if (fetchErr) throw new Error('Errore nel recupero della prenotazione.')
+
+                const details = currentBooking?.booking_details || {}
+                const existingPenalties = details.penalties || []
+                const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+
+                const newEntries = cart.map(c => ({
+                    label: c.label,
+                    amount: c.unitPrice,
+                    quantity: c.quantity,
+                    total: Math.round(c.unitPrice * c.quantity * 100) / 100,
+                    note: note || '',
+                    date: italyDate,
+                    paymentStatus: 'pending'
+                }))
+
+                const { error: updateErr } = await supabase
+                    .from('bookings')
+                    .update({
+                        booking_details: {
+                            ...details,
+                            penalties: [...existingPenalties, ...newEntries]
+                        }
+                    })
+                    .eq('id', booking.id)
+
+                if (updateErr) throw new Error('Errore nel salvataggio della penale.')
+
+                toast.success(`Penale registrata (Da Saldare) — €${cartTotal.toFixed(2)}`)
             }
 
-            toast.success(`Fattura penale generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
             setCart([]); setNote(''); onSuccess(); onClose()
         } catch (err: any) {
-            console.error('Error generating penalty invoice:', err)
+            console.error('Error generating penalty:', err)
             setError(err.message || 'Errore nella generazione.')
         } finally {
             setIsGenerating(false)
