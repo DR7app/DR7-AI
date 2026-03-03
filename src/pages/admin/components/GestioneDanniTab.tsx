@@ -538,15 +538,13 @@ export default function GestioneDanniTab() {
                           >
                             Modifica
                           </button>
-                          {c.penaliItems.some(i => i.status === 'pending') && (
-                            <button
-                              onClick={() => handleDeleteAllPending(c, 'penali')}
-                              disabled={saving}
-                              className="px-3 py-1 text-xs bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20 hover:text-orange-400 rounded-full transition-colors disabled:opacity-30"
-                            >
-                              Elimina
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleDeleteAllPending(c, 'penali')}
+                            disabled={saving || !c.penaliItems.some(i => i.status === 'pending')}
+                            className="px-3 py-1 text-xs bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20 hover:text-orange-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            Elimina
+                          </button>
                         </div>
                       </td>
                       <td className="text-right px-4 py-3">
@@ -563,15 +561,13 @@ export default function GestioneDanniTab() {
                           >
                             Modifica
                           </button>
-                          {c.danniItems.some(i => i.status === 'pending') && (
-                            <button
-                              onClick={() => handleDeleteAllPending(c, 'danni')}
-                              disabled={saving}
-                              className="px-3 py-1 text-xs bg-red-500/10 text-red-400/70 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors disabled:opacity-30"
-                            >
-                              Elimina
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleDeleteAllPending(c, 'danni')}
+                            disabled={saving || !c.danniItems.some(i => i.status === 'pending')}
+                            className="px-3 py-1 text-xs bg-red-500/10 text-red-400/70 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            Elimina
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -599,15 +595,13 @@ export default function GestioneDanniTab() {
                         >
                           Modifica
                         </button>
-                        {c.penaliItems.some(i => i.status === 'pending') && (
-                          <button
-                            onClick={() => handleDeleteAllPending(c, 'penali')}
-                            disabled={saving}
-                            className="px-3 py-1 text-xs bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20 hover:text-orange-400 rounded-full transition-colors disabled:opacity-30"
-                          >
-                            Elimina
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleDeleteAllPending(c, 'penali')}
+                          disabled={saving || !c.penaliItems.some(i => i.status === 'pending')}
+                          className="px-3 py-1 text-xs bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20 hover:text-orange-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          Elimina
+                        </button>
                       </div>
                     </div>
                     <div className="text-center">
@@ -620,15 +614,13 @@ export default function GestioneDanniTab() {
                         >
                           Modifica
                         </button>
-                        {c.danniItems.some(i => i.status === 'pending') && (
-                          <button
-                            onClick={() => handleDeleteAllPending(c, 'danni')}
-                            disabled={saving}
-                            className="px-3 py-1 text-xs bg-red-500/10 text-red-400/70 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors disabled:opacity-30"
-                          >
-                            Elimina
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleDeleteAllPending(c, 'danni')}
+                          disabled={saving || !c.danniItems.some(i => i.status === 'pending')}
+                          className="px-3 py-1 text-xs bg-red-500/10 text-red-400/70 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          Elimina
+                        </button>
                       </div>
                     </div>
                   </div>
