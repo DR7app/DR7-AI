@@ -268,7 +268,10 @@ export default function GestioneDanniTab() {
     const pendingItems = (type === 'penali' ? customer.penaliItems : customer.danniItems)
       .filter(i => i.status === 'pending')
 
-    if (pendingItems.length === 0) return
+    if (pendingItems.length === 0) {
+      toast('Solo voci fatturate — non eliminabili da qui', { icon: 'ℹ️' })
+      return
+    }
 
     setSaving(true)
     try {
@@ -540,8 +543,8 @@ export default function GestioneDanniTab() {
                           </button>
                           <button
                             onClick={() => handleDeleteAllPending(c, 'penali')}
-                            disabled={saving || !c.penaliItems.some(i => i.status === 'pending')}
-                            className="px-3 py-1 text-xs bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20 hover:text-orange-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            disabled={saving}
+                            className="px-3 py-1 text-xs bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20 hover:text-orange-400 rounded-full transition-colors disabled:opacity-30"
                           >
                             Elimina
                           </button>
@@ -563,8 +566,8 @@ export default function GestioneDanniTab() {
                           </button>
                           <button
                             onClick={() => handleDeleteAllPending(c, 'danni')}
-                            disabled={saving || !c.danniItems.some(i => i.status === 'pending')}
-                            className="px-3 py-1 text-xs bg-red-500/10 text-red-400/70 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            disabled={saving}
+                            className="px-3 py-1 text-xs bg-red-500/10 text-red-400/70 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors disabled:opacity-30"
                           >
                             Elimina
                           </button>
@@ -597,7 +600,7 @@ export default function GestioneDanniTab() {
                         </button>
                         <button
                           onClick={() => handleDeleteAllPending(c, 'penali')}
-                          disabled={saving || !c.penaliItems.some(i => i.status === 'pending')}
+                          disabled={saving}
                           className="px-3 py-1 text-xs bg-orange-500/10 text-orange-400/70 hover:bg-orange-500/20 hover:text-orange-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           Elimina
@@ -616,7 +619,7 @@ export default function GestioneDanniTab() {
                         </button>
                         <button
                           onClick={() => handleDeleteAllPending(c, 'danni')}
-                          disabled={saving || !c.danniItems.some(i => i.status === 'pending')}
+                          disabled={saving}
                           className="px-3 py-1 text-xs bg-red-500/10 text-red-400/70 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           Elimina
