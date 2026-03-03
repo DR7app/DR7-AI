@@ -12,12 +12,9 @@ const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 function cleanPhone(phone: string): string | null {
   if (!phone) return null;
   let clean = phone.replace(/[\s\-\+\(\)]/g, '');
-  // Handle 00 international prefix (e.g., 00393921900763)
   if (clean.startsWith('00')) {
     clean = clean.substring(2);
   }
-  // 10-digit local Italian number → always prepend country code 39
-  // (covers numbers starting with 39X like 392, 393, 394 mobile prefixes)
   if (clean.length === 10) {
     clean = '39' + clean;
   }
@@ -59,15 +56,62 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
 }
 
 /**
- * Scheduled function — runs every 5 minutes
- * Sends 3 types of WhatsApp reminders:
- *
- * 1. SUPERCAR day-before: promo continuation offer
- * 2. UTILITARIA day-before: extension offer with discount
- * 3. DEPOSIT return (exactly 1h after rental ends): IBAN request for refund
+ * Resolve phone number from booking → booking_details → customers_extended
  */
-const reminderHandler: Handler = async (event) => {
-  console.log('=== Booking Reminders Started ===');
+async function resolvePhone(booking: any, supabase: any): Promise<string | null> {
+  let phone = booking.customer_phone || booking.booking_details?.customer?.phone;
+  if (!phone) {
+    const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
+    if (custId) {
+      const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle();
+      if (cust?.telefono) phone = cust.telefono;
+    }
+    if (!phone && booking.customer_email) {
+      const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('email', booking.customer_email).maybeSingle();
+      if (cust?.telefono) phone = cust.telefono;
+    }
+  }
+  return phone || null;
+}
+
+/**
+ * Check if customer is blacklisted
+ */
+async function isBlacklisted(booking: any, supabase: any): Promise<boolean> {
+  const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
+  if (custId) {
+    const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId).maybeSingle();
+    if (custCheck?.status === 'blacklist') return true;
+  }
+  return false;
+}
+
+/**
+ * Get Rome date string (YYYY-MM-DD) with offset
+ */
+function getRomeDateString(offsetDays: number): string {
+  const now = new Date();
+  const target = new Date(now.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(target);
+}
+
+/**
+ * Scheduled function — runs ONCE per day at 9:00 AM Rome time
+ *
+ * 1. EXTENSION OFFER (>24h bookings): for bookings ending tomorrow
+ * 2. EXTENSION OFFER (≤24h bookings): for short rentals that started today or yesterday
+ * 3. IBAN DEPOSIT REQUEST: for bookings that ended yesterday (with deposit)
+ *
+ * Each message is sent ONE TIME only — flags prevent re-sending.
+ */
+const reminderHandler: Handler = async () => {
+  console.log('=== Daily Booking Reminders Started (9 AM Rome) ===');
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -87,10 +131,7 @@ const reminderHandler: Handler = async (event) => {
   let sent = 0;
   let failed = 0;
 
-  // ──────────────────────────────────────────────
   // Load message templates from system_messages table
-  // (editable from Admin CRM → Marketing → Messaggi di Sistema)
-  // ──────────────────────────────────────────────
   const messageTemplates: Record<string, string> = {};
   try {
     const { data: templates } = await supabase
@@ -105,315 +146,208 @@ const reminderHandler: Handler = async (event) => {
     console.warn('Could not load system_messages, using defaults:', err.message);
   }
 
-  // Fallback defaults if table doesn't exist yet
   const getTemplate = (key: string, fallback: string) => messageTemplates[key] || fallback;
 
+  // Load vehicles to determine category (exotic vs urban)
+  const { data: allVehicles } = await supabase
+    .from('vehicles')
+    .select('id, plate, category');
+
+  const vehicleMap = new Map<string, string>();
+  const plateMap = new Map<string, string>();
+  if (allVehicles) {
+    allVehicles.forEach((v: any) => {
+      vehicleMap.set(v.id, v.category || 'urban');
+      if (v.plate) plateMap.set(v.plate.replace(/\s/g, '').toUpperCase(), v.category || 'urban');
+    });
+  }
+
+  function getVehicleCategory(booking: any): string {
+    if (booking.vehicle_id && vehicleMap.has(booking.vehicle_id)) {
+      return vehicleMap.get(booking.vehicle_id)!;
+    }
+    if (booking.vehicle_plate) {
+      const normPlate = booking.vehicle_plate.replace(/\s/g, '').toUpperCase();
+      if (plateMap.has(normPlate)) return plateMap.get(normPlate)!;
+    }
+    return 'urban';
+  }
+
+  function buildExtensionMessage(category: string, firstName: string): string {
+    if (category === 'exotic') {
+      const template = getTemplate('supercar_day_before',
+        `Salve,\n\nla contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nRestiamo in attesa di un suo cortese riscontro.\nGrazie.\n\nCordiali saluti,\nDR7`);
+      return template.replace(/\{nome\}/g, firstName);
+    } else {
+      const template = getTemplate('utilitaria_day_before',
+        `Salve {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`);
+      return template.replace(/\{nome\}/g, firstName);
+    }
+  }
+
   // ──────────────────────────────────────────────
-  // 1 & 2. EXTENSION OFFER — sent at 9:00 AM Italy time, day before dropoff
-  // Only runs when Italy time is ~9:00 AM (±5 min window)
+  // 1. EXTENSION OFFER for bookings > 24h ending TOMORROW
   // ──────────────────────────────────────────────
   try {
-    // Check if it's 9:00 AM in Italy (±5 min)
-    const italyTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
-    const italyHour = italyTime.getHours();
-    const italyMinute = italyTime.getMinutes();
-    const isNineAM = italyHour === 9;
-
-    // Load vehicles to determine category (exotic vs urban/aziendali)
-    const { data: allVehicles } = await supabase
-      .from('vehicles')
-      .select('id, plate, category')
-
-    const vehicleMap = new Map<string, string>()
-    const plateMap = new Map<string, string>()
-    if (allVehicles) {
-      allVehicles.forEach((v: any) => {
-        vehicleMap.set(v.id, v.category || 'urban')
-        if (v.plate) plateMap.set(v.plate.replace(/\s/g, '').toUpperCase(), v.category || 'urban')
-      })
-    }
-
-    // Find all bookings ending tomorrow (full day)
-    const italyFormatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Rome',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const tomorrowItaly = italyFormatter.format(tomorrowDate);
+    const tomorrowRome = getRomeDateString(1);
+    console.log(`[Extension >24h] Looking for bookings ending tomorrow: ${tomorrowRome}`);
 
     const { data: endingTomorrow, error: dayBeforeError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('dropoff_date', `${tomorrowItaly}T00:00:00`)
-      .lt('dropoff_date', `${tomorrowItaly}T23:59:59`)
+      .gte('dropoff_date', `${tomorrowRome}T00:00:00`)
+      .lt('dropoff_date', `${tomorrowRome}T23:59:59`)
       .in('status', ['confirmed', 'active'])
       .is('service_type', null);
 
-    if (!isNineAM) {
-      console.log(`Extension offer: not 9 AM Italy time (${italyHour}:${italyMinute.toString().padStart(2, '0')}), skipping day-before offers`);
-    } else if (dayBeforeError) {
-      console.error('Error querying day-before bookings:', dayBeforeError);
+    if (dayBeforeError) {
+      console.error('[Extension >24h] Query error:', dayBeforeError);
     } else if (endingTomorrow && endingTomorrow.length > 0) {
-      console.log(`Found ${endingTomorrow.length} booking(s) ending tomorrow — sending 9 AM extension offers`);
+      console.log(`[Extension >24h] Found ${endingTomorrow.length} booking(s) ending tomorrow`);
 
       for (const booking of endingTomorrow) {
         try {
           if (booking.booking_details?.day_before_reminder_sent || booking.booking_details?.pre_rental_offer_sent) {
-            console.log(`Skipping booking ${booking.id} — day-before already sent`);
+            console.log(`[Extension >24h] Skipping ${booking.id} — already sent`);
             continue;
           }
 
-          // Skip short rentals (≤ 24h) — handled by 4h-after-pickup logic in Section 2b
+          // Skip short rentals (≤ 24h) — handled by Section 2
           if (booking.pickup_date && booking.dropoff_date) {
             const durationHours = (new Date(booking.dropoff_date).getTime() - new Date(booking.pickup_date).getTime()) / (1000 * 60 * 60);
             if (durationHours <= 24) {
-              console.log(`Skipping booking ${booking.id} — short rental (${durationHours.toFixed(1)}h), handled by 4h-after-pickup`);
+              console.log(`[Extension >24h] Skipping ${booking.id} — short rental (${durationHours.toFixed(1)}h)`);
               continue;
             }
           }
 
-          const firstName = booking.booking_details?.customer?.firstName
-            || booking.customer_name?.split(' ')[0]
-            || 'Cliente';
+          const phone = await resolvePhone(booking, supabase);
+          if (!phone) { console.log(`[Extension >24h] Skipping ${booking.id} — no phone`); continue; }
+          if (await isBlacklisted(booking, supabase)) { console.log(`[Extension >24h] Skipping ${booking.id} — blacklisted`); continue; }
 
-          // Resolve phone: booking column → booking_details → customers_extended
-          let phone = booking.customer_phone || booking.booking_details?.customer?.phone;
-          if (!phone) {
-            const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
-            if (custId) {
-              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle();
-              if (cust?.telefono) phone = cust.telefono;
-            }
-            if (!phone && booking.customer_email) {
-              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('email', booking.customer_email).maybeSingle();
-              if (cust?.telefono) phone = cust.telefono;
-            }
-          }
-
-          if (!phone) {
-            console.log(`Skipping booking ${booking.id} (${booking.customer_name}) — no phone number`);
-            continue;
-          }
-
-          // Check blacklist status
-          const custId1 = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
-          if (custId1) {
-            const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId1).maybeSingle();
-            if (custCheck?.status === 'blacklist') {
-              console.log(`Skipping booking ${booking.id} — customer is blacklisted`);
-              continue;
-            }
-          }
-
-          // Determine vehicle category from vehicles table
-          let category = 'urban';
-          if (booking.vehicle_id && vehicleMap.has(booking.vehicle_id)) {
-            category = vehicleMap.get(booking.vehicle_id)!;
-          } else if (booking.vehicle_plate) {
-            const normPlate = booking.vehicle_plate.replace(/\s/g, '').toUpperCase();
-            if (plateMap.has(normPlate)) category = plateMap.get(normPlate)!;
-          }
-
-          let message = '';
-          if (category === 'exotic') {
-            const template = getTemplate('supercar_day_before',
-              `Salve,\n\nla contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nRestiamo in attesa di un suo cortese riscontro.\nGrazie.\n\nCordiali saluti,\nDR7`);
-            message = template.replace(/\{nome\}/g, firstName);
-          } else {
-            const template = getTemplate('utilitaria_day_before',
-              `Salve {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`);
-            message = template.replace(/\{nome\}/g, firstName);
-          }
+          const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
+          const category = getVehicleCategory(booking);
+          const message = buildExtensionMessage(category, firstName);
 
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
 
           if (success) {
-            const updatedDetails = {
-              ...(booking.booking_details || {}),
-              day_before_reminder_sent: true,
-              day_before_reminder_sent_at: now.toISOString(),
-              pre_rental_offer_sent: true,
-            };
-
-            await supabase
-              .from('bookings')
-              .update({ booking_details: updatedDetails })
-              .eq('id', booking.id);
-
-            console.log(`Day-before reminder sent for booking ${booking.id} (${category})`);
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...(booking.booking_details || {}),
+                day_before_reminder_sent: true,
+                day_before_reminder_sent_at: now.toISOString(),
+                pre_rental_offer_sent: true,
+              }
+            }).eq('id', booking.id);
+            console.log(`[Extension >24h] Sent for ${booking.id} (${category})`);
             sent++;
-          } else {
-            failed++;
-          }
+          } else { failed++; }
+
+          await new Promise(r => setTimeout(r, 2000));
         } catch (err: any) {
-          console.error(`Error processing day-before for booking ${booking.id}:`, err.message);
+          console.error(`[Extension >24h] Error for ${booking.id}:`, err.message);
           failed++;
         }
       }
     } else {
-      console.log('No bookings ending tomorrow');
+      console.log('[Extension >24h] No bookings ending tomorrow');
     }
   } catch (err: any) {
-    console.error('Day-before reminders error:', err.message);
+    console.error('[Extension >24h] Fatal error:', err.message);
   }
 
   // ──────────────────────────────────────────────
-  // 2b. SHORT RENTAL EXTENSION OFFER (< 1 day bookings)
-  // Send 4 hours after pickup_date instead of day-before
+  // 2. EXTENSION OFFER for short rentals ≤ 24h
+  // At 9 AM, find short rentals that started yesterday (so 4h+ has passed)
   // ──────────────────────────────────────────────
   try {
-    // Find bookings where pickup was ~4 hours ago (±30 min window for hourly runs)
-    const fourHoursMinusThirty = new Date(now.getTime() - (4 * 60 + 30) * 60 * 1000);
-    const fourHoursPlusThirty = new Date(now.getTime() - (4 * 60 - 30) * 60 * 1000);
+    const yesterdayRome = getRomeDateString(-1);
+    const todayRome = getRomeDateString(0);
+    console.log(`[Extension ≤24h] Looking for short rentals started yesterday: ${yesterdayRome}`);
 
-    const { data: recentPickups, error: shortRentalError } = await supabase
+    const { data: recentPickups, error: shortError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('pickup_date', fourHoursMinusThirty.toISOString())
-      .lte('pickup_date', fourHoursPlusThirty.toISOString())
+      .gte('pickup_date', `${yesterdayRome}T00:00:00`)
+      .lt('pickup_date', `${todayRome}T00:00:00`)
       .in('status', ['confirmed', 'active'])
       .is('service_type', null);
 
-    if (shortRentalError) {
-      console.error('Error querying short rental bookings:', shortRentalError);
+    if (shortError) {
+      console.error('[Extension ≤24h] Query error:', shortError);
     } else if (recentPickups && recentPickups.length > 0) {
-      // Filter to only short rentals (≤ 24 hours)
       const shortRentals = recentPickups.filter(b => {
         if (!b.pickup_date || !b.dropoff_date) return false;
-        const pickup = new Date(b.pickup_date).getTime();
-        const dropoff = new Date(b.dropoff_date).getTime();
-        const durationHours = (dropoff - pickup) / (1000 * 60 * 60);
+        const durationHours = (new Date(b.dropoff_date).getTime() - new Date(b.pickup_date).getTime()) / (1000 * 60 * 60);
         return durationHours <= 24;
       });
 
-      console.log(`Found ${shortRentals.length} short rental(s) eligible for 4h extension offer (from ${recentPickups.length} recent pickups)`);
-
-      // Load vehicles for category
-      const { data: allVehiclesShort } = await supabase.from('vehicles').select('id, plate, category');
-      const vehicleMapShort = new Map<string, string>();
-      const plateMapShort = new Map<string, string>();
-      if (allVehiclesShort) {
-        allVehiclesShort.forEach((v: any) => {
-          vehicleMapShort.set(v.id, v.category || 'urban');
-          if (v.plate) plateMapShort.set(v.plate.replace(/\s/g, '').toUpperCase(), v.category || 'urban');
-        });
-      }
+      console.log(`[Extension ≤24h] Found ${shortRentals.length} short rental(s) (from ${recentPickups.length} pickups yesterday)`);
 
       for (const booking of shortRentals) {
         try {
           if (booking.booking_details?.day_before_reminder_sent || booking.booking_details?.pre_rental_offer_sent) {
-            console.log(`Skipping short rental ${booking.id} — extension offer already sent`);
+            console.log(`[Extension ≤24h] Skipping ${booking.id} — already sent`);
             continue;
           }
 
-          const firstName = booking.booking_details?.customer?.firstName
-            || booking.customer_name?.split(' ')[0]
-            || 'Cliente';
+          const phone = await resolvePhone(booking, supabase);
+          if (!phone) { console.log(`[Extension ≤24h] Skipping ${booking.id} — no phone`); continue; }
+          if (await isBlacklisted(booking, supabase)) { console.log(`[Extension ≤24h] Skipping ${booking.id} — blacklisted`); continue; }
 
-          let phone = booking.customer_phone || booking.booking_details?.customer?.phone;
-          if (!phone) {
-            const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
-            if (custId) {
-              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle();
-              if (cust?.telefono) phone = cust.telefono;
-            }
-            if (!phone && booking.customer_email) {
-              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('email', booking.customer_email).maybeSingle();
-              if (cust?.telefono) phone = cust.telefono;
-            }
-          }
-
-          if (!phone) {
-            console.log(`Skipping short rental ${booking.id} (${booking.customer_name}) — no phone number`);
-            continue;
-          }
-
-          // Check blacklist status
-          const custId2 = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
-          if (custId2) {
-            const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId2).maybeSingle();
-            if (custCheck?.status === 'blacklist') {
-              console.log(`Skipping short rental ${booking.id} — customer is blacklisted`);
-              continue;
-            }
-          }
-
-          let category = 'urban';
-          if (booking.vehicle_id && vehicleMapShort.has(booking.vehicle_id)) {
-            category = vehicleMapShort.get(booking.vehicle_id)!;
-          } else if (booking.vehicle_plate) {
-            const normPlate = booking.vehicle_plate.replace(/\s/g, '').toUpperCase();
-            if (plateMapShort.has(normPlate)) category = plateMapShort.get(normPlate)!;
-          }
-
-          let message = '';
-          if (category === 'exotic') {
-            const template = getTemplate('supercar_day_before',
-              `Salve,\n\nla contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nRestiamo in attesa di un suo cortese riscontro.\nGrazie.\n\nCordiali saluti,\nDR7`);
-            message = template.replace(/\{nome\}/g, firstName);
-          } else {
-            const template = getTemplate('utilitaria_day_before',
-              `Salve {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`);
-            message = template.replace(/\{nome\}/g, firstName);
-          }
+          const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
+          const category = getVehicleCategory(booking);
+          const message = buildExtensionMessage(category, firstName);
 
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
 
           if (success) {
-            const updatedDetails = {
-              ...(booking.booking_details || {}),
-              day_before_reminder_sent: true,
-              day_before_reminder_sent_at: now.toISOString(),
-              pre_rental_offer_sent: true,
-            };
-
-            await supabase
-              .from('bookings')
-              .update({ booking_details: updatedDetails })
-              .eq('id', booking.id);
-
-            console.log(`Short rental extension offer sent for booking ${booking.id} (4h after pickup, ${category})`);
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...(booking.booking_details || {}),
+                day_before_reminder_sent: true,
+                day_before_reminder_sent_at: now.toISOString(),
+                pre_rental_offer_sent: true,
+              }
+            }).eq('id', booking.id);
+            console.log(`[Extension ≤24h] Sent for ${booking.id} (${category})`);
             sent++;
-          } else {
-            failed++;
-          }
+          } else { failed++; }
+
+          await new Promise(r => setTimeout(r, 2000));
         } catch (err: any) {
-          console.error(`Error processing short rental extension for booking ${booking.id}:`, err.message);
+          console.error(`[Extension ≤24h] Error for ${booking.id}:`, err.message);
           failed++;
         }
       }
     } else {
-      console.log('No short rentals eligible for 4h extension offer');
+      console.log('[Extension ≤24h] No short rentals from yesterday');
     }
   } catch (err: any) {
-    console.error('Short rental extension error:', err.message);
+    console.error('[Extension ≤24h] Fatal error:', err.message);
   }
 
   // ──────────────────────────────────────────────
-  // 3. DEPOSIT RETURN REMINDER (24 hours after rental ends)
-  // Only for customers who left a deposit (cauzione)
-  // Runs every 5 min → window is 24h ±5 min after dropoff
+  // 3. IBAN DEPOSIT REQUEST for bookings that ended YESTERDAY
   // ──────────────────────────────────────────────
   try {
-    const twentyFourHoursMinusThirty = new Date(now.getTime() - (24 * 60 + 30) * 60 * 1000);
-    const twentyFourHoursPlusThirty = new Date(now.getTime() - (24 * 60 - 30) * 60 * 1000);
+    const yesterdayRome = getRomeDateString(-1);
+    console.log(`[IBAN Deposit] Looking for bookings ended yesterday: ${yesterdayRome}`);
 
-    // Fetch bookings that ended ~24h ago (±5 min precision)
-    const { data: recentEndedBookings, error: depositError } = await supabase
+    const { data: endedYesterday, error: depositError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('dropoff_date', twentyFourHoursMinusThirty.toISOString())
-      .lte('dropoff_date', twentyFourHoursPlusThirty.toISOString())
+      .gte('dropoff_date', `${yesterdayRome}T00:00:00`)
+      .lt('dropoff_date', `${yesterdayRome}T23:59:59`)
       .in('status', ['confirmed', 'active', 'completed'])
       .is('service_type', null);
 
     if (depositError) {
-      console.error('Error querying deposit bookings:', depositError);
-    } else if (recentEndedBookings && recentEndedBookings.length > 0) {
-      // Check cauzioni table for deposits not tracked on booking itself
-      const bookingIds = recentEndedBookings.map(b => b.id);
+      console.error('[IBAN Deposit] Query error:', depositError);
+    } else if (endedYesterday && endedYesterday.length > 0) {
+      // Check cauzioni table for deposits
+      const bookingIds = endedYesterday.map(b => b.id);
       const { data: cauzioni } = await supabase
         .from('cauzioni')
         .select('riferimento_contratto_id, importo, stato')
@@ -423,56 +357,28 @@ const reminderHandler: Handler = async (event) => {
         (cauzioni || []).map(c => [c.riferimento_contratto_id, c])
       );
 
-      // Filter to only bookings that have a deposit
-      const depositBookings = recentEndedBookings.filter(b => {
+      const depositBookings = endedYesterday.filter(b => {
+        if (b.booking_details?.depositOption === 'no_deposit') return false;
         const fromAmount = Number(b.deposit_amount ?? 0) > 0;
         const fromDetails = Number(b.booking_details?.deposit ?? 0) > 0;
         const fromCauzioni = cauzioneMap.has(b.id) && Number(cauzioneMap.get(b.id)!.importo) > 0;
         return fromAmount || fromDetails || fromCauzioni;
       });
 
-      console.log(`Found ${depositBookings.length} deposit booking(s) eligible for IBAN reminder (from ${recentEndedBookings.length} ended bookings)`);
+      console.log(`[IBAN Deposit] Found ${depositBookings.length} deposit booking(s) (from ${endedYesterday.length} ended yesterday)`);
 
       for (const booking of depositBookings) {
         try {
           if (booking.booking_details?.deposit_reminder_sent || booking.booking_details?.iban_request_sent) {
-            console.log(`Skipping booking ${booking.id} — deposit reminder already sent`);
+            console.log(`[IBAN Deposit] Skipping ${booking.id} — already sent`);
             continue;
           }
 
-          const firstName = booking.booking_details?.customer?.firstName
-            || booking.customer_name?.split(' ')[0]
-            || 'Cliente';
+          const phone = await resolvePhone(booking, supabase);
+          if (!phone) { console.log(`[IBAN Deposit] Skipping ${booking.id} — no phone`); continue; }
+          if (await isBlacklisted(booking, supabase)) { console.log(`[IBAN Deposit] Skipping ${booking.id} — blacklisted`); continue; }
 
-          // Resolve phone: booking column → booking_details → customers_extended
-          let phone = booking.customer_phone || booking.booking_details?.customer?.phone;
-          if (!phone) {
-            const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
-            if (custId) {
-              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle();
-              if (cust?.telefono) phone = cust.telefono;
-            }
-            if (!phone && booking.customer_email) {
-              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('email', booking.customer_email).maybeSingle();
-              if (cust?.telefono) phone = cust.telefono;
-            }
-          }
-
-          if (!phone) {
-            console.log(`Skipping booking ${booking.id} (${booking.customer_name}) — no phone number`);
-            continue;
-          }
-
-          // Check blacklist status
-          const custId3 = booking.booking_details?.customer?.customerId || booking.booking_details?.customer_id || booking.user_id;
-          if (custId3) {
-            const { data: custCheck } = await supabase.from('customers_extended').select('status').eq('id', custId3).maybeSingle();
-            if (custCheck?.status === 'blacklist') {
-              console.log(`Skipping deposit reminder ${booking.id} — customer is blacklisted`);
-              continue;
-            }
-          }
-
+          const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
           const template = getTemplate('deposit_return_iban',
             `Salve {nome},\n\nLa ringraziamo per aver scelto i nostri servizi.\n\nAl fine di procedere con la restituzione della cauzione, Le chiediamo cortesemente di comunicarci il Suo IBAN completo e il nominativo dell'intestatario del conto.\n\nIl rimborso verrà effettuato tramite bonifico ordinario entro il quattordicesimo giorno lavorativo, come da condizioni contrattuali.\n\nCordiali saluti,\nDR7`);
           const message = template.replace(/\{nome\}/g, firstName);
@@ -480,38 +386,34 @@ const reminderHandler: Handler = async (event) => {
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
 
           if (success) {
-            const updatedDetails = {
-              ...(booking.booking_details || {}),
-              deposit_reminder_sent: true,
-              deposit_reminder_sent_at: now.toISOString(),
-              iban_request_sent: true,
-            };
-
-            await supabase
-              .from('bookings')
-              .update({ booking_details: updatedDetails })
-              .eq('id', booking.id);
-
-            console.log(`Deposit IBAN reminder sent for booking ${booking.id}`);
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...(booking.booking_details || {}),
+                deposit_reminder_sent: true,
+                deposit_reminder_sent_at: now.toISOString(),
+                iban_request_sent: true,
+              }
+            }).eq('id', booking.id);
+            console.log(`[IBAN Deposit] Sent for ${booking.id}`);
             sent++;
-          } else {
-            failed++;
-          }
+          } else { failed++; }
+
+          await new Promise(r => setTimeout(r, 2000));
         } catch (err: any) {
-          console.error(`Error processing deposit reminder for booking ${booking.id}:`, err.message);
+          console.error(`[IBAN Deposit] Error for ${booking.id}:`, err.message);
           failed++;
         }
       }
     } else {
-      console.log('No deposit bookings eligible for IBAN reminder');
+      console.log('[IBAN Deposit] No bookings ended yesterday');
     }
   } catch (err: any) {
-    console.error('Deposit reminders error:', err.message);
+    console.error('[IBAN Deposit] Fatal error:', err.message);
   }
 
-  console.log(`=== Booking Reminders Complete: ${sent} sent, ${failed} failed ===`);
-  return { statusCode: 200, body: `Reminders sent: ${sent}, failed: ${failed}` };
+  console.log(`=== Daily Booking Reminders Complete: ${sent} sent, ${failed} failed ===`);
+  return { statusCode: 200, body: `Sent: ${sent}, failed: ${failed}` };
 };
 
-// Run once per hour — flags ensure each message is sent only once
-export const handler = schedule('0 * * * *', reminderHandler);
+// Run ONCE per day at 8:00 AM UTC = 9:00 AM Rome (winter) / 10:00 AM Rome (summer)
+export const handler = schedule('0 8 * * *', reminderHandler);
