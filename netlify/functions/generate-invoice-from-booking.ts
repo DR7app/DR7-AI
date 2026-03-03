@@ -20,7 +20,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, includeIVA = true } = JSON.parse(event.body || '{}')
+        const { bookingId, includeIVA = true, extensionAmount } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return {
@@ -233,18 +233,21 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Check if invoice already exists for this booking
-        const { data: existingInvoice } = await supabase
-            .from('fatture')
-            .select('id, numero_fattura')
-            .eq('booking_id', bookingId)
-            .single()
+        // For extensions, always create a NEW invoice (not update existing)
+        // For regular bookings, update if one already exists
+        let existingInvoice: any = null
+        if (!extensionAmount) {
+            const { data } = await supabase
+                .from('fatture')
+                .select('id, numero_fattura')
+                .eq('booking_id', bookingId)
+                .single()
+            existingInvoice = data
+        }
 
-        // If invoice exists, we'll update it instead of creating a new one
         let invoiceNumber: string
 
         if (existingInvoice) {
-            // Reuse existing invoice number
             invoiceNumber = existingInvoice.numero_fattura
         } else {
             // Get next invoice number
@@ -279,7 +282,19 @@ export const handler: Handler = async (event) => {
         const items = []
         let rentalDays = 1
 
-        if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical') {
+        if (extensionAmount && extensionAmount > 0) {
+            // Extension invoice: single line for the additional amount
+            const extGross = extensionAmount // Amount in EUR, includes IVA
+            const vatRate = includeIVA ? 22 : 0
+            const vatDivisor = 1.22
+            items.push({
+                description: `Estensione noleggio ${booking.vehicle_name || ''} - ${booking.id.substring(0, 8).toUpperCase()}`,
+                unit_price: extGross / vatDivisor,
+                quantity: 1,
+                vat_rate: vatRate,
+                total: extGross / vatDivisor
+            })
+        } else if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical') {
             // Logic for Services (Car Wash / Mechanical)
             // User confirmed prices INCLUDE IVA (Gross)
             const serviceName = booking.service_name || (booking.service_type === 'car_wash' ? 'Lavaggio Auto' : 'Intervento Meccanico')
