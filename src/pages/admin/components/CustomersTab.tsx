@@ -516,9 +516,44 @@ export default function CustomersTab() {
         }
       }
 
-      // Check storage for documents (optimized to just check existence if possible, or skip if too slow)
-      // For now, we'll skip the heavy storage listing and per-user fetching
-      // The verification status should be in customers_extended or handled via specific queries when viewing a customer
+      // Fetch penali/danni totals from fatture
+      try {
+        const { data: penaltyFatture } = await supabase
+          .from('fatture')
+          .select('customer_name, items, importo_totale')
+
+        if (penaltyFatture) {
+          const penaliByName = new Map<string, number>()
+          const danniByName = new Map<string, number>()
+
+          penaltyFatture.forEach((f: any) => {
+            if (!f.items || !Array.isArray(f.items)) return
+            const hasPenale = f.items.some((item: any) => item.description?.includes('Penale prenotazione'))
+            const hasDanno = f.items.some((item: any) => item.description?.includes('Danno prenotazione'))
+            if (!hasPenale && !hasDanno) return
+
+            const name = (f.customer_name || '').trim()
+            if (!name) return
+
+            if (hasDanno) {
+              danniByName.set(name, (danniByName.get(name) || 0) + (f.importo_totale || 0))
+            } else if (hasPenale) {
+              penaliByName.set(name, (penaliByName.get(name) || 0) + (f.importo_totale || 0))
+            }
+          })
+
+          customerMap.forEach((customer, key) => {
+            const name = customer.full_name?.trim() || ''
+            const penaliTotal = penaliByName.get(name) || 0
+            const danniTotal = danniByName.get(name) || 0
+            if (penaliTotal > 0 || danniTotal > 0) {
+              customerMap.set(key, { ...customer, penali_total: penaliTotal, danni_total: danniTotal } as any)
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('[CustomersTab] Failed to load penali/danni totals:', e)
+      }
 
       // Initial cleanup of loading state
       const customersArray = Array.from(customerMap.values())
@@ -2067,6 +2102,8 @@ export default function CustomersTab() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo Cliente</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Telefono</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Penali</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Danni</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Status</th>
               </tr>
@@ -2141,6 +2178,16 @@ export default function CustomersTab() {
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.email || '-'}</td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.phone || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-right tabular-nums">
+                    {(customer as any).penali_total > 0
+                      ? <span className="text-orange-400 font-medium">{`€${((customer as any).penali_total).toFixed(2)}`}</span>
+                      : <span className="text-theme-text-muted">-</span>}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right tabular-nums">
+                    {(customer as any).danni_total > 0
+                      ? <span className="text-red-400 font-medium">{`€${((customer as any).danni_total).toFixed(2)}`}</span>
+                      : <span className="text-theme-text-muted">-</span>}
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">
                       <Button
