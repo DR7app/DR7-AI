@@ -355,12 +355,18 @@ export default function UnpaidBookingsTab() {
 
   async function deleteSingleBooking(bookingId: string) {
     try {
-      // First, get the booking to check if it has a Google Calendar event ID
+      // First, get the booking to check status and Google Calendar event ID
       const { data: booking } = await supabase
         .from('bookings')
         .select('*')
         .eq('id', bookingId)
         .single()
+
+      // Safety: NEVER delete a paid booking from this tab
+      if (booking && (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded')) {
+        toast.error('Impossibile eliminare una prenotazione già pagata!')
+        return
+      }
 
       // Try to delete from Google Calendar if event ID exists
       if (booking) {
