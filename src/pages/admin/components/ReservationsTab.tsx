@@ -3424,8 +3424,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Note: Removed duplicate reservation creation - bookings table is the single source of truth
-
+      // Auto-generate fattura and send to SDI when payment status is "paid"
+      if (formData.payment_status === 'paid' && insertedBooking?.id) {
+        try {
+          console.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
+          })
+          if (invoiceRes.ok) {
+            console.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+          } else {
+            const errData = await invoiceRes.json()
+            console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errData.message || errData.error)
+          }
+        } catch (invoiceError) {
+          console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
+        }
+      }
 
       setShowForm(false)
       setEditingId(null)
