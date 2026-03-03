@@ -68,12 +68,6 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
         setIsGenerating(true)
         try {
-            if (paymentStatus !== 'paid') {
-                toast.success(`Danno registrato — Da Saldare (€${cartTotal.toFixed(2)})`)
-                setCart([]); setNote(''); setPaymentStatus('pending'); onSuccess(); onClose()
-                return
-            }
-
             const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
