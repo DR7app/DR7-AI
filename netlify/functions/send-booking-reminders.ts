@@ -160,7 +160,7 @@ const reminderHandler: Handler = async (event) => {
 
       for (const booking of endingTomorrow) {
         try {
-          if (booking.booking_details?.day_before_reminder_sent) {
+          if (booking.booking_details?.day_before_reminder_sent || booking.booking_details?.pre_rental_offer_sent) {
             console.log(`Skipping booking ${booking.id} — day-before already sent`);
             continue;
           }
@@ -234,6 +234,7 @@ const reminderHandler: Handler = async (event) => {
               ...(booking.booking_details || {}),
               day_before_reminder_sent: true,
               day_before_reminder_sent_at: now.toISOString(),
+              pre_rental_offer_sent: true,
             };
 
             await supabase
@@ -433,7 +434,7 @@ const reminderHandler: Handler = async (event) => {
 
       for (const booking of depositBookings) {
         try {
-          if (booking.booking_details?.deposit_reminder_sent) {
+          if (booking.booking_details?.deposit_reminder_sent || booking.booking_details?.iban_request_sent) {
             console.log(`Skipping booking ${booking.id} — deposit reminder already sent`);
             continue;
           }
@@ -482,6 +483,7 @@ const reminderHandler: Handler = async (event) => {
               ...(booking.booking_details || {}),
               deposit_reminder_sent: true,
               deposit_reminder_sent_at: now.toISOString(),
+              iban_request_sent: true,
             };
 
             await supabase
