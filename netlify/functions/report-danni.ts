@@ -173,6 +173,47 @@ export const handler: Handler = async (event) => {
       }
     })
 
+    // Also scan bookings.booking_details for pending penalties/danni (Da Saldare, no fattura)
+    {
+      const detailsKey = reportType === 'danni' ? 'danni' : 'penalties'
+      const { data: allBookings } = await supabase
+        .from('bookings')
+        .select('id, vehicle_name, vehicle_plate, customer_name, booking_details')
+
+      if (allBookings) {
+        for (const b of allBookings) {
+          const entries = b.booking_details?.[detailsKey]
+          if (!Array.isArray(entries) || entries.length === 0) continue
+
+          const plate = (b.vehicle_plate || 'Sconosciuto').replace(/\s/g, '').toUpperCase()
+          const name = b.vehicle_name || 'Sconosciuto'
+
+          for (const entry of entries) {
+            const entryTotal = entry.total || (entry.amount || 0) * (entry.quantity || 1)
+
+            if (!vehicleMap[plate]) {
+              vehicleMap[plate] = {
+                vehicleName: name,
+                vehiclePlate: plate,
+                customerName: b.customer_name || '',
+                count: 0,
+                totalAmount: 0,
+              }
+            }
+
+            vehicleMap[plate].count += 1
+            vehicleMap[plate].totalAmount += entryTotal
+            if (vehicleMap[plate].vehicleName === 'Sconosciuto' && name !== 'Sconosciuto') {
+              vehicleMap[plate].vehicleName = name
+            }
+            if (!vehicleMap[plate].customerName && b.customer_name) {
+              vehicleMap[plate].customerName = b.customer_name
+            }
+          }
+        }
+      }
+    }
+
     // For danni report: also include cashed cauzioni (stato='Bloccata')
     if (reportType === 'danni') {
       const { data: cauzioni } = await supabase
