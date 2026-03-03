@@ -303,7 +303,7 @@ const reminderHandler: Handler = async (event) => {
 
       for (const booking of shortRentals) {
         try {
-          if (booking.booking_details?.day_before_reminder_sent) {
+          if (booking.booking_details?.day_before_reminder_sent || booking.booking_details?.pre_rental_offer_sent) {
             console.log(`Skipping short rental ${booking.id} — extension offer already sent`);
             continue;
           }
@@ -366,6 +366,7 @@ const reminderHandler: Handler = async (event) => {
               ...(booking.booking_details || {}),
               day_before_reminder_sent: true,
               day_before_reminder_sent_at: now.toISOString(),
+              pre_rental_offer_sent: true,
             };
 
             await supabase
@@ -417,7 +418,7 @@ const reminderHandler: Handler = async (event) => {
         .from('cauzioni')
         .select('riferimento_contratto_id, importo, stato')
         .in('riferimento_contratto_id', bookingIds)
-        .in('stato', ['Attiva', 'In scadenza', 'Incassata']);
+        .in('stato', ['Attiva', 'In scadenza']);
       const cauzioneMap = new Map(
         (cauzioni || []).map(c => [c.riferimento_contratto_id, c])
       );
