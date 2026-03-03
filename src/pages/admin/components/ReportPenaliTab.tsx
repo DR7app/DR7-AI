@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 interface VehicleEntry {
   vehicleName: string
   vehiclePlate: string
+  customerName: string
   count: number
   totalAmount: number
 }
@@ -103,6 +104,7 @@ export default function ReportPenaliTab() {
                   <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
                     <th className="text-left px-4 py-3">Veicolo</th>
                     <th className="text-left px-4 py-3">Targa</th>
+                    <th className="text-left px-4 py-3">Cliente</th>
                     <th className="text-center px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => setSortField('count')}>
                       N. Penali {sortField === 'count' && '↓'}
                     </th>
@@ -116,6 +118,7 @@ export default function ReportPenaliTab() {
                     <tr key={v.vehiclePlate || i} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
                       <td className="px-4 py-3 font-medium text-theme-text-primary">{v.vehicleName}</td>
                       <td className="px-4 py-3 text-theme-text-muted text-xs">{v.vehiclePlate}</td>
+                      <td className="px-4 py-3 text-theme-text-primary">{v.customerName}</td>
                       <td className="text-center px-4 py-3 text-orange-400 font-semibold">{v.count}</td>
                       <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(v.totalAmount)}</td>
                     </tr>
@@ -123,7 +126,7 @@ export default function ReportPenaliTab() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-dr7-gold/30 bg-theme-bg-primary/30">
-                    <td className="px-4 py-3 font-bold text-theme-text-primary" colSpan={2}>Totale</td>
+                    <td className="px-4 py-3 font-bold text-theme-text-primary" colSpan={3}>Totale</td>
                     <td className="text-center px-4 py-3 font-bold text-orange-400">{data.totalCount}</td>
                     <td className="text-right px-4 py-3 font-bold text-dr7-gold">{formatCurrency(data.totalAmount)}</td>
                   </tr>
@@ -136,6 +139,7 @@ export default function ReportPenaliTab() {
                   <div className="mb-2">
                     <p className="font-semibold text-theme-text-primary text-sm">{v.vehicleName}</p>
                     <p className="text-xs text-theme-text-muted">{v.vehiclePlate}</p>
+                    <p className="text-xs text-theme-text-primary mt-1">{v.customerName}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-center">
                     <div>

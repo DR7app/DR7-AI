@@ -289,6 +289,34 @@ export const handler: Handler = async (event) => {
       })
     }
 
+    // Scan booking_details.penalties[] and booking_details.danni[] (Da Saldare, no fattura)
+    ;(bookingsRes.data || []).forEach(b => {
+      const details = b.booking_details || {}
+      const pendingPenalties = details.penalties || []
+      const pendingDanni = details.danni || []
+
+      if (pendingPenalties.length === 0 && pendingDanni.length === 0) return
+
+      const custId = b.user_id || details.customer?.customerId || ''
+      const custEmail = b.customer_email || details.customer?.email || ''
+      const key = custId || custEmail || b.id
+      const custName = b.customer_name || details.customer?.fullName || ''
+
+      const c = getOrCreate(key, custId, custName, custEmail)
+
+      for (const p of pendingPenalties) {
+        const total = p.total || (p.amount || 0) * (p.quantity || 1)
+        c.penali_spesa_eur += total
+        c.penali_eventi += 1
+      }
+
+      for (const d of pendingDanni) {
+        const total = d.total || (d.amount || 0) * (d.quantity || 1)
+        c.danni_spesa_eur += total
+        c.danni_eventi += 1
+      }
+    })
+
     // Apply cashed cauzioni as danni
     for (const [clienteId, data] of danniCauzioniMap.entries()) {
       // Find existing customer entry by customerId
