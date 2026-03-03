@@ -68,6 +68,7 @@ export default function UnpaidBookingsTab() {
       // Filter to include:
       // 1. Bookings with pending/unpaid payment_status
       // 2. Bookings with extension_history containing pending payments
+      // 3. Bookings with pending penalties or danni in booking_details
       const unpaidBookings = (data || []).filter(booking => {
         // Check main payment status
         if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
@@ -77,7 +78,19 @@ export default function UnpaidBookingsTab() {
         // Check extension payments
         const extensions = booking.booking_details?.extension_history || []
         const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
-        return hasPendingExtension
+        if (hasPendingExtension) return true
+
+        // Check pending penalties
+        const penalties = booking.booking_details?.penalties || []
+        const hasPendingPenalty = penalties.some((p: any) => p.paymentStatus === 'pending')
+        if (hasPendingPenalty) return true
+
+        // Check pending danni
+        const danni = booking.booking_details?.danni || []
+        const hasPendingDanno = danni.some((d: any) => d.paymentStatus === 'pending')
+        if (hasPendingDanno) return true
+
+        return false
       })
 
       setBookings(unpaidBookings)
@@ -101,6 +114,24 @@ export default function UnpaidBookingsTab() {
       if (error) throw error
 
       toast.success('Stato pagamento aggiornato!')
+
+      // Auto-generate fattura + send to SDI when marking as paid
+      if (newStatus === 'paid') {
+        try {
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId, includeIVA: true })
+          })
+          if (invoiceRes.ok) {
+            const invoiceData = await invoiceRes.json()
+            toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata e inviata a SDI`)
+          }
+        } catch (invoiceErr) {
+          console.warn('Auto-invoice generation failed:', invoiceErr)
+        }
+      }
+
       loadUnpaidBookings()
     } catch (error: any) {
       console.error('Failed to update payment status:', error)
@@ -309,12 +340,38 @@ export default function UnpaidBookingsTab() {
       })
     }
 
+    // Add pending penalties (amounts are in EUR, convert to cents)
+    const penalties = booking.booking_details?.penalties || []
+    penalties.forEach((p: any) => {
+      if (p.paymentStatus === 'pending') {
+        remaining += Math.round((p.total || (p.amount || 0) * (p.quantity || 1)) * 100)
+      }
+    })
+
+    // Add pending danni (amounts are in EUR, convert to cents)
+    const danni = booking.booking_details?.danni || []
+    danni.forEach((d: any) => {
+      if (d.paymentStatus === 'pending') {
+        remaining += Math.round((d.total || (d.amount || 0) * (d.quantity || 1)) * 100)
+      }
+    })
+
     return remaining
   }
 
   const getPendingExtensions = (booking: UnpaidBooking) => {
     const extensions = booking.booking_details?.extension_history || []
     return extensions.filter((ext: any) => ext.payment_status === 'pending')
+  }
+
+  const getPendingPenalties = (booking: UnpaidBooking) => {
+    const penalties = booking.booking_details?.penalties || []
+    return penalties.filter((p: any) => p.paymentStatus === 'pending')
+  }
+
+  const getPendingDanni = (booking: UnpaidBooking) => {
+    const danni = booking.booking_details?.danni || []
+    return danni.filter((d: any) => d.paymentStatus === 'pending')
   }
 
   const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
@@ -545,6 +602,16 @@ export default function UnpaidBookingsTab() {
                 {getPendingExtensions(booking).length > 0 && (
                   <div className="text-xs text-purple-400">
                     incl. {getPendingExtensions(booking).length} estensione/i
+                  </div>
+                )}
+                {getPendingPenalties(booking).length > 0 && (
+                  <div className="text-xs text-yellow-400">
+                    incl. {getPendingPenalties(booking).length} penale/i
+                  </div>
+                )}
+                {getPendingDanni(booking).length > 0 && (
+                  <div className="text-xs text-red-400">
+                    incl. {getPendingDanni(booking).length} danno/i
                   </div>
                 )}
               </div>
