@@ -172,9 +172,11 @@ export function generateFatturaXML(invoice: InvoiceData): string {
 
   // Customer identification section
   // Per FatturaPA: IdFiscaleIVA for B2B, CodiceFiscale for individuals
-  // If customer has BOTH P.IVA and CF, include both
+  // Only include P.IVA for B2B customers (those with a real SDI code, not 0000000)
+  // to avoid SDI error 00324 (P.IVA/CF mismatch) for individuals
   let customerIdSection = ''
-  if (customerVAT) {
+  const isB2B = codiceDestinatario !== '0000000'
+  if (customerVAT && (isB2B || !customerFiscalCode)) {
     customerIdSection += `
           <IdFiscaleIVA>
             <IdPaese>IT</IdPaese>
