@@ -2124,6 +2124,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.error('[handleConfirmExtend] ⚠️ Cauzione sync failed:', cauzioneError)
       }
 
+      // Auto-generate fattura for extension when paid
+      if (extendData.extension_payment_status === 'paid' && additionalAmount > 0) {
+        try {
+          console.log('[handleConfirmExtend] Generating extension fattura for €' + additionalAmount.toFixed(2))
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: extendingBooking.id, includeIVA: true, extensionAmount: additionalAmount })
+          })
+          if (invoiceRes.ok) {
+            console.log('[handleConfirmExtend] ✅ Extension fattura generated and sent to SDI')
+          } else {
+            const errData = await invoiceRes.json()
+            console.warn('[handleConfirmExtend] ⚠️ Extension fattura failed:', errData.message || errData.error)
+          }
+        } catch (invoiceError) {
+          console.error('[handleConfirmExtend] ⚠️ Failed to generate extension fattura:', invoiceError)
+        }
+      }
+
       // Close modal
       const bookingId = extendingBooking.id
       setShowExtendModal(false)
