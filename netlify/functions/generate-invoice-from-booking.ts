@@ -313,21 +313,8 @@ export const handler: Handler = async (event) => {
             // Parse prices (assuming stored as cents)
             const priceTotal = (booking.price_total || 0) / 100
             const insuranceTotal = (bookingDetails.insurancePrice || 0) * rentalDays
-            const kmFee = (booking.km_overage_fee || 0) / 100
-
-            // Calculate base rental price (Total - Insurance - KM Fee)
-            // Note: This logic assumes price_total INCLUDES insurance and fees. 
-            // If price_total is JUST the car, verify logic. Usually price_total is final amount to pay.
-            let vehiclePriceGross = priceTotal
-
-            // If insurance is priced separately in metadata but included in total, subtract it to isolate vehicle price?
-            // Simplified approach: Treat specific line items if we know them.
-            // If we add insurance as a separate line item, we must ensure we don't double count it in the total.
-            // The user wants clear lines.
-
-            // Re-calculating from components if possible is safer, but we might drift from stored total.
-            // Let's stick to: Create line items that SUM up to the booking.price_total.
-            // If we have insurance, we split the Pot. If not, everything is Rental.
+            // Note: km_overage_fee is the per-km RATE (e.g. €1.80/km) for the contract,
+            // NOT an actual charged penalty. Do not include it as a fattura line item.
 
             // Calculate Net Prices for components based on IVA inclusion
             const vatRate = includeIVA ? 22 : 0
@@ -335,10 +322,9 @@ export const handler: Handler = async (event) => {
             const vatDivisor = 1.22
 
             const insurancePriceGross = insuranceTotal
-            const kmFeeGross = kmFee // KM fee might be exempt or 22%? Assuming 22% for now unless exempt.
 
-            // Subtract extras from total to get vehicle portion
-            let rentalGross = priceTotal - insurancePriceGross - kmFeeGross
+            // Subtract insurance from total to get vehicle portion
+            let rentalGross = priceTotal - insurancePriceGross
             if (rentalGross < 0) rentalGross = 0 // Safety check
 
             // 1. Vehicle Rental Item
@@ -347,7 +333,7 @@ export const handler: Handler = async (event) => {
                 unit_price: rentalGross / vatDivisor, // Net Price
                 quantity: 1,
                 vat_rate: vatRate,
-                total: (rentalGross / vatDivisor) // Not strictly used by calculation loop
+                total: (rentalGross / vatDivisor)
             })
 
             // 2. Insurance Item
@@ -359,17 +345,6 @@ export const handler: Handler = async (event) => {
                     quantity: 1,
                     vat_rate: vatRate,
                     total: (insurancePriceGross / vatDivisor)
-                })
-            }
-
-            // 3. KM Overage (always 0% VAT for penalties)
-            if (kmFeeGross > 0) {
-                items.push({ // Penalties usually exempt (Article 15). Keep as is.
-                    description: 'Penale chilometraggio extra',
-                    unit_price: kmFeeGross,
-                    quantity: 1,
-                    vat_rate: 0,
-                    total: kmFeeGross
                 })
             }
         }
