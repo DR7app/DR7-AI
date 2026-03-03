@@ -102,16 +102,15 @@ function getRomeDateString(offsetDays: number): string {
 }
 
 /**
- * Scheduled function — runs ONCE per day at 9:00 AM Rome time
+ * Scheduled function — checks every 2 hours for pending messages.
+ * Each message is sent ONE TIME only — flags in booking_details prevent re-sending.
  *
- * 1. EXTENSION OFFER (>24h bookings): for bookings ending tomorrow
- * 2. EXTENSION OFFER (≤24h bookings): for short rentals that started today or yesterday
- * 3. IBAN DEPOSIT REQUEST: for bookings that ended yesterday (with deposit)
- *
- * Each message is sent ONE TIME only — flags prevent re-sending.
+ * 1. EXTENSION OFFER (>24h bookings): runs ONLY at 9 AM Rome → bookings ending tomorrow
+ * 2. EXTENSION OFFER (≤24h bookings): runs EVERY check → sends 4h after pickup
+ * 3. IBAN DEPOSIT REQUEST: runs ONLY at 9 AM Rome → bookings ended yesterday
  */
 const reminderHandler: Handler = async () => {
-  console.log('=== Daily Booking Reminders Started (9 AM Rome) ===');
+  console.log('=== Booking Reminders Check Started ===');
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -130,6 +129,16 @@ const reminderHandler: Handler = async () => {
   const now = new Date();
   let sent = 0;
   let failed = 0;
+
+  // Determine current Rome hour — sections 1 & 3 only run at ~9 AM
+  const romeHourFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Rome',
+    hour: 'numeric',
+    hour12: false,
+  });
+  const currentRomeHour = parseInt(romeHourFormatter.format(now), 10);
+  const isMorningRun = currentRomeHour >= 8 && currentRomeHour <= 10;
+  console.log(`Current Rome hour: ${currentRomeHour} — Morning run: ${isMorningRun}`);
 
   // Load message templates from system_messages table
   const messageTemplates: Record<string, string> = {};
@@ -187,8 +196,9 @@ const reminderHandler: Handler = async () => {
 
   // ──────────────────────────────────────────────
   // 1. EXTENSION OFFER for bookings > 24h ending TOMORROW
+  //    Only runs at 9 AM Rome time — ONE TIME per day
   // ──────────────────────────────────────────────
-  try {
+  if (isMorningRun) try {
     const tomorrowRome = getRomeDateString(1);
     console.log(`[Extension >24h] Looking for bookings ending tomorrow: ${tomorrowRome}`);
 
@@ -255,22 +265,25 @@ const reminderHandler: Handler = async () => {
     }
   } catch (err: any) {
     console.error('[Extension >24h] Fatal error:', err.message);
+  } else {
+    console.log('[Extension >24h] Skipping — not morning run');
   }
 
   // ──────────────────────────────────────────────
   // 2. EXTENSION OFFER for short rentals ≤ 24h
-  // At 9 AM, find short rentals that started yesterday (so 4h+ has passed)
+  //    Runs EVERY check — sends 4h after pickup, ONE TIME per booking
   // ──────────────────────────────────────────────
   try {
-    const yesterdayRome = getRomeDateString(-1);
-    const todayRome = getRomeDateString(0);
-    console.log(`[Extension ≤24h] Looking for short rentals started yesterday: ${yesterdayRome}`);
+    // Look for short rentals (≤24h) that started in the last 30 hours
+    // Send message when pickup + 4h has passed
+    const cutoffStart = new Date(now.getTime() - 30 * 60 * 60 * 1000).toISOString();
+    console.log(`[Extension ≤24h] Looking for short rentals picked up since ${cutoffStart}`);
 
     const { data: recentPickups, error: shortError } = await supabase
       .from('bookings')
       .select('*')
-      .gte('pickup_date', `${yesterdayRome}T00:00:00`)
-      .lt('pickup_date', `${todayRome}T00:00:00`)
+      .gte('pickup_date', cutoffStart)
+      .lte('pickup_date', now.toISOString())
       .in('status', ['confirmed', 'active'])
       .is('service_type', null);
 
@@ -283,12 +296,21 @@ const reminderHandler: Handler = async () => {
         return durationHours <= 24;
       });
 
-      console.log(`[Extension ≤24h] Found ${shortRentals.length} short rental(s) (from ${recentPickups.length} pickups yesterday)`);
+      console.log(`[Extension ≤24h] Found ${shortRentals.length} short rental(s) (from ${recentPickups.length} recent pickups)`);
 
       for (const booking of shortRentals) {
         try {
           if (booking.booking_details?.day_before_reminder_sent || booking.booking_details?.pre_rental_offer_sent) {
             console.log(`[Extension ≤24h] Skipping ${booking.id} — already sent`);
+            continue;
+          }
+
+          // Only send if 4h have passed since pickup
+          const pickupTime = new Date(booking.pickup_date).getTime();
+          const fourHoursAfterPickup = pickupTime + 4 * 60 * 60 * 1000;
+          if (now.getTime() < fourHoursAfterPickup) {
+            const minutesLeft = Math.round((fourHoursAfterPickup - now.getTime()) / 60000);
+            console.log(`[Extension ≤24h] Skipping ${booking.id} — only ${minutesLeft} min since pickup, waiting for 4h`);
             continue;
           }
 
@@ -311,7 +333,7 @@ const reminderHandler: Handler = async () => {
                 pre_rental_offer_sent: true,
               }
             }).eq('id', booking.id);
-            console.log(`[Extension ≤24h] Sent for ${booking.id} (${category})`);
+            console.log(`[Extension ≤24h] Sent for ${booking.id} — 4h after pickup (${category})`);
             sent++;
           } else { failed++; }
 
@@ -322,7 +344,7 @@ const reminderHandler: Handler = async () => {
         }
       }
     } else {
-      console.log('[Extension ≤24h] No short rentals from yesterday');
+      console.log('[Extension ≤24h] No recent short rentals found');
     }
   } catch (err: any) {
     console.error('[Extension ≤24h] Fatal error:', err.message);
@@ -330,8 +352,9 @@ const reminderHandler: Handler = async () => {
 
   // ──────────────────────────────────────────────
   // 3. IBAN DEPOSIT REQUEST for bookings that ended YESTERDAY
+  //    Only runs at 9 AM Rome time — ONE TIME per day
   // ──────────────────────────────────────────────
-  try {
+  if (isMorningRun) try {
     const yesterdayRome = getRomeDateString(-1);
     console.log(`[IBAN Deposit] Looking for bookings ended yesterday: ${yesterdayRome}`);
 
@@ -409,11 +432,15 @@ const reminderHandler: Handler = async () => {
     }
   } catch (err: any) {
     console.error('[IBAN Deposit] Fatal error:', err.message);
+  } else {
+    console.log('[IBAN Deposit] Skipping — not morning run');
   }
 
-  console.log(`=== Daily Booking Reminders Complete: ${sent} sent, ${failed} failed ===`);
+  console.log(`=== Booking Reminders Check Complete: ${sent} sent, ${failed} failed ===`);
   return { statusCode: 200, body: `Sent: ${sent}, failed: ${failed}` };
 };
 
-// Run ONCE per day at 8:00 AM UTC = 9:00 AM Rome (winter) / 10:00 AM Rome (summer)
-export const handler = schedule('0 8 * * *', reminderHandler);
+// Run every 2 hours to catch short rental 4h-after-pickup window.
+// Sections 1 (>24h extension) and 3 (IBAN) only execute at 9 AM Rome.
+// Each message is sent ONE TIME only — flags prevent re-sending.
+export const handler = schedule('0 */2 * * *', reminderHandler);
