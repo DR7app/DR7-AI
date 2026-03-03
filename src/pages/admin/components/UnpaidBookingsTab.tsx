@@ -590,22 +590,10 @@ export default function UnpaidBookingsTab() {
                   </>
                 )}
                 {getPendingPenalties(booking).length > 0 && (
-                  <div className="mt-1">
-                    {getPendingPenalties(booking).map((p: any, i: number) => (
-                      <div key={i} className="text-xs text-yellow-400 font-medium">
-                        PENALE: {p.label} — €{(p.total || (p.amount * (p.quantity || 1))).toFixed(2)}
-                      </div>
-                    ))}
-                  </div>
+                  <div className="text-xs text-yellow-400 font-medium mt-1">PENALE</div>
                 )}
                 {getPendingDanni(booking).length > 0 && (
-                  <div className="mt-1">
-                    {getPendingDanni(booking).map((d: any, i: number) => (
-                      <div key={i} className="text-xs text-red-400 font-medium">
-                        DANNO: {d.label} — €{(d.total || (d.amount * (d.quantity || 1))).toFixed(2)}
-                      </div>
-                    ))}
-                  </div>
+                  <div className="text-xs text-red-400 font-medium mt-1">DANNO</div>
                 )}
               </div>
               <div className="text-right">
@@ -736,22 +724,10 @@ export default function UnpaidBookingsTab() {
                       </div>
                     )}
                     {getPendingPenalties(booking).length > 0 && (
-                      <div className="mt-1">
-                        {getPendingPenalties(booking).map((p: any, i: number) => (
-                          <div key={i} className="text-xs text-yellow-400 font-medium">
-                            PENALE: {p.label} — €{(p.total || (p.amount * (p.quantity || 1))).toFixed(2)}
-                          </div>
-                        ))}
-                      </div>
+                      <div className="text-xs text-yellow-400 font-medium mt-1">PENALE</div>
                     )}
                     {getPendingDanni(booking).length > 0 && (
-                      <div className="mt-1">
-                        {getPendingDanni(booking).map((d: any, i: number) => (
-                          <div key={i} className="text-xs text-red-400 font-medium">
-                            DANNO: {d.label} — €{(d.total || (d.amount * (d.quantity || 1))).toFixed(2)}
-                          </div>
-                        ))}
-                      </div>
+                      <div className="text-xs text-red-400 font-medium mt-1">DANNO</div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-muted">
