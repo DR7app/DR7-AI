@@ -483,37 +483,6 @@ export default function UnpaidBookingsTab() {
 
   const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
 
-  // ── Partial payment on a single danni/penali item ──────────────────────────
-  async function handleItemPartialPayment(booking: UnpaidBooking, arrayKey: 'penalties' | 'danni', index: number, paymentAmount: number) {
-    try {
-      const details = booking.booking_details || {}
-      const arr: any[] = [...(details[arrayKey] || [])]
-      if (!arr[index]) return
-
-      const existing = arr[index]
-      const total = existing.total || (existing.amount || 0) * (existing.quantity || 1)
-      const newAmountPaid = Math.min((existing.amountPaid || 0) + paymentAmount, total)
-
-      arr[index] = {
-        ...existing,
-        amountPaid: newAmountPaid,
-        paymentStatus: newAmountPaid >= total ? 'paid' : 'partial',
-      }
-
-      const { error } = await supabase
-        .from('bookings')
-        .update({ booking_details: { ...details, [arrayKey]: arr } })
-        .eq('id', booking.id)
-
-      if (error) throw error
-
-      toast.success('Pagamento registrato')
-      loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
-    }
-  }
-
   // ── Partial payment on a fattura danni/penali item ──────────────────────────
   async function handleFatturaItemPayment(fi: FatturaItem, paymentAmount: number) {
     try {
@@ -551,44 +520,6 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  // ── Mark a single booking_details item as fully paid ─────────────────────
-  async function markSingleItemPaid(booking: UnpaidBooking, arrayKey: 'penalties' | 'danni', index: number) {
-    try {
-      const details = booking.booking_details || {}
-      const arr: any[] = [...(details[arrayKey] || [])]
-      if (!arr[index]) return
-      const item = arr[index]
-      const total = item.total || (item.amount || 0) * (item.quantity || 1)
-      const remaining = total - (item.amountPaid || 0)
-
-      // Generate fattura for this single item
-      if (remaining > 0) {
-        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            customerId: booking.customer_id || booking.user_id,
-            items: [{ label: item.label, amount: remaining, quantity: 1 }],
-            type: arrayKey === 'danni' ? 'danni' : undefined,
-            paymentStatus: 'paid'
-          })
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.message || err.error || 'Errore generazione fattura')
-        }
-      }
-
-      arr[index] = { ...item, paymentStatus: 'paid', amountPaid: total }
-      await supabase.from('bookings').update({ booking_details: { ...details, [arrayKey]: arr } }).eq('id', booking.id)
-      toast.success('Pagamento registrato')
-      loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
-    }
-  }
-
   // ── Mark a single fattura item as fully paid ───────────────────────────────
   async function markSingleFatturaItemPaid(fi: FatturaItem) {
     try {
@@ -609,6 +540,127 @@ export default function UnpaidBookingsTab() {
     } catch (err: any) {
       toast.error(err.message || 'Errore')
     }
+  }
+
+  // ── Mark ALL pending penali or danni as paid (grouped) ──────────────────────
+  async function markAllTypePaid(booking: UnpaidBooking, type: 'penalties' | 'danni') {
+    try {
+      const details = booking.booking_details || {}
+      const arr: any[] = details[type] || []
+      const pending = arr.filter((item: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+
+      if (pending.length > 0) {
+        // Generate fattura for remaining amounts
+        const invoiceItems = pending.map((item: any) => {
+          const total = item.total || (item.amount || 0) * (item.quantity || 1)
+          const remaining = total - (item.amountPaid || 0)
+          return { label: item.label, amount: remaining, quantity: 1 }
+        }).filter((i: any) => i.amount > 0)
+
+        if (invoiceItems.length > 0) {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: booking.id,
+              customerId: booking.customer_id || booking.user_id,
+              items: invoiceItems,
+              type: type === 'danni' ? 'danni' : undefined,
+              paymentStatus: 'paid'
+            })
+          })
+          if (!res.ok) {
+            const err = await res.json()
+            throw new Error(err.message || err.error || 'Errore generazione fattura')
+          }
+        }
+
+        // Mark all as paid in booking_details
+        const updated = arr.map((item: any) => {
+          if (!item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial') {
+            const total = item.total || (item.amount || 0) * (item.quantity || 1)
+            return { ...item, paymentStatus: 'paid', amountPaid: total }
+          }
+          return item
+        })
+        await supabase.from('bookings').update({ booking_details: { ...details, [type]: updated } }).eq('id', booking.id)
+      }
+
+      // Also mark fattura items of this type as paid
+      const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
+      for (const fi of fItems) {
+        await markSingleFatturaItemPaid(fi)
+      }
+
+      toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  // ── Partial payment across all pending items of a type (single DB write) ────
+  async function handleTypePartialPayment(booking: UnpaidBooking, type: 'penalties' | 'danni', paymentAmount: number) {
+    try {
+      let remaining = paymentAmount
+
+      // Apply to booking_details items
+      const details = booking.booking_details || {}
+      const arr: any[] = [...(details[type] || [])]
+      let changed = false
+      for (let i = 0; i < arr.length; i++) {
+        if (remaining <= 0) break
+        const item = arr[i]
+        if (item.paymentStatus === 'paid') continue
+        if (item.paymentStatus && item.paymentStatus !== 'pending' && item.paymentStatus !== 'partial') continue
+        const total = item.total || (item.amount || 0) * (item.quantity || 1)
+        const itemRemaining = total - (item.amountPaid || 0)
+        const toApply = Math.min(remaining, itemRemaining)
+        if (toApply > 0) {
+          const newPaid = (item.amountPaid || 0) + toApply
+          arr[i] = { ...item, amountPaid: newPaid, paymentStatus: newPaid >= total ? 'paid' : 'partial' }
+          remaining -= toApply
+          changed = true
+        }
+      }
+      if (changed) {
+        await supabase.from('bookings').update({ booking_details: { ...details, [type]: arr } }).eq('id', booking.id)
+      }
+
+      // Apply to fattura items of this type
+      if (remaining > 0) {
+        const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
+        for (const fi of fItems) {
+          if (remaining <= 0) break
+          const fiRemaining = fi.total - fi.amountPaid
+          const toApply = Math.min(remaining, fiRemaining)
+          if (toApply > 0) {
+            await handleFatturaItemPayment(fi, toApply)
+            remaining -= toApply
+          }
+        }
+      }
+
+      toast.success('Pagamento parziale registrato')
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  // Compute total remaining for a type (penalties or danni)
+  function getTypeRemaining(booking: UnpaidBooking, type: 'penalties' | 'danni'): number {
+    let total = 0
+    const pending = getPendingWithIndex(booking, type)
+    for (const { item } of pending) {
+      const t = item.total || (item.amount || 0) * (item.quantity || 1)
+      total += t - (item.amountPaid || 0)
+    }
+    const fItems = (fatturaItemsMap[booking.id] || []).filter((fi: FatturaItem) => fi.type === type)
+    for (const fi of fItems) {
+      total += fi.total - fi.amountPaid
+    }
+    return total
   }
 
   const getStatusBadge = (booking: UnpaidBooking): { label: string; className: string } => {
@@ -860,84 +912,26 @@ export default function UnpaidBookingsTab() {
               </div>
             </div>
 
-            {/* Detailed danni/penali items with per-item actions */}
+            {/* Detailed danni/penali items (info only) */}
             {(getPendingPenalties(booking).length > 0 || getPendingDanni(booking).length > 0 || (fatturaItemsMap[booking.id] || []).length > 0) && (
               <div className="space-y-1.5 mb-2">
-                {getPendingWithIndex(booking, 'penalties').map(({ item: p, realIdx }: any) => {
+                {getPendingPenalties(booking).map((p: any, idx: number) => {
                   const pTotal = p.total || (p.amount || 0) * (p.quantity || 1)
                   const pPaid = p.amountPaid || 0
-                  const pRemaining = pTotal - pPaid
-                  const key = `${booking.id}:penalties:${realIdx}`
                   return (
-                    <DanniPenaliItemRow
-                      key={key}
-                      label={p.label || 'Penale'}
-                      total={pTotal}
-                      amountPaid={pPaid}
-                      remaining={pRemaining}
-                      isPartial={p.paymentStatus === 'partial'}
-                      color="yellow"
-                      tag="PENALE"
-                      itemKey={key}
-                      activePayKey={partialPayItemKey}
-                      onMarkPaid={() => markSingleItemPaid(booking, 'penalties', realIdx)}
-                      onStartPartial={() => { setPartialPayItemKey(key); setPartialPayValue('') }}
-                      onConfirmPartial={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleItemPartialPayment(booking, 'penalties', realIdx, v); setPartialPayItemKey(null) } }}
-                      onCancelPartial={() => setPartialPayItemKey(null)}
-                      partialValue={partialPayValue}
-                      onPartialValueChange={setPartialPayValue}
-                    />
+                    <DanniPenaliItemRow key={`pen-${idx}`} label={p.label || 'Penale'} total={pTotal} amountPaid={pPaid} remaining={pTotal - pPaid} isPartial={p.paymentStatus === 'partial'} color="yellow" tag="PENALE" />
                   )
                 })}
-                {getPendingWithIndex(booking, 'danni').map(({ item: d, realIdx }: any) => {
+                {getPendingDanni(booking).map((d: any, idx: number) => {
                   const dTotal = d.total || (d.amount || 0) * (d.quantity || 1)
                   const dPaid = d.amountPaid || 0
-                  const dRemaining = dTotal - dPaid
-                  const key = `${booking.id}:danni:${realIdx}`
                   return (
-                    <DanniPenaliItemRow
-                      key={key}
-                      label={d.label || 'Danno'}
-                      total={dTotal}
-                      amountPaid={dPaid}
-                      remaining={dRemaining}
-                      isPartial={d.paymentStatus === 'partial'}
-                      color="red"
-                      tag="DANNO"
-                      itemKey={key}
-                      activePayKey={partialPayItemKey}
-                      onMarkPaid={() => markSingleItemPaid(booking, 'danni', realIdx)}
-                      onStartPartial={() => { setPartialPayItemKey(key); setPartialPayValue('') }}
-                      onConfirmPartial={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleItemPartialPayment(booking, 'danni', realIdx, v); setPartialPayItemKey(null) } }}
-                      onCancelPartial={() => setPartialPayItemKey(null)}
-                      partialValue={partialPayValue}
-                      onPartialValueChange={setPartialPayValue}
-                    />
+                    <DanniPenaliItemRow key={`dan-${idx}`} label={d.label || 'Danno'} total={dTotal} amountPaid={dPaid} remaining={dTotal - dPaid} isPartial={d.paymentStatus === 'partial'} color="red" tag="DANNO" />
                   )
                 })}
-                {(fatturaItemsMap[booking.id] || []).map((fi, idx) => {
-                  const key = `${booking.id}:fattura:${idx}`
-                  return (
-                    <DanniPenaliItemRow
-                      key={key}
-                      label={`${fi.description} (${fi.fatturaNumero})`}
-                      total={fi.total}
-                      amountPaid={fi.amountPaid}
-                      remaining={fi.total - fi.amountPaid}
-                      isPartial={fi.paymentStatus === 'partial'}
-                      color={fi.type === 'danni' ? 'red' : 'yellow'}
-                      tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'}
-                      itemKey={key}
-                      activePayKey={partialPayItemKey}
-                      onMarkPaid={() => markSingleFatturaItemPaid(fi)}
-                      onStartPartial={() => { setPartialPayItemKey(key); setPartialPayValue('') }}
-                      onConfirmPartial={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleFatturaItemPayment(fi, v); setPartialPayItemKey(null) } }}
-                      onCancelPartial={() => setPartialPayItemKey(null)}
-                      partialValue={partialPayValue}
-                      onPartialValueChange={setPartialPayValue}
-                    />
-                  )
-                })}
+                {(fatturaItemsMap[booking.id] || []).map((fi, idx) => (
+                  <DanniPenaliItemRow key={`fat-${idx}`} label={`${fi.description} (${fi.fatturaNumero})`} total={fi.total} amountPaid={fi.amountPaid} remaining={fi.total - fi.amountPaid} isPartial={fi.paymentStatus === 'partial'} color={fi.type === 'danni' ? 'red' : 'yellow'} tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'} />
+                ))}
               </div>
             )}
 
@@ -949,6 +943,64 @@ export default function UnpaidBookingsTab() {
                 >
                   Segna Pagato
                 </button>
+              )}
+              {/* Grouped penali buttons */}
+              {getTypeRemaining(booking, 'penalties') > 0 && (
+                <>
+                  <button
+                    onClick={() => markAllTypePaid(booking, 'penalties')}
+                    className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                  >
+                    Penali Pagato
+                  </button>
+                  {partialPayItemKey !== `${booking.id}:type:penalties` && (
+                    <button
+                      onClick={() => { setPartialPayItemKey(`${booking.id}:type:penalties`); setPartialPayValue('') }}
+                      className="px-3 py-2 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                    >
+                      Penali Parziale
+                    </button>
+                  )}
+                </>
+              )}
+              {partialPayItemKey === `${booking.id}:type:penalties` && (
+                <div className="flex items-center gap-1.5 flex-1">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+                    <input type="number" step="0.01" min="0.01" value={partialPayValue} onChange={e => setPartialPayValue(e.target.value)} placeholder="Importo" className="w-full pl-6 pr-2 py-2 min-h-[44px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50" onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'penalties', v); setPartialPayItemKey(null) } } if (e.key === 'Escape') setPartialPayItemKey(null) }} autoFocus />
+                  </div>
+                  <button onClick={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'penalties', v); setPartialPayItemKey(null) } }} disabled={!partialPayValue || parseFloat(partialPayValue) <= 0} className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors disabled:opacity-30">OK</button>
+                  <button onClick={() => setPartialPayItemKey(null)} className="px-3 py-2 min-h-[44px] bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded-full text-xs font-semibold transition-colors">×</button>
+                </div>
+              )}
+              {/* Grouped danni buttons */}
+              {getTypeRemaining(booking, 'danni') > 0 && (
+                <>
+                  <button
+                    onClick={() => markAllTypePaid(booking, 'danni')}
+                    className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                  >
+                    Danni Pagato
+                  </button>
+                  {partialPayItemKey !== `${booking.id}:type:danni` && (
+                    <button
+                      onClick={() => { setPartialPayItemKey(`${booking.id}:type:danni`); setPartialPayValue('') }}
+                      className="px-3 py-2 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                    >
+                      Danni Parziale
+                    </button>
+                  )}
+                </>
+              )}
+              {partialPayItemKey === `${booking.id}:type:danni` && (
+                <div className="flex items-center gap-1.5 flex-1">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+                    <input type="number" step="0.01" min="0.01" value={partialPayValue} onChange={e => setPartialPayValue(e.target.value)} placeholder="Importo" className="w-full pl-6 pr-2 py-2 min-h-[44px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50" onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'danni', v); setPartialPayItemKey(null) } } if (e.key === 'Escape') setPartialPayItemKey(null) }} autoFocus />
+                  </div>
+                  <button onClick={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'danni', v); setPartialPayItemKey(null) } }} disabled={!partialPayValue || parseFloat(partialPayValue) <= 0} className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors disabled:opacity-30">OK</button>
+                  <button onClick={() => setPartialPayItemKey(null)} className="px-3 py-2 min-h-[44px] bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded-full text-xs font-semibold transition-colors">×</button>
+                </div>
               )}
               {getPendingExtensions(booking).length > 0 && (
                 <button
@@ -1068,82 +1120,20 @@ export default function UnpaidBookingsTab() {
                         incl. {getPendingExtensions(booking).length} estensione/i
                       </div>
                     )}
-                    {/* Detailed danni/penali items with per-item actions */}
-                    {getPendingWithIndex(booking, 'penalties').map(({ item: p, realIdx }: any) => {
+                    {/* Detailed danni/penali items (info only) */}
+                    {getPendingPenalties(booking).map((p: any, idx: number) => {
                       const pTotal = p.total || (p.amount || 0) * (p.quantity || 1)
                       const pPaid = p.amountPaid || 0
-                      const pRemaining = pTotal - pPaid
-                      const key = `${booking.id}:penalties:${realIdx}`
-                      return (
-                        <DanniPenaliItemRow
-                          key={key}
-                          label={p.label || 'Penale'}
-                          total={pTotal}
-                          amountPaid={pPaid}
-                          remaining={pRemaining}
-                          isPartial={p.paymentStatus === 'partial'}
-                          color="yellow"
-                          tag="PENALE"
-                          itemKey={key}
-                          activePayKey={partialPayItemKey}
-                          onMarkPaid={() => markSingleItemPaid(booking, 'penalties', realIdx)}
-                          onStartPartial={() => { setPartialPayItemKey(key); setPartialPayValue('') }}
-                          onConfirmPartial={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleItemPartialPayment(booking, 'penalties', realIdx, v); setPartialPayItemKey(null) } }}
-                          onCancelPartial={() => setPartialPayItemKey(null)}
-                          partialValue={partialPayValue}
-                          onPartialValueChange={setPartialPayValue}
-                        />
-                      )
+                      return <DanniPenaliItemRow key={`pen-${idx}`} label={p.label || 'Penale'} total={pTotal} amountPaid={pPaid} remaining={pTotal - pPaid} isPartial={p.paymentStatus === 'partial'} color="yellow" tag="PENALE" />
                     })}
-                    {getPendingWithIndex(booking, 'danni').map(({ item: d, realIdx }: any) => {
+                    {getPendingDanni(booking).map((d: any, idx: number) => {
                       const dTotal = d.total || (d.amount || 0) * (d.quantity || 1)
                       const dPaid = d.amountPaid || 0
-                      const dRemaining = dTotal - dPaid
-                      const key = `${booking.id}:danni:${realIdx}`
-                      return (
-                        <DanniPenaliItemRow
-                          key={key}
-                          label={d.label || 'Danno'}
-                          total={dTotal}
-                          amountPaid={dPaid}
-                          remaining={dRemaining}
-                          isPartial={d.paymentStatus === 'partial'}
-                          color="red"
-                          tag="DANNO"
-                          itemKey={key}
-                          activePayKey={partialPayItemKey}
-                          onMarkPaid={() => markSingleItemPaid(booking, 'danni', realIdx)}
-                          onStartPartial={() => { setPartialPayItemKey(key); setPartialPayValue('') }}
-                          onConfirmPartial={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleItemPartialPayment(booking, 'danni', realIdx, v); setPartialPayItemKey(null) } }}
-                          onCancelPartial={() => setPartialPayItemKey(null)}
-                          partialValue={partialPayValue}
-                          onPartialValueChange={setPartialPayValue}
-                        />
-                      )
+                      return <DanniPenaliItemRow key={`dan-${idx}`} label={d.label || 'Danno'} total={dTotal} amountPaid={dPaid} remaining={dTotal - dPaid} isPartial={d.paymentStatus === 'partial'} color="red" tag="DANNO" />
                     })}
-                    {(fatturaItemsMap[booking.id] || []).map((fi, idx) => {
-                      const key = `${booking.id}:fattura:${idx}`
-                      return (
-                        <DanniPenaliItemRow
-                          key={key}
-                          label={`${fi.description} (${fi.fatturaNumero})`}
-                          total={fi.total}
-                          amountPaid={fi.amountPaid}
-                          remaining={fi.total - fi.amountPaid}
-                          isPartial={fi.paymentStatus === 'partial'}
-                          color={fi.type === 'danni' ? 'red' : 'yellow'}
-                          tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'}
-                          itemKey={key}
-                          activePayKey={partialPayItemKey}
-                          onMarkPaid={() => markSingleFatturaItemPaid(fi)}
-                          onStartPartial={() => { setPartialPayItemKey(key); setPartialPayValue('') }}
-                          onConfirmPartial={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleFatturaItemPayment(fi, v); setPartialPayItemKey(null) } }}
-                          onCancelPartial={() => setPartialPayItemKey(null)}
-                          partialValue={partialPayValue}
-                          onPartialValueChange={setPartialPayValue}
-                        />
-                      )
-                    })}
+                    {(fatturaItemsMap[booking.id] || []).map((fi, idx) => (
+                      <DanniPenaliItemRow key={`fat-${idx}`} label={`${fi.description} (${fi.fatturaNumero})`} total={fi.total} amountPaid={fi.amountPaid} remaining={fi.total - fi.amountPaid} isPartial={fi.paymentStatus === 'partial'} color={fi.type === 'danni' ? 'red' : 'yellow'} tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'} />
+                    ))}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${getStatusBadge(booking).className}`}>
@@ -1159,6 +1149,64 @@ export default function UnpaidBookingsTab() {
                         >
                           Segna Pagato
                         </button>
+                      )}
+                      {/* Grouped penali buttons */}
+                      {getTypeRemaining(booking, 'penalties') > 0 && (
+                        <>
+                          <button
+                            onClick={() => markAllTypePaid(booking, 'penalties')}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                          >
+                            Penali Pagato
+                          </button>
+                          {partialPayItemKey !== `${booking.id}:type:penalties` && (
+                            <button
+                              onClick={() => { setPartialPayItemKey(`${booking.id}:type:penalties`); setPartialPayValue('') }}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                            >
+                              Penali Parziale
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {partialPayItemKey === `${booking.id}:type:penalties` && (
+                        <div className="flex items-center gap-1">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+                            <input type="number" step="0.01" min="0.01" value={partialPayValue} onChange={e => setPartialPayValue(e.target.value)} placeholder="Importo" className="w-24 pl-5 pr-1.5 py-1 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50" onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'penalties', v); setPartialPayItemKey(null) } } if (e.key === 'Escape') setPartialPayItemKey(null) }} autoFocus />
+                          </div>
+                          <button onClick={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'penalties', v); setPartialPayItemKey(null) } }} disabled={!partialPayValue || parseFloat(partialPayValue) <= 0} className="px-2 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors disabled:opacity-30">OK</button>
+                          <button onClick={() => setPartialPayItemKey(null)} className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-secondary text-theme-text-muted rounded-full text-xs transition-colors">×</button>
+                        </div>
+                      )}
+                      {/* Grouped danni buttons */}
+                      {getTypeRemaining(booking, 'danni') > 0 && (
+                        <>
+                          <button
+                            onClick={() => markAllTypePaid(booking, 'danni')}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                          >
+                            Danni Pagato
+                          </button>
+                          {partialPayItemKey !== `${booking.id}:type:danni` && (
+                            <button
+                              onClick={() => { setPartialPayItemKey(`${booking.id}:type:danni`); setPartialPayValue('') }}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                            >
+                              Danni Parziale
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {partialPayItemKey === `${booking.id}:type:danni` && (
+                        <div className="flex items-center gap-1">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+                            <input type="number" step="0.01" min="0.01" value={partialPayValue} onChange={e => setPartialPayValue(e.target.value)} placeholder="Importo" className="w-24 pl-5 pr-1.5 py-1 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50" onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'danni', v); setPartialPayItemKey(null) } } if (e.key === 'Escape') setPartialPayItemKey(null) }} autoFocus />
+                          </div>
+                          <button onClick={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) { handleTypePartialPayment(booking, 'danni', v); setPartialPayItemKey(null) } }} disabled={!partialPayValue || parseFloat(partialPayValue) <= 0} className="px-2 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors disabled:opacity-30">OK</button>
+                          <button onClick={() => setPartialPayItemKey(null)} className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-secondary text-theme-text-muted rounded-full text-xs transition-colors">×</button>
+                        </div>
                       )}
                       {getPendingExtensions(booking).length > 0 && (
                         <button
@@ -1205,8 +1253,8 @@ export default function UnpaidBookingsTab() {
   )
 }
 
-// ── Danni/penali item row with per-item actions ──────────────────────────────
-function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, color, tag, itemKey, activePayKey, onMarkPaid, onStartPartial, onConfirmPartial, onCancelPartial, partialValue, onPartialValueChange }: {
+// ── Info-only danni/penali item row ───────────────────────────────────────────
+function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, color, tag }: {
   label: string
   total: number
   amountPaid: number
@@ -1214,20 +1262,10 @@ function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, co
   isPartial: boolean
   color: 'yellow' | 'red'
   tag: string
-  itemKey: string
-  activePayKey: string | null
-  onMarkPaid: () => void
-  onStartPartial: () => void
-  onConfirmPartial: () => void
-  onCancelPartial: () => void
-  partialValue: string
-  onPartialValueChange: (v: string) => void
 }) {
   const colorClasses = color === 'yellow'
     ? { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/20' }
     : { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20' }
-
-  const isActive = activePayKey === itemKey
 
   return (
     <div className={`${colorClasses.bg} border ${colorClasses.border} rounded-lg px-2.5 py-1.5 mt-1`}>
@@ -1243,42 +1281,10 @@ function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, co
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <span className={`font-semibold text-[12px] tabular-nums ${colorClasses.text}`}>
-            €{remaining.toFixed(2)}
-          </span>
-          {!isActive && (
-            <>
-              <button onClick={onMarkPaid} className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-[10px] font-semibold transition-colors">
-                Pagato
-              </button>
-              <button onClick={onStartPartial} className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] font-semibold transition-colors">
-                Parziale
-              </button>
-            </>
-          )}
-        </div>
+        <span className={`font-semibold text-[12px] tabular-nums shrink-0 ${colorClasses.text}`}>
+          €{remaining.toFixed(2)}
+        </span>
       </div>
-      {isActive && (
-        <div className="flex items-center gap-1 mt-1">
-          <div className="relative flex-1">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-[10px]">€</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={partialValue}
-              onChange={e => onPartialValueChange(e.target.value)}
-              placeholder="Importo"
-              className="w-full pl-5 pr-1.5 py-1 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-              onKeyDown={e => { if (e.key === 'Enter') onConfirmPartial(); if (e.key === 'Escape') onCancelPartial() }}
-              autoFocus
-            />
-          </div>
-          <button onClick={onConfirmPartial} className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded-full text-[10px] font-semibold transition-colors">OK</button>
-          <button onClick={onCancelPartial} className="px-1.5 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-secondary text-theme-text-muted rounded-full text-[10px] transition-colors">×</button>
-        </div>
-      )}
     </div>
   )
 }
