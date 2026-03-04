@@ -917,7 +917,6 @@ export default function UnpaidBookingsTab() {
                   const pTotal = p.total || (p.amount || 0) * (p.quantity || 1)
                   const pPaid = p.amountPaid || 0
                   const pRemaining = pTotal - pPaid
-                  const realIdx = (booking.booking_details?.penalties || []).indexOf(p)
                   return (
                     <DanniPenaliItemRow
                       key={`pen-${idx}`}
@@ -935,7 +934,6 @@ export default function UnpaidBookingsTab() {
                   const dTotal = d.total || (d.amount || 0) * (d.quantity || 1)
                   const dPaid = d.amountPaid || 0
                   const dRemaining = dTotal - dPaid
-                  const realIdx = (booking.booking_details?.danni || []).indexOf(d)
                   return (
                     <DanniPenaliItemRow
                       key={`dan-${idx}`}
@@ -1149,7 +1147,6 @@ export default function UnpaidBookingsTab() {
                       const pTotal = p.total || (p.amount || 0) * (p.quantity || 1)
                       const pPaid = p.amountPaid || 0
                       const pRemaining = pTotal - pPaid
-                      const realIdx = (booking.booking_details?.penalties || []).indexOf(p)
                       return (
                         <DanniPenaliItemRow
                           key={`pen-${idx}`}
@@ -1167,7 +1164,6 @@ export default function UnpaidBookingsTab() {
                       const dTotal = d.total || (d.amount || 0) * (d.quantity || 1)
                       const dPaid = d.amountPaid || 0
                       const dRemaining = dTotal - dPaid
-                      const realIdx = (booking.booking_details?.danni || []).indexOf(d)
                       return (
                         <DanniPenaliItemRow
                           key={`dan-${idx}`}
