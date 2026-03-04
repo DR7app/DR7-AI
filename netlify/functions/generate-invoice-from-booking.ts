@@ -163,7 +163,7 @@ export const handler: Handler = async (event) => {
             const num = customerData.numero_civico || customerData.streetNumber || ''
             const zip = customerData.codice_postale || customerData.zipCode || customerData.zip || ''
             const city = customerData.citta_residenza || customerData.city || ''
-            const prov = customerData.provincia_residenza || customerData.province || ''
+            const prov = (customerData.provincia_residenza || customerData.province || '').toUpperCase().trim()
 
             if (street) {
                 let streetAddress = street

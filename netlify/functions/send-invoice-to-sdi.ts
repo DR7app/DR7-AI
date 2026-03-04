@@ -92,16 +92,21 @@ export const handler: Handler = async (event) => {
             invoice.numero_fattura = newNumber
         }
 
-        // Normalize customer tax data (fix lowercase CF/P.IVA that SDI rejects)
+        // Normalize customer data (fix lowercase CF/P.IVA/provincia that SDI rejects)
         const normalizedTaxCode = (invoice.customer_tax_code || '').toUpperCase().trim()
         const normalizedVat = (invoice.customer_vat || '').toUpperCase().trim()
-        if (normalizedTaxCode !== invoice.customer_tax_code || normalizedVat !== invoice.customer_vat) {
+        // Fix provincia in address: (Ss) → (SS), (ca) → (CA)
+        const normalizedAddress = (invoice.customer_address || '').replace(/\(([A-Za-z]{2})\)/, (_: string, prov: string) => `(${prov.toUpperCase()})`)
+        const needsUpdate = normalizedTaxCode !== invoice.customer_tax_code || normalizedVat !== invoice.customer_vat || normalizedAddress !== invoice.customer_address
+        if (needsUpdate) {
             await supabase.from('fatture').update({
                 customer_tax_code: normalizedTaxCode,
-                customer_vat: normalizedVat
+                customer_vat: normalizedVat,
+                customer_address: normalizedAddress
             }).eq('id', invoiceId)
             invoice.customer_tax_code = normalizedTaxCode
             invoice.customer_vat = normalizedVat
+            invoice.customer_address = normalizedAddress
         }
 
         // 1. Generate XML

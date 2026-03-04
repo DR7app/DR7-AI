@@ -360,268 +360,309 @@ export default function GestioneMulteTab() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
-                <div>
-                    <h2 className="text-xl font-bold text-theme-text-primary">Gestione Multe</h2>
-                    <p className="text-theme-text-muted text-sm">
-                        {activeSubTab === 'fines' ? 'Ricerca conducente per data infrazione' : 'Invio telematico - Portale Polizia di Stato'}
-                    </p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-theme-bg-tertiary rounded-full border border-theme-border overflow-hidden">
-                        <button
-                            onClick={() => setActiveSubTab('fines')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-                        >
-                            Multe
-                        </button>
-                        <button
-                            onClick={() => setActiveSubTab('export')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-                        >
-                            Invio Telematico
-                        </button>
+        <div className="space-y-4 lg:space-y-6">
+            {/* Header */}
+            <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4 border border-theme-border">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                        <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Multe</h2>
+                        <p className="text-sm text-theme-text-muted mt-0.5">
+                            {activeSubTab === 'fines' ? 'Ricerca conducente per data infrazione' : 'Invio telematico — Portale Polizia di Stato'}
+                        </p>
                     </div>
-                    {activeSubTab === 'export' && (
-                        <>
+                    <div className="flex items-center gap-2">
+                        <div className="flex bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
                             <button
-                                onClick={() => setShowSettings(!showSettings)}
-                                className="px-3 py-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-full border border-theme-border transition-colors"
-                                title="Impostazioni API"
+                                onClick={() => setActiveSubTab('fines')}
+                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                             >
-                                ⚙️
+                                Ricerca Multa
                             </button>
-                            <a
-                                href="https://cargos.poliziadistato.it/Cargos_Portale/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary font-medium rounded-full hover:bg-theme-bg-hover transition-colors flex items-center gap-2 text-sm"
+                            <button
+                                onClick={() => setActiveSubTab('export')}
+                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                             >
-                                Apri Portale Cargos
-                            </a>
-                        </>
-                    )}
+                                Invio Telematico
+                            </button>
+                        </div>
+                        {activeSubTab === 'export' && (
+                            <>
+                                <button
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    className="p-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-lg border border-theme-border transition-colors"
+                                    title="Impostazioni API"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                </button>
+                                <a
+                                    href="https://cargos.poliziadistato.it/Cargos_Portale/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary font-medium rounded-lg hover:bg-theme-bg-hover transition-colors flex items-center gap-2 text-sm border border-theme-border"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                    Portale Cargos
+                                </a>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* API Settings Modal */}
+            {/* API Settings Panel */}
             {showSettings && (
-                <div className="bg-theme-bg-tertiary border border-theme-border p-6 rounded-full mb-6 animate-fadeIn">
-                    <h3 className="text-lg font-bold text-theme-text-primary mb-4 border-b border-theme-border pb-2">⚙️ Configurazione API Cargos</h3>
+                <div className="bg-theme-bg-secondary border border-theme-border p-5 rounded-lg animate-fadeIn">
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-theme-border">
+                        <h3 className="text-base font-bold text-theme-text-primary">Configurazione API Cargos</h3>
+                        <button onClick={() => setShowSettings(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs text-theme-text-muted mb-1">Username (Utente Web Service)</label>
-                            <Input
-                                type="text"
-                                value={apiConfig.username}
-                                onChange={(e: any) => setApiConfig({ ...apiConfig, username: e.target.value })}
-                                placeholder="Es. SC123456"
-                            />
+                            <label className="block text-xs text-theme-text-muted mb-1">Username</label>
+                            <Input type="text" value={apiConfig.username} onChange={(e: any) => setApiConfig({ ...apiConfig, username: e.target.value })} placeholder="Es. SC123456" />
                         </div>
                         <div>
                             <label className="block text-xs text-theme-text-muted mb-1">Password</label>
-                            <Input
-                                type="password"
-                                value={apiConfig.password}
-                                onChange={(e: any) => setApiConfig({ ...apiConfig, password: e.target.value })}
-                                placeholder="••••••••"
-                            />
+                            <Input type="password" value={apiConfig.password} onChange={(e: any) => setApiConfig({ ...apiConfig, password: e.target.value })} placeholder="••••••••" />
                         </div>
                         <div>
                             <label className="block text-xs text-theme-text-muted mb-1">Codice Agenzia</label>
-                            <Input
-                                type="text"
-                                value={apiConfig.agencyCode}
-                                onChange={(e: any) => setApiConfig({ ...apiConfig, agencyCode: e.target.value })}
-                                placeholder="Codice identificativo questura"
-                            />
+                            <Input type="text" value={apiConfig.agencyCode} onChange={(e: any) => setApiConfig({ ...apiConfig, agencyCode: e.target.value })} placeholder="Codice identificativo" />
                         </div>
                         <div>
                             <label className="block text-xs text-theme-text-muted mb-1">Endpoint WSDL</label>
-                            <Input
-                                type="text"
-                                value={apiConfig.wsUrl}
-                                onChange={(e: any) => setApiConfig({ ...apiConfig, wsUrl: e.target.value })}
-                            />
+                            <Input type="text" value={apiConfig.wsUrl} onChange={(e: any) => setApiConfig({ ...apiConfig, wsUrl: e.target.value })} />
                         </div>
                     </div>
                     <div className="flex justify-end mt-4">
-                        <Button onClick={handleSaveConfig} className="bg-green-600 hover:bg-green-500">
-                            Salva Configurazione
-                        </Button>
+                        <Button onClick={handleSaveConfig} className="bg-green-600 hover:bg-green-500">Salva</Button>
                     </div>
                 </div>
             )}
 
+            {/* ── FINES TAB ───────────────────────────────────────────────── */}
             {activeSubTab === 'fines' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Search Form */}
-                    <div className="bg-theme-bg-tertiary p-6 rounded-full border border-theme-border space-y-4 h-fit">
-                        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Dati Multa (Ricerca Driver)</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
+                    {/* Search Form — 2 cols */}
+                    <div className="lg:col-span-2 bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden h-fit">
+                        <div className="px-5 py-4 border-b border-theme-border">
+                            <h3 className="text-base font-bold text-theme-text-primary">Dati Multa</h3>
+                            <p className="text-xs text-theme-text-muted mt-0.5">Inserisci i dati per trovare il conducente</p>
+                        </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-theme-text-muted mb-1">Targa Veicolo</label>
-                            <div className="relative">
+                        <div className="p-5 space-y-4">
+                            {/* Plate input */}
+                            <div>
+                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Targa Veicolo</label>
                                 <input
                                     type="text"
                                     value={plate}
                                     onChange={(e) => setPlate(e.target.value.toUpperCase())}
-                                    placeholder="Esempio: GB123XY"
-                                    className="w-full text-theme-text-primary bg-theme-bg-secondary border border-theme-border rounded-full p-2.5 font-mono uppercase tracking-wider focus:ring-2 focus:ring-dr7-gold outline-none"
+                                    placeholder="ES: GB123XY"
+                                    className="w-full text-theme-text-primary bg-theme-bg-primary border border-theme-border rounded-lg px-4 py-3 font-mono text-lg uppercase tracking-widest focus:ring-2 focus:ring-dr7-gold/50 focus:border-dr7-gold outline-none transition-colors"
                                 />
+                                {/* Vehicle quick-select chips */}
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {vehicles.slice(0, 8).map(v => {
+                                        const vPlate = v.plate || v.targa || ''
+                                        const isSelected = plate === vPlate
+                                        return (
+                                            <button
+                                                key={v.id}
+                                                onClick={() => setPlate(vPlate)}
+                                                className={`px-2.5 py-1 rounded-md text-xs transition-colors ${
+                                                    isSelected
+                                                        ? 'bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/40 font-semibold'
+                                                        : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover border border-transparent'
+                                                }`}
+                                            >
+                                                <span className="font-medium">{v.display_name}</span>
+                                                {vPlate && <span className="ml-1 opacity-60 font-mono text-[10px]">{vPlate}</span>}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
                             </div>
-                            {/* Quick select from vehicles helper */}
-                            <div className="mt-2 text-xs text-theme-text-muted overflow-x-auto whitespace-nowrap pb-2 flex gap-2">
-                                {vehicles.slice(0, 10).map(v => (
-                                    <button
-                                        key={v.id}
-                                        onClick={() => setPlate(v.plate || v.targa || '')}
-                                        className="px-2 py-1 bg-theme-bg-tertiary rounded-full hover:bg-theme-bg-hover"
-                                    >
-                                        {v.display_name}
-                                    </button>
-                                ))}
+
+                            {/* Date & Time */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Infrazione</label>
+                                    <Input type="date" value={fineDate} onChange={(e: any) => setFineDate(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Ora</label>
+                                    <Input type="time" value={fineTime} onChange={(e: any) => setFineTime(e.target.value)} />
+                                </div>
                             </div>
+
+                            {/* Search button */}
+                            <Button onClick={handleSearch} disabled={loading} className="w-full flex items-center justify-center gap-2">
+                                {loading ? (
+                                    <>
+                                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                                        Ricerca in corso...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                        Trova Conducente
+                                    </>
+                                )}
+                            </Button>
+
+                            {error && (
+                                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm flex items-start gap-2">
+                                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    {error}
+                                </div>
+                            )}
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Infrazione</label>
-                                <Input
-                                    type="date"
-                                    value={fineDate}
-                                    onChange={(e: any) => setFineDate(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-theme-text-muted mb-1">Ora</label>
-                                <Input
-                                    type="time"
-                                    value={fineTime}
-                                    onChange={(e: any) => setFineTime(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        <Button onClick={handleSearch} disabled={loading} className="w-full">
-                            {loading ? 'Ricerca in corso...' : '🔍 Trova Conducente'}
-                        </Button>
-
-                        {error && (
-                            <div className="p-3 bg-red-900/30 border border-red-800 rounded-full text-red-200 text-sm">
-                                {error}
-                            </div>
-                        )}
                     </div>
 
-                    {/* Results Area */}
-                    <div className="lg:col-span-2">
+                    {/* Results Area — 3 cols */}
+                    <div className="lg:col-span-3">
                         {searchResult ? (
-                            <div className="bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
-                                <div className="p-6 border-b border-theme-border bg-theme-bg-tertiary/50">
+                            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                                {/* Result header */}
+                                <div className="px-5 py-4 border-b border-theme-border">
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-green-400 text-sm font-bold tracking-wider uppercase">Conducente Trovato</span>
-                                                <span className="text-theme-text-muted text-xs">•</span>
-                                                <span className="text-theme-text-muted text-xs">Booking ID: {searchResult.id.slice(0, 8)}...</span>
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-xs font-bold uppercase">
+                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                    Conducente Trovato
+                                                </span>
+                                                <span className="text-theme-text-muted text-xs font-mono">#{searchResult.id.slice(0, 8)}</span>
                                             </div>
-                                            <h3 className="text-2xl font-bold text-theme-text-primary mb-1">{searchResult.customer_name}</h3>
-                                            <p className="text-theme-text-muted text-sm flex items-center gap-2">
-                                                <span>{searchResult.vehicle_name}</span>
-                                                <span className="px-2 py-0.5 bg-theme-bg-tertiary rounded text-xs text-theme-text-primary font-mono">{searchResult.vehicle_plate || plate}</span>
-                                            </p>
-                                        </div>
-                                        {searchResult.contract_url && (
-                                            <a
-                                                href={searchResult.contract_url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-full hover:bg-blue-600/30 transition-colors text-sm font-medium flex items-center gap-2"
-                                            >
-                                                📄 Vedi Contratto
-                                            </a>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-4">
-                                        <h4 className="text-dr7-gold font-medium uppercase text-xs tracking-wider border-b border-theme-border pb-2">Dati Contatto</h4>
-
-                                        <div>
-                                            <label className="text-xs text-theme-text-muted">Email</label>
-                                            <div className="text-theme-text-secondary flex items-center gap-2">
-                                                {searchResult.customer_email || 'N/D'}
-                                                <button className="text-theme-text-muted hover:text-theme-text-primary" title="Copia" onClick={() => navigator.clipboard.writeText(searchResult.customer_email)}>📋</button>
+                                            <h3 className="text-xl font-bold text-theme-text-primary">{searchResult.customer_name}</h3>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-theme-text-muted text-sm">{searchResult.vehicle_name}</span>
+                                                <span className="px-2 py-0.5 bg-theme-bg-tertiary rounded text-xs text-theme-text-primary font-mono border border-theme-border">{searchResult.vehicle_plate || plate}</span>
                                             </div>
                                         </div>
-                                        <div>
-                                            <label className="text-xs text-theme-text-muted">Telefono</label>
-                                            <div className="text-theme-text-secondary">{searchResult.customer_phone || 'N/D'}</div>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-theme-text-muted">Documento Guida</label>
-                                            <div className="text-theme-text-secondary font-mono bg-theme-bg-secondary/50 p-2 rounded border border-theme-border inline-block">
-                                                {searchResult.driver_license || 'Non registrato'}
-                                            </div>
-                                            {!searchResult.driver_license && (
-                                                <p className="text-xs text-yellow-500 mt-1">⚠️ Numero patente mancante. Controlla il contratto PDF.</p>
+                                        <div className="flex gap-2">
+                                            {searchResult.contract_url && (
+                                                <a
+                                                    href={searchResult.contract_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="px-3 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors text-xs font-medium flex items-center gap-1.5"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                                    Contratto
+                                                </a>
                                             )}
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div className="space-y-4">
-                                        <h4 className="text-dr7-gold font-medium uppercase text-xs tracking-wider border-b border-theme-border pb-2">Periodo Noleggio</h4>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-xs text-theme-text-muted">Ritiro</label>
-                                                <div className="text-theme-text-primary font-medium">
-                                                    {new Date(searchResult.pickup_date).toLocaleDateString('it-IT')}
+                                {/* Result body */}
+                                <div className="p-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Contact data */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-dr7-gold font-semibold uppercase text-xs tracking-wider pb-2 border-b border-theme-border">Dati Contatto</h4>
+                                            <div className="space-y-2.5">
+                                                <div className="flex items-center justify-between bg-theme-bg-tertiary/50 rounded-lg px-3 py-2">
+                                                    <div>
+                                                        <div className="text-[10px] text-theme-text-muted uppercase">Email</div>
+                                                        <div className="text-sm text-theme-text-primary">{searchResult.customer_email || 'N/D'}</div>
+                                                    </div>
+                                                    {searchResult.customer_email && (
+                                                        <button className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded hover:bg-theme-bg-hover transition-colors" title="Copia" onClick={() => { navigator.clipboard.writeText(searchResult.customer_email); toast.success('Email copiata') }}>
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                <div className="text-theme-text-muted text-sm">
-                                                    {new Date(searchResult.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                                                <div className="flex items-center justify-between bg-theme-bg-tertiary/50 rounded-lg px-3 py-2">
+                                                    <div>
+                                                        <div className="text-[10px] text-theme-text-muted uppercase">Telefono</div>
+                                                        <div className="text-sm text-theme-text-primary">{searchResult.customer_phone || 'N/D'}</div>
+                                                    </div>
+                                                    {searchResult.customer_phone && (
+                                                        <button className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded hover:bg-theme-bg-hover transition-colors" title="Copia" onClick={() => { navigator.clipboard.writeText(searchResult.customer_phone); toast.success('Telefono copiato') }}>
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                        </button>
+                                                    )}
                                                 </div>
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-theme-text-muted">Restituzione</label>
-                                                <div className="text-theme-text-primary font-medium">
-                                                    {new Date(searchResult.dropoff_date).toLocaleDateString('it-IT')}
+                                                <div className="bg-theme-bg-tertiary/50 rounded-lg px-3 py-2">
+                                                    <div className="text-[10px] text-theme-text-muted uppercase">Patente</div>
+                                                    <div className="text-sm text-theme-text-primary font-mono">
+                                                        {searchResult.driver_license || <span className="text-yellow-500 font-sans">Non registrato</span>}
+                                                    </div>
+                                                    {!searchResult.driver_license && (
+                                                        <p className="text-[10px] text-yellow-500/80 mt-0.5">Numero patente mancante — controlla il contratto PDF</p>
+                                                    )}
                                                 </div>
-                                                <div className="text-theme-text-muted text-sm">
-                                                    {new Date(searchResult.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                                                <div className="bg-theme-bg-tertiary/50 rounded-lg px-3 py-2">
+                                                    <div className="text-[10px] text-theme-text-muted uppercase">Indirizzo Residenza</div>
+                                                    <div className="text-sm text-theme-text-primary">
+                                                        {searchResult.address || <span className="text-theme-text-muted italic">Non disponibile</span>}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div>
-                                            <label className="text-xs text-theme-text-muted">Indirizzo Residenza (da Booking)</label>
-                                            <div className="text-theme-text-secondary text-sm mt-1 p-2 bg-theme-bg-secondary/30 rounded">
-                                                {searchResult.address || 'Indirizzo non presente nei metadati'}
+                                        {/* Rental period */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-dr7-gold font-semibold uppercase text-xs tracking-wider pb-2 border-b border-theme-border">Periodo Noleggio</h4>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="bg-theme-bg-tertiary/50 rounded-lg px-3 py-2">
+                                                    <div className="text-[10px] text-theme-text-muted uppercase">Ritiro</div>
+                                                    <div className="text-sm text-theme-text-primary font-medium">
+                                                        {new Date(searchResult.pickup_date).toLocaleDateString('it-IT')}
+                                                    </div>
+                                                    <div className="text-xs text-theme-text-muted">
+                                                        {new Date(searchResult.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-theme-bg-tertiary/50 rounded-lg px-3 py-2">
+                                                    <div className="text-[10px] text-theme-text-muted uppercase">Restituzione</div>
+                                                    <div className="text-sm text-theme-text-primary font-medium">
+                                                        {new Date(searchResult.dropoff_date).toLocaleDateString('it-IT')}
+                                                    </div>
+                                                    <div className="text-xs text-theme-text-muted">
+                                                        {new Date(searchResult.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Quick summary card */}
+                                            <div className="bg-dr7-gold/5 border border-dr7-gold/20 rounded-lg p-3 mt-2">
+                                                <div className="text-xs text-dr7-gold font-semibold uppercase mb-1">Riepilogo Infrazione</div>
+                                                <div className="text-sm text-theme-text-primary">
+                                                    <span className="font-medium">{searchResult.customer_name}</span> guidava <span className="font-mono font-medium">{searchResult.vehicle_plate || plate}</span> ({searchResult.vehicle_name}) il <span className="font-medium">{fineDate && new Date(fineDate).toLocaleDateString('it-IT')}</span> alle <span className="font-medium">{fineTime}</span>.
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-theme-bg-secondary/50 border-t border-theme-border flex justify-end gap-3">
+                                {/* Actions footer */}
+                                <div className="px-5 py-3 bg-theme-bg-tertiary/30 border-t border-theme-border flex justify-end gap-2">
                                     <Button
                                         variant="secondary"
                                         onClick={() => {
-                                            const text = `DICHIARAZIONE DATI CONDUCENTE:\n\nIl veicolo targa ${plate} era noleggiato a:\nNome: ${searchResult.customer_name}\nPatente: ${searchResult.driver_license || 'N/D'}\nData Noleggio: ${new Date(searchResult.pickup_date).toLocaleDateString()} - ${new Date(searchResult.dropoff_date).toLocaleDateString()}`
+                                            const text = `DICHIARAZIONE DATI CONDUCENTE:\n\nIl veicolo targa ${plate} era noleggiato a:\nNome: ${searchResult.customer_name}\nPatente: ${searchResult.driver_license || 'N/D'}\nData Noleggio: ${new Date(searchResult.pickup_date).toLocaleDateString('it-IT')} - ${new Date(searchResult.dropoff_date).toLocaleDateString('it-IT')}\nEmail: ${searchResult.customer_email || 'N/D'}\nTelefono: ${searchResult.customer_phone || 'N/D'}\nIndirizzo: ${searchResult.address || 'N/D'}`
                                             navigator.clipboard.writeText(text)
+                                            toast.success('Dati copiati negli appunti')
                                         }}
                                     >
-                                        Copia Dati per Comunicazione
+                                        <span className="flex items-center gap-1.5">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                            Copia Dati per Comunicazione
+                                        </span>
                                     </Button>
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full min-h-[300px] flex flex-col items-center justify-center bg-theme-bg-tertiary/30 rounded-lg border border-theme-border border-dashed text-theme-text-muted">
-                                <span className="text-4xl mb-4">👮‍♂️</span>
-                                <p className="text-lg font-medium">In attesa di ricerca</p>
-                                <p className="text-sm max-w-md text-center mt-2">
+                            <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-theme-bg-secondary rounded-lg border border-theme-border border-dashed text-theme-text-muted">
+                                <svg className="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <p className="text-base font-medium">In attesa di ricerca</p>
+                                <p className="text-sm max-w-sm text-center mt-1 opacity-60">
                                     Inserisci targa, data e ora per trovare chi guidava il veicolo al momento della multa.
                                 </p>
                             </div>
@@ -630,75 +671,75 @@ export default function GestioneMulteTab() {
                 </div>
             )}
 
+            {/* ── EXPORT TAB ──────────────────────────────────────────────── */}
             {activeSubTab === 'export' && (
-                <div className="bg-theme-bg-tertiary p-8 rounded-full border border-theme-border">
-                    <div className="max-w-2xl mx-auto space-y-8">
-                        <div className="text-center">
-                            <span className="text-5xl mb-4 block">📤</span>
-                            <h3 className="text-2xl font-bold text-theme-text-primary mb-2">Esportazione Dati per Cargos</h3>
-                            <p className="text-theme-text-muted">
-                                Prepara e invia automaticamente i dati dei contratti al portale Polizia di Stato.<br />
-                                Seleziona la data di inizio noleggio.
-                            </p>
-
-                            {/* Alert if no config */}
-                            {(!apiConfig.username || !apiConfig.password) && (
-                                <div className="mt-4 p-2 bg-yellow-900/20 border border-yellow-800 text-yellow-500 text-sm rounded inline-block">
-                                    ⚠️ Configurazione API mancante. <button onClick={() => setShowSettings(true)} className="underline font-bold">Clicca qui per impostare</button>
-                                </div>
-                            )}
+                <div className="max-w-3xl mx-auto space-y-6">
+                    {/* API warning */}
+                    {(!apiConfig.username || !apiConfig.password) && (
+                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm flex items-center gap-2">
+                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                            Configurazione API mancante.
+                            <button onClick={() => setShowSettings(true)} className="underline font-semibold hover:text-yellow-300">Configura</button>
                         </div>
+                    )}
 
-                        <div className="bg-theme-bg-secondary/50 p-6 rounded-full border border-theme-border max-w-md mx-auto">
-                            <label className="block text-sm font-medium text-theme-text-muted mb-2">Seleziona Data Inizio Noleggio</label>
-                            <Input
-                                type="date"
-                                value={exportDate}
-                                onChange={(e: any) => setExportDate(e.target.value)}
-                            />
-
-                            <div className="space-y-4 mt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                        {/* Auto send card */}
+                        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                            <div className="px-5 py-4 border-b border-theme-border">
+                                <h3 className="text-base font-bold text-theme-text-primary">Invio Automatico</h3>
+                                <p className="text-xs text-theme-text-muted mt-0.5">Invia dati al portale Polizia di Stato</p>
+                            </div>
+                            <div className="p-5 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
+                                    <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
+                                </div>
                                 <Button
                                     onClick={handleAutoSend}
-                                    className="w-full flex justify-center items-center gap-2 py-3 text-lg font-bold bg-green-600 hover:bg-green-500"
+                                    className="w-full flex justify-center items-center gap-2 bg-green-600 hover:bg-green-500"
                                     disabled={exportLoading}
                                 >
-                                    {exportLoading ? '...' : '🚀 Invia Automaticamente a Cargos'}
+                                    {exportLoading ? (
+                                        <>
+                                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                                            Invio in corso...
+                                        </>
+                                    ) : 'Invia a Cargos'}
                                 </Button>
+                            </div>
+                        </div>
 
-                                <div className="relative flex py-2 items-center">
-                                    <div className="flex-grow border-t border-theme-border"></div>
-                                    <span className="flex-shrink-0 mx-4 text-theme-text-muted text-xs uppercase">Oppure Scarica File</span>
-                                    <div className="flex-grow border-t border-theme-border"></div>
+                        {/* Download card */}
+                        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+                            <div className="px-5 py-4 border-b border-theme-border">
+                                <h3 className="text-base font-bold text-theme-text-primary">Scarica File</h3>
+                                <p className="text-xs text-theme-text-muted mt-0.5">Esporta i dati per upload manuale</p>
+                            </div>
+                            <div className="p-5 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
+                                    <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
                                 </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <Button
-                                        onClick={() => handleExport('csv')}
-                                        disabled={exportLoading}
-                                        variant="secondary"
-                                        className="w-full flex justify-center items-center gap-2 text-sm"
-                                    >
-                                        📄 Scarica CSV
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Button onClick={() => handleExport('csv')} disabled={exportLoading} variant="secondary" className="w-full flex justify-center items-center gap-1.5 text-sm">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        CSV
                                     </Button>
-                                    <Button
-                                        onClick={() => handleExport('xml')}
-                                        disabled={exportLoading}
-                                        variant="secondary"
-                                        className="w-full flex justify-center items-center gap-2 text-sm"
-                                    >
-                                        💻 Scarica XML
+                                    <Button onClick={() => handleExport('xml')} disabled={exportLoading} variant="secondary" className="w-full flex justify-center items-center gap-1.5 text-sm">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        XML
                                     </Button>
                                 </div>
                             </div>
-
-                            {exportStats && (
-                                <div className={`mt-4 p-3 border rounded text-center text-sm ${exportStats.includes('Errore') ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
-                                    {exportStats}
-                                </div>
-                            )}
                         </div>
                     </div>
+
+                    {exportStats && (
+                        <div className={`p-3 border rounded-lg text-center text-sm ${exportStats.includes('Errore') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
+                            {exportStats}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
