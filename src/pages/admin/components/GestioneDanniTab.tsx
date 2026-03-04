@@ -314,30 +314,58 @@ export default function GestioneDanniTab() {
     }
   }
 
-  // ── Modal: delete a pending item ───────────────────────────────────────────
+  // ── Modal: delete a single item (pending or invoiced) ──────────────────────
   async function handleDeleteItem(item: PenaltyDannoItem) {
-    if (item.status !== 'pending') return
-
     setSaving(true)
     try {
-      const { data: booking, error: fetchErr } = await supabase
-        .from('bookings')
-        .select('booking_details')
-        .eq('id', item.bookingId)
-        .single()
+      if (item.status === 'pending') {
+        // Remove from booking_details array
+        const { data: booking, error: fetchErr } = await supabase
+          .from('bookings')
+          .select('booking_details')
+          .eq('id', item.bookingId)
+          .single()
 
-      if (fetchErr) throw fetchErr
+        if (fetchErr) throw fetchErr
 
-      const details = booking?.booking_details || {}
-      const arr: any[] = [...(details[item.arrayKey] || [])]
-      arr.splice(item.arrayIndex, 1)
+        const details = booking?.booking_details || {}
+        const arr: any[] = [...(details[item.arrayKey] || [])]
+        arr.splice(item.arrayIndex, 1)
 
-      const { error: updateErr } = await supabase
-        .from('bookings')
-        .update({ booking_details: { ...details, [item.arrayKey]: arr } })
-        .eq('id', item.bookingId)
+        const { error: updateErr } = await supabase
+          .from('bookings')
+          .update({ booking_details: { ...details, [item.arrayKey]: arr } })
+          .eq('id', item.bookingId)
 
-      if (updateErr) throw updateErr
+        if (updateErr) throw updateErr
+      } else if (item.status === 'invoiced' && item.bookingId) {
+        // Remove from booking_details array by matching label/amount
+        const { data: booking, error: fetchErr } = await supabase
+          .from('bookings')
+          .select('booking_details')
+          .eq('id', item.bookingId)
+          .single()
+
+        if (fetchErr) throw fetchErr
+
+        const details = booking?.booking_details || {}
+        const arr: any[] = [...(details[item.arrayKey] || [])]
+        // Find matching entry by label and amount
+        const matchIdx = arr.findIndex((e: any) => {
+          const entryLabel = e.label || e.description || ''
+          const entryAmount = e.total || e.amount || 0
+          return entryLabel === item.label && entryAmount === item.total
+        })
+        if (matchIdx >= 0) {
+          arr.splice(matchIdx, 1)
+          const { error: updateErr } = await supabase
+            .from('bookings')
+            .update({ booking_details: { ...details, [item.arrayKey]: arr } })
+            .eq('id', item.bookingId)
+          if (updateErr) throw updateErr
+        }
+        // Fattura is NOT touched
+      }
 
       toast.success('Voce eliminata')
       setEditModal(null)
@@ -829,29 +857,27 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, saving }: {
                 {formatCurrency(item.total)}
               </span>
               {isPending && (
-                <>
-                  <button
-                    onClick={() => { setEditValue(item.total.toString()); setEditing(true) }}
-                    disabled={saving}
-                    className="w-6 h-6 rounded-full bg-white/10 text-theme-text-muted hover:bg-white/20 flex items-center justify-center transition-all disabled:opacity-30"
-                    title="Modifica importo"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={onDelete}
-                    disabled={saving}
-                    className={`w-6 h-6 rounded-full bg-${accent}-500/10 text-${accent}-400 hover:bg-${accent}-500/20 flex items-center justify-center transition-all disabled:opacity-30`}
-                    title="Elimina"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </>
+                <button
+                  onClick={() => { setEditValue(item.total.toString()); setEditing(true) }}
+                  disabled={saving}
+                  className="w-6 h-6 rounded-full bg-white/10 text-theme-text-muted hover:bg-white/20 flex items-center justify-center transition-all disabled:opacity-30"
+                  title="Modifica importo"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
               )}
+              <button
+                onClick={onDelete}
+                disabled={saving}
+                className={`w-6 h-6 rounded-full bg-${accent}-500/10 text-${accent}-400 hover:bg-${accent}-500/20 flex items-center justify-center transition-all disabled:opacity-30`}
+                title="Elimina"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </>
           )}
         </div>
