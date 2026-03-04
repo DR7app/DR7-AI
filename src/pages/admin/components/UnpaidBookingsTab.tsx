@@ -82,14 +82,14 @@ export default function UnpaidBookingsTab() {
         const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
         if (hasPendingExtension) return true
 
-        // Check pending penalties
+        // Check pending penalties (treat missing paymentStatus as pending)
         const penalties = booking.booking_details?.penalties || []
-        const hasPendingPenalty = penalties.some((p: any) => p.paymentStatus === 'pending')
+        const hasPendingPenalty = penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending')
         if (hasPendingPenalty) return true
 
-        // Check pending danni
+        // Check pending danni (treat missing paymentStatus as pending)
         const danni = booking.booking_details?.danni || []
-        const hasPendingDanno = danni.some((d: any) => d.paymentStatus === 'pending')
+        const hasPendingDanno = danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
         if (hasPendingDanno) return true
 
         return false
@@ -146,14 +146,14 @@ export default function UnpaidBookingsTab() {
   function hasPendingPenaltyDanni(booking: UnpaidBooking): boolean {
     const penalties = booking.booking_details?.penalties || []
     const danni = booking.booking_details?.danni || []
-    return penalties.some((p: any) => p.paymentStatus === 'pending') || danni.some((d: any) => d.paymentStatus === 'pending')
+    return penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending') || danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
   }
 
   async function removePendingPenaltiesDanni(booking: UnpaidBooking) {
     try {
       const details = booking.booking_details || {}
-      const penalties = (details.penalties || []).filter((p: any) => p.paymentStatus !== 'pending')
-      const danni = (details.danni || []).filter((d: any) => d.paymentStatus !== 'pending')
+      const penalties = (details.penalties || []).filter((p: any) => p.paymentStatus && p.paymentStatus !== 'pending')
+      const danni = (details.danni || []).filter((d: any) => d.paymentStatus && d.paymentStatus !== 'pending')
 
       const { error } = await supabase
         .from('bookings')
@@ -179,8 +179,8 @@ export default function UnpaidBookingsTab() {
   async function markPenaltiesDanniPaid(booking: UnpaidBooking) {
     try {
       const details = booking.booking_details || {}
-      const pendingPenalties = (details.penalties || []).filter((p: any) => p.paymentStatus === 'pending')
-      const pendingDanni = (details.danni || []).filter((d: any) => d.paymentStatus === 'pending')
+      const pendingPenalties = (details.penalties || []).filter((p: any) => !p.paymentStatus || p.paymentStatus === 'pending')
+      const pendingDanni = (details.danni || []).filter((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
 
       // Generate fattura for pending penalties
       if (pendingPenalties.length > 0) {
@@ -220,8 +220,8 @@ export default function UnpaidBookingsTab() {
       }
 
       // Remove pending entries from booking_details
-      const updatedPenalties = (details.penalties || []).filter((p: any) => p.paymentStatus !== 'pending')
-      const updatedDanni = (details.danni || []).filter((d: any) => d.paymentStatus !== 'pending')
+      const updatedPenalties = (details.penalties || []).filter((p: any) => p.paymentStatus && p.paymentStatus !== 'pending')
+      const updatedDanni = (details.danni || []).filter((d: any) => d.paymentStatus && d.paymentStatus !== 'pending')
 
       await supabase
         .from('bookings')
@@ -451,7 +451,7 @@ export default function UnpaidBookingsTab() {
     // Add pending penalties (amounts are in EUR, convert to cents)
     const penalties = booking.booking_details?.penalties || []
     penalties.forEach((p: any) => {
-      if (p.paymentStatus === 'pending') {
+      if (!p.paymentStatus || p.paymentStatus === 'pending') {
         remaining += Math.round((p.total || (p.amount || 0) * (p.quantity || 1)) * 100)
       }
     })
@@ -459,7 +459,7 @@ export default function UnpaidBookingsTab() {
     // Add pending danni (amounts are in EUR, convert to cents)
     const danni = booking.booking_details?.danni || []
     danni.forEach((d: any) => {
-      if (d.paymentStatus === 'pending') {
+      if (!d.paymentStatus || d.paymentStatus === 'pending') {
         remaining += Math.round((d.total || (d.amount || 0) * (d.quantity || 1)) * 100)
       }
     })
@@ -474,12 +474,12 @@ export default function UnpaidBookingsTab() {
 
   const getPendingPenalties = (booking: UnpaidBooking) => {
     const penalties = booking.booking_details?.penalties || []
-    return penalties.filter((p: any) => p.paymentStatus === 'pending')
+    return penalties.filter((p: any) => !p.paymentStatus || p.paymentStatus === 'pending')
   }
 
   const getPendingDanni = (booking: UnpaidBooking) => {
     const danni = booking.booking_details?.danni || []
-    return danni.filter((d: any) => d.paymentStatus === 'pending')
+    return danni.filter((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
   }
 
   const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
