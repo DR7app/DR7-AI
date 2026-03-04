@@ -36,6 +36,8 @@ interface PenaltyDannoItem {
   amount: number
   quantity: number
   total: number
+  amountPaid: number // amount already paid in EUR (default 0)
+  paymentStatus: 'pending' | 'partial' | 'paid'
   note: string
   date: string
   status: 'pending' | 'invoiced'
@@ -138,6 +140,11 @@ export default function GestioneDanniTab() {
           entries.forEach((entry: any, idx: number) => {
             const g = getOrCreate(b.customer_name || '', b.customer_email || '')
             const total = entry.total || (entry.amount || 0) * (entry.quantity || 1)
+            const amountPaid = entry.amountPaid || 0
+            const paymentStatus: 'pending' | 'partial' | 'paid' =
+              entry.paymentStatus === 'paid' ? 'paid' :
+              entry.paymentStatus === 'partial' ? 'partial' :
+              amountPaid > 0 && amountPaid < total ? 'partial' : 'pending'
             const item: PenaltyDannoItem = {
               bookingId: b.id,
               bookingLabel,
@@ -145,6 +152,8 @@ export default function GestioneDanniTab() {
               amount: entry.amount || total,
               quantity: entry.quantity || 1,
               total,
+              amountPaid,
+              paymentStatus,
               note: entry.note || '',
               date: entry.date || '',
               status: 'pending',
@@ -209,6 +218,8 @@ export default function GestioneDanniTab() {
             amount: fi.unit_price || total,
             quantity: fi.quantity || 1,
             total,
+            amountPaid: total, // invoiced = fully paid
+            paymentStatus: 'paid',
             note: '',
             date: '',
             status: 'invoiced',
@@ -409,6 +420,49 @@ export default function GestioneDanniTab() {
       if (updateErr) throw updateErr
 
       toast.success('Importo aggiornato')
+      setEditModal(null)
+      await loadData()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Modal: register a partial (or full) payment on a pending/partial item ──
+  async function handlePartialPayment(item: PenaltyDannoItem, paymentAmount: number) {
+    if (item.status !== 'pending') return
+    setSaving(true)
+    try {
+      const { data: booking, error: fetchErr } = await supabase
+        .from('bookings')
+        .select('booking_details')
+        .eq('id', item.bookingId)
+        .single()
+
+      if (fetchErr) throw fetchErr
+
+      const details = booking?.booking_details || {}
+      const arr: any[] = [...(details[item.arrayKey] || [])]
+      if (arr[item.arrayIndex]) {
+        const existing = arr[item.arrayIndex]
+        const newAmountPaid = (existing.amountPaid || 0) + paymentAmount
+        const total = existing.total || (existing.amount || 0) * (existing.quantity || 1)
+        arr[item.arrayIndex] = {
+          ...existing,
+          amountPaid: Math.min(newAmountPaid, total),
+          paymentStatus: newAmountPaid >= total ? 'paid' : 'partial',
+        }
+      }
+
+      const { error: updateErr } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...details, [item.arrayKey]: arr } })
+        .eq('id', item.bookingId)
+
+      if (updateErr) throw updateErr
+
+      toast.success('Pagamento registrato')
       setEditModal(null)
       await loadData()
     } catch (err: any) {
@@ -717,6 +771,7 @@ export default function GestioneDanniTab() {
                   accentColor={editModal.type === 'penali' ? 'orange' : 'red'}
                   onDelete={() => handleDeleteItem(item)}
                   onUpdateAmount={(val) => handleUpdateAmount(item, val)}
+                  onPartialPayment={(val) => handlePartialPayment(item, val)}
                   saving={saving}
                 />
               ))}
@@ -791,17 +846,23 @@ export default function GestioneDanniTab() {
 }
 
 // ── Item Row subcomponent ────────────────────────────────────────────────────
-function ItemRow({ item, accentColor, onDelete, onUpdateAmount, saving }: {
+function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment, saving }: {
   item: PenaltyDannoItem
   accentColor: 'orange' | 'red'
   onDelete: () => void
   onUpdateAmount: (val: number) => void
+  onPartialPayment: (val: number) => void
   saving: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(item.total.toString())
+  const [paying, setPaying] = useState(false)
+  const [payValue, setPayValue] = useState('')
 
   const isPending = item.status === 'pending'
+  const isPartial = item.paymentStatus === 'partial'
+  const canPay = isPending && (item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+  const remaining = item.total - item.amountPaid
   const accent = accentColor === 'orange' ? 'orange' : 'red'
 
   function handleSaveEdit() {
@@ -809,6 +870,14 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, saving }: {
     if (isNaN(val) || val <= 0) return
     onUpdateAmount(val)
     setEditing(false)
+  }
+
+  function handleSavePayment() {
+    const val = parseFloat(payValue)
+    if (isNaN(val) || val <= 0 || val > remaining + 0.005) return
+    onPartialPayment(val)
+    setPaying(false)
+    setPayValue('')
   }
 
   return (
@@ -822,20 +891,53 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, saving }: {
           {item.note && (
             <p className="text-[11px] text-theme-text-muted/70 italic mt-0.5">{item.note}</p>
           )}
-          <div className="flex items-center gap-2 mt-1">
-            {isPending ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 font-medium">Da saldare</span>
-            ) : (
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {item.paymentStatus === 'paid' || item.status === 'invoiced' ? (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium">
-                Fatturato{item.fatturaNumero ? ` — ${item.fatturaNumero}` : ''}
+                {item.status === 'invoiced'
+                  ? `Fatturato${item.fatturaNumero ? ` — ${item.fatturaNumero}` : ''}`
+                  : 'Pagato'}
               </span>
+            ) : isPartial ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium">
+                Parziale — {formatCurrency(item.amountPaid)}/{formatCurrency(item.total)}
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 font-medium">Da saldare</span>
             )}
             {item.date && <span className="text-[10px] text-theme-text-muted">{item.date}</span>}
           </div>
+          {isPartial && (
+            <p className="text-[11px] text-blue-400 mt-0.5">{formatCurrency(remaining)} rimanenti</p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {editing ? (
+          {paying ? (
+            <div className="flex items-center gap-1">
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-[12px]">&euro;</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={remaining}
+                  value={payValue}
+                  onChange={e => setPayValue(e.target.value)}
+                  placeholder={remaining.toFixed(2)}
+                  className={`w-20 pl-5 pr-1 py-1 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500/50`}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSavePayment(); if (e.key === 'Escape') { setPaying(false); setPayValue('') } }}
+                  autoFocus
+                />
+              </div>
+              <button onClick={handleSavePayment} disabled={saving || !payValue || parseFloat(payValue) <= 0} className="w-6 h-6 rounded-full bg-green-500/15 text-green-400 hover:bg-green-500/25 flex items-center justify-center disabled:opacity-30">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </button>
+              <button onClick={() => { setPaying(false); setPayValue('') }} className="w-6 h-6 rounded-full bg-white/10 text-theme-text-muted hover:bg-white/20 flex items-center justify-center">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          ) : editing ? (
             <div className="flex items-center gap-1">
               <div className="relative">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-[12px]">&euro;</span>
@@ -861,6 +963,18 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, saving }: {
               <span className={`font-semibold tabular-nums text-[14px] text-${accent}-400`}>
                 {formatCurrency(item.total)}
               </span>
+              {canPay && (
+                <button
+                  onClick={() => { setPayValue(''); setPaying(true) }}
+                  disabled={saving}
+                  className="w-6 h-6 rounded-full bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 flex items-center justify-center transition-all disabled:opacity-30"
+                  title="Registra pagamento"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                  </svg>
+                </button>
+              )}
               {isPending && (
                 <button
                   onClick={() => { setEditValue(item.total.toString()); setEditing(true) }}

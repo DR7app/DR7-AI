@@ -82,14 +82,14 @@ export default function UnpaidBookingsTab() {
         const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
         if (hasPendingExtension) return true
 
-        // Check pending penalties (treat missing paymentStatus as pending)
+        // Check pending/partial penalties (treat missing paymentStatus as pending)
         const penalties = booking.booking_details?.penalties || []
-        const hasPendingPenalty = penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending')
+        const hasPendingPenalty = penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
         if (hasPendingPenalty) return true
 
-        // Check pending danni (treat missing paymentStatus as pending)
+        // Check pending/partial danni (treat missing paymentStatus as pending)
         const danni = booking.booking_details?.danni || []
-        const hasPendingDanno = danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
+        const hasPendingDanno = danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
         if (hasPendingDanno) return true
 
         return false
@@ -146,14 +146,14 @@ export default function UnpaidBookingsTab() {
   function hasPendingPenaltyDanni(booking: UnpaidBooking): boolean {
     const penalties = booking.booking_details?.penalties || []
     const danni = booking.booking_details?.danni || []
-    return penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending') || danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
+    return penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') || danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
   }
 
   async function removePendingPenaltiesDanni(booking: UnpaidBooking) {
     try {
       const details = booking.booking_details || {}
-      const penalties = (details.penalties || []).filter((p: any) => p.paymentStatus && p.paymentStatus !== 'pending')
-      const danni = (details.danni || []).filter((d: any) => d.paymentStatus && d.paymentStatus !== 'pending')
+      const penalties = (details.penalties || []).filter((p: any) => p.paymentStatus && p.paymentStatus !== 'pending' && p.paymentStatus !== 'partial')
+      const danni = (details.danni || []).filter((d: any) => d.paymentStatus && d.paymentStatus !== 'pending' && d.paymentStatus !== 'partial')
 
       const { error } = await supabase
         .from('bookings')
@@ -179,49 +179,75 @@ export default function UnpaidBookingsTab() {
   async function markPenaltiesDanniPaid(booking: UnpaidBooking) {
     try {
       const details = booking.booking_details || {}
-      const pendingPenalties = (details.penalties || []).filter((p: any) => !p.paymentStatus || p.paymentStatus === 'pending')
-      const pendingDanni = (details.danni || []).filter((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
+      const pendingPenalties = (details.penalties || []).filter((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
+      const pendingDanni = (details.danni || []).filter((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
 
-      // Generate fattura for pending penalties
+      // Generate fattura for pending/partial penalties (use remaining amount)
       if (pendingPenalties.length > 0) {
-        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            customerId: booking.customer_id || booking.user_id,
-            items: pendingPenalties.map((p: any) => ({ label: p.label, amount: p.amount, quantity: p.quantity || 1 })),
-            paymentStatus: 'paid'
+        const items = pendingPenalties.map((p: any) => {
+          const total = p.total || (p.amount || 0) * (p.quantity || 1)
+          const remaining = total - (p.amountPaid || 0)
+          return { label: p.label, amount: remaining, quantity: 1 }
+        }).filter((i: any) => i.amount > 0)
+        if (items.length > 0) {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: booking.id,
+              customerId: booking.customer_id || booking.user_id,
+              items,
+              paymentStatus: 'paid'
+            })
           })
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.message || err.error || 'Errore generazione fattura penali')
+          if (!res.ok) {
+            const err = await res.json()
+            throw new Error(err.message || err.error || 'Errore generazione fattura penali')
+          }
         }
       }
 
-      // Generate fattura for pending danni
+      // Generate fattura for pending/partial danni (use remaining amount)
       if (pendingDanni.length > 0) {
-        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            customerId: booking.customer_id || booking.user_id,
-            items: pendingDanni.map((d: any) => ({ label: d.label, amount: d.amount, quantity: d.quantity || 1 })),
-            type: 'danni',
-            paymentStatus: 'paid'
+        const items = pendingDanni.map((d: any) => {
+          const total = d.total || (d.amount || 0) * (d.quantity || 1)
+          const remaining = total - (d.amountPaid || 0)
+          return { label: d.label, amount: remaining, quantity: 1 }
+        }).filter((i: any) => i.amount > 0)
+        if (items.length > 0) {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: booking.id,
+              customerId: booking.customer_id || booking.user_id,
+              items,
+              type: 'danni',
+              paymentStatus: 'paid'
+            })
           })
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.message || err.error || 'Errore generazione fattura danni')
+          if (!res.ok) {
+            const err = await res.json()
+            throw new Error(err.message || err.error || 'Errore generazione fattura danni')
+          }
         }
       }
 
-      // Remove pending entries from booking_details
-      const updatedPenalties = (details.penalties || []).filter((p: any) => p.paymentStatus && p.paymentStatus !== 'pending')
-      const updatedDanni = (details.danni || []).filter((d: any) => d.paymentStatus && d.paymentStatus !== 'pending')
+      // Mark all pending/partial entries as paid
+      const updatedPenalties = (details.penalties || []).map((p: any) => {
+        if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') {
+          const total = p.total || (p.amount || 0) * (p.quantity || 1)
+          return { ...p, paymentStatus: 'paid', amountPaid: total }
+        }
+        return p
+      })
+      const updatedDanni = (details.danni || []).map((d: any) => {
+        if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial') {
+          const total = d.total || (d.amount || 0) * (d.quantity || 1)
+          return { ...d, paymentStatus: 'paid', amountPaid: total }
+        }
+        return d
+      })
 
       await supabase
         .from('bookings')
@@ -448,19 +474,23 @@ export default function UnpaidBookingsTab() {
       })
     }
 
-    // Add pending penalties (amounts are in EUR, convert to cents)
+    // Add pending/partial penalties (amounts are in EUR, convert to cents; subtract amountPaid)
     const penalties = booking.booking_details?.penalties || []
     penalties.forEach((p: any) => {
-      if (!p.paymentStatus || p.paymentStatus === 'pending') {
-        remaining += Math.round((p.total || (p.amount || 0) * (p.quantity || 1)) * 100)
+      if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') {
+        const total = p.total || (p.amount || 0) * (p.quantity || 1)
+        const paid = p.amountPaid || 0
+        remaining += Math.round((total - paid) * 100)
       }
     })
 
-    // Add pending danni (amounts are in EUR, convert to cents)
+    // Add pending/partial danni (amounts are in EUR, convert to cents; subtract amountPaid)
     const danni = booking.booking_details?.danni || []
     danni.forEach((d: any) => {
-      if (!d.paymentStatus || d.paymentStatus === 'pending') {
-        remaining += Math.round((d.total || (d.amount || 0) * (d.quantity || 1)) * 100)
+      if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial') {
+        const total = d.total || (d.amount || 0) * (d.quantity || 1)
+        const paid = d.amountPaid || 0
+        remaining += Math.round((total - paid) * 100)
       }
     })
 
@@ -474,12 +504,12 @@ export default function UnpaidBookingsTab() {
 
   const getPendingPenalties = (booking: UnpaidBooking) => {
     const penalties = booking.booking_details?.penalties || []
-    return penalties.filter((p: any) => !p.paymentStatus || p.paymentStatus === 'pending')
+    return penalties.filter((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
   }
 
   const getPendingDanni = (booking: UnpaidBooking) => {
     const danni = booking.booking_details?.danni || []
-    return danni.filter((d: any) => !d.paymentStatus || d.paymentStatus === 'pending')
+    return danni.filter((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
   }
 
   const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
@@ -698,10 +728,14 @@ export default function UnpaidBookingsTab() {
                   </>
                 )}
                 {getPendingPenalties(booking).length > 0 && (
-                  <div className="text-xs text-yellow-400 font-medium mt-1">PENALE</div>
+                  <div className="text-xs text-yellow-400 font-medium mt-1">
+                    PENALE{getPendingPenalties(booking).some((p: any) => p.paymentStatus === 'partial') ? ' (parziale)' : ''}
+                  </div>
                 )}
                 {getPendingDanni(booking).length > 0 && (
-                  <div className="text-xs text-red-400 font-medium mt-1">DANNO</div>
+                  <div className="text-xs text-red-400 font-medium mt-1">
+                    DANNO{getPendingDanni(booking).some((d: any) => d.paymentStatus === 'partial') ? ' (parziale)' : ''}
+                  </div>
                 )}
               </div>
               <div className="text-right">

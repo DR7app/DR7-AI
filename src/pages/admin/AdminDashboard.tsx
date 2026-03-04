@@ -133,7 +133,7 @@ export default function AdminDashboard() {
     'cauzioni': 'Cauzioni',
     'contratto': 'Contratti',
     'cargos': 'Cargos',
-    'gestione-danni': 'Gestione Danni',
+    'gestione-danni': 'Gestione Danni & Penali & Penali',
     'gestione-multe': 'Gestione Multe',
     'carwash': 'Prenotazioni Prime Wash',
     'carwash-calendar': 'Calendario Prime Wash',
@@ -283,7 +283,7 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
               <button onClick={() => { setActiveTab('contratto'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'contratto')}>Contratti</button>
               <button onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cargos')}>Cargos</button>
-              <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Gestione Danni</button>
+              <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Gestione Danni & Penali</button>
               <button onClick={() => { setActiveTab('gestione-multe'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
 
               {/* PRIME WASH */}
@@ -375,7 +375,7 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('cauzioni')} className={dropdownItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
                   <button onClick={() => setActiveTab('contratto')} className={dropdownItemClass(activeTab === 'contratto')}>Contratti</button>
                   <button onClick={() => setActiveTab('cargos')} className={dropdownItemClass(activeTab === 'cargos')}>Cargos</button>
-                  <button onClick={() => setActiveTab('gestione-danni')} className={dropdownItemClass(activeTab === 'gestione-danni')}>Gestione Danni</button>
+                  <button onClick={() => setActiveTab('gestione-danni')} className={dropdownItemClass(activeTab === 'gestione-danni')}>Gestione Danni & Penali</button>
                   <button onClick={() => setActiveTab('gestione-multe')} className={dropdownItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
                 </div>
               </div>
