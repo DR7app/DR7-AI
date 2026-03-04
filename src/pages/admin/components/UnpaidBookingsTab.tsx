@@ -559,6 +559,33 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  async function deleteFatturaItem(fi: FatturaItem) {
+    try {
+      const { data: fattura, error: fetchErr } = await supabase
+        .from('fatture')
+        .select('id, items')
+        .eq('id', fi.fatturaId)
+        .single()
+
+      if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+      const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+      items.splice(fi.itemIndex, 1)
+
+      const { error: updateErr } = await supabase
+        .from('fatture')
+        .update({ items })
+        .eq('id', fi.fatturaId)
+
+      if (updateErr) throw updateErr
+      toast.success('Elemento fattura eliminato!')
+      setConfirmDeleteKey(null)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
   async function updateFatturaItemAmount(fi: FatturaItem, newAmountEur: number) {
     try {
       const { data: fattura, error: fetchErr } = await supabase
@@ -1229,6 +1256,12 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
+                    {confirmDeleteKey !== deleteKey && (
+                      <button
+                        onClick={() => setConfirmDeleteKey(deleteKey)}
+                        className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                      >x</button>
+                    )}
                   </>
                 )}
               </div>
@@ -1261,15 +1294,25 @@ export default function UnpaidBookingsTab() {
                   />
                 </>
               ) : (
-                <EditAmountInput
-                  itemKey={editKey}
-                  currentAmount={item.amount}
-                  onSubmit={(v) => {
-                    const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
-                    if (fi) updateFatturaItemAmount(fi, v)
-                  }}
-                  onCancel={() => setEditAmountKey(null)}
-                />
+                <>
+                  <EditAmountInput
+                    itemKey={editKey}
+                    currentAmount={item.amount}
+                    onSubmit={(v) => {
+                      const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                      if (fi) updateFatturaItemAmount(fi, v)
+                    }}
+                    onCancel={() => setEditAmountKey(null)}
+                  />
+                  <ConfirmDelete
+                    itemKey={deleteKey}
+                    onConfirm={() => {
+                      const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                      if (fi) deleteFatturaItem(fi)
+                    }}
+                    onCancel={() => setConfirmDeleteKey(null)}
+                  />
+                </>
               )}
             </div>
           )
