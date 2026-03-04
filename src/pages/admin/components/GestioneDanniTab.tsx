@@ -338,33 +338,38 @@ export default function GestioneDanniTab() {
           .eq('id', item.bookingId)
 
         if (updateErr) throw updateErr
-      } else if (item.status === 'invoiced' && item.bookingId) {
-        // Remove from booking_details array by matching label/amount
-        const { data: booking, error: fetchErr } = await supabase
-          .from('bookings')
-          .select('booking_details')
-          .eq('id', item.bookingId)
+      } else if (item.status === 'invoiced' && item.fatturaNumero) {
+        // Remove this line item from the fattura's items array (fattura stays, just fewer items)
+        const { data: fattura, error: fetchErr } = await supabase
+          .from('fatture')
+          .select('id, items, importo_totale')
+          .eq('numero_fattura', item.fatturaNumero)
           .single()
 
-        if (fetchErr) throw fetchErr
+        if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
-        const details = booking?.booking_details || {}
-        const arr: any[] = [...(details[item.arrayKey] || [])]
-        // Find matching entry by label and amount
-        const matchIdx = arr.findIndex((e: any) => {
-          const entryLabel = e.label || e.description || ''
-          const entryAmount = e.total || e.amount || 0
-          return entryLabel === item.label && entryAmount === item.total
-        })
+        const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+        // Find matching line item by description
+        const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
+
         if (matchIdx >= 0) {
-          arr.splice(matchIdx, 1)
-          const { error: updateErr } = await supabase
-            .from('bookings')
-            .update({ booking_details: { ...details, [item.arrayKey]: arr } })
-            .eq('id', item.bookingId)
-          if (updateErr) throw updateErr
+          const removedTotal = fatturaItems[matchIdx].total || (fatturaItems[matchIdx].unit_price || 0) * (fatturaItems[matchIdx].quantity || 1)
+          fatturaItems.splice(matchIdx, 1)
+
+          if (fatturaItems.length === 0) {
+            // No items left — delete the fattura
+            const { error: delErr } = await supabase.from('fatture').delete().eq('id', fattura.id)
+            if (delErr) throw delErr
+          } else {
+            // Update fattura with remaining items and adjusted total
+            const newTotal = Math.max(0, (fattura.importo_totale || 0) - removedTotal)
+            const { error: updateErr } = await supabase
+              .from('fatture')
+              .update({ items: fatturaItems, importo_totale: newTotal })
+              .eq('id', fattura.id)
+            if (updateErr) throw updateErr
+          }
         }
-        // Fattura is NOT touched
       }
 
       toast.success('Voce eliminata')
