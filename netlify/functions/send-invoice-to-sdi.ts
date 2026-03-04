@@ -32,7 +32,7 @@ export const handler: Handler = async (event) => {
         }
 
         // Skip if already sent/processing (prevent duplicate uploads to Aruba)
-        if (invoice.sdi_status === 'sending' || invoice.sdi_status === 'sent' || invoice.sdi_status === 'accepted') {
+        if (['sending', 'sent', 'accepted'].includes(invoice.sdi_status)) {
             return {
                 statusCode: 200,
                 body: JSON.stringify({
@@ -41,6 +41,31 @@ export const handler: Handler = async (event) => {
                     skipped: true
                 })
             }
+        }
+
+        // If rejected/scartata, assign a NEW invoice number before re-sending
+        // This prevents SDI error 00404 (fattura duplicata) when retrying
+        if (invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata') {
+            const currentYear = new Date().getFullYear()
+            const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+
+            if (seqError || seqResult == null) {
+                console.error('[SDI] Sequence error on retry:', seqError)
+                return {
+                    statusCode: 500,
+                    body: JSON.stringify({ error: 'Failed to generate new invoice number for retry', details: seqError?.message })
+                }
+            }
+
+            const newNumber = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+            console.log(`[SDI] Rejected invoice ${invoice.numero_fattura} → new number ${newNumber}`)
+
+            await supabase.from('fatture').update({
+                numero_fattura: newNumber,
+                sdi_status: 'draft'
+            }).eq('id', invoiceId)
+
+            invoice.numero_fattura = newNumber
         }
 
         // 1. Generate XML

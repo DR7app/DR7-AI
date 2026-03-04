@@ -169,30 +169,16 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Get next invoice number
-        const { data: lastInvoice } = await supabase
-            .from('fatture')
-            .select('numero_fattura')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-
-        let nextNumber = 1
+        // Atomic invoice numbering via DB sequence (prevents race-condition duplicates)
         const currentYear = new Date().getFullYear()
+        const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
 
-        if (lastInvoice?.numero_fattura) {
-            const legacyMatch = lastInvoice.numero_fattura.match(/^(\d+)\//)
-            const newMatch = lastInvoice.numero_fattura.match(/DR7-\d+-(\d+)/)
-
-            if (newMatch) {
-                nextNumber = parseInt(newMatch[1], 10) + 1
-            } else if (legacyMatch) {
-                nextNumber = parseInt(legacyMatch[1], 10) + 1
-            }
+        if (seqError || seqResult == null) {
+            console.error('[Penalty Invoice] Sequence error:', seqError)
+            throw new Error('Failed to generate invoice number: ' + (seqError?.message || 'sequence returned null'))
         }
 
-        const padded = String(nextNumber).padStart(4, '0')
-        const invoiceNumber = `DR7-${currentYear}-${padded}`
+        const invoiceNumber = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
 
         // Create invoice items from cart
         // IMPORTANT: Amount is NET (without IVA), VAT rate is 0

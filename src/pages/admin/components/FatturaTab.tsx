@@ -22,7 +22,7 @@ interface Invoice {
   created_at: string
   updated_at?: string
   // SDI fields
-  sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'error'
+  sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'scartata' | 'error'
   sdi_id?: string
   sdi_sent_at?: string
   sdi_response?: any
@@ -298,8 +298,9 @@ export default function FatturaTab() {
                           invoice.sdi_status === 'sent' ? 'Inviata SDI' :
                             invoice.sdi_status === 'sending' ? 'Invio...' :
                               invoice.sdi_status === 'rejected' ? 'Rifiutata' :
-                                invoice.sdi_status === 'error' ? 'Errore SDI' :
-                                  'Bozza'}
+                                invoice.sdi_status === 'scartata' ? 'Scartata' :
+                                  invoice.sdi_status === 'error' ? 'Errore SDI' :
+                                    'Bozza'}
                       </span>
                     )}
                   </div>
@@ -331,12 +332,12 @@ export default function FatturaTab() {
                   >
                     PDF
                   </button>
-                  {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error') ? (
+                  {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error' || invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata') ? (
                     <button
                       onClick={() => handleSendToSDI(invoice)}
-                      className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      className={`${invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'} text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1`}
                     >
-                      Invia SDI
+                      {invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata' ? 'Reinvia SDI' : 'Invia SDI'}
                     </button>
                   ) : (
                     <button
