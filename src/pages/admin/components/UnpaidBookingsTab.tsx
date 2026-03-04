@@ -49,6 +49,8 @@ export default function UnpaidBookingsTab() {
   const [filterService, setFilterService] = useState<'all' | 'rental' | 'car_wash' | 'mechanical_service'>('all')
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [selectedBookings, setSelectedBookings] = useState<Set<string>>(new Set())
+  const [partialPayBookingId, setPartialPayBookingId] = useState<string | null>(null)
+  const [partialPayValue, setPartialPayValue] = useState('')
 
   useEffect(() => {
     loadUnpaidBookings()
@@ -596,6 +598,32 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  // ── Partial payment at booking level — applies to first pending item ────────
+  async function handleBookingPartialPayment(booking: UnpaidBooking, paymentAmount: number) {
+    // Try booking_details items first
+    const details = booking.booking_details || {}
+    for (const arrayKey of ['penalties', 'danni'] as const) {
+      const arr: any[] = details[arrayKey] || []
+      for (let i = 0; i < arr.length; i++) {
+        const entry = arr[i]
+        if (entry.paymentStatus === 'paid') continue
+        if (entry.paymentStatus && entry.paymentStatus !== 'pending' && entry.paymentStatus !== 'partial') continue
+        // Found a pending/partial item — apply payment
+        await handleItemPartialPayment(booking, arrayKey, i, paymentAmount)
+        return
+      }
+    }
+
+    // Try fattura items
+    const fItems = fatturaItemsMap[booking.id] || []
+    if (fItems.length > 0) {
+      await handleFatturaItemPayment(fItems[0], paymentAmount)
+      return
+    }
+
+    toast.error('Nessuna voce da pagare')
+  }
+
   // ── Partial payment on a fattura danni/penali item ──────────────────────────
   async function handleFatturaItemPayment(fi: FatturaItem, paymentAmount: number) {
     try {
@@ -900,7 +928,6 @@ export default function UnpaidBookingsTab() {
                       isPartial={p.paymentStatus === 'partial'}
                       color="yellow"
                       tag="PENALE"
-                      onPay={(amount) => handleItemPartialPayment(booking, 'penalties', realIdx, amount)}
                     />
                   )
                 })}
@@ -919,7 +946,6 @@ export default function UnpaidBookingsTab() {
                       isPartial={d.paymentStatus === 'partial'}
                       color="red"
                       tag="DANNO"
-                      onPay={(amount) => handleItemPartialPayment(booking, 'danni', realIdx, amount)}
                     />
                   )
                 })}
@@ -933,7 +959,6 @@ export default function UnpaidBookingsTab() {
                     isPartial={fi.paymentStatus === 'partial'}
                     color={fi.type === 'danni' ? 'red' : 'yellow'}
                     tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'}
-                    onPay={(amount) => handleFatturaItemPayment(fi, amount)}
                   />
                 ))}
               </div>
@@ -955,6 +980,51 @@ export default function UnpaidBookingsTab() {
                 >
                   Segna Pagato
                 </button>
+              )}
+              {hasPendingPenaltyDanni(booking) && partialPayBookingId !== booking.id && (
+                <button
+                  onClick={() => { setPartialPayBookingId(booking.id); setPartialPayValue('') }}
+                  className="px-3 py-2 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                >
+                  Parzialmente
+                </button>
+              )}
+              {partialPayBookingId === booking.id && (
+                <div className="flex items-center gap-1.5 flex-1">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={partialPayValue}
+                      onChange={e => setPartialPayValue(e.target.value)}
+                      placeholder="Importo"
+                      className="w-full pl-6 pr-2 py-2 min-h-[44px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          const val = parseFloat(partialPayValue)
+                          if (!isNaN(val) && val > 0) { handleBookingPartialPayment(booking, val); setPartialPayBookingId(null) }
+                        }
+                        if (e.key === 'Escape') setPartialPayBookingId(null)
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    onClick={() => { const val = parseFloat(partialPayValue); if (!isNaN(val) && val > 0) { handleBookingPartialPayment(booking, val); setPartialPayBookingId(null) } }}
+                    disabled={!partialPayValue || parseFloat(partialPayValue) <= 0}
+                    className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors disabled:opacity-30"
+                  >
+                    OK
+                  </button>
+                  <button
+                    onClick={() => setPartialPayBookingId(null)}
+                    className="px-3 py-2 min-h-[44px] bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded-full text-xs font-semibold transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
               )}
               {getPendingExtensions(booking).length > 0 && (
                 <button
@@ -1090,8 +1160,7 @@ export default function UnpaidBookingsTab() {
                           isPartial={p.paymentStatus === 'partial'}
                           color="yellow"
                           tag="PENALE"
-                          onPay={(amount) => handleItemPartialPayment(booking, 'penalties', realIdx, amount)}
-                        />
+                            />
                       )
                     })}
                     {getPendingDanni(booking).map((d: any, idx: number) => {
@@ -1109,8 +1178,7 @@ export default function UnpaidBookingsTab() {
                           isPartial={d.paymentStatus === 'partial'}
                           color="red"
                           tag="DANNO"
-                          onPay={(amount) => handleItemPartialPayment(booking, 'danni', realIdx, amount)}
-                        />
+                            />
                       )
                     })}
                     {(fatturaItemsMap[booking.id] || []).map((fi, idx) => (
@@ -1123,8 +1191,7 @@ export default function UnpaidBookingsTab() {
                         isPartial={fi.paymentStatus === 'partial'}
                         color={fi.type === 'danni' ? 'red' : 'yellow'}
                         tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'}
-                        onPay={(amount) => handleFatturaItemPayment(fi, amount)}
-                      />
+                          />
                     ))}
                   </td>
                   <td className="px-4 py-3 text-sm">
@@ -1149,6 +1216,51 @@ export default function UnpaidBookingsTab() {
                         >
                           Segna Pagato
                         </button>
+                      )}
+                      {hasPendingPenaltyDanni(booking) && partialPayBookingId !== booking.id && (
+                        <button
+                          onClick={() => { setPartialPayBookingId(booking.id); setPartialPayValue('') }}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                        >
+                          Parzialmente
+                        </button>
+                      )}
+                      {partialPayBookingId === booking.id && (
+                        <div className="flex items-center gap-1">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              value={partialPayValue}
+                              onChange={e => setPartialPayValue(e.target.value)}
+                              placeholder="Importo"
+                              className="w-24 pl-5 pr-1.5 py-1 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  const val = parseFloat(partialPayValue)
+                                  if (!isNaN(val) && val > 0) { handleBookingPartialPayment(booking, val); setPartialPayBookingId(null) }
+                                }
+                                if (e.key === 'Escape') setPartialPayBookingId(null)
+                              }}
+                              autoFocus
+                            />
+                          </div>
+                          <button
+                            onClick={() => { const val = parseFloat(partialPayValue); if (!isNaN(val) && val > 0) { handleBookingPartialPayment(booking, val); setPartialPayBookingId(null) } }}
+                            disabled={!partialPayValue || parseFloat(partialPayValue) <= 0}
+                            className="px-2 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors disabled:opacity-30"
+                          >
+                            OK
+                          </button>
+                          <button
+                            onClick={() => setPartialPayBookingId(null)}
+                            className="px-2 py-1 bg-theme-bg-tertiary hover:bg-theme-bg-secondary text-theme-text-muted rounded-full text-xs transition-colors"
+                          >
+                            ×
+                          </button>
+                        </div>
                       )}
                       {getPendingExtensions(booking).length > 0 && (
                         <button
@@ -1195,8 +1307,8 @@ export default function UnpaidBookingsTab() {
   )
 }
 
-// ── Inline danni/penali item with pay button ─────────────────────────────────
-function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, color, tag, onPay }: {
+// ── Info-only danni/penali item row ───────────────────────────────────────────
+function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, color, tag }: {
   label: string
   total: number
   amountPaid: number
@@ -1204,19 +1316,7 @@ function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, co
   isPartial: boolean
   color: 'yellow' | 'red'
   tag: string
-  onPay: (amount: number) => void
 }) {
-  const [paying, setPaying] = useState(false)
-  const [payValue, setPayValue] = useState('')
-
-  function handleConfirmPay() {
-    const val = parseFloat(payValue)
-    if (isNaN(val) || val <= 0 || val > remaining + 0.005) return
-    onPay(val)
-    setPaying(false)
-    setPayValue('')
-  }
-
   const colorClasses = color === 'yellow'
     ? { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/20' }
     : { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20' }
@@ -1235,51 +1335,9 @@ function DanniPenaliItemRow({ label, total, amountPaid, remaining, isPartial, co
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {paying ? (
-            <>
-              <div className="relative">
-                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[10px]">€</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={remaining}
-                  value={payValue}
-                  onChange={e => setPayValue(e.target.value)}
-                  placeholder={remaining.toFixed(2)}
-                  className="w-16 pl-4 pr-1 py-0.5 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                  onKeyDown={e => { if (e.key === 'Enter') handleConfirmPay(); if (e.key === 'Escape') { setPaying(false); setPayValue('') } }}
-                  autoFocus
-                />
-              </div>
-              <button onClick={handleConfirmPay} disabled={!payValue || parseFloat(payValue) <= 0} className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500/30 flex items-center justify-center disabled:opacity-30">
-                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              </button>
-              <button onClick={() => { setPaying(false); setPayValue('') }} className="w-5 h-5 rounded-full bg-white/10 text-theme-text-muted hover:bg-white/20 flex items-center justify-center">
-                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </>
-          ) : (
-            <>
-              <span className={`font-semibold text-[12px] tabular-nums ${colorClasses.text}`}>
-                €{remaining.toFixed(2)}
-              </span>
-              <button
-                onClick={() => { onPay(remaining); }}
-                className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-[10px] font-semibold transition-colors"
-              >
-                Segna Pagato
-              </button>
-              <button
-                onClick={() => setPaying(true)}
-                className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] font-semibold transition-colors"
-              >
-                Parzialmente
-              </button>
-            </>
-          )}
-        </div>
+        <span className={`font-semibold text-[12px] tabular-nums shrink-0 ${colorClasses.text}`}>
+          €{remaining.toFixed(2)}
+        </span>
       </div>
     </div>
   )
