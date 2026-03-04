@@ -512,6 +512,57 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  async function updateBookingAmount(bookingId: string, newAmountEur: number) {
+    try {
+      const newAmountCents = Math.round(newAmountEur * 100)
+      const { error } = await supabase
+        .from('bookings')
+        .update({ price_total: newAmountCents })
+        .eq('id', bookingId)
+
+      if (error) throw error
+      toast.success('Importo aggiornato!')
+      setEditAmountKey(null)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  async function updateFatturaItemAmount(fi: FatturaItem, newAmountEur: number) {
+    try {
+      const { data: fattura, error: fetchErr } = await supabase
+        .from('fatture')
+        .select('id, items')
+        .eq('id', fi.fatturaId)
+        .single()
+
+      if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+      const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+      if (items[fi.itemIndex]) {
+        items[fi.itemIndex] = {
+          ...items[fi.itemIndex],
+          total: newAmountEur,
+          unit_price: newAmountEur,
+          quantity: 1,
+        }
+      }
+
+      const { error: updateErr } = await supabase
+        .from('fatture')
+        .update({ items })
+        .eq('id', fi.fatturaId)
+
+      if (updateErr) throw updateErr
+      toast.success('Importo fattura aggiornato!')
+      setEditAmountKey(null)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
   // ── Helper functions (preserved) ───────────────────────────────────────────
 
   const getEffectiveType = (booking: UnpaidBooking): 'rental' | 'prime_wash' | 'other' => {
@@ -613,10 +664,18 @@ export default function UnpaidBookingsTab() {
 
       const effectiveType = getEffectiveType(booking)
 
-      if (effectiveType === 'rental') {
-        group.noleggioBookings.push(booking)
-      } else {
-        group.primeWashBookings.push(booking)
+      // Only show in Noleggio/PW column if the main booking payment is unpaid
+      // (or has unpaid extensions). If the booking is paid but has only unpaid
+      // danni/penali, it belongs ONLY in those columns.
+      const mainIsUnpaid = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending')
+
+      if (mainIsUnpaid || hasUnpaidExtensions) {
+        if (effectiveType === 'rental') {
+          group.noleggioBookings.push(booking)
+        } else {
+          group.primeWashBookings.push(booking)
+        }
       }
 
       // Collect pending penalties from booking_details
@@ -710,22 +769,32 @@ export default function UnpaidBookingsTab() {
 
   const totalUnpaid = customerGroups.reduce((sum, g) => sum + g.totalRemaining, 0)
   const allGroups = useMemo(() => {
-    // Stats computed on unfiltered bookings
-    const gMap = new Map<string, { rental: boolean; pw: boolean }>()
+    // Stats computed on unfiltered bookings (respecting column assignment logic)
+    const gMap = new Map<string, { rental: boolean; pw: boolean; penali: boolean; danni: boolean }>()
     for (const b of bookings) {
       const key = (b.customer_name || '').toLowerCase().trim()
-      if (!gMap.has(key)) gMap.set(key, { rental: false, pw: false })
+      if (!gMap.has(key)) gMap.set(key, { rental: false, pw: false, penali: false, danni: false })
       const g = gMap.get(key)!
-      if (getEffectiveType(b) === 'rental') g.rental = true
-      else g.pw = true
+      const mainUnpaid = b.payment_status === 'pending' || b.payment_status === 'unpaid'
+      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending')
+      if (mainUnpaid || hasUnpaidExt) {
+        if (getEffectiveType(b) === 'rental') g.rental = true
+        else g.pw = true
+      }
+      const hasPen = (b.booking_details?.penalties || []).some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
+      const hasDan = (b.booking_details?.danni || []).some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
+      if (hasPen || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'penalties')) g.penali = true
+      if (hasDan || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'danni')) g.danni = true
     }
     const vals = Array.from(gMap.values())
     return {
       total: gMap.size,
       rental: vals.filter(v => v.rental).length,
       pw: vals.filter(v => v.pw).length,
+      penali: vals.filter(v => v.penali).length,
+      danni: vals.filter(v => v.danni).length,
     }
-  }, [bookings])
+  }, [bookings, fatturaItemsMap])
 
   // ── Mobile accordion toggle ────────────────────────────────────────────────
 
@@ -816,7 +885,7 @@ export default function UnpaidBookingsTab() {
   // ── Render: Noleggio cell content ──────────────────────────────────────────
 
   function NoleggioCell({ group }: { group: CustomerGroup }) {
-    if (group.noleggioBookings.length === 0) return <span className="text-theme-text-muted text-xs">-</span>
+    if (group.noleggioBookings.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     return (
       <div className="space-y-3">
@@ -826,29 +895,32 @@ export default function UnpaidBookingsTab() {
           const pickupDate = booking.pickup_date || booking.booking_details?.pickup_date
           const dropoffDate = booking.dropoff_date || booking.booking_details?.dropoff_date
           const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
-          const remaining = getRemainingAmount(booking)
           const pendingExts = getPendingExtensions(booking)
           const bkKey = `noleggio:${booking.id}`
+          const editKey = `edit:noleggio:${booking.id}`
+          const totalCents = booking.price_total || 0
+          const paidCents = booking.booking_details?.amountPaid || 0
+          const remainingCents = Math.max(0, totalCents - paidCents)
 
           return (
-            <div key={booking.id} className="border border-theme-border/50 rounded-lg p-2">
+            <div key={booking.id} className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-2.5">
               <div className="text-sm font-semibold text-theme-text-primary">{vehicle}</div>
               {plate && <div className="text-xs text-theme-text-muted font-mono">{plate}</div>}
               <div className="text-xs text-theme-text-muted">
                 {pickupDate && new Date(pickupDate).toLocaleDateString('it-IT')} - {dropoffDate && new Date(dropoffDate).toLocaleDateString('it-IT')}
               </div>
               <div className="text-red-400 font-bold text-sm mt-1">
-                €{(remaining / 100).toFixed(2)}
-                {booking.booking_details?.amountPaid > 0 && (
+                €{(remainingCents / 100).toFixed(2)}
+                {paidCents > 0 && (
                   <span className="text-xs text-theme-text-muted font-normal ml-1">
-                    su €{(booking.price_total / 100).toFixed(2)}
+                    su €{(totalCents / 100).toFixed(2)}
                   </span>
                 )}
               </div>
 
               {/* Pending extensions */}
               {pendingExts.length > 0 && (
-                <div className="mt-1 space-y-0.5">
+                <div className="mt-1.5 space-y-0.5">
                   {pendingExts.map((ext: any, i: number) => (
                     <div key={i} className="text-xs text-purple-400 bg-purple-500/10 rounded px-1.5 py-0.5">
                       Estensione +{ext.additional_days || '?'}gg €{(ext.additional_amount || 0).toFixed(2)}
@@ -858,29 +930,35 @@ export default function UnpaidBookingsTab() {
               )}
 
               {/* Action buttons */}
-              <div className="flex gap-1 flex-wrap mt-2">
+              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-blue-500/10">
                 {isPending && (
                   <button
                     onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                    className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                   >Pagato</button>
                 )}
                 {isPending && partialPayItemKey !== bkKey && (
                   <button
                     onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
-                    className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                   >Parziale</button>
+                )}
+                {editAmountKey !== editKey && (
+                  <button
+                    onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
+                    className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                  >Modifica</button>
                 )}
                 {pendingExts.length > 0 && (
                   <button
                     onClick={() => markExtensionsPaid(booking)}
-                    className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
                   >Ext. Pagate</button>
                 )}
                 {confirmDeleteKey !== bkKey && (
                   <button
                     onClick={() => setConfirmDeleteKey(bkKey)}
-                    className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
                   >x</button>
                 )}
               </div>
@@ -888,6 +966,12 @@ export default function UnpaidBookingsTab() {
                 itemKey={bkKey}
                 onSubmit={(v) => { handleBookingPartialPayment(booking.id, v) }}
                 onCancel={() => setPartialPayItemKey(null)}
+              />
+              <EditAmountInput
+                itemKey={editKey}
+                currentAmount={totalCents / 100}
+                onSubmit={(v) => updateBookingAmount(booking.id, v)}
+                onCancel={() => setEditAmountKey(null)}
               />
               <ConfirmDelete
                 itemKey={bkKey}
@@ -904,35 +988,68 @@ export default function UnpaidBookingsTab() {
   // ── Render: Prime Wash cell content ────────────────────────────────────────
 
   function PrimeWashCell({ group }: { group: CustomerGroup }) {
-    if (group.primeWashBookings.length === 0) return <span className="text-theme-text-muted text-xs">-</span>
+    if (group.primeWashBookings.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     return (
       <div className="space-y-3">
         {group.primeWashBookings.map(booking => {
           const serviceName = booking.service_name || '-'
-          const remaining = getRemainingAmount(booking)
           const bkKey = `pw:${booking.id}`
+          const editKey = `edit:pw:${booking.id}`
+          const totalCents = booking.price_total || 0
+          const paidCents = booking.booking_details?.amountPaid || 0
+          const remainingCents = Math.max(0, totalCents - paidCents)
 
           return (
-            <div key={booking.id} className="border border-theme-border/50 rounded-lg p-2">
+            <div key={booking.id} className="bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2.5">
               <div className="text-sm font-semibold text-theme-text-primary uppercase">{serviceName}</div>
               <div className="text-xs text-theme-text-muted">
                 {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time || ''}
               </div>
-              <div className="text-red-400 font-bold text-sm mt-1">€{(remaining / 100).toFixed(2)}</div>
+              <div className="text-red-400 font-bold text-sm mt-1">
+                €{(remainingCents / 100).toFixed(2)}
+                {paidCents > 0 && (
+                  <span className="text-xs text-theme-text-muted font-normal ml-1">
+                    su €{(totalCents / 100).toFixed(2)}
+                  </span>
+                )}
+              </div>
 
-              <div className="flex gap-1 flex-wrap mt-2">
+              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-cyan-500/10">
                 <button
                   onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                  className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                 >Pagato</button>
+                {partialPayItemKey !== bkKey && (
+                  <button
+                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                  >Parziale</button>
+                )}
+                {editAmountKey !== editKey && (
+                  <button
+                    onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
+                    className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                  >Modifica</button>
+                )}
                 {confirmDeleteKey !== bkKey && (
                   <button
                     onClick={() => setConfirmDeleteKey(bkKey)}
-                    className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
                   >x</button>
                 )}
               </div>
+              <PartialPayInput
+                itemKey={bkKey}
+                onSubmit={(v) => { handleBookingPartialPayment(booking.id, v) }}
+                onCancel={() => setPartialPayItemKey(null)}
+              />
+              <EditAmountInput
+                itemKey={editKey}
+                currentAmount={totalCents / 100}
+                onSubmit={(v) => updateBookingAmount(booking.id, v)}
+                onCancel={() => setEditAmountKey(null)}
+              />
               <ConfirmDelete
                 itemKey={bkKey}
                 onConfirm={() => deleteSingleBooking(booking.id)}
@@ -948,18 +1065,11 @@ export default function UnpaidBookingsTab() {
   // ── Render: Penali/Danni cell content (shared) ─────────────────────────────
 
   function PendingItemsCell({ items, type }: { items: PendingItem[]; type: 'penalties' | 'danni' }) {
-    if (items.length === 0) return <span className="text-theme-text-muted text-xs">-</span>
+    if (items.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     const colorClasses = type === 'penalties'
-      ? { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400' }
-      : { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400' }
-
-    // Group items by bookingId for grouped payment actions
-    const byBooking = new Map<string, PendingItem[]>()
-    for (const item of items) {
-      if (!byBooking.has(item.bookingId)) byBooking.set(item.bookingId, [])
-      byBooking.get(item.bookingId)!.push(item)
-    }
+      ? { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400', divider: 'border-yellow-500/10' }
+      : { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', divider: 'border-red-500/10' }
 
     return (
       <div className="space-y-2">
@@ -970,7 +1080,7 @@ export default function UnpaidBookingsTab() {
           const deleteKey = `delete:${itemKey}`
 
           return (
-            <div key={idx} className={`${colorClasses.bg} border ${colorClasses.border} rounded-lg p-2`}>
+            <div key={idx} className={`${colorClasses.bg} border ${colorClasses.border} rounded-lg p-2.5`}>
               <div className="text-xs text-theme-text-primary font-medium">{item.label}</div>
               <div className={`font-bold text-sm ${colorClasses.text}`}>€{item.remaining.toFixed(2)}</div>
               {item.paymentStatus === 'partial' && (
@@ -979,29 +1089,29 @@ export default function UnpaidBookingsTab() {
                 </div>
               )}
 
-              <div className="flex gap-1 flex-wrap mt-1.5">
+              <div className={`flex gap-1 flex-wrap mt-2 pt-2 border-t ${colorClasses.divider}`}>
                 {item.source === 'booking_details' ? (
                   <>
                     <button
                       onClick={() => markAllTypePaid(item.booking, type)}
-                      className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                     >Pagato</button>
                     {partialPayItemKey !== partialKey && (
                       <button
                         onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
-                        className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
                     )}
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
-                        className="px-2 py-0.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
                     {confirmDeleteKey !== deleteKey && (
                       <button
                         onClick={() => setConfirmDeleteKey(deleteKey)}
-                        className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
                       >x</button>
                     )}
                   </>
@@ -1012,13 +1122,19 @@ export default function UnpaidBookingsTab() {
                         const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
                         if (fi) markSingleFatturaItemPaid(fi)
                       }}
-                      className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                     >Pagato</button>
                     {partialPayItemKey !== partialKey && (
                       <button
                         onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
-                        className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
+                    )}
+                    {editAmountKey !== editKey && (
+                      <button
+                        onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
+                        className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                      >Modifica</button>
                     )}
                   </>
                 )}
@@ -1037,7 +1153,7 @@ export default function UnpaidBookingsTab() {
                 }}
                 onCancel={() => setPartialPayItemKey(null)}
               />
-              {item.source === 'booking_details' && (
+              {item.source === 'booking_details' ? (
                 <>
                   <EditAmountInput
                     itemKey={editKey}
@@ -1051,6 +1167,16 @@ export default function UnpaidBookingsTab() {
                     onCancel={() => setConfirmDeleteKey(null)}
                   />
                 </>
+              ) : (
+                <EditAmountInput
+                  itemKey={editKey}
+                  currentAmount={item.amount}
+                  onSubmit={(v) => {
+                    const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                    if (fi) updateFatturaItemAmount(fi, v)
+                  }}
+                  onCancel={() => setEditAmountKey(null)}
+                />
               )}
             </div>
           )
@@ -1083,24 +1209,30 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Totale Da Saldare</div>
-          <div className="text-xl lg:text-2xl font-bold text-red-400">
-            €{(totalUnpaid / 100).toFixed(2)}
-          </div>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 lg:gap-3">
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-theme-border">
+          <div className="text-xs text-theme-text-muted">Totale</div>
+          <div className="text-lg lg:text-xl font-bold text-red-400">€{(totalUnpaid / 100).toFixed(2)}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Clienti</div>
-          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">{allGroups.total}</div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-theme-border">
+          <div className="text-xs text-theme-text-muted">Clienti</div>
+          <div className="text-lg lg:text-xl font-bold text-theme-text-primary">{allGroups.total}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Noleggio</div>
-          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">{allGroups.rental}</div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-blue-500/30">
+          <div className="text-xs text-blue-400">Noleggio</div>
+          <div className="text-lg lg:text-xl font-bold text-blue-400">{allGroups.rental}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Prime Wash</div>
-          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">{allGroups.pw}</div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-cyan-500/30">
+          <div className="text-xs text-cyan-400">Prime Wash</div>
+          <div className="text-lg lg:text-xl font-bold text-cyan-400">{allGroups.pw}</div>
+        </div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-yellow-500/30">
+          <div className="text-xs text-yellow-400">Penali</div>
+          <div className="text-lg lg:text-xl font-bold text-yellow-400">{allGroups.penali}</div>
+        </div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-red-500/30">
+          <div className="text-xs text-red-400">Danni</div>
+          <div className="text-lg lg:text-xl font-bold text-red-400">{allGroups.danni}</div>
         </div>
       </div>
 
@@ -1228,21 +1360,21 @@ export default function UnpaidBookingsTab() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-theme-border">
+              <tr className="border-b-2 border-theme-border">
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-[18%]">Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-[24%]">Noleggio</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-[18%]">Prime Wash</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-[20%]">Penali</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-[20%]">Danni</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-blue-400 w-[24%] border-l border-theme-border">Noleggio</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cyan-400 w-[18%] border-l border-theme-border">Prime Wash</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-yellow-400 w-[20%] border-l border-theme-border">Penali</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-red-400 w-[20%] border-l border-theme-border">Danni</th>
               </tr>
             </thead>
             <tbody>
               {customerGroups.map(group => (
-                <tr key={group.customerKey} className="border-t border-theme-border hover:bg-theme-bg-tertiary/50 align-top">
+                <tr key={group.customerKey} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 align-top">
                   {/* Cliente column */}
                   <td className="px-4 py-3">
                     <div className="text-sm font-bold text-theme-text-primary">{group.customerName}</div>
-                    {group.customerEmail && <div className="text-xs text-theme-text-muted mt-0.5">{group.customerEmail}</div>}
+                    {group.customerEmail && <div className="text-xs text-theme-text-muted mt-0.5 truncate max-w-[180px]">{group.customerEmail}</div>}
                     {group.customerPhone && <div className="text-xs text-theme-text-muted">{group.customerPhone}</div>}
                     <div className="text-red-400 font-bold text-lg mt-2">
                       €{(group.totalRemaining / 100).toFixed(2)}
@@ -1250,22 +1382,22 @@ export default function UnpaidBookingsTab() {
                   </td>
 
                   {/* Noleggio column */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 border-l border-theme-border">
                     <NoleggioCell group={group} />
                   </td>
 
                   {/* Prime Wash column */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 border-l border-theme-border">
                     <PrimeWashCell group={group} />
                   </td>
 
                   {/* Penali column */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 border-l border-theme-border">
                     <PendingItemsCell items={group.penaliItems} type="penalties" />
                   </td>
 
                   {/* Danni column */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 border-l border-theme-border">
                     <PendingItemsCell items={group.danniItems} type="danni" />
                   </td>
                 </tr>
