@@ -87,6 +87,8 @@ export default function UnpaidBookingsTab() {
   const [editAmountValue, setEditAmountValue] = useState('')
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set())
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     loadUnpaidBookings()
@@ -157,7 +159,7 @@ export default function UnpaidBookingsTab() {
         if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
 
         const extensions = booking.booking_details?.extension_history || []
-        if (extensions.some((ext: any) => ext.payment_status === 'pending')) return true
+        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')) return true
 
         const penalties = booking.booking_details?.penalties || []
         if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')) return true
@@ -261,24 +263,52 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function markExtensionsPaid(booking: UnpaidBooking) {
+  async function markSingleExtensionPaid(booking: UnpaidBooking, extIndex: number) {
     try {
-      const extensions = booking.booking_details?.extension_history || []
-      const updatedExtensions = extensions.map((ext: any) => ({
-        ...ext,
-        payment_status: ext.payment_status === 'pending' ? 'paid' : ext.payment_status
-      }))
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      if (extensions[extIndex]) {
+        extensions[extIndex] = { ...extensions[extIndex], payment_status: 'paid' }
+      }
 
       const { error } = await supabase
         .from('bookings')
-        .update({ booking_details: { ...booking.booking_details, extension_history: updatedExtensions } })
+        .update({ booking_details: { ...booking.booking_details, extension_history: extensions } })
         .eq('id', booking.id)
 
       if (error) throw error
-      toast.success('Estensioni segnate come pagate!')
+      toast.success('Estensione segnata come pagata!')
       loadUnpaidBookings()
     } catch (error: any) {
-      console.error('Failed to update extension payment status:', error)
+      toast.error('Errore: ' + (error.message || error))
+    }
+  }
+
+  async function handleExtensionPartialPayment(booking: UnpaidBooking, extIndex: number, paymentAmount: number) {
+    try {
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      const ext = extensions[extIndex]
+      if (!ext) return
+
+      const total = ext.additional_amount || 0
+      const currentPaid = ext.amount_paid || 0
+      const newPaid = Math.min(currentPaid + paymentAmount, total)
+
+      extensions[extIndex] = {
+        ...ext,
+        amount_paid: newPaid,
+        payment_status: newPaid >= total ? 'paid' : 'partial'
+      }
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...booking.booking_details, extension_history: extensions } })
+        .eq('id', booking.id)
+
+      if (error) throw error
+      toast.success('Pagamento parziale estensione registrato!')
+      setPartialPayItemKey(null)
+      loadUnpaidBookings()
+    } catch (error: any) {
       toast.error('Errore: ' + (error.message || error))
     }
   }
@@ -586,8 +616,10 @@ export default function UnpaidBookingsTab() {
     } else {
       const extensions = booking.booking_details?.extension_history || []
       extensions.forEach((ext: any) => {
-        if (ext.payment_status === 'pending' && ext.additional_amount) {
-          remaining += (ext.additional_amount * 100)
+        if ((ext.payment_status === 'pending' || ext.payment_status === 'partial') && ext.additional_amount) {
+          const extTotal = ext.additional_amount * 100
+          const extPaid = (ext.amount_paid || 0) * 100
+          remaining += Math.max(0, extTotal - extPaid)
         }
       })
     }
@@ -620,7 +652,9 @@ export default function UnpaidBookingsTab() {
 
   const getPendingExtensions = (booking: UnpaidBooking) => {
     const extensions = booking.booking_details?.extension_history || []
-    return extensions.filter((ext: any) => ext.payment_status === 'pending')
+    return extensions
+      .map((ext: any, idx: number) => ({ ext, idx }))
+      .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
   }
 
   const getPendingWithIndex = (booking: UnpaidBooking, arrayKey: 'penalties' | 'danni') => {
@@ -668,7 +702,7 @@ export default function UnpaidBookingsTab() {
       // (or has unpaid extensions). If the booking is paid but has only unpaid
       // danni/penali, it belongs ONLY in those columns.
       const mainIsUnpaid = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
-      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending')
+      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
 
       if (mainIsUnpaid || hasUnpaidExtensions) {
         if (effectiveType === 'rental') {
@@ -759,11 +793,18 @@ export default function UnpaidBookingsTab() {
       )
     }
 
-    // Sort by totalRemaining DESC
-    groups.sort((a, b) => b.totalRemaining - a.totalRemaining)
+    // Sort
+    groups.sort((a, b) => {
+      if (sortBy === 'amount') {
+        return sortDir === 'desc' ? b.totalRemaining - a.totalRemaining : a.totalRemaining - b.totalRemaining
+      }
+      // name
+      const cmp = a.customerName.localeCompare(b.customerName, 'it')
+      return sortDir === 'desc' ? -cmp : cmp
+    })
 
     return groups
-  }, [bookings, fatturaItemsMap, filterService, searchQuery])
+  }, [bookings, fatturaItemsMap, filterService, searchQuery, sortBy, sortDir])
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
@@ -776,7 +817,7 @@ export default function UnpaidBookingsTab() {
       if (!gMap.has(key)) gMap.set(key, { rental: false, pw: false, penali: false, danni: false })
       const g = gMap.get(key)!
       const mainUnpaid = b.payment_status === 'pending' || b.payment_status === 'unpaid'
-      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending')
+      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
       if (mainUnpaid || hasUnpaidExt) {
         if (getEffectiveType(b) === 'rental') g.rental = true
         else g.pw = true
@@ -797,6 +838,20 @@ export default function UnpaidBookingsTab() {
   }, [bookings, fatturaItemsMap])
 
   // ── Mobile accordion toggle ────────────────────────────────────────────────
+
+  function handleSort(col: 'amount' | 'name') {
+    if (sortBy === col) {
+      setSortDir(prev => prev === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortBy(col)
+      setSortDir(col === 'amount' ? 'desc' : 'asc')
+    }
+  }
+
+  function SortArrow({ col }: { col: 'amount' | 'name' }) {
+    if (sortBy !== col) return <span className="text-theme-text-muted/30 ml-1">↕</span>
+    return <span className="ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>
+  }
 
   function toggleExpanded(key: string) {
     setExpandedCustomers(prev => {
@@ -920,17 +975,53 @@ export default function UnpaidBookingsTab() {
 
               {/* Pending extensions */}
               {pendingExts.length > 0 && (
-                <div className="mt-1.5 space-y-0.5">
-                  {pendingExts.map((ext: any, i: number) => {
+                <div className="mt-1.5 space-y-1.5">
+                  {pendingExts.map(({ ext, idx: extIdx }: any) => {
                     let days = ext.additional_days
                     if (!days && ext.previous_dropoff && ext.new_dropoff) {
                       const prev = new Date(ext.previous_dropoff)
                       const next = new Date(ext.new_dropoff)
                       days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
                     }
+                    const extTotal = ext.additional_amount || 0
+                    const extPaid = ext.amount_paid || 0
+                    const extRemaining = extTotal - extPaid
+                    const extPartialKey = `ext:${booking.id}:${extIdx}`
                     return (
-                      <div key={i} className="text-xs text-purple-400 bg-purple-500/10 rounded px-1.5 py-0.5">
-                        Estensione +{days || '?'}gg €{(ext.additional_amount || 0).toFixed(2)}
+                      <div key={extIdx} className="bg-purple-500/10 border border-purple-500/20 rounded-lg px-2 py-1.5">
+                        <div className="text-xs text-purple-400 font-medium">
+                          Estensione +{days || '?'}gg
+                        </div>
+                        <div className="text-purple-400 font-bold text-sm">
+                          €{extRemaining.toFixed(2)}
+                          {extPaid > 0 && (
+                            <span className="text-xs text-theme-text-muted font-normal ml-1">
+                              su €{extTotal.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        {ext.payment_status === 'partial' && (
+                          <div className="text-[10px] text-blue-400">
+                            €{extPaid.toFixed(2)} pagati
+                          </div>
+                        )}
+                        <div className="flex gap-1 flex-wrap mt-1 pt-1 border-t border-purple-500/10">
+                          <button
+                            onClick={() => markSingleExtensionPaid(booking, extIdx)}
+                            className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                          >Pagato</button>
+                          {partialPayItemKey !== extPartialKey && (
+                            <button
+                              onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue('') }}
+                              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                            >Parziale</button>
+                          )}
+                        </div>
+                        <PartialPayInput
+                          itemKey={extPartialKey}
+                          onSubmit={(v) => handleExtensionPartialPayment(booking, extIdx, v)}
+                          onCancel={() => setPartialPayItemKey(null)}
+                        />
                       </div>
                     )
                   })}
@@ -956,12 +1047,6 @@ export default function UnpaidBookingsTab() {
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
                     className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
                   >Modifica</button>
-                )}
-                {pendingExts.length > 0 && (
-                  <button
-                    onClick={() => markExtensionsPaid(booking)}
-                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
-                  >Ext. Pagate</button>
                 )}
                 {confirmDeleteKey !== bkKey && (
                   <button
@@ -1280,6 +1365,17 @@ export default function UnpaidBookingsTab() {
 
       {/* ── Mobile Card View ─────────────────────────────────────────────── */}
       <div className="lg:hidden space-y-3">
+        {/* Mobile sort bar */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleSort('name')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sortBy === 'name' ? 'bg-dr7-gold text-theme-bg-primary' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}
+          >Nome {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</button>
+          <button
+            onClick={() => handleSort('amount')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sortBy === 'amount' ? 'bg-dr7-gold text-theme-bg-primary' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}
+          >Importo {sortBy === 'amount' && (sortDir === 'asc' ? '↑' : '↓')}</button>
+        </div>
         {customerGroups.map(group => {
           const isExpanded = expandedCustomers.has(group.customerKey)
           const hasNoleggio = group.noleggioBookings.length > 0
@@ -1369,7 +1465,17 @@ export default function UnpaidBookingsTab() {
           <table className="w-full">
             <thead>
               <tr className="border-b-2 border-theme-border">
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-[18%]">Cliente</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold w-[18%]">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleSort('name')} className="flex items-center text-theme-text-primary hover:text-dr7-gold transition-colors">
+                      Cliente<SortArrow col="name" />
+                    </button>
+                    <span className="text-theme-text-muted/40">|</span>
+                    <button onClick={() => handleSort('amount')} className="flex items-center text-red-400 hover:text-red-300 transition-colors text-xs">
+                      €<SortArrow col="amount" />
+                    </button>
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-blue-400 w-[24%] border-l border-theme-border">Noleggio</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-cyan-400 w-[18%] border-l border-theme-border">Prime Wash</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-yellow-400 w-[20%] border-l border-theme-border">Penali</th>
