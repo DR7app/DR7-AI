@@ -30,8 +30,21 @@ interface UnpaidBooking {
   created_at: string
 }
 
+interface FatturaItem {
+  fatturaId: string
+  fatturaNumero: string
+  bookingId: string
+  description: string
+  total: number
+  amountPaid: number
+  paymentStatus: string
+  type: 'penalties' | 'danni'
+  itemIndex: number
+}
+
 export default function UnpaidBookingsTab() {
   const [bookings, setBookings] = useState<UnpaidBooking[]>([])
+  const [fatturaItemsMap, setFatturaItemsMap] = useState<Record<string, FatturaItem[]>>({})
   const [loading, setLoading] = useState(true)
   const [filterService, setFilterService] = useState<'all' | 'rental' | 'car_wash' | 'mechanical_service'>('all')
   const [multiSelectMode, setMultiSelectMode] = useState(false)
@@ -57,40 +70,70 @@ export default function UnpaidBookingsTab() {
   async function loadUnpaidBookings() {
     setLoading(true)
     try {
-      // Load bookings with pending payment OR bookings with pending extension payments
+      // Load all bookings
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
         .neq('status', 'cancelled')
-        .neq('customer_name', 'Lavaggio Rientro')  // Exclude auto-generated car wash rientri
+        .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      // Filter to include:
-      // 1. Bookings with pending/unpaid payment_status
-      // 2. Bookings with extension_history containing pending payments
-      // 3. Bookings with pending penalties or danni in booking_details
+      // Also load fatture with danni/penali items that aren't fully paid
+      const { data: fatture } = await supabase
+        .from('fatture')
+        .select('id, booking_id, numero_fattura, items')
+
+      const fItemsMap: Record<string, FatturaItem[]> = {}
+      const bookingIdsWithFatturaItems = new Set<string>()
+
+      for (const f of (fatture || [])) {
+        if (!f.items || !Array.isArray(f.items) || !f.booking_id) continue
+        f.items.forEach((fi: any, idx: number) => {
+          if (!fi.description) return
+          const desc = (fi.description as string)
+          const isDanniPenali = desc.includes('Penale prenotazione') || desc.includes('Danno prenotazione')
+          if (!isDanniPenali) return
+          // Include if NOT explicitly paid
+          if (fi.paymentStatus === 'paid') return
+
+          const total = fi.total || (fi.unit_price || 0) * (fi.quantity || 1)
+          const type: 'penalties' | 'danni' = desc.includes('Danno prenotazione') ? 'danni' : 'penalties'
+          const item: FatturaItem = {
+            fatturaId: f.id,
+            fatturaNumero: f.numero_fattura || '',
+            bookingId: f.booking_id,
+            description: desc,
+            total,
+            amountPaid: fi.amountPaid || 0,
+            paymentStatus: fi.paymentStatus || 'pending',
+            type,
+            itemIndex: idx,
+          }
+          if (!fItemsMap[f.booking_id]) fItemsMap[f.booking_id] = []
+          fItemsMap[f.booking_id].push(item)
+          bookingIdsWithFatturaItems.add(f.booking_id)
+        })
+      }
+
+      setFatturaItemsMap(fItemsMap)
+
+      // Filter bookings
       const unpaidBookings = (data || []).filter(booking => {
-        // Check main payment status
-        if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
-          return true
-        }
+        if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
 
-        // Check extension payments
         const extensions = booking.booking_details?.extension_history || []
-        const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
-        if (hasPendingExtension) return true
+        if (extensions.some((ext: any) => ext.payment_status === 'pending')) return true
 
-        // Check pending/partial penalties (treat missing paymentStatus as pending)
         const penalties = booking.booking_details?.penalties || []
-        const hasPendingPenalty = penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
-        if (hasPendingPenalty) return true
+        if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')) return true
 
-        // Check pending/partial danni (treat missing paymentStatus as pending)
         const danni = booking.booking_details?.danni || []
-        const hasPendingDanno = danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
-        if (hasPendingDanno) return true
+        if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')) return true
+
+        // Include if booking has unpaid fattura danni/penali items
+        if (bookingIdsWithFatturaItems.has(booking.id)) return true
 
         return false
       })
@@ -146,7 +189,9 @@ export default function UnpaidBookingsTab() {
   function hasPendingPenaltyDanni(booking: UnpaidBooking): boolean {
     const penalties = booking.booking_details?.penalties || []
     const danni = booking.booking_details?.danni || []
-    return penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') || danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
+    const hasBD = penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') || danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
+    const hasFattura = (fatturaItemsMap[booking.id] || []).length > 0
+    return hasBD || hasFattura
   }
 
   async function removePendingPenaltiesDanni(booking: UnpaidBooking) {
@@ -494,6 +539,12 @@ export default function UnpaidBookingsTab() {
       }
     })
 
+    // Add unpaid fattura danni/penali items (amounts in EUR, convert to cents)
+    const fItems = fatturaItemsMap[booking.id] || []
+    fItems.forEach(fi => {
+      remaining += Math.round((fi.total - fi.amountPaid) * 100)
+    })
+
     return remaining
   }
 
@@ -545,15 +596,53 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  // ── Partial payment on a fattura danni/penali item ──────────────────────────
+  async function handleFatturaItemPayment(fi: FatturaItem, paymentAmount: number) {
+    try {
+      const { data: fattura, error: fetchErr } = await supabase
+        .from('fatture')
+        .select('id, items')
+        .eq('id', fi.fatturaId)
+        .single()
+
+      if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+      const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+      if (items[fi.itemIndex]) {
+        const existing = items[fi.itemIndex]
+        const total = existing.total || (existing.unit_price || 0) * (existing.quantity || 1)
+        const newAmountPaid = Math.min((existing.amountPaid || 0) + paymentAmount, total)
+        items[fi.itemIndex] = {
+          ...existing,
+          amountPaid: newAmountPaid,
+          paymentStatus: newAmountPaid >= total ? 'paid' : 'partial',
+        }
+      }
+
+      const { error: updateErr } = await supabase
+        .from('fatture')
+        .update({ items })
+        .eq('id', fi.fatturaId)
+
+      if (updateErr) throw updateErr
+
+      toast.success('Pagamento registrato')
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
   const getStatusBadge = (booking: UnpaidBooking): { label: string; className: string } => {
     const mainPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
-    const hasPartialDanniPenali = [...(booking.booking_details?.penalties || []), ...(booking.booking_details?.danni || [])]
-      .some((item: any) => item.paymentStatus === 'partial')
+    const bdItems = [...(booking.booking_details?.penalties || []), ...(booking.booking_details?.danni || [])]
+    const fItems = fatturaItemsMap[booking.id] || []
+    const hasPartial = bdItems.some((item: any) => item.paymentStatus === 'partial') || fItems.some(fi => fi.paymentStatus === 'partial')
 
     if (mainPending) {
       return { label: 'Da Saldare', className: 'bg-yellow-600 text-black' }
     }
-    if (hasPartialDanniPenali) {
+    if (hasPartial) {
       return { label: 'Parziale', className: 'bg-blue-600 text-white' }
     }
     if (hasPendingPenaltyDanni(booking)) {
@@ -793,8 +882,8 @@ export default function UnpaidBookingsTab() {
               </div>
             </div>
 
-            {/* Detailed danni/penali items */}
-            {(getPendingPenalties(booking).length > 0 || getPendingDanni(booking).length > 0) && (
+            {/* Detailed danni/penali items (from booking_details + fatture) */}
+            {(getPendingPenalties(booking).length > 0 || getPendingDanni(booking).length > 0 || (fatturaItemsMap[booking.id] || []).length > 0) && (
               <div className="space-y-1.5 mb-2">
                 {getPendingPenalties(booking).map((p: any, idx: number) => {
                   const pTotal = p.total || (p.amount || 0) * (p.quantity || 1)
@@ -834,6 +923,19 @@ export default function UnpaidBookingsTab() {
                     />
                   )
                 })}
+                {(fatturaItemsMap[booking.id] || []).map((fi, idx) => (
+                  <DanniPenaliItemRow
+                    key={`fat-${idx}`}
+                    label={`${fi.description} (${fi.fatturaNumero})`}
+                    total={fi.total}
+                    amountPaid={fi.amountPaid}
+                    remaining={fi.total - fi.amountPaid}
+                    isPartial={fi.paymentStatus === 'partial'}
+                    color={fi.type === 'danni' ? 'red' : 'yellow'}
+                    tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'}
+                    onPay={(amount) => handleFatturaItemPayment(fi, amount)}
+                  />
+                ))}
               </div>
             )}
 
@@ -1011,6 +1113,19 @@ export default function UnpaidBookingsTab() {
                         />
                       )
                     })}
+                    {(fatturaItemsMap[booking.id] || []).map((fi, idx) => (
+                      <DanniPenaliItemRow
+                        key={`fat-${idx}`}
+                        label={`${fi.description} (${fi.fatturaNumero})`}
+                        total={fi.total}
+                        amountPaid={fi.amountPaid}
+                        remaining={fi.total - fi.amountPaid}
+                        isPartial={fi.paymentStatus === 'partial'}
+                        color={fi.type === 'danni' ? 'red' : 'yellow'}
+                        tag={fi.type === 'danni' ? 'DANNO' : 'PENALE'}
+                        onPay={(amount) => handleFatturaItemPayment(fi, amount)}
+                      />
+                    ))}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${getStatusBadge(booking).className}`}>
