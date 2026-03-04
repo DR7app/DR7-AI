@@ -393,31 +393,58 @@ export default function GestioneDanniTab() {
     }
   }
 
-  // ── Modal: update amount of a pending item ─────────────────────────────────
+  // ── Modal: update amount of a pending or invoiced item ──────────────────────
   async function handleUpdateAmount(item: PenaltyDannoItem, newTotal: number) {
-    if (item.status !== 'pending') return
     setSaving(true)
     try {
-      const { data: booking, error: fetchErr } = await supabase
-        .from('bookings')
-        .select('booking_details')
-        .eq('id', item.bookingId)
-        .single()
+      if (item.status === 'pending') {
+        // Update booking_details array
+        const { data: booking, error: fetchErr } = await supabase
+          .from('bookings')
+          .select('booking_details')
+          .eq('id', item.bookingId)
+          .single()
 
-      if (fetchErr) throw fetchErr
+        if (fetchErr) throw fetchErr
 
-      const details = booking?.booking_details || {}
-      const arr: any[] = [...(details[item.arrayKey] || [])]
-      if (arr[item.arrayIndex]) {
-        arr[item.arrayIndex] = { ...arr[item.arrayIndex], amount: newTotal, total: newTotal, quantity: 1 }
+        const details = booking?.booking_details || {}
+        const arr: any[] = [...(details[item.arrayKey] || [])]
+        if (arr[item.arrayIndex]) {
+          arr[item.arrayIndex] = { ...arr[item.arrayIndex], amount: newTotal, total: newTotal, quantity: 1 }
+        }
+
+        const { error: updateErr } = await supabase
+          .from('bookings')
+          .update({ booking_details: { ...details, [item.arrayKey]: arr } })
+          .eq('id', item.bookingId)
+
+        if (updateErr) throw updateErr
+      } else if (item.status === 'invoiced' && item.fatturaNumero) {
+        // Update fattura line item
+        const { data: fattura, error: fetchErr } = await supabase
+          .from('fatture')
+          .select('id, items, importo_totale')
+          .eq('numero_fattura', item.fatturaNumero)
+          .single()
+
+        if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+        const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+        const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
+
+        if (matchIdx >= 0) {
+          const oldTotal = fatturaItems[matchIdx].total || (fatturaItems[matchIdx].unit_price || 0) * (fatturaItems[matchIdx].quantity || 1)
+          fatturaItems[matchIdx] = { ...fatturaItems[matchIdx], unit_price: newTotal, total: newTotal, quantity: 1 }
+          const newImporto = Math.max(0, (fattura.importo_totale || 0) - oldTotal + newTotal)
+
+          const { error: updateErr } = await supabase
+            .from('fatture')
+            .update({ items: fatturaItems, importo_totale: newImporto })
+            .eq('id', fattura.id)
+
+          if (updateErr) throw updateErr
+        }
       }
-
-      const { error: updateErr } = await supabase
-        .from('bookings')
-        .update({ booking_details: { ...details, [item.arrayKey]: arr } })
-        .eq('id', item.bookingId)
-
-      if (updateErr) throw updateErr
 
       toast.success('Importo aggiornato')
       setEditModal(null)
@@ -975,8 +1002,7 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
                   </svg>
                 </button>
               )}
-              {isPending && (
-                <button
+              <button
                   onClick={() => { setEditValue(item.total.toString()); setEditing(true) }}
                   disabled={saving}
                   className="w-6 h-6 rounded-full bg-white/10 text-theme-text-muted hover:bg-white/20 flex items-center justify-center transition-all disabled:opacity-30"
@@ -986,7 +1012,6 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </button>
-              )}
               <button
                 onClick={onDelete}
                 disabled={saving}
