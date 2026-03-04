@@ -255,15 +255,27 @@ export const handler: Handler = async (event) => {
             invoiceNumber = existingInvoice.numero_fattura
         } else {
             // Atomic invoice numbering via DB sequence (prevents race-condition duplicates)
+            // Retry loop: if the generated number already exists in DB, get the next one
             const currentYear = new Date().getFullYear()
-            const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+            for (let attempt = 0; attempt < 5; attempt++) {
+                const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
 
-            if (seqError || seqResult == null) {
-                console.error('[Invoice] Sequence error:', seqError)
-                throw new Error('Failed to generate invoice number: ' + (seqError?.message || 'sequence returned null'))
+                if (seqError || seqResult == null) {
+                    console.error('[Invoice] Sequence error:', seqError)
+                    throw new Error('Failed to generate invoice number: ' + (seqError?.message || 'sequence returned null'))
+                }
+
+                const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+                const { data: existing } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+                if (!existing) {
+                    invoiceNumber = candidate
+                    break
+                }
+                console.warn(`[Invoice] Number ${candidate} already exists, retrying...`)
             }
-
-            invoiceNumber = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+            if (!invoiceNumber) {
+                throw new Error('Failed to generate unique invoice number after 5 attempts')
+            }
         }
 
 
