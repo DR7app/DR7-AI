@@ -223,98 +223,6 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function markPenaltiesDanniPaid(booking: UnpaidBooking) {
-    try {
-      const details = booking.booking_details || {}
-      const pendingPenalties = (details.penalties || []).filter((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
-      const pendingDanni = (details.danni || []).filter((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
-
-      // Generate fattura for pending/partial penalties (use remaining amount)
-      if (pendingPenalties.length > 0) {
-        const items = pendingPenalties.map((p: any) => {
-          const total = p.total || (p.amount || 0) * (p.quantity || 1)
-          const remaining = total - (p.amountPaid || 0)
-          return { label: p.label, amount: remaining, quantity: 1 }
-        }).filter((i: any) => i.amount > 0)
-        if (items.length > 0) {
-          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: booking.id,
-              customerId: booking.customer_id || booking.user_id,
-              items,
-              paymentStatus: 'paid'
-            })
-          })
-          if (!res.ok) {
-            const err = await res.json()
-            throw new Error(err.message || err.error || 'Errore generazione fattura penali')
-          }
-        }
-      }
-
-      // Generate fattura for pending/partial danni (use remaining amount)
-      if (pendingDanni.length > 0) {
-        const items = pendingDanni.map((d: any) => {
-          const total = d.total || (d.amount || 0) * (d.quantity || 1)
-          const remaining = total - (d.amountPaid || 0)
-          return { label: d.label, amount: remaining, quantity: 1 }
-        }).filter((i: any) => i.amount > 0)
-        if (items.length > 0) {
-          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: booking.id,
-              customerId: booking.customer_id || booking.user_id,
-              items,
-              type: 'danni',
-              paymentStatus: 'paid'
-            })
-          })
-          if (!res.ok) {
-            const err = await res.json()
-            throw new Error(err.message || err.error || 'Errore generazione fattura danni')
-          }
-        }
-      }
-
-      // Mark all pending/partial entries as paid
-      const updatedPenalties = (details.penalties || []).map((p: any) => {
-        if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') {
-          const total = p.total || (p.amount || 0) * (p.quantity || 1)
-          return { ...p, paymentStatus: 'paid', amountPaid: total }
-        }
-        return p
-      })
-      const updatedDanni = (details.danni || []).map((d: any) => {
-        if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial') {
-          const total = d.total || (d.amount || 0) * (d.quantity || 1)
-          return { ...d, paymentStatus: 'paid', amountPaid: total }
-        }
-        return d
-      })
-
-      await supabase
-        .from('bookings')
-        .update({
-          booking_details: {
-            ...details,
-            penalties: updatedPenalties,
-            danni: updatedDanni
-          }
-        })
-        .eq('id', booking.id)
-
-      toast.success('Penali/Danni segnati come pagati! Fattura generata e inviata a SDI.')
-      loadUnpaidBookings()
-    } catch (error: any) {
-      console.error('Failed to mark penalties/danni as paid:', error)
-      toast.error('Errore: ' + (error.message || error))
-    }
-  }
-
   async function markExtensionsPaid(booking: UnpaidBooking) {
     try {
       // Update all pending extensions to paid
@@ -604,32 +512,6 @@ export default function UnpaidBookingsTab() {
     } catch (err: any) {
       toast.error(err.message || 'Errore')
     }
-  }
-
-  // ── Partial payment at booking level — applies to first pending item ────────
-  async function handleBookingPartialPayment(booking: UnpaidBooking, paymentAmount: number) {
-    // Try booking_details items first
-    const details = booking.booking_details || {}
-    for (const arrayKey of ['penalties', 'danni'] as const) {
-      const arr: any[] = details[arrayKey] || []
-      for (let i = 0; i < arr.length; i++) {
-        const entry = arr[i]
-        if (entry.paymentStatus === 'paid') continue
-        if (entry.paymentStatus && entry.paymentStatus !== 'pending' && entry.paymentStatus !== 'partial') continue
-        // Found a pending/partial item — apply payment
-        await handleItemPartialPayment(booking, arrayKey, i, paymentAmount)
-        return
-      }
-    }
-
-    // Try fattura items
-    const fItems = fatturaItemsMap[booking.id] || []
-    if (fItems.length > 0) {
-      await handleFatturaItemPayment(fItems[0], paymentAmount)
-      return
-    }
-
-    toast.error('Nessuna voce da pagare')
   }
 
   // ── Partial payment on a fattura danni/penali item ──────────────────────────
