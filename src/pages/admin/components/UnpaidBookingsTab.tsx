@@ -18,6 +18,7 @@ interface UnpaidBooking {
   customer_provincia?: string
   service_name?: string
   vehicle_name?: string
+  vehicle_plate?: string
   appointment_date?: string
   appointment_time?: string
   pickup_date?: string
@@ -884,14 +885,15 @@ export default function UnpaidBookingsTab() {
               <div className="text-sm text-theme-text-muted">
                 {booking.service_type === 'rental' ? (
                   <>
-                    <div>{booking.vehicle_name}</div>
+                    <div className="font-medium">{booking.vehicle_name || '-'}</div>
+                    {booking.vehicle_plate && <div className="text-xs">{booking.vehicle_plate}</div>}
                     <div className="text-xs">
                       {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} - {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
                     </div>
                   </>
                 ) : (
                   <>
-                    <div>{booking.service_name}</div>
+                    <div className="font-medium">{booking.service_name || '-'}</div>
                     <div className="text-xs">
                       {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time}
                     </div>
@@ -1091,15 +1093,15 @@ export default function UnpaidBookingsTab() {
                   <td className="px-4 py-3 text-sm">
                     {booking.service_type === 'rental' ? (
                       <div>
-                        <div className="text-theme-text-primary">{booking.vehicle_name}</div>
+                        <div className="text-theme-text-primary font-medium">{booking.vehicle_name || '-'}</div>
+                        {booking.vehicle_plate && <div className="text-theme-text-muted text-xs">{booking.vehicle_plate}</div>}
                         <div className="text-theme-text-muted text-xs">
-                          {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} -
-                          {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
+                          {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} - {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
                         </div>
                       </div>
                     ) : (
                       <div>
-                        <div className="text-theme-text-primary">{booking.service_name}</div>
+                        <div className="text-theme-text-primary font-medium">{booking.service_name || '-'}</div>
                         <div className="text-theme-text-muted text-xs">
                           {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time}
                         </div>
