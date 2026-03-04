@@ -676,7 +676,10 @@ export default function UnpaidBookingsTab() {
       return { label: 'Parziale', className: 'bg-blue-600 text-white' }
     }
     if (hasPendingPenaltyDanni(booking)) {
-      return { label: 'Danni/Penali', className: 'bg-orange-600 text-white' }
+      const hasPen = getTypeRemaining(booking, 'penalties') > 0
+      const hasDan = getTypeRemaining(booking, 'danni') > 0
+      const label = hasPen && hasDan ? 'Danni/Penali' : hasDan ? 'Danni' : 'Penali'
+      return { label, className: 'bg-orange-600 text-white' }
     }
     if (getPendingExtensions(booking).length > 0) {
       return { label: 'Estensione', className: 'bg-purple-600 text-white' }
