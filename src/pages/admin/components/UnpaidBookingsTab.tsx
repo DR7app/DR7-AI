@@ -217,34 +217,6 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  function hasPendingPenaltyDanni(booking: UnpaidBooking): boolean {
-    const penalties = booking.booking_details?.penalties || []
-    const danni = booking.booking_details?.danni || []
-    const hasBD = penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') || danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
-    const hasFattura = (fatturaItemsMap[booking.id] || []).length > 0
-    return hasBD || hasFattura
-  }
-
-  async function removePendingPenaltiesDanni(booking: UnpaidBooking) {
-    try {
-      const details = booking.booking_details || {}
-      const penalties = (details.penalties || []).filter((p: any) => p.paymentStatus && p.paymentStatus !== 'pending' && p.paymentStatus !== 'partial')
-      const danni = (details.danni || []).filter((d: any) => d.paymentStatus && d.paymentStatus !== 'pending' && d.paymentStatus !== 'partial')
-
-      const { error } = await supabase
-        .from('bookings')
-        .update({ booking_details: { ...details, penalties, danni } })
-        .eq('id', booking.id)
-
-      if (error) throw error
-      toast.success('Penali/Danni rimossi!')
-      loadUnpaidBookings()
-    } catch (error: any) {
-      console.error('Failed to remove penalties/danni:', error)
-      toast.error('Errore: ' + (error.message || error))
-    }
-  }
-
   async function removeSinglePenaltyDanno(booking: UnpaidBooking, type: 'penalties' | 'danni', originalIndex: number) {
     try {
       const details = booking.booking_details || {}
@@ -605,20 +577,6 @@ export default function UnpaidBookingsTab() {
     return arr
       .map((item: any, realIdx: number) => ({ item, realIdx }))
       .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
-  }
-
-  function getTypeRemaining(booking: UnpaidBooking, type: 'penalties' | 'danni'): number {
-    let total = 0
-    const pending = getPendingWithIndex(booking, type)
-    for (const { item } of pending) {
-      const t = item.total || (item.amount || 0) * (item.quantity || 1)
-      total += t - (item.amountPaid || 0)
-    }
-    const fItems = (fatturaItemsMap[booking.id] || []).filter((fi: FatturaItem) => fi.type === type)
-    for (const fi of fItems) {
-      total += fi.total - fi.amountPaid
-    }
-    return total
   }
 
   // ── Build Customer Groups ──────────────────────────────────────────────────
