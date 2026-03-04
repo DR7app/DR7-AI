@@ -92,9 +92,19 @@ export const handler: Handler = async (event) => {
             invoice.numero_fattura = newNumber
         }
 
+        // Normalize customer tax data (fix lowercase CF/P.IVA that SDI rejects)
+        const normalizedTaxCode = (invoice.customer_tax_code || '').toUpperCase().trim()
+        const normalizedVat = (invoice.customer_vat || '').toUpperCase().trim()
+        if (normalizedTaxCode !== invoice.customer_tax_code || normalizedVat !== invoice.customer_vat) {
+            await supabase.from('fatture').update({
+                customer_tax_code: normalizedTaxCode,
+                customer_vat: normalizedVat
+            }).eq('id', invoiceId)
+            invoice.customer_tax_code = normalizedTaxCode
+            invoice.customer_vat = normalizedVat
+        }
+
         // 1. Generate XML
-        // Ensure invoice object matches InvoiceData interface if needed, or cast it
-        // The DB columns largely match standard naming
         const xmlContent = generateFatturaXML(invoice as any)
         const filename = generateInvoiceFilename(invoice as any)
 

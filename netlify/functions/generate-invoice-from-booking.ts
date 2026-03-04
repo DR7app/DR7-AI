@@ -191,8 +191,8 @@ export const handler: Handler = async (event) => {
         }
 
         // Ensure tax fields are robustly fetched
-        const taxCode = customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || ''
-        const vatNumber = customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || ''
+        const taxCode = (customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || '').toUpperCase().trim()
+        const vatNumber = (customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || '').toUpperCase().trim()
 
         // Debug: log what was found for diagnostics
         const debugInfo = {

@@ -143,8 +143,8 @@ export const handler: Handler = async (event) => {
             if (bookingCustomer.zip) fullAddress += ` ${bookingCustomer.zip}`
         }
 
-        const taxCode = customerData?.codiceFiscale || customerData?.codice_fiscale || bookingCustomer.taxCode || ''
-        const vatNumber = customerData?.partitaIva || customerData?.partita_iva || bookingCustomer.vatNumber || ''
+        const taxCode = (customerData?.codiceFiscale || customerData?.codice_fiscale || bookingCustomer.taxCode || '').toUpperCase().trim()
+        const vatNumber = (customerData?.partitaIva || customerData?.partita_iva || bookingCustomer.vatNumber || '').toUpperCase().trim()
 
         // Validation: Mandatory fields
         if (!fullAddress || fullAddress.trim() === '') {

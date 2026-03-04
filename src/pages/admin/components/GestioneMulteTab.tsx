@@ -30,7 +30,7 @@ interface BookingResult {
     province?: string
 }
 
-export default function CargosTab() {
+export default function GestioneMulteTab() {
     const [activeSubTab, setActiveSubTab] = useState<'fines' | 'export'>('fines')
     const [vehicles, setVehicles] = useState<Vehicle[]>([])
 
@@ -363,7 +363,7 @@ export default function CargosTab() {
         <div className="space-y-6">
             <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
                 <div>
-                    <h2 className="text-xl font-bold text-theme-text-primary">Cargos</h2>
+                    <h2 className="text-xl font-bold text-theme-text-primary">Gestione Multe</h2>
                     <p className="text-theme-text-muted text-sm">
                         {activeSubTab === 'fines' ? 'Ricerca conducente per data infrazione' : 'Invio telematico - Portale Polizia di Stato'}
                     </p>

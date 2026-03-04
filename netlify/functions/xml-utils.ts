@@ -53,8 +53,8 @@ function parseAddress(address: string): AddressParts {
     const capMatch = cityPart.match(/\b(\d{5})\b/)
     if (capMatch) cap = capMatch[1]
 
-    const provinciaMatch = cityPart.match(/\(([A-Z]{2})\)/)
-    if (provinciaMatch) provincia = provinciaMatch[1]
+    const provinciaMatch = cityPart.match(/\(([A-Za-z]{2})\)/)
+    if (provinciaMatch) provincia = provinciaMatch[1].toUpperCase()
 
     const parsedComune = cityPart
       .replace(cap, '')
@@ -135,8 +135,8 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   const progressivoInvio = (rawNum + rndSuffix).substring(0, 10)
 
   // Customer details
-  const customerVAT = invoice.customer_vat || ''
-  const customerFiscalCode = invoice.customer_tax_code || ''
+  const customerVAT = (invoice.customer_vat || '').toUpperCase().trim()
+  const customerFiscalCode = (invoice.customer_tax_code || '').toUpperCase().trim()
   const customerName = escapeXml(invoice.customer_name)
 
   // CodiceDestinatario: use customer's SDI code or default 0000000

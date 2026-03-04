@@ -542,6 +542,72 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  async function markAllCustomerItemsPaid(group: CustomerGroup, type: 'penalties' | 'danni') {
+    try {
+      const items = type === 'penalties' ? group.penaliItems : group.danniItems
+      if (items.length === 0) return
+
+      // Collect invoice line items from booking_details source items
+      const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
+      const bookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
+
+      for (const item of items) {
+        if (item.source === 'booking_details' && item.remaining > 0) {
+          invoiceLineItems.push({ label: item.label, amount: item.remaining, quantity: 1 })
+          if (!bookingUpdates.has(item.bookingId)) {
+            bookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
+          }
+          bookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
+        }
+      }
+
+      // Generate ONE fattura for all booking_details items using first booking as anchor
+      if (invoiceLineItems.length > 0) {
+        const firstItem = items.find(i => i.source === 'booking_details')!
+        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: firstItem.bookingId,
+            customerId: firstItem.booking.customer_id || firstItem.booking.user_id,
+            items: invoiceLineItems,
+            type: type === 'danni' ? 'danni' : undefined,
+            paymentStatus: 'paid'
+          })
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.message || err.error || 'Errore generazione fattura')
+        }
+      }
+
+      // Mark all booking_details items as paid in DB
+      for (const [bookingId, { booking, indices }] of bookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details[type] || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, [type]: arr } }).eq('id', bookingId)
+      }
+
+      // Mark all fattura source items as paid
+      const fatturaItems = items.filter(i => i.source === 'fattura')
+      for (const fItem of fatturaItems) {
+        const fi = (fatturaItemsMap[fItem.bookingId] || []).find(f => f.fatturaId === fItem.fatturaId && f.itemIndex === fItem.itemIndex)
+        if (fi) await markSingleFatturaItemPaid(fi)
+      }
+
+      toast.success(`Tutti ${type === 'danni' ? 'i danni' : 'le penali'} segnati come pagati — fattura unica generata!`)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
   async function updateBookingAmount(bookingId: string, newAmountEur: number) {
     try {
       const newAmountCents = Math.round(newAmountEur * 100)
@@ -1184,7 +1250,7 @@ export default function UnpaidBookingsTab() {
 
   // ── Render: Penali/Danni cell content (shared) ─────────────────────────────
 
-  function PendingItemsCell({ items, type }: { items: PendingItem[]; type: 'penalties' | 'danni' }) {
+  function PendingItemsCell({ items, type, onMarkAllPaid }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void }) {
     if (items.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     const colorClasses = type === 'penalties'
@@ -1193,6 +1259,12 @@ export default function UnpaidBookingsTab() {
 
     return (
       <div className="space-y-2">
+        {items.length >= 2 && onMarkAllPaid && (
+          <button
+            onClick={onMarkAllPaid}
+            className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
+          >Segna Tutti Pagato ({items.length})</button>
+        )}
         {items.map((item, idx) => {
           const itemKey = `${type}:${item.bookingId}:${item.source}:${item.originalIndex}`
           const partialKey = `partial:${itemKey}`
@@ -1460,7 +1532,7 @@ export default function UnpaidBookingsTab() {
                   {hasPenali && (
                     <div>
                       <div className="text-xs font-bold text-yellow-400 uppercase mb-1.5">Penali</div>
-                      <PendingItemsCell items={group.penaliItems} type="penalties" />
+                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
                     </div>
                   )}
 
@@ -1468,7 +1540,7 @@ export default function UnpaidBookingsTab() {
                   {hasDanni && (
                     <div>
                       <div className="text-xs font-bold text-red-400 uppercase mb-1.5">Danni</div>
-                      <PendingItemsCell items={group.danniItems} type="danni" />
+                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
                     </div>
                   )}
                 </div>
@@ -1531,12 +1603,12 @@ export default function UnpaidBookingsTab() {
 
                   {/* Penali column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.penaliItems} type="penalties" />
+                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
                   </td>
 
                   {/* Danni column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.danniItems} type="danni" />
+                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
                   </td>
                 </tr>
               ))}
