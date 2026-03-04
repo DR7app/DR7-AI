@@ -211,6 +211,11 @@ export default function GestioneDanniTab() {
           if (!desc.includes('Penale prenotazione') && !desc.includes('Danno prenotazione')) continue
 
           const total = fi.total || (fi.unit_price || 0) * (fi.quantity || 1)
+          const fiAmountPaid = fi.amountPaid ?? total
+          const fiPaymentStatus: 'pending' | 'partial' | 'paid' =
+            fi.paymentStatus === 'partial' ? 'partial' :
+            fi.paymentStatus === 'pending' ? 'pending' :
+            fiAmountPaid < total ? 'partial' : 'paid'
           const item: PenaltyDannoItem = {
             bookingId: f.booking_id || '',
             bookingLabel,
@@ -218,8 +223,8 @@ export default function GestioneDanniTab() {
             amount: fi.unit_price || total,
             quantity: fi.quantity || 1,
             total,
-            amountPaid: total, // invoiced = fully paid
-            paymentStatus: 'paid',
+            amountPaid: fiAmountPaid,
+            paymentStatus: fiPaymentStatus,
             note: '',
             date: '',
             status: 'invoiced',
@@ -458,36 +463,68 @@ export default function GestioneDanniTab() {
 
   // ── Modal: register a partial (or full) payment on a pending/partial item ──
   async function handlePartialPayment(item: PenaltyDannoItem, paymentAmount: number) {
-    if (item.status !== 'pending') return
     setSaving(true)
     try {
-      const { data: booking, error: fetchErr } = await supabase
-        .from('bookings')
-        .select('booking_details')
-        .eq('id', item.bookingId)
-        .single()
+      if (item.status === 'pending') {
+        // Update booking_details array
+        const { data: booking, error: fetchErr } = await supabase
+          .from('bookings')
+          .select('booking_details')
+          .eq('id', item.bookingId)
+          .single()
 
-      if (fetchErr) throw fetchErr
+        if (fetchErr) throw fetchErr
 
-      const details = booking?.booking_details || {}
-      const arr: any[] = [...(details[item.arrayKey] || [])]
-      if (arr[item.arrayIndex]) {
-        const existing = arr[item.arrayIndex]
-        const newAmountPaid = (existing.amountPaid || 0) + paymentAmount
-        const total = existing.total || (existing.amount || 0) * (existing.quantity || 1)
-        arr[item.arrayIndex] = {
-          ...existing,
-          amountPaid: Math.min(newAmountPaid, total),
-          paymentStatus: newAmountPaid >= total ? 'paid' : 'partial',
+        const details = booking?.booking_details || {}
+        const arr: any[] = [...(details[item.arrayKey] || [])]
+        if (arr[item.arrayIndex]) {
+          const existing = arr[item.arrayIndex]
+          const newAmountPaid = (existing.amountPaid || 0) + paymentAmount
+          const total = existing.total || (existing.amount || 0) * (existing.quantity || 1)
+          arr[item.arrayIndex] = {
+            ...existing,
+            amountPaid: Math.min(newAmountPaid, total),
+            paymentStatus: newAmountPaid >= total ? 'paid' : 'partial',
+          }
+        }
+
+        const { error: updateErr } = await supabase
+          .from('bookings')
+          .update({ booking_details: { ...details, [item.arrayKey]: arr } })
+          .eq('id', item.bookingId)
+
+        if (updateErr) throw updateErr
+      } else if (item.status === 'invoiced' && item.fatturaNumero) {
+        // Update fattura — reduce importo_totale by payment, track amountPaid in items
+        const { data: fattura, error: fetchErr } = await supabase
+          .from('fatture')
+          .select('id, items, importo_totale')
+          .eq('numero_fattura', item.fatturaNumero)
+          .single()
+
+        if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+        const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+        const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
+
+        if (matchIdx >= 0) {
+          const fi = fatturaItems[matchIdx]
+          const fiTotal = fi.total || (fi.unit_price || 0) * (fi.quantity || 1)
+          const newAmountPaid = (fi.amountPaid || 0) + paymentAmount
+          fatturaItems[matchIdx] = {
+            ...fi,
+            amountPaid: Math.min(newAmountPaid, fiTotal),
+            paymentStatus: newAmountPaid >= fiTotal ? 'paid' : 'partial',
+          }
+
+          const { error: updateErr } = await supabase
+            .from('fatture')
+            .update({ items: fatturaItems })
+            .eq('id', fattura.id)
+
+          if (updateErr) throw updateErr
         }
       }
-
-      const { error: updateErr } = await supabase
-        .from('bookings')
-        .update({ booking_details: { ...details, [item.arrayKey]: arr } })
-        .eq('id', item.bookingId)
-
-      if (updateErr) throw updateErr
 
       toast.success('Pagamento registrato')
       setEditModal(null)
@@ -888,7 +925,7 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
 
   const isPending = item.status === 'pending'
   const isPartial = item.paymentStatus === 'partial'
-  const canPay = isPending && (item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+  const canPay = item.paymentStatus === 'pending' || item.paymentStatus === 'partial'
   const remaining = item.total - item.amountPaid
   const accent = accentColor === 'orange' ? 'orange' : 'red'
 
