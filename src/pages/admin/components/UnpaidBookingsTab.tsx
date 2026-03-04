@@ -22,7 +22,7 @@ interface UnpaidBooking {
   appointment_date?: string
   appointment_time?: string
   pickup_date?: string
-  return_date?: string
+  dropoff_date?: string
   price_total: number
   status: string
   payment_status: string
@@ -890,7 +890,7 @@ export default function UnpaidBookingsTab() {
                     <div className="font-medium">{booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || '-'}</div>
                     {(booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate) && <div className="text-xs">{booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate}</div>}
                     <div className="text-xs">
-                      {(booking.pickup_date || booking.booking_details?.pickup_date) && new Date(booking.pickup_date || booking.booking_details?.pickup_date).toLocaleDateString('it-IT')} - {(booking.return_date || booking.booking_details?.return_date) && new Date(booking.return_date || booking.booking_details?.return_date).toLocaleDateString('it-IT')}
+                      {(booking.pickup_date || booking.booking_details?.pickup_date) && new Date(booking.pickup_date || booking.booking_details?.pickup_date).toLocaleDateString('it-IT')} - {(booking.dropoff_date || booking.booking_details?.dropoff_date) && new Date(booking.dropoff_date || booking.booking_details?.dropoff_date).toLocaleDateString('it-IT')}
                     </div>
                   </>
                 ) : (
@@ -1098,7 +1098,7 @@ export default function UnpaidBookingsTab() {
                         <div className="text-theme-text-primary font-medium">{booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || '-'}</div>
                         {(booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate) && <div className="text-theme-text-muted text-xs">{booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate}</div>}
                         <div className="text-theme-text-muted text-xs">
-                          {(booking.pickup_date || booking.booking_details?.pickup_date) && new Date(booking.pickup_date || booking.booking_details?.pickup_date).toLocaleDateString('it-IT')} - {(booking.return_date || booking.booking_details?.return_date) && new Date(booking.return_date || booking.booking_details?.return_date).toLocaleDateString('it-IT')}
+                          {(booking.pickup_date || booking.booking_details?.pickup_date) && new Date(booking.pickup_date || booking.booking_details?.pickup_date).toLocaleDateString('it-IT')} - {(booking.dropoff_date || booking.booking_details?.dropoff_date) && new Date(booking.dropoff_date || booking.booking_details?.dropoff_date).toLocaleDateString('it-IT')}
                         </div>
                       </div>
                     ) : (
