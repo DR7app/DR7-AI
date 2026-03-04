@@ -1197,7 +1197,6 @@ export default function UnpaidBookingsTab() {
           const itemKey = `${type}:${item.bookingId}:${item.source}:${item.originalIndex}`
           const partialKey = `partial:${itemKey}`
           const editKey = `edit:${itemKey}`
-          const deleteKey = `delete:${itemKey}`
 
           return (
             <div key={idx} className={`${colorClasses.bg} border ${colorClasses.border} rounded-lg p-2.5`}>
@@ -1228,12 +1227,10 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
-                    {confirmDeleteKey !== deleteKey && (
-                      <button
-                        onClick={() => setConfirmDeleteKey(deleteKey)}
-                        className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                      >x</button>
-                    )}
+                    <button
+                      onClick={() => removeSinglePenaltyDanno(item.booking, type, item.originalIndex)}
+                      className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                    >x</button>
                   </>
                 ) : (
                   <>
@@ -1256,12 +1253,13 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
-                    {confirmDeleteKey !== deleteKey && (
-                      <button
-                        onClick={() => setConfirmDeleteKey(deleteKey)}
-                        className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                      >x</button>
-                    )}
+                    <button
+                      onClick={() => {
+                        const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                        if (fi) deleteFatturaItem(fi)
+                      }}
+                      className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                    >x</button>
                   </>
                 )}
               </div>
@@ -1280,39 +1278,22 @@ export default function UnpaidBookingsTab() {
                 onCancel={() => setPartialPayItemKey(null)}
               />
               {item.source === 'booking_details' ? (
-                <>
-                  <EditAmountInput
-                    itemKey={editKey}
-                    currentAmount={item.amount}
-                    onSubmit={(v) => updateSinglePenaltyDannoAmount(item.booking, type, item.originalIndex, v)}
-                    onCancel={() => setEditAmountKey(null)}
-                  />
-                  <ConfirmDelete
-                    itemKey={deleteKey}
-                    onConfirm={() => removeSinglePenaltyDanno(item.booking, type, item.originalIndex)}
-                    onCancel={() => setConfirmDeleteKey(null)}
-                  />
-                </>
+                <EditAmountInput
+                  itemKey={editKey}
+                  currentAmount={item.amount}
+                  onSubmit={(v) => updateSinglePenaltyDannoAmount(item.booking, type, item.originalIndex, v)}
+                  onCancel={() => setEditAmountKey(null)}
+                />
               ) : (
-                <>
-                  <EditAmountInput
-                    itemKey={editKey}
-                    currentAmount={item.amount}
-                    onSubmit={(v) => {
-                      const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
-                      if (fi) updateFatturaItemAmount(fi, v)
-                    }}
-                    onCancel={() => setEditAmountKey(null)}
-                  />
-                  <ConfirmDelete
-                    itemKey={deleteKey}
-                    onConfirm={() => {
-                      const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
-                      if (fi) deleteFatturaItem(fi)
-                    }}
-                    onCancel={() => setConfirmDeleteKey(null)}
-                  />
-                </>
+                <EditAmountInput
+                  itemKey={editKey}
+                  currentAmount={item.amount}
+                  onSubmit={(v) => {
+                    const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                    if (fi) updateFatturaItemAmount(fi, v)
+                  }}
+                  onCancel={() => setEditAmountKey(null)}
+                />
               )}
             </div>
           )
