@@ -407,6 +407,18 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  const getEffectiveType = (booking: UnpaidBooking): 'rental' | 'prime_wash' | 'other' => {
+    if (booking.service_type === 'rental') return 'rental'
+    if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical_service') return 'prime_wash'
+    // Fallback: no service_type set
+    if (booking.vehicle_name || booking.booking_details?.vehicle) return 'rental'
+    if (booking.service_name) {
+      const sn = booking.service_name.toLowerCase()
+      if (sn.includes('lavaggio') || sn.includes('wash') || sn.includes('meccanica') || sn.includes('mechanical')) return 'prime_wash'
+    }
+    return 'rental' // default to rental
+  }
+
   const filteredBookings = filterService === 'all'
     ? bookings
     : bookings.filter(b => getEffectiveType(b) === filterService)
@@ -697,17 +709,6 @@ export default function UnpaidBookingsTab() {
   }
 
   // Resolve effective service type with fallback logic
-  const getEffectiveType = (booking: UnpaidBooking): 'rental' | 'prime_wash' | 'other' => {
-    if (booking.service_type === 'rental') return 'rental'
-    if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical_service') return 'prime_wash'
-    if (booking.vehicle_name) return 'rental'
-    if (booking.service_name) {
-      const sn = booking.service_name.toLowerCase()
-      if (sn.includes('lavaggio') || sn.includes('wash') || sn.includes('meccanica') || sn.includes('mechanical')) return 'prime_wash'
-    }
-    return 'rental' // default for bookings with danni/penali
-  }
-
   const getServiceLabel = (booking: UnpaidBooking) => {
     const serviceType = booking.service_type
 
@@ -868,9 +869,8 @@ export default function UnpaidBookingsTab() {
                   />
                 )}
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                  booking.service_type === 'rental' ? 'bg-blue-900 text-blue-200' :
-                  booking.service_type === 'car_wash' ? 'bg-cyan-900 text-cyan-200' :
-                  'bg-orange-900 text-orange-200'
+                  getEffectiveType(booking) === 'rental' ? 'bg-blue-900 text-blue-200' :
+                  'bg-cyan-900 text-cyan-200'
                 }`}>
                   {getServiceLabel(booking)}
                 </span>
@@ -885,12 +885,12 @@ export default function UnpaidBookingsTab() {
 
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-theme-text-muted">
-                {booking.service_type === 'rental' ? (
+                {getEffectiveType(booking) === 'rental' ? (
                   <>
-                    <div className="font-medium">{booking.vehicle_name || '-'}</div>
-                    {booking.vehicle_plate && <div className="text-xs">{booking.vehicle_plate}</div>}
+                    <div className="font-medium">{booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || '-'}</div>
+                    {(booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate) && <div className="text-xs">{booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate}</div>}
                     <div className="text-xs">
-                      {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} - {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
+                      {(booking.pickup_date || booking.booking_details?.pickup_date) && new Date(booking.pickup_date || booking.booking_details?.pickup_date).toLocaleDateString('it-IT')} - {(booking.return_date || booking.booking_details?.return_date) && new Date(booking.return_date || booking.booking_details?.return_date).toLocaleDateString('it-IT')}
                     </div>
                   </>
                 ) : (
@@ -1093,12 +1093,12 @@ export default function UnpaidBookingsTab() {
                     <div className="text-theme-text-muted text-xs">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {booking.service_type === 'rental' ? (
+                    {getEffectiveType(booking) === 'rental' ? (
                       <div>
-                        <div className="text-theme-text-primary font-medium">{booking.vehicle_name || '-'}</div>
-                        {booking.vehicle_plate && <div className="text-theme-text-muted text-xs">{booking.vehicle_plate}</div>}
+                        <div className="text-theme-text-primary font-medium">{booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || '-'}</div>
+                        {(booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate) && <div className="text-theme-text-muted text-xs">{booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate}</div>}
                         <div className="text-theme-text-muted text-xs">
-                          {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} - {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
+                          {(booking.pickup_date || booking.booking_details?.pickup_date) && new Date(booking.pickup_date || booking.booking_details?.pickup_date).toLocaleDateString('it-IT')} - {(booking.return_date || booking.booking_details?.return_date) && new Date(booking.return_date || booking.booking_details?.return_date).toLocaleDateString('it-IT')}
                         </div>
                       </div>
                     ) : (
