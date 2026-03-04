@@ -514,6 +514,26 @@ export default function UnpaidBookingsTab() {
 
   const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
 
+  const getStatusBadge = (booking: UnpaidBooking): { label: string; className: string } => {
+    const mainPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+    const hasPartialDanniPenali = [...(booking.booking_details?.penalties || []), ...(booking.booking_details?.danni || [])]
+      .some((item: any) => item.paymentStatus === 'partial')
+
+    if (mainPending) {
+      return { label: 'Da Saldare', className: 'bg-yellow-600 text-black' }
+    }
+    if (hasPartialDanniPenali) {
+      return { label: 'Parziale', className: 'bg-blue-600 text-white' }
+    }
+    if (hasPendingPenaltyDanni(booking)) {
+      return { label: 'Danni/Penali', className: 'bg-orange-600 text-white' }
+    }
+    if (getPendingExtensions(booking).length > 0) {
+      return { label: 'Estensione', className: 'bg-purple-600 text-white' }
+    }
+    return { label: 'Non Pagato', className: 'bg-red-600 text-theme-text-primary' }
+  }
+
   const getServiceTypeLabel = (serviceType: string) => {
     switch (serviceType) {
       case 'rental': return 'Noleggio'
@@ -702,11 +722,8 @@ export default function UnpaidBookingsTab() {
                   {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
                 </span>
               </div>
-              <span className={`px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 ${booking.payment_status === 'pending'
-                ? 'bg-yellow-600 text-black'
-                : 'bg-red-600 text-theme-text-primary'
-              }`}>
-                {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
+              <span className={`px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 ${getStatusBadge(booking).className}`}>
+                {getStatusBadge(booking).label}
               </span>
             </div>
 
@@ -918,11 +935,8 @@ export default function UnpaidBookingsTab() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'pending'
-                      ? 'bg-yellow-600 text-black'
-                      : 'bg-red-600 text-theme-text-primary'
-                      }`}>
-                      {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${getStatusBadge(booking).className}`}>
+                      {getStatusBadge(booking).label}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
