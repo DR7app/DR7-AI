@@ -921,11 +921,19 @@ export default function UnpaidBookingsTab() {
               {/* Pending extensions */}
               {pendingExts.length > 0 && (
                 <div className="mt-1.5 space-y-0.5">
-                  {pendingExts.map((ext: any, i: number) => (
-                    <div key={i} className="text-xs text-purple-400 bg-purple-500/10 rounded px-1.5 py-0.5">
-                      Estensione +{ext.additional_days || '?'}gg €{(ext.additional_amount || 0).toFixed(2)}
-                    </div>
-                  ))}
+                  {pendingExts.map((ext: any, i: number) => {
+                    let days = ext.additional_days
+                    if (!days && ext.previous_dropoff && ext.new_dropoff) {
+                      const prev = new Date(ext.previous_dropoff)
+                      const next = new Date(ext.new_dropoff)
+                      days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+                    }
+                    return (
+                      <div key={i} className="text-xs text-purple-400 bg-purple-500/10 rounded px-1.5 py-0.5">
+                        Estensione +{days || '?'}gg €{(ext.additional_amount || 0).toFixed(2)}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 
