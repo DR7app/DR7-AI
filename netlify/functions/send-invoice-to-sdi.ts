@@ -43,22 +43,46 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // If rejected/scartata, assign a NEW invoice number before re-sending
+        // If invoice was previously sent (rejected/scartata/error), ALWAYS assign a NEW number
         // This prevents SDI error 00404 (fattura duplicata) when retrying
-        if (invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata') {
-            const currentYear = new Date().getFullYear()
-            const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+        const needsNewNumber = invoice.sdi_status === 'rejected' ||
+            invoice.sdi_status === 'scartata' ||
+            invoice.sdi_status === 'error' ||
+            invoice.aruba_invoice_id // was already uploaded before
 
-            if (seqError || seqResult == null) {
-                console.error('[SDI] Sequence error on retry:', seqError)
+        if (needsNewNumber) {
+            const currentYear = new Date().getFullYear()
+            let newNumber = ''
+
+            // Retry loop: ensure the new number doesn't already exist in DB
+            for (let attempt = 0; attempt < 5; attempt++) {
+                const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+
+                if (seqError || seqResult == null) {
+                    console.error('[SDI] Sequence error on retry:', seqError)
+                    return {
+                        statusCode: 500,
+                        body: JSON.stringify({ error: 'Failed to generate new invoice number for retry', details: seqError?.message })
+                    }
+                }
+
+                const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+                const { data: existing } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+                if (!existing) {
+                    newNumber = candidate
+                    break
+                }
+                console.warn(`[SDI] Number ${candidate} already exists, retrying...`)
+            }
+
+            if (!newNumber) {
                 return {
                     statusCode: 500,
-                    body: JSON.stringify({ error: 'Failed to generate new invoice number for retry', details: seqError?.message })
+                    body: JSON.stringify({ error: 'Failed to generate unique invoice number after 5 attempts' })
                 }
             }
 
-            const newNumber = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
-            console.log(`[SDI] Rejected invoice ${invoice.numero_fattura} → new number ${newNumber}`)
+            console.log(`[SDI] Re-send: ${invoice.numero_fattura} → new number ${newNumber}`)
 
             await supabase.from('fatture').update({
                 numero_fattura: newNumber,
