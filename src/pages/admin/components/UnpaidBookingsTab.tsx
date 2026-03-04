@@ -47,7 +47,7 @@ export default function UnpaidBookingsTab() {
   const [bookings, setBookings] = useState<UnpaidBooking[]>([])
   const [fatturaItemsMap, setFatturaItemsMap] = useState<Record<string, FatturaItem[]>>({})
   const [loading, setLoading] = useState(true)
-  const [filterService, setFilterService] = useState<'all' | 'rental' | 'car_wash' | 'mechanical_service'>('all')
+  const [filterService, setFilterService] = useState<'all' | 'rental' | 'prime_wash'>('all')
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [selectedBookings, setSelectedBookings] = useState<Set<string>>(new Set())
   const [partialPayItemKey, setPartialPayItemKey] = useState<string | null>(null) // "bookingId:type:index"
@@ -409,7 +409,7 @@ export default function UnpaidBookingsTab() {
 
   const filteredBookings = filterService === 'all'
     ? bookings
-    : bookings.filter(b => b.service_type === filterService)
+    : bookings.filter(b => getEffectiveType(b) === filterService)
 
   const getRemainingAmount = (booking: UnpaidBooking) => {
     let remaining = 0
@@ -691,10 +691,21 @@ export default function UnpaidBookingsTab() {
   const getServiceTypeLabel = (serviceType: string) => {
     switch (serviceType) {
       case 'rental': return 'Noleggio'
-      case 'car_wash': return 'Lavaggio'
-      case 'mechanical_service': return 'Meccanica'
+      case 'prime_wash': return 'Prime Wash'
       default: return serviceType || 'Altro'
     }
+  }
+
+  // Resolve effective service type with fallback logic
+  const getEffectiveType = (booking: UnpaidBooking): 'rental' | 'prime_wash' | 'other' => {
+    if (booking.service_type === 'rental') return 'rental'
+    if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical_service') return 'prime_wash'
+    if (booking.vehicle_name) return 'rental'
+    if (booking.service_name) {
+      const sn = booking.service_name.toLowerCase()
+      if (sn.includes('lavaggio') || sn.includes('wash') || sn.includes('meccanica') || sn.includes('mechanical')) return 'prime_wash'
+    }
+    return 'rental' // default for bookings with danni/penali
   }
 
   const getServiceLabel = (booking: UnpaidBooking) => {
@@ -703,8 +714,8 @@ export default function UnpaidBookingsTab() {
     // Check known service types first
     switch (serviceType) {
       case 'rental': return 'Noleggio'
-      case 'car_wash': return 'Lavaggio'
-      case 'mechanical_service': return 'Meccanica'
+      case 'car_wash': return 'Prime Wash'
+      case 'mechanical_service': return 'Prime Wash'
     }
 
     // Fallback logic: determine service type from booking details
@@ -715,10 +726,10 @@ export default function UnpaidBookingsTab() {
     if (booking.service_name) {
       const serviceName = booking.service_name.toLowerCase()
       if (serviceName.includes('lavaggio') || serviceName.includes('wash')) {
-        return 'Lavaggio'
+        return 'Prime Wash'
       }
       if (serviceName.includes('meccanica') || serviceName.includes('mechanical')) {
-        return 'Meccanica'
+        return 'Prime Wash'
       }
       return 'Servizio' // Generic service
     }
@@ -765,13 +776,13 @@ export default function UnpaidBookingsTab() {
         <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
           <div className="text-xs lg:text-sm text-theme-text-muted">Noleggio</div>
           <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">
-            {bookings.filter(b => b.service_type === 'rental').length}
+            {bookings.filter(b => getEffectiveType(b) === 'rental').length}
           </div>
         </div>
         <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Lavaggio + Meccanica</div>
+          <div className="text-xs lg:text-sm text-theme-text-muted">Prime Wash</div>
           <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">
-            {bookings.filter(b => b.service_type === 'car_wash' || b.service_type === 'mechanical_service').length}
+            {bookings.filter(b => getEffectiveType(b) === 'prime_wash').length}
           </div>
         </div>
       </div>
@@ -796,25 +807,16 @@ export default function UnpaidBookingsTab() {
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
-              Noleggio ({bookings.filter(b => b.service_type === 'rental').length})
+              Noleggio ({bookings.filter(b => getEffectiveType(b) === 'rental').length})
             </button>
             <button
-              onClick={() => setFilterService('car_wash')}
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'car_wash'
+              onClick={() => setFilterService('prime_wash')}
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'prime_wash'
                 ? 'bg-dr7-gold text-theme-bg-primary'
                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                 }`}
             >
-              Lavaggio ({bookings.filter(b => b.service_type === 'car_wash').length})
-            </button>
-            <button
-              onClick={() => setFilterService('mechanical_service')}
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'mechanical_service'
-                ? 'bg-dr7-gold text-theme-bg-primary'
-                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-                }`}
-            >
-              Meccanica ({bookings.filter(b => b.service_type === 'mechanical_service').length})
+              Prime Wash ({bookings.filter(b => getEffectiveType(b) === 'prime_wash').length})
             </button>
           </div>
 
