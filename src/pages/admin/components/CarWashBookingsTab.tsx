@@ -760,6 +760,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       console.error('⚠️ Failed to generate invoice:', invoiceError)
     }
 
+    // Auto-generate fattura and send to SDI when paid
+    if (formData.payment_status === 'paid' && data?.id) {
+      try {
+        console.log('[Auto-Gen] Generating fattura for paid car wash booking:', data.id)
+        const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: data.id, includeIVA: true })
+        })
+        if (invoiceRes.ok) {
+          console.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+        } else {
+          const errData = await invoiceRes.json()
+          console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errData.message || errData.error)
+        }
+      } catch (invoiceError) {
+        console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
+      }
+    }
+
     // Send WhatsApp notification
     try {
       const paymentStatus = formData.payment_status || 'pending'
@@ -2206,6 +2226,35 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         .eq('id', editingBooking.id)
 
                       if (error) throw error
+
+                      // Auto-generate fattura if payment changed to paid
+                      if (editingBooking.payment_status === 'paid') {
+                        try {
+                          // Check if fattura already exists for this booking
+                          const { data: existingFattura } = await supabase
+                            .from('fatture')
+                            .select('id')
+                            .eq('booking_id', editingBooking.id)
+                            .maybeSingle()
+
+                          if (!existingFattura) {
+                            console.log('[Auto-Gen] Generating fattura for paid car wash:', editingBooking.id)
+                            const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ bookingId: editingBooking.id, includeIVA: true })
+                            })
+                            if (invoiceRes.ok) {
+                              console.log('[Auto-Gen] ✅ Fattura generated')
+                            } else {
+                              const errData = await invoiceRes.json()
+                              console.warn('[Auto-Gen] ⚠️ Fattura failed:', errData.message || errData.error)
+                            }
+                          }
+                        } catch (invoiceError) {
+                          console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
+                        }
+                      }
 
                       // Send WhatsApp modification notification
                       try {
