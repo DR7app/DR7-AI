@@ -96,6 +96,13 @@ function parseAddress(address: string): AddressParts {
 function escapeXml(unsafe: string): string {
   if (!unsafe) return ''
   return unsafe
+    // Replace Unicode characters outside BasicLatin + Latin-1Supplement with ASCII equivalents
+    .replace(/[\u2018\u2019\u201A\u2039\u203A]/g, "'")  // curly single quotes → '
+    .replace(/[\u201C\u201D\u201E\u00AB\u00BB]/g, '"')   // curly double quotes → "
+    .replace(/[\u2013\u2014]/g, '-')                       // en/em dash → -
+    .replace(/\u2026/g, '...')                             // ellipsis → ...
+    .replace(/[^\x00-\xFF]/g, '')                          // strip anything outside Latin-1Supplement
+    // XML entity escaping
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
