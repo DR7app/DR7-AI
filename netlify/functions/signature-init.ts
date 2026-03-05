@@ -174,8 +174,7 @@ export const handler: Handler = async (event) => {
             body: JSON.stringify({
                 success: true,
                 message: 'Richiesta di firma creata e email inviata',
-                requestId: sigRequest.id,
-                signingUrl
+                requestId: sigRequest.id
             })
         }
     } catch (error: any) {

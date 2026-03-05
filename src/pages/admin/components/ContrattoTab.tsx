@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 
 interface Contract {
@@ -183,11 +184,11 @@ export default function ContrattoTab() {
 
   async function handleSendSignatureEmail(contract: Contract) {
     if (!contract.pdf_url) {
-      alert('Il contratto non ha un PDF generato.')
+      toast.error('Il contratto non ha un PDF generato.')
       return
     }
     if (!contract.customer_email) {
-      alert('Email cliente mancante.')
+      toast.error('Email cliente mancante.')
       return
     }
 
@@ -200,14 +201,14 @@ export default function ContrattoTab() {
       })
       const data = await res.json()
       if (res.ok) {
-        alert('Link di firma inviato via email al cliente!')
+        toast.success(`Email di firma inviata a ${contract.customer_email}`)
         loadContracts()
       } else {
-        alert(data.error || 'Errore nell\'invio')
+        toast.error(data.error || 'Errore nell\'invio')
       }
     } catch (error: any) {
       console.error('Signature init error:', error)
-      alert('Errore: ' + error.message)
+      toast.error('Errore nell\'invio della richiesta di firma')
     } finally {
       setSendingSignature(null)
     }
