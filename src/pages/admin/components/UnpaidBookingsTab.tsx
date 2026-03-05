@@ -610,7 +610,24 @@ export default function UnpaidBookingsTab() {
 
   async function markBookingAndExtensionsPaid(booking: UnpaidBooking) {
     try {
-      // 1. Generate ONE fattura FIRST (before marking paid, so extensions are still 'pending' in DB)
+      // 1. Mark all pending extensions as paid
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      for (let i = 0; i < extensions.length; i++) {
+        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+          extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
+        }
+      }
+
+      // 2. Mark main booking as paid + update extensions
+      const { error } = await supabase.from('bookings').update({
+        payment_status: 'paid',
+        status: 'confirmed',
+        booking_details: { ...booking.booking_details, extension_history: extensions }
+      }).eq('id', booking.id)
+      if (error) throw error
+      toast.success('Tutto segnato come pagato!')
+
+      // 3. Generate ONE fattura with main + all extensions
       try {
         const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
@@ -625,29 +642,6 @@ export default function UnpaidBookingsTab() {
         console.warn('Auto-invoice generation failed:', invoiceErr)
       }
 
-      // 2. Mark all pending extensions as paid
-      const extensions = [...(booking.booking_details?.extension_history || [])]
-      let extChanged = false
-      for (let i = 0; i < extensions.length; i++) {
-        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
-          extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
-          extChanged = true
-        }
-      }
-
-      // 3. Mark main booking as paid + update extensions in one go
-      const updateData: any = {
-        payment_status: 'paid',
-        status: 'confirmed',
-      }
-      if (extChanged) {
-        updateData.booking_details = { ...booking.booking_details, extension_history: extensions }
-      }
-
-      const { error } = await supabase.from('bookings').update(updateData).eq('id', booking.id)
-      if (error) throw error
-
-      toast.success('Tutto segnato come pagato!')
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
