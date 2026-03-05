@@ -11,6 +11,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const AdminRoute = lazy(() => import('./components/AdminRoute'))
 const ReferralPage = lazy(() => import('./pages/ReferralPage'))
+const FirmaPage = lazy(() => import('./pages/FirmaPage'))
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/referral" element={<ReferralPage />} />
+              <Route path="/firma/:token" element={<FirmaPage />} />
               <Route
                 path="/admin"
                 element={

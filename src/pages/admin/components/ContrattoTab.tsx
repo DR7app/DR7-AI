@@ -23,9 +23,7 @@ interface Contract {
   created_at: string
   pdf_url?: string
   booking_id: string
-  yousign_status?: string
   signed_pdf_url?: string
-  yousign_signature_request_id?: string
 }
 
 export default function ContrattoTab() {
@@ -181,30 +179,45 @@ export default function ContrattoTab() {
   }
 
 
-  async function handleSendToYousign(contract: Contract) {
-    if (!contract.booking_id) {
-      alert('Impossibile inviare: ID prenotazione mancante.')
+  const [sendingSignature, setSendingSignature] = useState<string | null>(null)
+
+  async function handleSendSignatureEmail(contract: Contract) {
+    if (!contract.pdf_url) {
+      alert('Il contratto non ha un PDF generato.')
+      return
+    }
+    if (!contract.customer_email) {
+      alert('Email cliente mancante.')
       return
     }
 
+    setSendingSignature(contract.id)
     try {
-      const res = await fetch('/.netlify/functions/yousign-init', {
+      const res = await fetch('/.netlify/functions/signature-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: contract.booking_id })
+        body: JSON.stringify({ contractId: contract.id, bookingId: contract.booking_id })
       })
       const data = await res.json()
       if (res.ok) {
-        alert('Richiesta di firma inviata con successo! 📩')
+        alert('Link di firma inviato via email al cliente!')
         loadContracts()
       } else {
-        throw new Error(data.error || 'Errore sconosciuto')
+        alert(data.error || 'Errore nell\'invio')
       }
     } catch (error: any) {
-      console.error('Yousign error:', error)
-      alert('Errore Yousign: ' + error.message)
+      console.error('Signature init error:', error)
+      alert('Errore: ' + error.message)
+    } finally {
+      setSendingSignature(null)
     }
   }
+
+  function handleViewAuditTrail(contract: Contract) {
+    const url = `/.netlify/functions/signature-audit?contractId=${contract.id}&format=html`
+    window.open(url, '_blank')
+  }
+
 
   if (loading) {
     return (
@@ -538,25 +551,30 @@ export default function ContrattoTab() {
                       </a>
                     </div>
                   )}
-                  {contract.yousign_status === 'signed' && contract.signed_pdf_url ? (
+                  {contract.signed_pdf_url ? (
+                    <>
+                      <button
+                        onClick={() => window.open(contract.signed_pdf_url, '_blank')}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      >
+                        Contratto Firmato
+                      </button>
+                      <button
+                        onClick={() => handleViewAuditTrail(contract)}
+                        className="w-full bg-gray-600 hover:bg-gray-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      >
+                        Audit Trail
+                      </button>
+                    </>
+                  ) : contract.pdf_url ? (
                     <button
-                      onClick={() => window.open(contract.signed_pdf_url, '_blank')}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      onClick={() => handleSendSignatureEmail(contract)}
+                      disabled={sendingSignature === contract.id}
+                      className="w-full bg-dr7-gold hover:bg-yellow-500 text-black px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
                     >
-                      <span>🖊️</span> Contratto Firmato
+                      {sendingSignature === contract.id ? 'Invio...' : 'Firma via Email'}
                     </button>
-                  ) : contract.yousign_status === 'ongoing' ? (
-                    <div className="w-full bg-yellow-600 text-theme-text-primary px-3 py-1 rounded-full text-sm text-center opacity-70 cursor-not-allowed">
-                      <span>⏳</span> In Attesa di Firma
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleSendToYousign(contract)}
-                      className="w-full bg-pink-600 hover:bg-pink-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
-                    >
-                      <span>✍️</span> Invia a Yousign
-                    </button>
-                  )}
+                  ) : null}
                   <div className="flex gap-2 w-full">
                     <button
                       onClick={() => handleEdit(contract)}
