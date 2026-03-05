@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -19,6 +19,11 @@ export const handler: Handler = async (event) => {
 
         if (!token) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Token richiesto' }) }
+        }
+
+        const apiKey = process.env.RESEND_API_KEY
+        if (!apiKey) {
+            return { statusCode: 500, body: JSON.stringify({ error: 'RESEND_API_KEY non configurata' }) }
         }
 
         // Fetch signature request
@@ -41,7 +46,6 @@ export const handler: Handler = async (event) => {
             return { statusCode: 410, body: JSON.stringify({ error: 'Il link di firma e scaduto' }) }
         }
 
-        // Check if already signed
         if (sigRequest.status === 'signed') {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il documento e gia stato firmato' }) }
         }
@@ -54,7 +58,6 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'OTP gia verificato. Procedi con la firma.' }) }
         }
 
-        // Check max attempts
         if (sigRequest.otp_attempts >= MAX_OTP_ATTEMPTS) {
             return { statusCode: 429, body: JSON.stringify({ error: 'Troppi tentativi. Richiedi un nuovo link di firma.' }) }
         }
@@ -74,25 +77,11 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', sigRequest.id)
 
-        // Send OTP email
-        const smtpUser = process.env.SMTP_USER || 'info@dr7.app'
-        const smtpPass = process.env.SMTP_PASSWORD
-        if (!smtpPass) {
-            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP non configurato' }) }
-        }
+        // Send OTP via Resend
+        const resend = new Resend(apiKey)
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || 'smtp.secureserver.net',
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: {
-                user: smtpUser,
-                pass: smtpPass
-            }
-        })
-
-        await transporter.sendMail({
-            from: `"DR7 Empire" <${smtpUser}>`,
+        const { error: emailError } = await resend.emails.send({
+            from: 'DR7 Empire <info@dr7.app>',
             to: sigRequest.signer_email,
             subject: 'Codice di Verifica - Firma Contratto DR7',
             html: `
@@ -116,6 +105,11 @@ export const handler: Handler = async (event) => {
                 </div>
             `
         })
+
+        if (emailError) {
+            console.error('Resend OTP error:', emailError)
+            return { statusCode: 500, body: JSON.stringify({ error: 'Errore nell\'invio del codice OTP', details: emailError.message }) }
+        }
 
         // Log audit
         await supabase.from('signature_audit_trail').insert({

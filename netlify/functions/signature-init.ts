@@ -1,7 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -20,6 +20,11 @@ export const handler: Handler = async (event) => {
 
         if (!contractId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Contract ID is required' }) }
+        }
+
+        const apiKey = process.env.RESEND_API_KEY
+        if (!apiKey) {
+            return { statusCode: 500, body: JSON.stringify({ error: 'RESEND_API_KEY non configurata' }) }
         }
 
         // Fetch contract
@@ -46,7 +51,6 @@ export const handler: Handler = async (event) => {
             .single()
 
         if (existingRequest) {
-            // Cancel the old request and create a new one
             await supabase
                 .from('signature_requests')
                 .update({ status: 'cancelled', updated_at: new Date().toISOString() })
@@ -114,27 +118,12 @@ export const handler: Handler = async (event) => {
             }
         })
 
-        // Send signing link via email
+        // Send signing link via Resend
         const signingUrl = `${SIGNING_BASE_URL}/firma/${token}`
+        const resend = new Resend(apiKey)
 
-        const smtpUser = process.env.SMTP_USER || 'info@dr7.app'
-        const smtpPass = process.env.SMTP_PASSWORD
-        if (!smtpPass) {
-            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP non configurato. Impostare SMTP_PASSWORD nelle variabili ambiente.' }) }
-        }
-
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || 'smtp.secureserver.net',
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: {
-                user: smtpUser,
-                pass: smtpPass
-            }
-        })
-
-        await transporter.sendMail({
-            from: `"DR7 Empire" <${smtpUser}>`,
+        const { error: emailError } = await resend.emails.send({
+            from: 'DR7 Empire <info@dr7.app>',
             to: signerEmail,
             subject: `Firma Contratto - DR7 Empire - ${contract.contract_number || ''}`,
             html: `
@@ -161,6 +150,16 @@ export const handler: Handler = async (event) => {
                 </div>
             `
         })
+
+        if (emailError) {
+            console.error('Resend error:', emailError)
+            // Cleanup: cancel the request since email failed
+            await supabase
+                .from('signature_requests')
+                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                .eq('id', sigRequest.id)
+            return { statusCode: 500, body: JSON.stringify({ error: 'Errore nell\'invio dell\'email', details: emailError.message }) }
+        }
 
         // Log email sent
         await supabase.from('signature_audit_trail').insert({
