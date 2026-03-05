@@ -89,6 +89,7 @@ export default function UnpaidBookingsTab() {
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [processingKey, setProcessingKey] = useState<string | null>(null)
 
   useEffect(() => {
     loadUnpaidBookings()
@@ -419,6 +420,9 @@ export default function UnpaidBookingsTab() {
   }
 
   async function markAllTypePaid(booking: UnpaidBooking, type: 'penalties' | 'danni') {
+    const key = `type:${booking.id}:${type}`
+    if (processingKey) return
+    setProcessingKey(key)
     try {
       const details = booking.booking_details || {}
       const arr: any[] = details[type] || []
@@ -468,6 +472,8 @@ export default function UnpaidBookingsTab() {
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
+    } finally {
+      setProcessingKey(null)
     }
   }
 
@@ -543,9 +549,12 @@ export default function UnpaidBookingsTab() {
   }
 
   async function markAllCustomerItemsPaid(group: CustomerGroup, type: 'penalties' | 'danni') {
+    const key = `allitems:${group.customerKey}:${type}`
+    if (processingKey) return // Already processing something
+    setProcessingKey(key)
     try {
       const items = type === 'penalties' ? group.penaliItems : group.danniItems
-      if (items.length === 0) return
+      if (items.length === 0) { setProcessingKey(null); return }
 
       // Collect invoice line items from booking_details source items
       const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
@@ -605,6 +614,8 @@ export default function UnpaidBookingsTab() {
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
+    } finally {
+      setProcessingKey(null)
     }
   }
 
@@ -649,6 +660,9 @@ export default function UnpaidBookingsTab() {
   }
 
   async function markAllCustomerPaid(group: CustomerGroup) {
+    const key = `allcustomer:${group.customerKey}`
+    if (processingKey) return
+    setProcessingKey(key)
     try {
       // Collect ALL line items for ONE combined fattura
       const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
@@ -813,6 +827,8 @@ export default function UnpaidBookingsTab() {
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
+    } finally {
+      setProcessingKey(null)
     }
   }
 
@@ -1478,8 +1494,9 @@ export default function UnpaidBookingsTab() {
         {items.length >= 2 && onMarkAllPaid && (
           <button
             onClick={onMarkAllPaid}
-            className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
-          >Segna Tutti Pagato ({items.length})</button>
+            disabled={!!processingKey}
+            className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >{processingKey ? 'Elaborazione...' : `Segna Tutti Pagato (${items.length})`}</button>
         )}
         {items.map((item, idx) => {
           const itemKey = `${type}:${item.bookingId}:${item.source}:${item.originalIndex}`
@@ -1501,7 +1518,8 @@ export default function UnpaidBookingsTab() {
                   <>
                     <button
                       onClick={() => markAllTypePaid(item.booking, type)}
-                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                      disabled={!!processingKey}
+                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
                     >Pagato</button>
                     {partialPayItemKey !== partialKey && (
                       <button
@@ -1732,8 +1750,9 @@ export default function UnpaidBookingsTab() {
                   {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
                     <button
                       onClick={() => markAllCustomerPaid(group)}
-                      className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                    >Salda Tutto — Fattura Unica</button>
+                      disabled={!!processingKey}
+                      className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
                   )}
 
                   {/* Noleggio section */}
@@ -1816,8 +1835,9 @@ export default function UnpaidBookingsTab() {
                     {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
                       <button
                         onClick={() => markAllCustomerPaid(group)}
-                        className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                      >Salda Tutto (fattura unica)</button>
+                        disabled={!!processingKey}
+                        className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
                     )}
                   </td>
 
