@@ -50,6 +50,10 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'La richiesta di firma e stata annullata' }) }
         }
 
+        if (sigRequest.status === 'otp_verified') {
+            return { statusCode: 400, body: JSON.stringify({ error: 'OTP gia verificato. Procedi con la firma.' }) }
+        }
+
         // Check max attempts
         if (sigRequest.otp_attempts >= MAX_OTP_ATTEMPTS) {
             return { statusCode: 429, body: JSON.stringify({ error: 'Troppi tentativi. Richiedi un nuovo link di firma.' }) }
@@ -71,18 +75,24 @@ export const handler: Handler = async (event) => {
             .eq('id', sigRequest.id)
 
         // Send OTP email
+        const smtpUser = process.env.SMTP_USER || 'info@dr7.app'
+        const smtpPass = process.env.SMTP_PASSWORD
+        if (!smtpPass) {
+            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP non configurato' }) }
+        }
+
         const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || 'smtps.aruba.it',
-            port: parseInt(process.env.SMTP_PORT || '465'),
-            secure: true,
+            host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_SECURE === 'true',
             auth: {
-                user: process.env.SMTP_USER || 'info@dr7.app',
-                pass: process.env.SMTP_PASS
+                user: smtpUser,
+                pass: smtpPass
             }
         })
 
         await transporter.sendMail({
-            from: `"DR7 Empire" <${process.env.SMTP_USER || 'info@dr7.app'}>`,
+            from: `"DR7 Empire" <${smtpUser}>`,
             to: sigRequest.signer_email,
             subject: 'Codice di Verifica - Firma Contratto DR7',
             html: `

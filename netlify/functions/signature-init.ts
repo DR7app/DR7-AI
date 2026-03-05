@@ -46,18 +46,18 @@ export const handler: Handler = async (event) => {
             .single()
 
         if (existingRequest) {
-            const isExpired = new Date(existingRequest.token_expires_at) < new Date()
-            if (!isExpired) {
-                return {
-                    statusCode: 409,
-                    body: JSON.stringify({ error: 'Esiste gia una richiesta di firma attiva per questo contratto' })
-                }
-            }
-            // Expire the old request
+            // Cancel the old request and create a new one
             await supabase
                 .from('signature_requests')
-                .update({ status: 'expired', updated_at: new Date().toISOString() })
+                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
                 .eq('id', existingRequest.id)
+
+            await supabase.from('signature_audit_trail').insert({
+                signature_request_id: existingRequest.id,
+                event_type: 'request_cancelled',
+                event_description: 'Richiesta precedente annullata per creazione di una nuova',
+                metadata: { replaced_by: 'new_request' }
+            })
         }
 
         // Generate unique token
@@ -117,18 +117,24 @@ export const handler: Handler = async (event) => {
         // Send signing link via email
         const signingUrl = `${SIGNING_BASE_URL}/firma/${token}`
 
+        const smtpUser = process.env.SMTP_USER || 'info@dr7.app'
+        const smtpPass = process.env.SMTP_PASSWORD
+        if (!smtpPass) {
+            return { statusCode: 500, body: JSON.stringify({ error: 'SMTP non configurato. Impostare SMTP_PASSWORD nelle variabili ambiente.' }) }
+        }
+
         const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || 'smtps.aruba.it',
-            port: parseInt(process.env.SMTP_PORT || '465'),
-            secure: true,
+            host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_SECURE === 'true',
             auth: {
-                user: process.env.SMTP_USER || 'info@dr7.app',
-                pass: process.env.SMTP_PASS
+                user: smtpUser,
+                pass: smtpPass
             }
         })
 
         await transporter.sendMail({
-            from: `"DR7 Empire" <${process.env.SMTP_USER || 'info@dr7.app'}>`,
+            from: `"DR7 Empire" <${smtpUser}>`,
             to: signerEmail,
             subject: `Firma Contratto - DR7 Empire - ${contract.contract_number || ''}`,
             html: `
