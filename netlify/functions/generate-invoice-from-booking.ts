@@ -24,7 +24,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, includeIVA = true, extensionAmount } = JSON.parse(event.body || '{}')
+        const { bookingId, includeIVA = true, extensionAmount, includeExtensions } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return {
@@ -363,6 +363,35 @@ export const handler: Handler = async (event) => {
                     total: (insurancePriceGross / vatDivisor)
                 })
             }
+        }
+
+        // Include pending extensions as line items in the same fattura
+        if (includeExtensions) {
+            const extensions = bookingDetails.extension_history || []
+            const vatRate = includeIVA ? 22 : 0
+            const vatDivisor = 1.22
+            extensions.forEach((ext: any, idx: number) => {
+                if (ext.payment_status === 'pending' || ext.payment_status === 'partial') {
+                    const extTotal = ext.additional_amount || 0
+                    const extPaid = ext.amount_paid || 0
+                    const extRemaining = extTotal - extPaid
+                    if (extRemaining > 0) {
+                        let days = ext.additional_days
+                        if (!days && ext.previous_dropoff && ext.new_dropoff) {
+                            const prev = new Date(ext.previous_dropoff)
+                            const next = new Date(ext.new_dropoff)
+                            days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+                        }
+                        items.push({
+                            description: `Estensione +${days || '?'}gg ${booking.vehicle_name || ''} - ${booking.id.substring(0, 8).toUpperCase()}`,
+                            unit_price: extRemaining / vatDivisor,
+                            quantity: 1,
+                            vat_rate: vatRate,
+                            total: extRemaining / vatDivisor
+                        })
+                    }
+                }
+            })
         }
 
         // Calculate totals
