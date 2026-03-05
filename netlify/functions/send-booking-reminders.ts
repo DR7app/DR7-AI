@@ -152,7 +152,7 @@ const reminderHandler: Handler = async () => {
     hour12: false,
   });
   const currentRomeHour = parseInt(romeHourFormatter.format(now), 10);
-  const isMorningRun = currentRomeHour >= 8 && currentRomeHour <= 10;
+  const isMorningRun = currentRomeHour >= 8 && currentRomeHour <= 12;
   console.log(`Current Rome hour: ${currentRomeHour} — Morning run: ${isMorningRun}`);
 
   // Load message templates from system_messages table
