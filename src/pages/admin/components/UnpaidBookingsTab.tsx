@@ -648,6 +648,174 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  async function markAllCustomerPaid(group: CustomerGroup) {
+    try {
+      // Collect ALL line items for ONE combined fattura
+      const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
+
+      // Pick a bookingId to anchor the fattura (first available)
+      let anchorBookingId = group.noleggioBookings[0]?.id || group.primeWashBookings[0]?.id || group.penaliItems[0]?.bookingId || group.danniItems[0]?.bookingId
+      let anchorCustomerId = ''
+
+      // 1. Noleggio bookings + extensions → mark paid, collect line items
+      for (const booking of group.noleggioBookings) {
+        if (!anchorCustomerId) anchorCustomerId = booking.customer_id || booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = booking.id
+
+        const vehicle = booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || 'Noleggio'
+        const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate || ''
+        const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+
+        if (isPending) {
+          const totalCents = booking.price_total || 0
+          const paidCents = booking.booking_details?.amountPaid || 0
+          const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+          if (remainingEur > 0) {
+            invoiceLineItems.push({
+              label: `Noleggio ${vehicle}${plate ? ` (${plate})` : ''}`,
+              amount: remainingEur,
+              quantity: 1
+            })
+          }
+        }
+
+        const extensions = [...(booking.booking_details?.extension_history || [])]
+        for (let i = 0; i < extensions.length; i++) {
+          if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+            const extTotal = extensions[i].additional_amount || 0
+            const extPaid = extensions[i].amount_paid || 0
+            const extRemaining = Math.max(0, extTotal - extPaid)
+            if (extRemaining > 0) {
+              let days = extensions[i].additional_days
+              if (!days && extensions[i].previous_dropoff && extensions[i].new_dropoff) {
+                const prev = new Date(extensions[i].previous_dropoff)
+                const next = new Date(extensions[i].new_dropoff)
+                days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+              }
+              invoiceLineItems.push({
+                label: `Estensione +${days || '?'}gg ${vehicle}`,
+                amount: extRemaining,
+                quantity: 1
+              })
+            }
+            extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
+          }
+        }
+
+        await supabase.from('bookings').update({
+          payment_status: 'paid', status: 'confirmed',
+          booking_details: { ...booking.booking_details, extension_history: extensions }
+        }).eq('id', booking.id)
+      }
+
+      // 2. Prime Wash bookings → mark paid, collect line items
+      for (const booking of group.primeWashBookings) {
+        if (!anchorCustomerId) anchorCustomerId = booking.customer_id || booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = booking.id
+
+        const serviceName = booking.service_name || 'Servizio'
+        const totalCents = booking.price_total || 0
+        const paidCents = booking.booking_details?.amountPaid || 0
+        const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+        if (remainingEur > 0) {
+          invoiceLineItems.push({ label: serviceName, amount: remainingEur, quantity: 1 })
+        }
+
+        await supabase.from('bookings').update({
+          payment_status: 'paid', status: 'confirmed'
+        }).eq('id', booking.id)
+      }
+
+      // 3. Penali → mark paid in booking_details, collect line items
+      const penaliBookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
+      for (const item of group.penaliItems) {
+        if (!anchorCustomerId) anchorCustomerId = item.booking.customer_id || item.booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = item.bookingId
+
+        if (item.source === 'booking_details' && item.remaining > 0) {
+          invoiceLineItems.push({ label: `Penale - ${item.label}`, amount: item.remaining, quantity: 1 })
+          if (!penaliBookingUpdates.has(item.bookingId)) {
+            penaliBookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
+          }
+          penaliBookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
+        }
+      }
+      for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details.penalties || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, penalties: arr } }).eq('id', bookingId)
+      }
+
+      // 4. Danni → mark paid in booking_details, collect line items
+      const danniBookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
+      for (const item of group.danniItems) {
+        if (!anchorCustomerId) anchorCustomerId = item.booking.customer_id || item.booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = item.bookingId
+
+        if (item.source === 'booking_details' && item.remaining > 0) {
+          invoiceLineItems.push({ label: `Danno - ${item.label}`, amount: item.remaining, quantity: 1 })
+          if (!danniBookingUpdates.has(item.bookingId)) {
+            danniBookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
+          }
+          danniBookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
+        }
+      }
+      for (const [bookingId, { booking, indices }] of danniBookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details.danni || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, danni: arr } }).eq('id', bookingId)
+      }
+
+      // 5. Mark fattura-source penali/danni items as paid
+      const fatturaSourceItems = [...group.penaliItems, ...group.danniItems].filter(i => i.source === 'fattura')
+      for (const fItem of fatturaSourceItems) {
+        const fi = (fatturaItemsMap[fItem.bookingId] || []).find(f => f.fatturaId === fItem.fatturaId && f.itemIndex === fItem.itemIndex)
+        if (fi) await markSingleFatturaItemPaid(fi)
+      }
+
+      // 6. Generate ONE combined fattura for all booking_details items
+      if (invoiceLineItems.length > 0 && anchorBookingId) {
+        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: anchorBookingId,
+            customerId: anchorCustomerId,
+            items: invoiceLineItems,
+            rawDescriptions: true,
+            paymentStatus: 'paid'
+          })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          toast.success(`Fattura unica ${data.invoice?.numero_fattura || ''} generata per ${group.customerName}!`)
+        } else {
+          const err = await res.json()
+          console.warn('Combined invoice generation failed:', err)
+          toast.success(`Tutto pagato per ${group.customerName}! (fattura non generata: ${err.message || err.error || 'errore'})`)
+        }
+      } else {
+        toast.success(`Tutto pagato per ${group.customerName}!`)
+      }
+
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
   async function updateBookingAmount(bookingId: string, newAmountEur: number) {
     try {
       const newAmountCents = Math.round(newAmountEur * 100)
@@ -1560,6 +1728,14 @@ export default function UnpaidBookingsTab() {
                     {group.customerPhone && <div>{group.customerPhone}</div>}
                   </div>
 
+                  {/* Salda Tutto button */}
+                  {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                    <button
+                      onClick={() => markAllCustomerPaid(group)}
+                      className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                    >Salda Tutto — Fattura Unica</button>
+                  )}
+
                   {/* Noleggio section */}
                   {hasNoleggio && (
                     <div>
@@ -1637,6 +1813,12 @@ export default function UnpaidBookingsTab() {
                     <div className="text-red-400 font-bold text-lg mt-2">
                       €{(group.totalRemaining / 100).toFixed(2)}
                     </div>
+                    {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                      <button
+                        onClick={() => markAllCustomerPaid(group)}
+                        className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                      >Salda Tutto (fattura unica)</button>
+                    )}
                   </td>
 
                   {/* Noleggio column */}

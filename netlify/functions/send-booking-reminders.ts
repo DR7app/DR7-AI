@@ -42,13 +42,28 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
       }),
     });
 
-    if (response.ok) {
-      return true;
-    } else {
-      const text = await response.text();
-      console.error(`WhatsApp send failed for ${cleanNum}:`, text);
+    const responseBody = await response.text();
+    let parsed: any = null;
+    try { parsed = JSON.parse(responseBody); } catch { /* not JSON */ }
+
+    if (!response.ok) {
+      console.error(`WhatsApp HTTP ${response.status} for ${cleanNum}:`, responseBody);
       return false;
     }
+
+    // Green API can return 200 but with an error in the body
+    if (parsed?.error) {
+      console.error(`WhatsApp API error for ${cleanNum}:`, JSON.stringify(parsed));
+      return false;
+    }
+
+    if (!parsed?.idMessage) {
+      console.error(`WhatsApp unexpected response for ${cleanNum} (no idMessage):`, responseBody);
+      return false;
+    }
+
+    console.log(`WhatsApp message sent to ${cleanNum}, idMessage: ${parsed.idMessage}`);
+    return true;
   } catch (err: any) {
     console.error(`WhatsApp error for ${cleanNum}:`, err.message);
     return false;
