@@ -610,29 +610,7 @@ export default function UnpaidBookingsTab() {
 
   async function markBookingAndExtensionsPaid(booking: UnpaidBooking) {
     try {
-      // 1. Mark all pending extensions as paid
-      const extensions = [...(booking.booking_details?.extension_history || [])]
-      let extChanged = false
-      for (let i = 0; i < extensions.length; i++) {
-        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
-          extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
-          extChanged = true
-        }
-      }
-
-      // 2. Mark main booking as paid + update extensions in one go
-      const updateData: any = {
-        payment_status: 'paid',
-        status: 'confirmed',
-      }
-      if (extChanged) {
-        updateData.booking_details = { ...booking.booking_details, extension_history: extensions }
-      }
-
-      const { error } = await supabase.from('bookings').update(updateData).eq('id', booking.id)
-      if (error) throw error
-
-      // 3. Generate ONE fattura with main + extensions
+      // 1. Generate ONE fattura FIRST (before marking paid, so extensions are still 'pending' in DB)
       try {
         const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
@@ -646,6 +624,28 @@ export default function UnpaidBookingsTab() {
       } catch (invoiceErr) {
         console.warn('Auto-invoice generation failed:', invoiceErr)
       }
+
+      // 2. Mark all pending extensions as paid
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      let extChanged = false
+      for (let i = 0; i < extensions.length; i++) {
+        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+          extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
+          extChanged = true
+        }
+      }
+
+      // 3. Mark main booking as paid + update extensions in one go
+      const updateData: any = {
+        payment_status: 'paid',
+        status: 'confirmed',
+      }
+      if (extChanged) {
+        updateData.booking_details = { ...booking.booking_details, extension_history: extensions }
+      }
+
+      const { error } = await supabase.from('bookings').update(updateData).eq('id', booking.id)
+      if (error) throw error
 
       toast.success('Tutto segnato come pagato!')
       loadUnpaidBookings()
@@ -1168,7 +1168,7 @@ export default function UnpaidBookingsTab() {
               )}
 
               {/* Segna Tutto Pagato — booking + extensions in one fattura */}
-              {pendingExts.length > 0 && isPending && (
+              {((isPending ? 1 : 0) + pendingExts.length) >= 2 && (
                 <button
                   onClick={() => markBookingAndExtensionsPaid(booking)}
                   className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
