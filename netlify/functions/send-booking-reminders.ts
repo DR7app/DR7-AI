@@ -124,7 +124,7 @@ function getRomeDateString(offsetDays: number): string {
  * 2. EXTENSION OFFER (≤24h bookings): runs EVERY check → sends 4h after pickup
  * 3. IBAN DEPOSIT REQUEST: runs ONLY at 9 AM Rome → bookings ended yesterday
  */
-const reminderHandler: Handler = async () => {
+export const reminderHandler: Handler = async () => {
   console.log('=== Booking Reminders Check Started ===');
 
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -455,17 +455,5 @@ const reminderHandler: Handler = async () => {
   return { statusCode: 200, body: `Sent: ${sent}, failed: ${failed}` };
 };
 
-// Run every 2 hours to catch short rental 4h-after-pickup window.
-// Sections 1 (>24h extension) and 3 (IBAN) only execute at 9 AM Rome.
-// Each message is sent ONE TIME only — flags prevent re-sending.
-const scheduledHandler = schedule('0 */2 * * *', reminderHandler);
-
-// Allow both scheduled invocation AND direct HTTP trigger for manual runs
-export const handler: Handler = async (event, context) => {
-  // Direct HTTP call (manual trigger) — run the handler directly
-  if (event.httpMethod === 'GET' || (event.httpMethod === 'POST' && !event.body?.includes('next_run'))) {
-    return reminderHandler(event, context);
-  }
-  // Scheduled invocation from Netlify
-  return scheduledHandler(event, context);
-};
+// Run every 2 hours via Netlify scheduled functions.
+export const handler = schedule('0 */2 * * *', reminderHandler);
