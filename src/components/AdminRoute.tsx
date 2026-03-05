@@ -12,6 +12,15 @@ export default function AdminRoute({ children }: AdminRouteProps) {
 
   useEffect(() => {
     checkAuth()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setAuthorized(false)
+        setLoading(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   async function checkAuth() {
