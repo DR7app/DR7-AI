@@ -287,9 +287,10 @@ export default function UnpaidBookingsTab() {
   async function markSingleExtensionPaid(booking: UnpaidBooking, extIndex: number) {
     try {
       const extensions = [...(booking.booking_details?.extension_history || [])]
-      if (extensions[extIndex]) {
-        extensions[extIndex] = { ...extensions[extIndex], payment_status: 'paid' }
-      }
+      const ext = extensions[extIndex]
+      if (!ext) return
+
+      extensions[extIndex] = { ...ext, payment_status: 'paid' }
 
       const { error } = await supabase
         .from('bookings')
@@ -298,6 +299,28 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Estensione segnata come pagata!')
+
+      // Generate fattura for the extension
+      const extAmount = ext.additional_amount || 0
+      if (extAmount > 0) {
+        try {
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extAmount })
+          })
+          if (invoiceRes.ok) {
+            toast.success('Fattura estensione generata!')
+          } else {
+            const errData = await invoiceRes.json()
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            toast.error(`Fattura estensione non generata: ${errMsg}`, { duration: 8000 })
+          }
+        } catch (invoiceError) {
+          console.error('Failed to generate extension fattura:', invoiceError)
+        }
+      }
+
       loadUnpaidBookings()
     } catch (error: any) {
       toast.error('Errore: ' + (error.message || error))
@@ -328,6 +351,27 @@ export default function UnpaidBookingsTab() {
       if (error) throw error
       toast.success('Pagamento parziale estensione registrato!')
       setPartialPayItemKey(null)
+
+      // Generate fattura when fully paid
+      if (newPaid >= total && total > 0) {
+        try {
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: total })
+          })
+          if (invoiceRes.ok) {
+            toast.success('Fattura estensione generata!')
+          } else {
+            const errData = await invoiceRes.json()
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            toast.error(`Fattura estensione non generata: ${errMsg}`, { duration: 8000 })
+          }
+        } catch (invoiceError) {
+          console.error('Failed to generate extension fattura:', invoiceError)
+        }
+      }
+
       loadUnpaidBookings()
     } catch (error: any) {
       toast.error('Errore: ' + (error.message || error))
