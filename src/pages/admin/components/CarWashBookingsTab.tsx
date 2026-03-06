@@ -730,34 +730,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     console.log('✅ Booking created successfully:', data)
 
-    // Generate PDF invoice for car wash
+    // Generate fattura for car wash booking
     try {
-      await fetch('/.netlify/functions/generate-invoice-pdf', {
+      const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: data.id || '',
-          bookingType: 'car_wash',
-          customerName,
-          customerEmail,
-          customerPhone,
-          items: [{
-            description: `Servizio Lavaggio: ${serviceNames}`,
-            quantity: 1,
-            unitPrice: totalPrice * 100,
-            total: totalPrice * 100
-          }],
-          subtotal: totalPrice * 100,
-          tax: 0,
-          total: totalPrice * 100,
-          paymentStatus: formData.payment_status || 'pending',
-          bookingDate: new Date().toISOString(),
-          serviceDate: appointmentDateTime,
-          notes: formData.notes || ''
-        })
+        body: JSON.stringify({ bookingId: data.id, includeIVA: true })
       })
+      if (invoiceResponse.ok) {
+        const invoiceData = await invoiceResponse.json()
+        console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
+      } else {
+        const errData = await invoiceResponse.json().catch(() => ({}))
+        console.warn('⚠️ Fattura generation failed:', errData.error || errData.message || invoiceResponse.statusText)
+      }
     } catch (invoiceError) {
-      console.error('⚠️ Failed to generate invoice:', invoiceError)
+      console.error('⚠️ Failed to generate fattura:', invoiceError)
     }
 
     // Send WhatsApp notification

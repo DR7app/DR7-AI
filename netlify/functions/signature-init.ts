@@ -7,7 +7,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyira
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://admin.dr7empire.com'
+const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://dr7empire.com'
 const TOKEN_EXPIRY_HOURS = 48
 
 export const handler: Handler = async (event) => {
