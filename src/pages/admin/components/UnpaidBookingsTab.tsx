@@ -113,7 +113,7 @@ export default function UnpaidBookingsTab() {
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
-        .neq('status', 'cancelled')
+        .not('status', 'in', '(cancelled,annullata,completed,completata)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 
@@ -260,6 +260,26 @@ export default function UnpaidBookingsTab() {
       loadUnpaidBookings()
     } catch (error: any) {
       console.error('Failed to update amount:', error)
+      toast.error('Errore: ' + (error.message || error))
+    }
+  }
+
+  async function deleteSingleExtension(booking: UnpaidBooking, extIndex: number) {
+    try {
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      if (!extensions[extIndex]) return
+      extensions.splice(extIndex, 1)
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...booking.booking_details, extension_history: extensions } })
+        .eq('id', booking.id)
+
+      if (error) throw error
+      toast.success('Estensione rimossa!')
+      setConfirmDeleteKey(null)
+      loadUnpaidBookings()
+    } catch (error: any) {
       toast.error('Errore: ' + (error.message || error))
     }
   }
@@ -621,15 +641,52 @@ export default function UnpaidBookingsTab() {
 
   async function markBookingAndExtensionsPaid(booking: UnpaidBooking) {
     try {
-      // 1. Mark all pending extensions as paid
+      const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid' || booking.payment_status === 'partial'
+      const vehicle = booking.vehicle_name || booking.booking_details?.vehicle?.name || 'Noleggio'
+      const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || ''
+
+      // 1. Collect unpaid line items for fattura
+      const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
+
+      // Add base booking only if it's actually unpaid
+      if (isPending) {
+        const totalCents = booking.price_total || 0
+        const paidCents = booking.booking_details?.amountPaid || 0
+        const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+        if (remainingEur > 0) {
+          invoiceLineItems.push({
+            label: `Noleggio ${vehicle}${plate ? ` (${plate})` : ''}`,
+            amount: remainingEur,
+            quantity: 1
+          })
+        }
+      }
+
+      // 2. Mark pending extensions as paid and collect their amounts
       const extensions = [...(booking.booking_details?.extension_history || [])]
       for (let i = 0; i < extensions.length; i++) {
         if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+          const extTotal = extensions[i].additional_amount || 0
+          const extPaid = extensions[i].amount_paid || 0
+          const extRemaining = Math.max(0, extTotal - extPaid)
+          if (extRemaining > 0) {
+            let days = extensions[i].additional_days
+            if (!days && extensions[i].previous_dropoff && extensions[i].new_dropoff) {
+              const prev = new Date(extensions[i].previous_dropoff)
+              const next = new Date(extensions[i].new_dropoff)
+              days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+            }
+            invoiceLineItems.push({
+              label: `Estensione +${days || '?'}gg ${vehicle}`,
+              amount: extRemaining,
+              quantity: 1
+            })
+          }
           extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
         }
       }
 
-      // 2. Mark main booking as paid + update extensions
+      // 3. Update booking in DB
       const { error } = await supabase.from('bookings').update({
         payment_status: 'paid',
         status: 'confirmed',
@@ -638,19 +695,27 @@ export default function UnpaidBookingsTab() {
       if (error) throw error
       toast.success('Tutto segnato come pagato!')
 
-      // 3. Generate ONE fattura with main + all extensions
-      try {
-        const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId: booking.id, includeIVA: true, includeExtensions: true })
-        })
-        if (invoiceRes.ok) {
-          const invoiceData = await invoiceRes.json()
-          toast.success(`Fattura unica ${invoiceData.invoice?.numero_fattura || ''} generata!`)
+      // 4. Generate ONE fattura with ONLY unpaid items
+      if (invoiceLineItems.length > 0) {
+        try {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: booking.id,
+              customerId: booking.customer_id || booking.user_id,
+              items: invoiceLineItems,
+              rawDescriptions: true,
+              paymentStatus: 'paid'
+            })
+          })
+          if (res.ok) {
+            const data = await res.json()
+            toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata!`)
+          }
+        } catch (invoiceErr) {
+          console.warn('Auto-invoice generation failed:', invoiceErr)
         }
-      } catch (invoiceErr) {
-        console.warn('Auto-invoice generation failed:', invoiceErr)
       }
 
       loadUnpaidBookings()
@@ -678,7 +743,7 @@ export default function UnpaidBookingsTab() {
 
         const vehicle = booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || 'Noleggio'
         const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate || ''
-        const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+        const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid' || booking.payment_status === 'partial'
 
         if (isPending) {
           const totalCents = booking.price_total || 0
@@ -1332,6 +1397,23 @@ export default function UnpaidBookingsTab() {
                               onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue('') }}
                               className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                             >Parziale</button>
+                          )}
+                          {confirmDeleteKey !== extPartialKey ? (
+                            <button
+                              onClick={() => setConfirmDeleteKey(extPartialKey)}
+                              className="px-2 py-0.5 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                            >x</button>
+                          ) : (
+                            <div className="flex gap-1 items-center">
+                              <button
+                                onClick={() => deleteSingleExtension(booking, extIdx)}
+                                className="px-2 py-0.5 bg-red-600 text-white rounded text-xs font-semibold"
+                              >Conferma</button>
+                              <button
+                                onClick={() => setConfirmDeleteKey(null)}
+                                className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs font-semibold"
+                              >Annulla</button>
+                            </div>
                           )}
                         </div>
                         <PartialPayInput
