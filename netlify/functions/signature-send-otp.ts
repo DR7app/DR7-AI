@@ -83,7 +83,8 @@ export const handler: Handler = async (event) => {
         const { error: emailError } = await resend.emails.send({
             from: 'DR7 Empire <info@dr7.app>',
             to: sigRequest.signer_email,
-            subject: 'Codice di Verifica - Firma Contratto DR7',
+            subject: `Il tuo codice OTP: ${otp} - DR7 Empire`,
+            text: `Il tuo codice di verifica DR7 Empire e: ${otp}\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questa email.\n\nDubai rent 7.0 S.p.A. - www.dr7empire.com`,
             html: `
                 <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <div style="text-align: center; margin-bottom: 30px;">
