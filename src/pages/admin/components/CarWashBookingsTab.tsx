@@ -742,7 +742,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
       } else {
         const errData = await invoiceResponse.json().catch(() => ({}))
-        console.warn('⚠️ Fattura generation failed:', errData.error || errData.message || invoiceResponse.statusText)
+        const errMsg = errData.message || errData.error || invoiceResponse.statusText
+        console.warn('⚠️ Fattura generation failed:', errMsg)
+        toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
       }
     } catch (invoiceError) {
       console.error('⚠️ Failed to generate fattura:', invoiceError)
@@ -761,7 +763,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           console.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
         } else {
           const errData = await invoiceRes.json()
-          console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errData.message || errData.error)
+          const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+          console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
+          toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
         }
       } catch (invoiceError) {
         console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
@@ -2236,7 +2240,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               console.log('[Auto-Gen] ✅ Fattura generated')
                             } else {
                               const errData = await invoiceRes.json()
-                              console.warn('[Auto-Gen] ⚠️ Fattura failed:', errData.message || errData.error)
+                              const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+                              console.warn('[Auto-Gen] ⚠️ Fattura failed:', errMsg)
+                              toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
                             }
                           }
                         } catch (invoiceError) {

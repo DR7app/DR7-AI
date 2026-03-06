@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import toast from 'react-hot-toast'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 
@@ -2148,7 +2149,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             console.log('[handleConfirmExtend] ✅ Extension fattura generated and sent to SDI')
           } else {
             const errData = await invoiceRes.json()
-            console.warn('[handleConfirmExtend] ⚠️ Extension fattura failed:', errData.message || errData.error)
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            console.warn('[handleConfirmExtend] ⚠️ Extension fattura failed:', errMsg)
+            toast.error(`Fattura estensione non generata: ${errMsg}`, { duration: 8000 })
           }
         } catch (invoiceError) {
           console.error('[handleConfirmExtend] ⚠️ Failed to generate extension fattura:', invoiceError)
@@ -3473,7 +3476,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             console.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
           } else {
             const errData = await invoiceRes.json()
-            console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errData.message || errData.error)
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
+            toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
           }
         } catch (invoiceError) {
           console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
