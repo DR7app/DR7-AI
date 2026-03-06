@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import toast from 'react-hot-toast'
+import type { Session } from '@supabase/supabase-js'
 
 interface AlarmBooking {
     bookingId: string
@@ -47,10 +48,20 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         audioEnabled: localStorage.getItem('audioAlertsEnabled') === 'true'
     })
 
+    const [session, setSession] = useState<Session | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const triggeredAlarmsRef = useRef<Set<string>>(
         new Set(JSON.parse(localStorage.getItem('triggered_alarms') || '[]'))
     )
+
+    // Track auth state — only run alarms when logged in
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session)
+        })
+        return () => subscription.unsubscribe()
+    }, [])
 
     // Enable audio alerts
     const enableAudio = async () => {
@@ -659,8 +670,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
-    // Poll every 30 seconds
+    // Poll every 30 seconds — only when authenticated
     useEffect(() => {
+        if (!session) return
         checkAlarms()
         checkFleetMaintenanceAlarms()
         const interval = setInterval(() => {
@@ -668,7 +680,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             checkFleetMaintenanceAlarms()
         }, 30000)
         return () => clearInterval(interval)
-    }, []) // Empty deps - runs once on mount
+    }, [session])
 
     // Cleanup audio on unmount
     useEffect(() => {
