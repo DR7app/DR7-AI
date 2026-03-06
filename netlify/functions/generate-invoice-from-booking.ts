@@ -47,15 +47,9 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Skip fattura for test vehicles
+        // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
         const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
-        if (vehicleName === 'test') {
-            console.log('[Invoice] Skipping fattura for test vehicle')
-            return {
-                statusCode: 200,
-                body: JSON.stringify({ success: true, skipped: true, message: 'Test vehicle — fattura skipped' })
-            }
-        }
+        const isTestVehicle = vehicleName === 'test'
 
         // Fetch customer data with robust fallback (Logic from generate-contract.ts)
         const bookingDetails = booking.booking_details || {}
@@ -457,8 +451,10 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // Auto-send to SDI via Aruba if customer has tax code
-        if (invoice.customer_tax_code) {
+        // Auto-send to SDI via Aruba if customer has tax code (skip for test vehicles)
+        if (isTestVehicle) {
+            console.log('[Invoice] Test vehicle — skipping SDI, will send PDF via WhatsApp only')
+        } else if (invoice.customer_tax_code) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
