@@ -72,7 +72,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       const { data: vehiclesData } = await supabase
         .from('vehicles')
         .select('id, display_name, plate, status, category, metadata')
-        .neq('status', 'retired')
+        .or('status.neq.retired,display_name.eq.Test')
 
       // Fetch ALL bookings via Netlify function (bypasses RLS)
       let allBookings: any[] | null = null

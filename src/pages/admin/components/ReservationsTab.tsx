@@ -1133,7 +1133,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const { data: vehiclesData, error: vehiclesError } = await supabase
         .from('vehicles')
         .select('*')
-        .neq('status', 'retired')
+        .or('status.neq.retired,display_name.eq.Test')
         .order('display_name')
 
       if (vehiclesError) {

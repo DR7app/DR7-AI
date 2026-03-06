@@ -71,6 +71,16 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Skip fattura for test vehicles
+        const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
+        if (vehicleName === 'test') {
+            console.log('[Penalty Invoice] Skipping fattura for test vehicle')
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ success: true, skipped: true, message: 'Test vehicle — fattura skipped' })
+            }
+        }
+
         // Fetch customer data
         const bookingDetails = booking.booking_details || {}
         const finalCustomerId = customerId || bookingDetails.customer?.customerId || booking.user_id || booking.customer_id
