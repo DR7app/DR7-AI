@@ -4422,12 +4422,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 value={formData.total_amount}
                 onChange={(e) => {
                   const newTotal = e.target.value
-                  // If currently paid, update paid amount to match new total (including delivery/pickup fees)
-                  const fullTotal = parseFloat(newTotal || '0')
-                    + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-                    + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                  const newPaid = formData.payment_status === 'paid' ? fullTotal.toFixed(2) : formData.amount_paid
-                  setFormData({ ...formData, total_amount: newTotal, amount_paid: newPaid })
+                  setFormData(prev => {
+                    // If currently paid, update paid amount to match new total (including delivery/pickup fees)
+                    const fullTotal = parseFloat(newTotal || '0')
+                      + (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
+                      + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
+                    const newPaid = prev.payment_status === 'paid' ? fullTotal.toFixed(2) : prev.amount_paid
+                    return { ...prev, total_amount: newTotal, amount_paid: newPaid }
+                  })
                 }}
               />
               <Input
@@ -4471,7 +4473,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   type="checkbox"
                   id="unlimited_km"
                   checked={formData.unlimited_km}
-                  onChange={(e) => setFormData({ ...formData, unlimited_km: e.target.checked, km_overage_fee: e.target.checked ? '0' : '1.80' })}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : '1.80' }))
+                  }}
                   className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
                 />
                 <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
