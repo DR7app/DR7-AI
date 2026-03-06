@@ -1891,7 +1891,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Subtract delivery/pickup fees to get BASE rental amount only
       // (fees are re-added on save at price_total calculation)
       // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
-      total_amount: ((booking.price_total
+      total_amount: (Math.round(booking.price_total
         - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
         - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
       ) / 100).toFixed(2),
@@ -1931,14 +1931,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       delivery_zip: booking.delivery_address?.zip || booking.booking_details?.delivery_address?.zip || '',
       delivery_province: booking.delivery_address?.province || booking.booking_details?.delivery_address?.province || '',
       delivery_notes: booking.delivery_address?.notes || booking.booking_details?.delivery_address?.notes || '',
-      delivery_fee: booking.delivery_fee != null ? (booking.delivery_fee / 100).toString() : (booking.booking_details?.delivery_fee || '0'),
+      delivery_fee: booking.delivery_fee != null ? (Math.round(booking.delivery_fee) / 100).toFixed(2) : (booking.booking_details?.delivery_fee || '0'),
       pickup_enabled: booking.pickup_enabled || booking.booking_details?.pickup_enabled || false,
       pickup_street: booking.pickup_address?.street || booking.booking_details?.pickup_address?.street || '',
       pickup_city: booking.pickup_address?.city || booking.booking_details?.pickup_address?.city || '',
       pickup_zip: booking.pickup_address?.zip || booking.booking_details?.pickup_address?.zip || '',
       pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
-      pickup_fee: booking.pickup_fee != null ? (booking.pickup_fee / 100).toString() : (booking.booking_details?.pickup_fee || '0'),
+      pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
     })
 
     setEditingId(booking.id)
@@ -3074,9 +3074,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
-        price_total: eurToCents(formData.total_amount) // Convert to cents (base rental)
+        price_total: Math.round(eurToCents(formData.total_amount) // Convert to cents (base rental)
           + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
-          + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
+          + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0)),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
