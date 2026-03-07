@@ -84,6 +84,7 @@ export default function FirmaPage() {
     const [remainingAttempts, setRemainingAttempts] = useState(5)
     const [acceptedTerms, setAcceptedTerms] = useState(false)
     const [acceptedMarketing, setAcceptedMarketing] = useState<boolean | null>(null)
+    const [showMarketingInfo, setShowMarketingInfo] = useState(false)
     const [secondDriverName, setSecondDriverName] = useState<string | null>(null)
     const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -544,7 +545,13 @@ export default function FirmaPage() {
 
                         <div className="mb-6">
                             <p className="text-sm text-gray-700 mb-3">
-                                Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMarketingInfo(true)}
+                                    className="underline text-yellow-700 hover:text-yellow-800 transition-colors"
+                                >
+                                    Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
+                                </button>
                             </p>
                             <div className="flex gap-4">
                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -610,6 +617,35 @@ export default function FirmaPage() {
             <div className="text-center py-6 text-xs text-gray-400">
                 Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927
             </div>
+
+            {/* Marketing Info Modal */}
+            {showMarketingInfo && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowMarketingInfo(false)}>
+                    <div className="bg-white rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">
+                            INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI PER FINALITA DI MARKETING
+                        </h3>
+                        <div className="text-sm text-gray-700 space-y-3">
+                            <p>Ai sensi del Regolamento (UE) 2016/679 ("GDPR"), previo consenso dell'utente, Trustera potra trattare i dati personali forniti durante l'utilizzo della piattaforma (quali ad esempio dati identificativi e di contatto) per finalita di marketing e comunicazioni commerciali.</p>
+                            <p>I dati potranno essere utilizzati per l'invio di vantaggi, offerte, promozioni e sconti dedicati relativi a prodotti o servizi che potrebbero essere di interesse per l'utente.</p>
+                            <p>Le comunicazioni potranno essere effettuate tramite diversi canali di contatto, tra cui, a titolo esemplificativo: email, SMS, telefono, notifiche push, applicazioni di messaggistica (come ad esempio WhatsApp) e altri strumenti di comunicazione elettronica o digitale.</p>
+                            <p>Previo consenso dell'utente, i dati potranno essere trattati da Trustera, partner selezionati, e resi disponibili anche attraverso DR7 Platform, una piattaforma digitale utilizzata per la gestione e la distribuzione di opportunita commerciali e offerte da parte di aziende e partner aderenti.</p>
+                            <p>Attraverso DR7 Platform, i dati potranno essere utilizzati da partner commerciali selezionati presenti sulla piattaforma, al fine di proporre comunicazioni commerciali, offerte, promozioni, vantaggi e sconti dedicati.</p>
+                            <p>Tali partner possono appartenere a diverse categorie merceologiche e settori economici, inclusi, a titolo esemplificativo ma non esaustivo, aziende operanti nei settori retail e beni di consumo, moda e abbigliamento, e-commerce, servizi digitali e tecnologici, telecomunicazioni, mobilita, turismo, energia, assicurazioni, servizi finanziari, servizi professionali, casa, benessere, tempo libero e altri prodotti o servizi potenzialmente di interesse per l'utente.</p>
+                            <p>Il consenso al trattamento dei dati per finalita di marketing e facoltativo e non e necessario per l'utilizzo delle funzionalita principali della piattaforma.</p>
+                            <p>L'utente puo revocare in qualsiasi momento il consenso prestato tramite i link di disiscrizione presenti nelle comunicazioni ricevute oppure attraverso i canali indicati nella privacy policy generale.</p>
+                            <p>Trustera conserva evidenza del consenso prestato, inclusi data, ora e log tecnici associati alla manifestazione di volonta dell'utente, al fine di dimostrare la liceita del trattamento.</p>
+                            <p>L'utente puo esercitare in qualsiasi momento i diritti previsti dagli articoli 15-22 del GDPR, tra cui accesso ai dati personali, rettifica, cancellazione, limitazione del trattamento, opposizione e portabilita dei dati.</p>
+                        </div>
+                        <button
+                            onClick={() => setShowMarketingInfo(false)}
+                            className="mt-6 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg transition-colors"
+                        >
+                            Chiudi
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
