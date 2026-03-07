@@ -83,6 +83,7 @@ export default function FirmaPage() {
     const [error, setError] = useState('')
     const [remainingAttempts, setRemainingAttempts] = useState(5)
     const [acceptedTerms, setAcceptedTerms] = useState(false)
+    const [acceptedMarketing, setAcceptedMarketing] = useState<boolean | null>(null)
     const [secondDriverName, setSecondDriverName] = useState<string | null>(null)
     const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -208,6 +209,11 @@ export default function FirmaPage() {
             return
         }
 
+        if (acceptedMarketing === null) {
+            setError('Seleziona Si o No per le offerte Trustera')
+            return
+        }
+
         setError('')
         try {
             const signatureImage = sig1.toDataUrl()
@@ -215,7 +221,7 @@ export default function FirmaPage() {
             const res = await fetch('/.netlify/functions/signature-complete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, signatureImage, signatureImage2 })
+                body: JSON.stringify({ token, signatureImage, signatureImage2, marketingConsent: acceptedMarketing })
             })
 
             if (!res.ok) {
@@ -524,7 +530,7 @@ export default function FirmaPage() {
                             </div>
                         )}
 
-                        <label className="flex items-start gap-3 mb-6 cursor-pointer">
+                        <label className="flex items-start gap-3 mb-4 cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={acceptedTerms}
@@ -532,14 +538,41 @@ export default function FirmaPage() {
                                 className="mt-1 h-5 w-5 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
                             />
                             <span className="text-sm text-gray-700">
-                                Accetto i termini e le condizioni del contratto e confermo la mia volonta di firmare
-                                elettronicamente questo documento.
+                                Confermo che i dati inseriti sono corretti e accetto i termini e le condizioni del contratto.
                             </span>
                         </label>
 
+                        <div className="mb-6">
+                            <p className="text-sm text-gray-700 mb-3">
+                                Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
+                            </p>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="marketing"
+                                        checked={acceptedMarketing === true}
+                                        onChange={() => setAcceptedMarketing(true)}
+                                        className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">Si</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="marketing"
+                                        checked={acceptedMarketing === false}
+                                        onChange={() => setAcceptedMarketing(false)}
+                                        className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">No</span>
+                                </label>
+                            </div>
+                        </div>
+
                         <button
                             onClick={handleSign}
-                            disabled={!acceptedTerms || !sig1.hasSig || (!!secondDriverName && !sig2.hasSig)}
+                            disabled={!acceptedTerms || !sig1.hasSig || (!!secondDriverName && !sig2.hasSig) || acceptedMarketing === null}
                             className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-lg transition-colors text-lg"
                         >
                             Firma il Documento

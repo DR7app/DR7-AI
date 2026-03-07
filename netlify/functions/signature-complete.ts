@@ -13,7 +13,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { token, signatureImage, signatureImage2 } = JSON.parse(event.body || '{}')
+        const { token, signatureImage, signatureImage2, marketingConsent } = JSON.parse(event.body || '{}')
 
         if (!token) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Token richiesto' }) }
@@ -319,9 +319,78 @@ export const handler: Handler = async (event) => {
                 original_pdf_hash: currentHash,
                 signed_pdf_hash: signedPdfHash,
                 signed_pdf_url: signedPdfUrl,
-                contract_number: contract.contract_number
+                contract_number: contract.contract_number,
+                marketing_consent: !!marketingConsent
             }
         })
+
+        // Save marketing consent on customer record if provided
+        if (marketingConsent !== undefined && contract.booking_id) {
+            try {
+                const { data: booking } = await supabase
+                    .from('bookings')
+                    .select('customer_email, booking_details')
+                    .eq('id', contract.booking_id)
+                    .single()
+
+                const customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email
+                if (customerEmail) {
+                    await supabase
+                        .from('customers_extended')
+                        .update({
+                            marketing_consent: !!marketingConsent,
+                            marketing_consent_date: signedAt.toISOString()
+                        })
+                        .eq('email', customerEmail)
+                    console.log(`[signature-complete] Marketing consent (${marketingConsent}) saved for ${customerEmail}`)
+                }
+            } catch (mcErr: any) {
+                console.error('[signature-complete] Failed to save marketing consent:', mcErr.message)
+            }
+        }
+
+        // Send signed contract via WhatsApp
+        const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+        const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
+        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && signedPdfUrl) {
+            try {
+                const { data: booking } = await supabase
+                    .from('bookings')
+                    .select('customer_phone, booking_details')
+                    .eq('id', contract.booking_id)
+                    .single()
+
+                const customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
+                if (customerPhone) {
+                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            urlFile: signedPdfUrl,
+                            fileName: `Contratto_Firmato_${contract.contract_number || ''}.pdf`,
+                            caption: `Contratto ${contract.contract_number || ''} firmato - DR7 Empire`
+                        })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && !waResult.error) {
+                        console.log('[signature-complete] Signed contract sent via WhatsApp:', waResult.idMessage)
+                    } else {
+                        console.error('[signature-complete] WhatsApp send failed:', waResult)
+                    }
+                } else {
+                    console.log('[signature-complete] No customer phone — skipping WhatsApp send')
+                }
+            } catch (waErr: any) {
+                console.error('[signature-complete] WhatsApp send failed:', waErr.message)
+            }
+        }
 
         return {
             statusCode: 200,
