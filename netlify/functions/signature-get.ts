@@ -40,9 +40,25 @@ export const handler: Handler = async (event) => {
         // Fetch contract for PDF URL and details
         const { data: contract } = await supabase
             .from('contracts')
-            .select('contract_number, pdf_url, customer_name, vehicle_name, rental_start_date, rental_end_date')
+            .select('contract_number, pdf_url, customer_name, vehicle_name, rental_start_date, rental_end_date, booking_id')
             .eq('id', sigRequest.contract_id)
             .single()
+
+        // Check if booking has a second driver
+        let secondDriverName: string | null = null
+        if (contract?.booking_id) {
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('booking_details')
+                .eq('id', contract.booking_id)
+                .single()
+
+            if (booking?.booking_details?.second_driver) {
+                const sd = booking.booking_details.second_driver
+                secondDriverName = sd.fullName || sd.full_name || sd.name ||
+                    [sd.nome, sd.cognome].filter(Boolean).join(' ') || null
+            }
+        }
 
         // Log document view
         if (sigRequest.status !== 'signed') {
@@ -63,6 +79,7 @@ export const handler: Handler = async (event) => {
                 signerEmail: sigRequest.signer_email,
                 signedPdfUrl: sigRequest.signed_pdf_url,
                 signedAt: sigRequest.signed_at,
+                secondDriverName,
                 contract: contract ? {
                     contractNumber: contract.contract_number,
                     pdfUrl: contract.pdf_url,

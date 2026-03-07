@@ -13,7 +13,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { token } = JSON.parse(event.body || '{}')
+        const { token, signatureImage, signatureImage2 } = JSON.parse(event.body || '{}')
 
         if (!token) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Token richiesto' }) }
@@ -93,6 +93,74 @@ export const handler: Handler = async (event) => {
         const signedAt = new Date()
         const signedAtRome = signedAt.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })
 
+        // Embed handwritten signature on the last page of the original contract
+        if (signatureImage && signatureImage.startsWith('data:image/png;base64,')) {
+            try {
+                const base64Data = signatureImage.replace('data:image/png;base64,', '')
+                const sigBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+                const sigImage = await pdfDoc.embedPng(sigBytes)
+
+                const pages = pdfDoc.getPages()
+                const lastPage = pages[pages.length - 1]
+                const { width: pageWidth, height: pageHeight } = lastPage.getSize()
+
+                // Place signature in the "Firma del 1 guidatore" box area
+                // Typically the signature boxes are at the bottom of the last page
+                // Position: center-right area (second column), near the bottom
+                const sigMaxWidth = 160
+                const sigMaxHeight = 50
+                const sigDims = sigImage.scale(Math.min(sigMaxWidth / sigImage.width, sigMaxHeight / sigImage.height))
+
+                // "Firma del 1 guidatore" box is roughly in the middle third of the page width, near the bottom
+                const sigX = pageWidth * 0.35 + (sigMaxWidth - sigDims.width) / 2
+                const sigY = 45 // Near the very bottom of the page, inside the signature box
+
+                lastPage.drawImage(sigImage, {
+                    x: sigX,
+                    y: sigY,
+                    width: sigDims.width,
+                    height: sigDims.height,
+                })
+
+                console.log(`[signature-complete] Handwritten signature 1 embedded at (${sigX}, ${sigY}) size ${sigDims.width}x${sigDims.height}`)
+            } catch (sigErr: any) {
+                console.error('[signature-complete] Failed to embed signature image:', sigErr.message)
+                // Continue without signature image — OTP alone is still valid
+            }
+        }
+
+        // Embed 2nd driver signature if provided
+        if (signatureImage2 && signatureImage2.startsWith('data:image/png;base64,')) {
+            try {
+                const base64Data2 = signatureImage2.replace('data:image/png;base64,', '')
+                const sigBytes2 = Uint8Array.from(atob(base64Data2), c => c.charCodeAt(0))
+                const sigImage2 = await pdfDoc.embedPng(sigBytes2)
+
+                const pages = pdfDoc.getPages()
+                const lastPage = pages[pages.length - 1]
+                const { width: pageWidth } = lastPage.getSize()
+
+                const sigMaxWidth = 160
+                const sigMaxHeight = 50
+                const sigDims2 = sigImage2.scale(Math.min(sigMaxWidth / sigImage2.width, sigMaxHeight / sigImage2.height))
+
+                // "Firma del 2 guidatore" box is in the right third of the page
+                const sigX2 = pageWidth * 0.67 + (sigMaxWidth - sigDims2.width) / 2
+                const sigY2 = 45
+
+                lastPage.drawImage(sigImage2, {
+                    x: sigX2,
+                    y: sigY2,
+                    width: sigDims2.width,
+                    height: sigDims2.height,
+                })
+
+                console.log(`[signature-complete] Handwritten signature 2 embedded at (${sigX2}, ${sigY2})`)
+            } catch (sigErr: any) {
+                console.error('[signature-complete] Failed to embed 2nd driver signature:', sigErr.message)
+            }
+        }
+
         // Add attestation page
         const page = pdfDoc.addPage([595.28, 841.89]) // A4
         const { width, height } = page.getSize()
@@ -139,7 +207,7 @@ export const handler: Handler = async (event) => {
         y -= 20
 
         const verifyLines = [
-            ['Metodo:', 'Firma Elettronica Avanzata via OTP Email'],
+            ['Metodo:', signatureImage ? 'Firma Elettronica Avanzata via OTP Email + Firma Autografa' : 'Firma Elettronica Avanzata via OTP Email'],
             ['Email OTP:', sigRequest.signer_email],
             ['IP firmatario:', ipAddress],
             ['User Agent:', (userAgent || '').substring(0, 70)],
