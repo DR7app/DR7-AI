@@ -215,7 +215,7 @@ const VEHICLE_DB: Record<string, { models: string[]; category: VehicleCategory }
     { models: ['4', 'dr4', '5', 'dr5', '6', 'dr6', '7', 'dr7', 'f35', 'evo'], category: 'maxi' },
   ],
   evo: [
-    { models: ['3', '4', '5', '6', 'cross 4'], category: 'maxi' },
+    { models: ['3', '4', '5', '6', '7', '8', '9', 'cross 4'], category: 'maxi' },
   ],
   mg: [
     { models: ['3', 'mg3', '4', 'mg4', '5', 'mg5'], category: 'urban' },
