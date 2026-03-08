@@ -1,66 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 
 type SigningStatus = 'loading' | 'viewing' | 'otp_sending' | 'otp_sent' | 'otp_verifying' | 'signing' | 'signed' | 'expired' | 'error'
-
-function useSignatureCanvas() {
-    const ref = useRef<HTMLCanvasElement | null>(null)
-    const [drawing, setDrawing] = useState(false)
-    const [hasSig, setHasSig] = useState(false)
-
-    const getPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-        const canvas = ref.current
-        if (!canvas) return { x: 0, y: 0 }
-        const rect = canvas.getBoundingClientRect()
-        const scaleX = canvas.width / rect.width
-        const scaleY = canvas.height / rect.height
-        if ('touches' in e) {
-            return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY }
-        }
-        return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY }
-    }, [])
-
-    const start = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-        e.preventDefault()
-        const ctx = ref.current?.getContext('2d')
-        if (!ctx) return
-        const pt = getPoint(e)
-        ctx.beginPath()
-        ctx.moveTo(pt.x, pt.y)
-        setDrawing(true)
-    }, [getPoint])
-
-    const move = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-        if (!drawing) return
-        e.preventDefault()
-        const ctx = ref.current?.getContext('2d')
-        if (!ctx) return
-        const pt = getPoint(e)
-        ctx.lineWidth = 2.5
-        ctx.lineCap = 'round'
-        ctx.lineJoin = 'round'
-        ctx.strokeStyle = '#000'
-        ctx.lineTo(pt.x, pt.y)
-        ctx.stroke()
-        setHasSig(true)
-    }, [drawing, getPoint])
-
-    const stop = useCallback(() => setDrawing(false), [])
-
-    const clear = useCallback(() => {
-        const ctx = ref.current?.getContext('2d')
-        if (!ctx || !ref.current) return
-        ctx.clearRect(0, 0, ref.current.width, ref.current.height)
-        setHasSig(false)
-    }, [])
-
-    const toDataUrl = useCallback((): string | null => {
-        if (!ref.current || !hasSig) return null
-        return ref.current.toDataURL('image/png')
-    }, [hasSig])
-
-    return { ref, hasSig, start, move, stop, clear, toDataUrl }
-}
 
 interface ContractInfo {
     contractNumber: string
@@ -85,11 +26,8 @@ export default function FirmaPage() {
     const [acceptedTerms, setAcceptedTerms] = useState(false)
     const [acceptedMarketing, setAcceptedMarketing] = useState<boolean | null>(null)
     const [showMarketingInfo, setShowMarketingInfo] = useState(false)
-    const [secondDriverName, setSecondDriverName] = useState<string | null>(null)
+    const [otpChannel, setOtpChannel] = useState<'whatsapp' | 'email' | null>(null)
     const otpRefs = useRef<(HTMLInputElement | null)[]>([])
-
-    const sig1 = useSignatureCanvas()
-    const sig2 = useSignatureCanvas()
 
     useEffect(() => {
         if (token) loadSigningData()
@@ -119,7 +57,7 @@ export default function FirmaPage() {
             setSignerName(data.signerName)
             setSignerEmail(data.signerEmail)
             setContract(data.contract)
-            if (data.secondDriverName) setSecondDriverName(data.secondDriverName)
+            if (data.otpChannel) setOtpChannel(data.otpChannel)
 
             if (data.status === 'signed') {
                 setSignedPdfUrl(data.signedPdfUrl)
@@ -150,6 +88,9 @@ export default function FirmaPage() {
                 setStatus('viewing')
                 return
             }
+
+            const data = await res.json()
+            if (data.channel) setOtpChannel(data.channel)
 
             setStatus('otp_sent')
             setOtp(['', '', '', '', '', ''])
@@ -200,16 +141,6 @@ export default function FirmaPage() {
             return
         }
 
-        if (!sig1.hasSig) {
-            setError('Devi apporre la tua firma nel riquadro')
-            return
-        }
-
-        if (secondDriverName && !sig2.hasSig) {
-            setError('Anche il 2° guidatore deve firmare')
-            return
-        }
-
         if (acceptedMarketing === null) {
             setError('Seleziona Si o No per le offerte Trustera')
             return
@@ -217,12 +148,10 @@ export default function FirmaPage() {
 
         setError('')
         try {
-            const signatureImage = sig1.toDataUrl()
-            const signatureImage2 = secondDriverName ? sig2.toDataUrl() : null
             const res = await fetch('/.netlify/functions/signature-complete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, signatureImage, signatureImage2, marketingConsent: acceptedMarketing })
+                body: JSON.stringify({ token, marketingConsent: acceptedMarketing })
             })
 
             if (!res.ok) {
@@ -370,7 +299,7 @@ export default function FirmaPage() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
                         <h2 className="text-lg font-bold text-gray-800 mb-2">Firma il Contratto</h2>
                         <p className="text-gray-600 text-sm mb-6">
-                            Per procedere con la firma, invieremo un codice di verifica a <strong>{signerEmail}</strong>
+                            Per procedere con la firma, invieremo un codice di verifica via WhatsApp o email.
                         </p>
                         <button
                             onClick={handleRequestOtp}
@@ -393,7 +322,9 @@ export default function FirmaPage() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <h2 className="text-lg font-bold text-gray-800 mb-2 text-center">Inserisci Codice OTP</h2>
                         <p className="text-gray-600 text-sm mb-6 text-center">
-                            Abbiamo inviato un codice a 6 cifre a <strong>{signerEmail}</strong>
+                            {otpChannel === 'whatsapp'
+                                ? 'Abbiamo inviato un codice a 6 cifre via WhatsApp.'
+                                : `Abbiamo inviato un codice a 6 cifre a ${signerEmail}`}
                         </p>
 
                         <div className="flex justify-center gap-2 mb-6" onPaste={handleOtpPaste}>
@@ -459,78 +390,6 @@ export default function FirmaPage() {
                             </p>
                         </div>
 
-                        {/* Signature Canvas - 1st Driver */}
-                        <div className="mb-6">
-                            <div className="flex items-center justify-between mb-2">
-                                <label className="text-sm font-semibold text-gray-700">
-                                    Firma del 1° guidatore ({signerName})
-                                </label>
-                                {sig1.hasSig && (
-                                    <button onClick={sig1.clear} className="text-xs text-red-500 hover:text-red-700 transition-colors">
-                                        Cancella
-                                    </button>
-                                )}
-                            </div>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white relative" style={{ touchAction: 'none' }}>
-                                <canvas
-                                    ref={sig1.ref}
-                                    width={600}
-                                    height={200}
-                                    className="w-full cursor-crosshair rounded-lg"
-                                    style={{ height: '150px' }}
-                                    onMouseDown={sig1.start}
-                                    onMouseMove={sig1.move}
-                                    onMouseUp={sig1.stop}
-                                    onMouseLeave={sig1.stop}
-                                    onTouchStart={sig1.start}
-                                    onTouchMove={sig1.move}
-                                    onTouchEnd={sig1.stop}
-                                />
-                                {!sig1.hasSig && (
-                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <span className="text-gray-400 text-sm">Firma qui con il dito o il mouse</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Signature Canvas - 2nd Driver (only if present) */}
-                        {secondDriverName && (
-                            <div className="mb-6">
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-sm font-semibold text-gray-700">
-                                        Firma del 2° guidatore ({secondDriverName})
-                                    </label>
-                                    {sig2.hasSig && (
-                                        <button onClick={sig2.clear} className="text-xs text-red-500 hover:text-red-700 transition-colors">
-                                            Cancella
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white relative" style={{ touchAction: 'none' }}>
-                                    <canvas
-                                        ref={sig2.ref}
-                                        width={600}
-                                        height={200}
-                                        className="w-full cursor-crosshair rounded-lg"
-                                        style={{ height: '150px' }}
-                                        onMouseDown={sig2.start}
-                                        onMouseMove={sig2.move}
-                                        onMouseUp={sig2.stop}
-                                        onMouseLeave={sig2.stop}
-                                        onTouchStart={sig2.start}
-                                        onTouchMove={sig2.move}
-                                        onTouchEnd={sig2.stop}
-                                    />
-                                    {!sig2.hasSig && (
-                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <span className="text-gray-400 text-sm">Firma del 2° guidatore</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
                         <label className="flex items-start gap-3 mb-4 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -579,7 +438,7 @@ export default function FirmaPage() {
 
                         <button
                             onClick={handleSign}
-                            disabled={!acceptedTerms || !sig1.hasSig || (!!secondDriverName && !sig2.hasSig) || acceptedMarketing === null}
+                            disabled={!acceptedTerms || acceptedMarketing === null}
                             className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-lg transition-colors text-lg"
                         >
                             Firma il Documento
@@ -597,7 +456,7 @@ export default function FirmaPage() {
                             {signedAt ? ` il ${new Date(signedAt).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}` : ''}.
                         </p>
                         <p className="text-gray-500 text-sm mb-6">
-                            Riceverai una copia del contratto firmato via email.
+                            Riceverai una copia del contratto firmato via WhatsApp.
                         </p>
                         {signedPdfUrl && (
                             <a
