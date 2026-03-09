@@ -31,7 +31,6 @@ interface BookingResult {
 }
 
 export default function GestioneMulteTab() {
-    const [activeSubTab, setActiveSubTab] = useState<'fines' | 'export'>('fines')
     const [vehicles, setVehicles] = useState<Vehicle[]>([])
 
     // Search State
@@ -42,63 +41,11 @@ export default function GestioneMulteTab() {
     const [searchResult, setSearchResult] = useState<BookingResult | null>(null)
     const [error, setError] = useState<string | null>(null)
 
-    // API Configuration State
-    const [showSettings, setShowSettings] = useState(false)
-    const [apiConfig, setApiConfig] = useState({
-        username: '',
-        password: '',
-        agencyCode: '',
-        wsUrl: 'https://cargos.poliziadistato.it/CARGOS_API/'
-    })
-
-    // Export State
-    const [exportDate, setExportDate] = useState(new Date().toISOString().split('T')[0])
-    const [exportLoading, setExportLoading] = useState(false)
-    const [exportStats, setExportStats] = useState<string | null>(null)
-
     useEffect(() => {
         loadVehicles()
-        // Load config from localStorage if available (simple persistence for demo)
-        const savedConfig = localStorage.getItem('cargos_api_config')
-        if (savedConfig) {
-            setApiConfig(JSON.parse(savedConfig))
-        }
     }, [])
 
-    const handleSaveConfig = () => {
-        localStorage.setItem('cargos_api_config', JSON.stringify(apiConfig))
-        setShowSettings(false)
-    }
 
-    async function handleAutoSend() {
-        if (!apiConfig.username || !apiConfig.password || !apiConfig.agencyCode) {
-            toast.error('Per l\'invio automatico, configura prima le credenziali API nelle impostazioni.')
-            setShowSettings(true)
-            return
-        }
-
-        setExportLoading(true)
-        setExportStats('Connessione al Web Service Cargos in corso...')
-
-        try {
-            // Simulation of the API Handshake
-            // In a real scenario, this would call a Netlify Function to avoid CORS and hide secrets
-            await new Promise(resolve => setTimeout(resolve, 2000))
-
-            // For now, we simulate a failure because we don't have the real WSDL/Auth logic
-            // But this proves the flow is ready.
-            throw new Error("Autenticazione Fallita. Verificare 'Codice Agenzia' e credenziali. È richiesto il certificato digitale?")
-
-        } catch (err: any) {
-            console.error(err)
-            setExportStats('Errore Invio: ' + err.message)
-            toast.error('Errore durante l\'invio automatico: ' + err.message)
-        } finally {
-            setExportLoading(false)
-        }
-    }
-
-    // ... existing loadVehicles, handleSearch ... 
 
     async function loadVehicles() {
         const { data } = await supabase
@@ -217,148 +164,6 @@ export default function GestioneMulteTab() {
         }
     }
 
-    async function handleExport(format: 'csv' | 'xml') {
-        setExportLoading(true)
-        setExportStats(null)
-
-        try {
-            // Fetch bookings for export date
-            const startOfDay = new Date(exportDate)
-            startOfDay.setHours(0, 0, 0, 0)
-            const endOfDay = new Date(exportDate)
-            endOfDay.setHours(23, 59, 59, 999)
-
-            const { data: bookings, error } = await supabase
-                .from('bookings')
-                .select(`
-                    id,
-                    pickup_date,
-                    dropoff_date,
-                    vehicle_plate,
-                    vehicle_name,
-                    customer_name,
-                    booking_details,
-                    user_id
-                `)
-                .gte('pickup_date', startOfDay.toISOString())
-                .lte('pickup_date', endOfDay.toISOString())
-                .neq('status', 'cancelled')
-
-            if (error) throw error
-            if (!bookings || bookings.length === 0) {
-                setExportStats('Nessuna prenotazione trovata per questa data.')
-                setExportLoading(false)
-                return
-            }
-
-            // Enrich with customer details
-            const enrichedBookings = await Promise.all(bookings.map(async (b) => {
-                let customerInfo = {
-                    firstName: b.customer_name?.split(' ')[0] || '',
-                    lastName: b.customer_name?.split(' ').slice(1).join(' ') || '',
-                    birthDate: '',
-                    birthPlace: '',
-                    licenseNumber: b.booking_details?.customer?.driverLicense || '',
-                    address: b.booking_details?.customer?.address || ''
-                }
-
-                if (b.user_id) {
-                    const { data: c } = await supabase.from('customers_extended').select('*').eq('id', b.user_id).single()
-                    if (c) {
-                        customerInfo.firstName = c.nome || customerInfo.firstName
-                        customerInfo.lastName = c.cognome || customerInfo.lastName
-                        customerInfo.birthDate = c.data_nascita || ''
-                        customerInfo.birthPlace = c.luogo_nascita || ''
-                        customerInfo.licenseNumber = c.patente_numero || customerInfo.licenseNumber
-                        customerInfo.address = `${c.indirizzo || ''} ${c.citta || ''} ${c.provincia || ''}`
-                    }
-                }
-                return { ...b, ...customerInfo }
-            }))
-
-            if (format === 'csv') {
-                generateCSV(enrichedBookings)
-            } else {
-                generateXML(enrichedBookings)
-            }
-
-            setExportStats(`File generato (${enrichedBookings.length} prenotazioni).`)
-
-        } catch (err: any) {
-            console.error(err)
-            setExportStats('Errore export: ' + err.message)
-        } finally {
-            setExportLoading(false)
-        }
-    }
-
-    function generateCSV(data: any[]) {
-        const headers = [
-            'Targa', 'Data Ritiro', 'Ora Ritiro', 'Data Consegna', 'Ora Consegna',
-            'Cognome', 'Nome', 'Data Nascita', 'Luogo Nascita', 'Patente', 'Indirizzo'
-        ]
-
-        const rows = data.map(b => {
-            const pickup = new Date(b.pickup_date)
-            const dropoff = new Date(b.dropoff_date)
-            return [
-                b.vehicle_plate || b.booking_details?.vehicle_plate || 'Targa Mancante',
-                pickup.toLocaleDateString('it-IT'),
-                pickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                dropoff.toLocaleDateString('it-IT'),
-                dropoff.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                b.lastName,
-                b.firstName,
-                b.birthDate,
-                b.birthPlace,
-                b.licenseNumber,
-                `"${b.address}"`
-            ].join(',')
-        })
-
-        const csvContent = [headers.join(','), ...rows].join('\n')
-        downloadFile(csvContent, `cargos_export_${exportDate}.csv`, 'text/csv')
-    }
-
-    function generateXML(data: any[]) {
-        let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<CargosExport date="' + exportDate + '" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n'
-
-        data.forEach(b => {
-            const pickup = new Date(b.pickup_date)
-            const dropoff = new Date(b.dropoff_date)
-
-            xml += `  <Noleggio>\n`
-            xml += `    <DatiVeicolo>\n`
-            xml += `       <Targa>${b.vehicle_plate || 'MISSING'}</Targa>\n`
-            xml += `       <Modello>${b.vehicle_name || ''}</Modello>\n`
-            xml += `    </DatiVeicolo>\n`
-            xml += `    <DatiNoleggio>\n`
-            xml += `       <DataInizio>${pickup.toISOString()}</DataInizio>\n`
-            xml += `       <DataFine>${dropoff.toISOString()}</DataFine>\n`
-            xml += `    </DatiNoleggio>\n`
-            xml += `    <DatiConducente>\n`
-            xml += `      <Cognome>${b.lastName}</Cognome>\n`
-            xml += `      <Nome>${b.firstName}</Nome>\n`
-            xml += `      <DataNascita>${b.birthDate}</DataNascita>\n`
-            xml += `      <LuogoNascita>${b.birthPlace}</LuogoNascita>\n`
-            xml += `      <Patente>${b.licenseNumber}</Patente>\n`
-            xml += `      <Indirizzo>${b.address}</Indirizzo>\n`
-            xml += `    </DatiConducente>\n`
-            xml += `  </Noleggio>\n`
-        })
-
-        xml += '</CargosExport>'
-        downloadFile(xml, `cargos_export_${exportDate}.xml`, 'application/xml')
-    }
-
-    function downloadFile(content: string, fileName: string, contentType: string) {
-        const a = document.createElement("a")
-        const file = new Blob([content], { type: contentType })
-        a.href = URL.createObjectURL(file)
-        a.download = fileName
-        a.click()
-    }
-
     return (
         <div className="space-y-4 lg:space-y-6">
             {/* Header */}
@@ -366,84 +171,13 @@ export default function GestioneMulteTab() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
                         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Multe</h2>
-                        <p className="text-sm text-theme-text-muted mt-0.5">
-                            {activeSubTab === 'fines' ? 'Ricerca conducente per data infrazione' : 'Invio telematico — Portale Polizia di Stato'}
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="flex bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
-                            <button
-                                onClick={() => setActiveSubTab('fines')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'fines' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-                            >
-                                Ricerca Multa
-                            </button>
-                            <button
-                                onClick={() => setActiveSubTab('export')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-                            >
-                                Invio Telematico
-                            </button>
-                        </div>
-                        {activeSubTab === 'export' && (
-                            <>
-                                <button
-                                    onClick={() => setShowSettings(!showSettings)}
-                                    className="p-2 bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary rounded-lg border border-theme-border transition-colors"
-                                    title="Impostazioni API"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                </button>
-                                <a
-                                    href="https://cargos.poliziadistato.it/Cargos_Portale/"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary font-medium rounded-lg hover:bg-theme-bg-hover transition-colors flex items-center gap-2 text-sm border border-theme-border"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                                    Portale Cargos
-                                </a>
-                            </>
-                        )}
+                        <p className="text-sm text-theme-text-muted mt-0.5">Ricerca conducente per data infrazione</p>
                     </div>
                 </div>
             </div>
 
-            {/* API Settings Panel */}
-            {showSettings && (
-                <div className="bg-theme-bg-secondary border border-theme-border p-5 rounded-lg animate-fadeIn">
-                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-theme-border">
-                        <h3 className="text-base font-bold text-theme-text-primary">Configurazione API Cargos</h3>
-                        <button onClick={() => setShowSettings(false)} className="text-theme-text-muted hover:text-theme-text-primary">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs text-theme-text-muted mb-1">Username</label>
-                            <Input type="text" value={apiConfig.username} onChange={(e: any) => setApiConfig({ ...apiConfig, username: e.target.value })} placeholder="Es. SC123456" />
-                        </div>
-                        <div>
-                            <label className="block text-xs text-theme-text-muted mb-1">Password</label>
-                            <Input type="password" value={apiConfig.password} onChange={(e: any) => setApiConfig({ ...apiConfig, password: e.target.value })} placeholder="••••••••" />
-                        </div>
-                        <div>
-                            <label className="block text-xs text-theme-text-muted mb-1">Codice Agenzia</label>
-                            <Input type="text" value={apiConfig.agencyCode} onChange={(e: any) => setApiConfig({ ...apiConfig, agencyCode: e.target.value })} placeholder="Codice identificativo" />
-                        </div>
-                        <div>
-                            <label className="block text-xs text-theme-text-muted mb-1">Endpoint WSDL</label>
-                            <Input type="text" value={apiConfig.wsUrl} onChange={(e: any) => setApiConfig({ ...apiConfig, wsUrl: e.target.value })} />
-                        </div>
-                    </div>
-                    <div className="flex justify-end mt-4">
-                        <Button onClick={handleSaveConfig} className="bg-green-600 hover:bg-green-500">Salva</Button>
-                    </div>
-                </div>
-            )}
-
-            {/* ── FINES TAB ───────────────────────────────────────────────── */}
-            {activeSubTab === 'fines' && (
+            {/* ── RICERCA MULTA ─────────────────────────────────────────── */}
+            {(
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
                     {/* Search Form — 2 cols */}
                     <div className="lg:col-span-2 bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden h-fit">
@@ -671,77 +405,6 @@ export default function GestioneMulteTab() {
                 </div>
             )}
 
-            {/* ── EXPORT TAB ──────────────────────────────────────────────── */}
-            {activeSubTab === 'export' && (
-                <div className="max-w-3xl mx-auto space-y-6">
-                    {/* API warning */}
-                    {(!apiConfig.username || !apiConfig.password) && (
-                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm flex items-center gap-2">
-                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-                            Configurazione API mancante.
-                            <button onClick={() => setShowSettings(true)} className="underline font-semibold hover:text-yellow-300">Configura</button>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                        {/* Auto send card */}
-                        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-                            <div className="px-5 py-4 border-b border-theme-border">
-                                <h3 className="text-base font-bold text-theme-text-primary">Invio Automatico</h3>
-                                <p className="text-xs text-theme-text-muted mt-0.5">Invia dati al portale Polizia di Stato</p>
-                            </div>
-                            <div className="p-5 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
-                                    <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
-                                </div>
-                                <Button
-                                    onClick={handleAutoSend}
-                                    className="w-full flex justify-center items-center gap-2 bg-green-600 hover:bg-green-500"
-                                    disabled={exportLoading}
-                                >
-                                    {exportLoading ? (
-                                        <>
-                                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-                                            Invio in corso...
-                                        </>
-                                    ) : 'Invia a Cargos'}
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* Download card */}
-                        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-                            <div className="px-5 py-4 border-b border-theme-border">
-                                <h3 className="text-base font-bold text-theme-text-primary">Scarica File</h3>
-                                <p className="text-xs text-theme-text-muted mt-0.5">Esporta i dati per upload manuale</p>
-                            </div>
-                            <div className="p-5 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
-                                    <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Button onClick={() => handleExport('csv')} disabled={exportLoading} variant="secondary" className="w-full flex justify-center items-center gap-1.5 text-sm">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                        CSV
-                                    </Button>
-                                    <Button onClick={() => handleExport('xml')} disabled={exportLoading} variant="secondary" className="w-full flex justify-center items-center gap-1.5 text-sm">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                        XML
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {exportStats && (
-                        <div className={`p-3 border rounded-lg text-center text-sm ${exportStats.includes('Errore') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
-                            {exportStats}
-                        </div>
-                    )}
-                </div>
-            )}
         </div>
     )
 }

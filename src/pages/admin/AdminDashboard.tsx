@@ -29,6 +29,7 @@ import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
 import GestioneDanniTab from './components/GestioneDanniTab'
+import CargosTab from './components/CargosTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import CarWashCatalogTab from './components/CarWashCatalogTab'
 
@@ -552,7 +553,7 @@ export default function AdminDashboard() {
           {/* Placeholder tabs for new features */}
           {activeTab === 'gestione-danni' && <GestioneDanniTab />}
           {activeTab === 'gestione-multe' && <GestioneMulteTab />}
-          {activeTab === 'cargos' && <PlaceholderTab title="Cargos" />}
+          {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && <ReportLavaggioTab />}
