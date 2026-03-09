@@ -3485,6 +3485,40 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
+      // Auto-send contract for signature via WhatsApp (NEW paid bookings only, after contract + fattura)
+      if (!editingId && formData.payment_status === 'paid' && insertedBooking?.id) {
+        try {
+          // Fetch the contract that was just generated for this booking
+          const { data: contractForSig } = await supabase
+            .from('contracts')
+            .select('id, pdf_url, customer_email, booking_id')
+            .eq('booking_id', insertedBooking.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (contractForSig?.id && contractForSig?.pdf_url) {
+            console.log('[Auto-Gen] Sending contract for signature via WhatsApp:', contractForSig.id)
+            const sigRes = await fetch('/.netlify/functions/signature-init', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractId: contractForSig.id, bookingId: insertedBooking.id })
+            })
+            if (sigRes.ok) {
+              console.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
+            } else {
+              const sigErr = await sigRes.json()
+              console.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
+              toast.error(`Link firma non inviato: ${sigErr.error || 'Errore sconosciuto'}`, { duration: 8000 })
+            }
+          } else {
+            console.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init')
+          }
+        } catch (sigError) {
+          console.error('[Auto-Gen] ⚠️ Failed to send signing link:', sigError)
+        }
+      }
+
       setShowForm(false)
       setEditingId(null)
       setNewCustomerMode(false)
