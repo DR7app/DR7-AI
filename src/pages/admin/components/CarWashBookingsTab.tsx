@@ -621,7 +621,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        openEditCustomer(booking.booking_details?.customer?.customerId || booking.user_id)
+        openEditCustomer(booking.booking_details?.customer?.customerId || booking.customer_id)
         return
       }
       toast.error('Errore nella generazione della fattura: ' + errorMessage)
@@ -2230,7 +2230,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               // Open customer edit modal if missing data
                               if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
                                 toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
-                                openEditCustomer(editingBooking.booking_details?.customer?.customerId || editingBooking.user_id)
+                                openEditCustomer(editingBooking.booking_details?.customer?.customerId || editingBooking.customer_id)
                               } else {
                                 toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
                               }
