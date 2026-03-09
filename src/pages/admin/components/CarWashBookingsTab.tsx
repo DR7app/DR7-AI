@@ -621,7 +621,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        openEditCustomer(booking.customer_id)
+        openEditCustomer(booking.booking_details?.customer?.customerId || booking.user_id)
         return
       }
       toast.error('Errore nella generazione della fattura: ' + errorMessage)
@@ -686,6 +686,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       createdBy: 'admin_panel',
       cartItems: cartItems,
       totalDuration: getTotalDuration(),
+      customer: { customerId: formData.customer_id },
       ...(vehicleCategory && { vehicleCategory }),
       ...(vehicleMakeModel && { vehicleMakeModel }),
       ...(classificationSource && { classificationSource }),
@@ -696,7 +697,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       service_name: serviceNames,
       vehicle_name: vehicleMakeModel || 'Car Wash Service',
       vehicle_plate: vehiclePlate || null,
-      customer_id: formData.customer_id || null,
       customer_name: customerName,
       customer_email: customerEmail || null,
       customer_phone: customerPhone || null,
@@ -2230,7 +2230,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               // Open customer edit modal if missing data
                               if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
                                 toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
-                                openEditCustomer(editingBooking.customer_id)
+                                openEditCustomer(editingBooking.booking_details?.customer?.customerId || editingBooking.user_id)
                               } else {
                                 toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
                               }
