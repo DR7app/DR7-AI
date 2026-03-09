@@ -6,16 +6,6 @@ import Input from './Input'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface Vehicle {
-    id: string
-    display_name: string
-    plate: string | null
-    targa?: string | null
-    brand?: string
-    model?: string
-    color?: string
-}
-
 interface BookingForCargos {
     id: string
     pickup_date: string
@@ -92,19 +82,6 @@ const ISTAT_CODES: Record<string, string> = {
     'BARI': '072006',
     'CATANIA': '087015',
     'VENEZIA': '027042',
-}
-
-// Vehicle type mapping for CARGOS (field 15)
-// Reference table values — A=Auto, M=Moto, F=Furgone, etc.
-const VEHICLE_TYPE_MAP: Record<string, string> = {
-    'auto': 'A',
-    'car': 'A',
-    'moto': 'M',
-    'motorcycle': 'M',
-    'furgone': 'F',
-    'van': 'F',
-    'camion': 'C',
-    'truck': 'C',
 }
 
 // Payment type (field 2) — C=Contanti, B=Bonifico, K=Carta, etc.
@@ -333,9 +310,6 @@ export default function CargosTab() {
     const [sending, setSending] = useState(false)
     const [sendResult, setSendResult] = useState<{ success: number; errors: number; details?: string } | null>(null)
 
-    // Reference tables
-    const [refTables, setRefTables] = useState<Record<number, any[]>>({})
-
     // Sub-tab
     const [activeSubTab, setActiveSubTab] = useState<'send' | 'history' | 'export'>('send')
 
@@ -371,32 +345,11 @@ export default function CargosTab() {
                 setIsAuthenticated(true)
                 localStorage.setItem('cargos_password', password)
                 setShowSettings(false)
-                // Try to load reference tables
-                loadRefTables()
             }
         } catch (err: any) {
             toast.error('Errore connessione: ' + err.message)
         } finally {
             setAuthLoading(false)
-        }
-    }
-
-    async function loadRefTables() {
-        // Load key reference tables (payment types, vehicle types, doc types, location codes)
-        for (const id of [1, 2, 3, 4, 5]) {
-            try {
-                const res = await fetch('/.netlify/functions/cargos-api', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'getTabella', tabellaId: id, password }),
-                })
-                const data = await res.json()
-                if (data.data) {
-                    setRefTables(prev => ({ ...prev, [id]: data.data }))
-                }
-            } catch {
-                // Silently skip — tables are for enrichment only
-            }
         }
     }
 
