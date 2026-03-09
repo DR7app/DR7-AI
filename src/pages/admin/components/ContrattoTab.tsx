@@ -573,7 +573,7 @@ export default function ContrattoTab() {
                       disabled={sendingSignature === contract.id}
                       className="w-full bg-dr7-gold hover:bg-yellow-500 text-black px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
                     >
-                      {sendingSignature === contract.id ? 'Invio...' : 'Firma via Email'}
+                      {sendingSignature === contract.id ? 'Invio...' : 'Firma via WhatsApp'}
                     </button>
                   ) : null}
                   <div className="flex gap-2 w-full">
