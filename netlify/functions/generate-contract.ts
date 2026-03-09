@@ -302,7 +302,11 @@ export const handler: Handler = async (event) => {
 
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
-        const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
+        // Generate sequential contract number: DR71000, DR71001, ...
+        const { count: contractCount } = await supabase
+            .from('contracts')
+            .select('id', { count: 'exact', head: true })
+        const contractNumber = `DR7${1000 + (contractCount || 0)}`
 
         // KM limit: use unlimited_km flag (strict boolean check) or legacy km_limit === 'Illimitati'
         const isUnlimitedKm = booking.booking_details?.unlimited_km === true || booking.booking_details?.km_limit === 'Illimitati'
