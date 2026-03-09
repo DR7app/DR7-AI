@@ -1,14 +1,23 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
-import { Resend } from 'resend'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
+
 const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://trustera360.app'
 const TOKEN_EXPIRY_HOURS = 48
+
+function cleanPhone(phone: string): string {
+    let cleaned = phone.replace(/[\s\-\+\(\)]/g, '')
+    if (cleaned.startsWith('00')) cleaned = cleaned.substring(2)
+    if (cleaned.length === 10 && cleaned.startsWith('3')) cleaned = '39' + cleaned
+    return cleaned
+}
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -20,11 +29,6 @@ export const handler: Handler = async (event) => {
 
         if (!contractId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Contract ID is required' }) }
-        }
-
-        const apiKey = process.env.RESEND_API_KEY
-        if (!apiKey) {
-            return { statusCode: 500, body: JSON.stringify({ error: 'RESEND_API_KEY non configurata' }) }
         }
 
         // Fetch contract
@@ -118,62 +122,83 @@ export const handler: Handler = async (event) => {
             }
         })
 
-        // Send signing link via Resend
+        // Build signing URL
         const signingUrl = `${SIGNING_BASE_URL}/firma/${token}`
-        const resend = new Resend(apiKey)
 
-        const { error: emailError } = await resend.emails.send({
-            from: 'DR7 Empire <info@dr7.app>',
-            to: signerEmail,
-            subject: `Firma Contratto - DR7 Empire - ${contract.contract_number || ''}`,
-            html: `
-                <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 80px;" />
-                    </div>
-                    <h2 style="color: #111; margin-bottom: 10px;">Firma del Contratto</h2>
-                    <p>Gentile <strong>${signerName}</strong>,</p>
-                    <p>Ti chiediamo di firmare il contratto di noleggio <strong>${contract.contract_number || ''}</strong>.</p>
-                    <p>Clicca sul pulsante qui sotto per visualizzare e firmare il documento:</p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${signingUrl}" style="background: #d4af37; color: #000; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 16px; display: inline-block;">
-                            Firma il Contratto
-                        </a>
-                    </div>
-                    <p style="color: #666; font-size: 13px;">Questo link scade tra ${TOKEN_EXPIRY_HOURS} ore.</p>
-                    <p style="color: #666; font-size: 13px;">Se non hai richiesto la firma di questo documento, ignora questa email.</p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-                    <p style="color: #999; font-size: 11px; text-align: center;">
-                        Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA)<br>
-                        P.IVA 04104640927 | www.dr7empire.com
-                    </p>
-                </div>
-            `
-        })
+        // Get customer phone: contract -> booking -> customers_extended
+        let customerPhone = contract.customer_phone || ''
 
-        if (emailError) {
-            console.error('Resend error:', emailError)
-            // Cleanup: cancel the request since email failed
-            await supabase
-                .from('signature_requests')
-                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-                .eq('id', sigRequest.id)
-            return { statusCode: 500, body: JSON.stringify({ error: 'Errore nell\'invio dell\'email', details: emailError.message }) }
+        if (!customerPhone && (bookingId || contract.booking_id)) {
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('customer_phone, booking_details')
+                .eq('id', bookingId || contract.booking_id)
+                .single()
+            if (booking) {
+                customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+            }
         }
 
-        // Log email sent
+        if (!customerPhone && signerEmail) {
+            const { data: customer } = await supabase
+                .from('customers_extended')
+                .select('telefono')
+                .eq('email', signerEmail)
+                .maybeSingle()
+            if (customer?.telefono) customerPhone = customer.telefono
+        }
+
+        // Send signing link via WhatsApp
+        let sentVia = ''
+
+        if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+            try {
+                const cleanedPhone = cleanPhone(customerPhone)
+                const chatId = `${cleanedPhone}@c.us`
+                const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+
+                const waResponse = await fetch(greenApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chatId,
+                        message: `*DR7 Empire - Firma Contratto*\n\nGentile *${signerName}*,\n\nTi chiediamo di firmare il contratto di noleggio *${contract.contract_number || ''}*.\n\nClicca qui per firmare:\n${signingUrl}\n\nIl link scade tra ${TOKEN_EXPIRY_HOURS} ore.\n\n_Dubai rent 7.0 S.p.A._`
+                    })
+                })
+
+                const waResult = await waResponse.json()
+                if (waResponse.ok && waResult.idMessage) {
+                    sentVia = 'whatsapp'
+                    console.log(`[signature-init] Signing link sent via WhatsApp to ${cleanedPhone}`)
+                } else {
+                    console.warn('[signature-init] WhatsApp failed:', waResult)
+                }
+            } catch (waErr: any) {
+                console.warn('[signature-init] WhatsApp error:', waErr.message)
+            }
+        }
+
+        if (!sentVia) {
+            console.warn(`[signature-init] No WhatsApp sent. Phone="${customerPhone}", GREEN_API=${GREEN_API_INSTANCE_ID ? 'set' : 'NOT SET'}`)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: 'Impossibile inviare il link via WhatsApp. Verifica il numero di telefono del cliente.' })
+            }
+        }
+
+        // Log sent
         await supabase.from('signature_audit_trail').insert({
             signature_request_id: sigRequest.id,
-            event_type: 'email_sent',
-            event_description: `Email con link di firma inviata a ${signerEmail}`,
-            metadata: { signing_url: signingUrl }
+            event_type: 'link_sent',
+            event_description: `Link di firma inviato via WhatsApp`,
+            metadata: { signing_url: signingUrl, channel: 'whatsapp' }
         })
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
-                message: 'Richiesta di firma creata e email inviata',
+                message: 'Link di firma inviato via WhatsApp',
                 requestId: sigRequest.id
             })
         }
