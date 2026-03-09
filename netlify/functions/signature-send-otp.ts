@@ -85,7 +85,12 @@ export const handler: Handler = async (event) => {
                 .single()
             if (booking) {
                 customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+                console.log(`[signature-send-otp] Booking phone: customer_phone="${booking.customer_phone}", details.phone="${booking.booking_details?.customer?.phone}"`)
+            } else {
+                console.log(`[signature-send-otp] No booking found for booking_id=${sigRequest.booking_id}`)
             }
+        } else {
+            console.log(`[signature-send-otp] No booking_id on signature request`)
         }
 
         // If no phone from booking, try contract
@@ -97,8 +102,13 @@ export const handler: Handler = async (event) => {
                 .single()
             if (contract) {
                 customerPhone = contract.customer_phone || ''
+                console.log(`[signature-send-otp] Contract phone: "${contract.customer_phone}"`)
+            } else {
+                console.log(`[signature-send-otp] No contract found for contract_id=${sigRequest.contract_id}`)
             }
         }
+
+        console.log(`[signature-send-otp] Final customerPhone="${customerPhone}", GREEN_API_INSTANCE_ID=${GREEN_API_INSTANCE_ID ? 'set' : 'NOT SET'}, GREEN_API_TOKEN=${GREEN_API_TOKEN ? 'set' : 'NOT SET'}`)
 
         let channel: 'whatsapp' | 'email' = 'email'
 
