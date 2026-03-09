@@ -10,7 +10,7 @@ const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
 const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://trustera360.app'
-const TOKEN_EXPIRY_HOURS = 48
+const TOKEN_EXPIRY_HOURS = 12
 
 function cleanPhone(phone: string): string {
     let cleaned = phone.replace(/[\s\-\+\(\)]/g, '')
