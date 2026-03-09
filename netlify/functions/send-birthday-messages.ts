@@ -29,7 +29,9 @@ Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo li
 
 Con stima,
 Dubai Rent 7.0 S.p.A.
-Ogni compleanno merita uno stile all'altezza.`;
+Ogni compleanno merita uno stile all'altezza.
+
+_Messaggio automatico di sistema._`;
 
 // Generate unique discount code
 function generateDiscountCode(): string {

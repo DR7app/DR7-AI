@@ -162,7 +162,7 @@ export const handler: Handler = async (event) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chatId,
-                        message: `*DR7 Empire - Firma Contratto*\n\nGentile *${signerName}*,\n\nTi chiediamo di firmare il contratto di noleggio *${contract.contract_number || ''}*.\n\nClicca qui per firmare:\n${signingUrl}\n\nIl link scade tra ${TOKEN_EXPIRY_HOURS} ore.\n\n_Dubai rent 7.0 S.p.A._`
+                        message: `Gentile *${signerName}*,\n\ndi seguito trova il contratto di noleggio n. *${contract.contract_number || ''}* da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore: trascorso questo termine, la prenotazione potrà decadere automaticamente come da policy.\n\nLa invitiamo quindi a completare la firma ora per confermare il noleggio.\n\nCordiali Saluti,\nDR7\n\n_Messaggio automatico di sistema._`
                     })
                 })
 

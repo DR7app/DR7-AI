@@ -89,7 +89,7 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const message = `🔐 *DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP: *${code}*\n\nScade tra 5 minuti.\nNon condividere questo codice con nessuno.`;
+    const message = `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP: *${code}*\n\nScade tra 5 minuti.\nNon condividere questo codice con nessuno.\n\n_Messaggio automatico di sistema._`;
 
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
