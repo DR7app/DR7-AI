@@ -3463,8 +3463,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Auto-generate fattura and send to SDI when payment status is "paid" (NEW bookings only)
-      if (!editingId && formData.payment_status === 'paid' && insertedBooking?.id) {
+      // Auto-generate fattura and send to SDI when payment status is "paid"
+      if (formData.payment_status === 'paid' && insertedBooking?.id) {
         try {
           console.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
           const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
