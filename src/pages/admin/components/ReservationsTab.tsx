@@ -3741,8 +3741,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             booking={{
               id: selectedBookingForDanni.id,
               customer_name: selectedBookingForDanni.customer_name || 'Cliente',
-              customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || undefined,
-              user_id: selectedBookingForDanni.user_id || undefined
+              customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || selectedBookingForDanni.booking_details?.customer_id || undefined,
+              user_id: selectedBookingForDanni.user_id || undefined,
+              customer_email: selectedBookingForDanni.customer_email || selectedBookingForDanni.booking_details?.customer?.email || undefined
             }}
             onClose={() => {
               setDanniModalOpen(false)
