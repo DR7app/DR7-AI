@@ -145,14 +145,41 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     let cap = ''
     let patenteNumero = ''
 
+    // Try to find customer in customers_extended: first by user_id, then by email
+    let customerFound = false
+
     if (match.user_id) {
         const { data: c } = await supabase
             .from('customers_extended')
             .select('*')
             .eq('id', match.user_id)
-            .single()
+            .maybeSingle()
 
         if (c) {
+            customerFound = true
+            cognome = c.cognome || ''
+            nome = c.nome || ''
+            codiceFiscale = c.codice_fiscale || ''
+            dataNascita = c.data_nascita || ''
+            luogoNascita = c.luogo_nascita || ''
+            indirizzo = c.indirizzo || ''
+            citta = c.citta || ''
+            provincia = c.provincia || ''
+            cap = c.cap || c.codice_postale || ''
+            patenteNumero = c.patente_numero || ''
+        }
+    }
+
+    // Fallback: search by email if user_id didn't work
+    if (!customerFound && match.customer_email) {
+        const { data: c } = await supabase
+            .from('customers_extended')
+            .select('*')
+            .eq('email', match.customer_email)
+            .maybeSingle()
+
+        if (c) {
+            customerFound = true
             cognome = c.cognome || ''
             nome = c.nome || ''
             codiceFiscale = c.codice_fiscale || ''
@@ -173,35 +200,41 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
         nome = parts.slice(0, -1).join(' ')
     }
 
-    // Fetch contract PDF URL
+    // Fetch contract PDF URL — prefer signed, fallback to unsigned
     let contractUrl = ''
     const { data: contractData } = await supabase
         .from('contracts')
-        .select('signed_pdf_url')
+        .select('signed_pdf_url, pdf_url')
         .eq('booking_id', match.id)
         .maybeSingle()
-    if (contractData?.signed_pdf_url) contractUrl = contractData.signed_pdf_url
+    if (contractData) {
+        contractUrl = contractData.signed_pdf_url || contractData.pdf_url || ''
+    }
 
     // Fetch customer documents (driver license, ID) from storage
     const licenseUrls: string[] = []
     const idUrls: string[] = []
 
-    if (match.user_id) {
+    // Look up documents using user_id or customer email-based folder
+    const storageUserId = match.user_id || (match.customer_email ? match.customer_email : null)
+
+    if (storageUserId) {
         const BUCKETS = [
             { name: 'driver-licenses', list: licenseUrls },
             { name: 'driver-ids', list: idUrls },
             { name: 'carta-identita', list: idUrls },
+            { name: 'customer-documents', list: idUrls },
         ]
 
         await Promise.all(BUCKETS.map(async ({ name, list }) => {
             const { data: files } = await supabase.storage
                 .from(name)
-                .list(match.user_id, { limit: 10, sortBy: { column: 'created_at', order: 'desc' } })
+                .list(storageUserId, { limit: 10, sortBy: { column: 'created_at', order: 'desc' } })
 
             if (files) {
                 for (const file of files) {
                     if (!file.id || file.name.includes('.emptyFolderPlaceholder')) continue
-                    const path = `${match.user_id}/${file.name}`
+                    const path = `${storageUserId}/${file.name}`
                     const { data: signed } = await supabase.storage
                         .from(name)
                         .createSignedUrl(path, 86400)
