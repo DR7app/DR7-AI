@@ -338,7 +338,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     extension_payment_method: '',
     notes: '',
     change_vehicle: false,
-    new_vehicle_id: ''
+    new_vehicle_id: '',
+    show_all_vehicles: false
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -1923,7 +1924,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       extension_payment_method: '',
       notes: '',
       change_vehicle: false,
-      new_vehicle_id: ''
+      new_vehicle_id: '',
+      show_all_vehicles: false
     })
     setShowExtendModal(true)
   }
@@ -5184,7 +5186,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 {extendData.change_vehicle && (
                   <div>
-                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuovo Veicolo</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-theme-text-secondary">Nuovo Veicolo</label>
+                      <button
+                        type="button"
+                        onClick={() => setExtendData({ ...extendData, show_all_vehicles: !extendData.show_all_vehicles })}
+                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        {extendData.show_all_vehicles ? 'Nascondi ritirati' : 'Mostra tutti i veicoli'}
+                      </button>
+                    </div>
                     <select
                       value={extendData.new_vehicle_id}
                       onChange={(e) => setExtendData({ ...extendData, new_vehicle_id: e.target.value })}
@@ -5192,9 +5203,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     >
                       <option value="">-- Seleziona veicolo --</option>
                       {vehicles
-                        .filter(v => v.status !== 'retired' && v.id !== extendingBooking?.vehicle_id)
+                        .filter(v => (extendData.show_all_vehicles || v.status !== 'retired') && v.id !== extendingBooking?.vehicle_id)
                         .map(v => (
-                          <option key={v.id} value={v.id}>{v.display_name} ({v.plate || v.targa || 'N/A'})</option>
+                          <option key={v.id} value={v.id}>{v.display_name} ({v.plate || v.targa || 'N/A'}){v.status === 'retired' ? ' [Ritirato]' : ''}</option>
                         ))
                       }
                     </select>
