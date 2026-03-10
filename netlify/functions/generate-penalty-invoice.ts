@@ -2,10 +2,14 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
+import { generateInvoicePDF } from './invoice-pdf-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -17,7 +21,7 @@ export const handler: Handler = async (event) => {
 
     try {
         const body = JSON.parse(event.body || '{}')
-        const { bookingId, customerId, note, type, paymentStatus } = body
+        const { bookingId, customerId, note, type, paymentStatus, rawDescriptions } = body
 
         // Validation
         if (!bookingId) {
@@ -67,6 +71,10 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
+        const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
+        const isTestVehicle = vehicleName === 'test'
+
         // Fetch customer data
         const bookingDetails = booking.booking_details || {}
         const finalCustomerId = customerId || bookingDetails.customer?.customerId || booking.user_id || booking.customer_id
@@ -114,7 +122,7 @@ export const handler: Handler = async (event) => {
             const num = customerData.numero_civico || ''
             const zip = customerData.codice_postale || customerData.zipCode || ''
             const city = customerData.citta_residenza || customerData.city || ''
-            const prov = customerData.provincia_residenza || customerData.province || ''
+            const prov = (customerData.provincia_residenza || customerData.province || '').toUpperCase().trim()
 
             if (street) {
                 let streetAddress = street
@@ -139,8 +147,8 @@ export const handler: Handler = async (event) => {
             if (bookingCustomer.zip) fullAddress += ` ${bookingCustomer.zip}`
         }
 
-        const taxCode = customerData?.codiceFiscale || customerData?.codice_fiscale || bookingCustomer.taxCode || ''
-        const vatNumber = customerData?.partitaIva || customerData?.partita_iva || bookingCustomer.vatNumber || ''
+        const taxCode = (customerData?.codiceFiscale || customerData?.codice_fiscale || bookingCustomer.taxCode || '').toUpperCase().trim()
+        const vatNumber = (customerData?.partitaIva || customerData?.partita_iva || bookingCustomer.vatNumber || '').toUpperCase().trim()
 
         // Validation: Mandatory fields
         if (!fullAddress || fullAddress.trim() === '') {
@@ -165,30 +173,29 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Get next invoice number
-        const { data: lastInvoice } = await supabase
-            .from('fatture')
-            .select('numero_fattura')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-
-        let nextNumber = 1
+        // Atomic invoice numbering via DB sequence (prevents race-condition duplicates)
+        // Retry loop: if the generated number already exists in DB, get the next one
         const currentYear = new Date().getFullYear()
+        let invoiceNumber = ''
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
 
-        if (lastInvoice?.numero_fattura) {
-            const legacyMatch = lastInvoice.numero_fattura.match(/^(\d+)\//)
-            const newMatch = lastInvoice.numero_fattura.match(/DR7-\d+-(\d+)/)
-
-            if (newMatch) {
-                nextNumber = parseInt(newMatch[1], 10) + 1
-            } else if (legacyMatch) {
-                nextNumber = parseInt(legacyMatch[1], 10) + 1
+            if (seqError || seqResult == null) {
+                console.error('[Penalty Invoice] Sequence error:', seqError)
+                throw new Error('Failed to generate invoice number: ' + (seqError?.message || 'sequence returned null'))
             }
-        }
 
-        const padded = String(nextNumber).padStart(4, '0')
-        const invoiceNumber = `DR7-${currentYear}-${padded}`
+            const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+            const { data: existing } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+            if (!existing) {
+                invoiceNumber = candidate
+                break
+            }
+            console.warn(`[Penalty Invoice] Number ${candidate} already exists, retrying...`)
+        }
+        if (!invoiceNumber) {
+            throw new Error('Failed to generate unique invoice number after 5 attempts')
+        }
 
         // Create invoice items from cart
         // IMPORTANT: Amount is NET (without IVA), VAT rate is 0
@@ -196,9 +203,9 @@ export const handler: Handler = async (event) => {
         const bookingPrefix = `${isDanni ? 'Danno' : 'Penale'} prenotazione ${booking.id.substring(0, 8).toUpperCase()}`
 
         const items = cartItems.map(item => {
-            const description = item.label
-                ? `${bookingPrefix} - ${item.label}`
-                : bookingPrefix
+            const description = rawDescriptions
+                ? (item.label || 'Servizio')
+                : (item.label ? `${bookingPrefix} - ${item.label}` : bookingPrefix)
             return {
                 description,
                 unit_price: item.amount,
@@ -248,8 +255,10 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // Auto-send to SDI via Aruba if paid and customer has tax code
-        if (paymentStatus === 'paid' && invoice.customer_tax_code) {
+        // Auto-send to SDI via Aruba if paid and customer has tax code (skip for test vehicles)
+        if (isTestVehicle) {
+            console.log('[Penalty Invoice] Test vehicle — skipping SDI, will send PDF via WhatsApp only')
+        } else if (paymentStatus === 'paid' && invoice.customer_tax_code) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
@@ -269,12 +278,68 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // --- Generate PDF, upload to storage, send via WhatsApp ---
+        let pdfUrl: string | null = null
+        try {
+            const pdfBytes = await generateInvoicePDF(invoice as any)
+            const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+
+            const { error: uploadError } = await supabase.storage
+                .from('invoices')
+                .upload(pdfFileName, pdfBytes, { contentType: 'application/pdf', upsert: true })
+
+            if (uploadError) {
+                console.error('[Penalty Invoice] PDF storage upload failed:', uploadError.message)
+            } else {
+                const { data: { publicUrl } } = supabase.storage
+                    .from('invoices')
+                    .getPublicUrl(pdfFileName)
+
+                pdfUrl = publicUrl
+                console.log('[Penalty Invoice] PDF uploaded to storage:', pdfUrl)
+
+                await supabase.from('fatture').update({ pdf_url: pdfUrl }).eq('id', invoice.id)
+
+                const customerPhone = invoice.customer_phone || resolvedPhone || ''
+                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            urlFile: pdfUrl,
+                            fileName: `Fattura_${invoice.numero_fattura}.pdf`,
+                            caption: `Fattura ${invoice.numero_fattura} - DR7 Empire`
+                        })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && !waResult.error) {
+                        console.log('[Penalty Invoice] Fattura PDF sent via WhatsApp:', waResult.idMessage)
+                    } else {
+                        console.error('[Penalty Invoice] WhatsApp send failed:', waResult)
+                    }
+                } else {
+                    if (!customerPhone) console.log('[Penalty Invoice] No customer phone — skipping WhatsApp PDF send')
+                    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) console.log('[Penalty Invoice] Green API not configured — skipping WhatsApp PDF send')
+                }
+            }
+        } catch (pdfError: any) {
+            console.error('[Penalty Invoice] PDF generation/send failed (invoice still saved):', pdfError.message)
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
                 invoice: invoice,
                 invoiceId: invoice.id,
+                pdfUrl,
                 message: 'Penalty invoice generated successfully'
             })
         }

@@ -32,7 +32,7 @@ export const handler: Handler = async (event) => {
         }
 
         // Skip if already sent/processing (prevent duplicate uploads to Aruba)
-        if (invoice.sdi_status === 'sending' || invoice.sdi_status === 'sent' || invoice.sdi_status === 'accepted') {
+        if (['sending', 'sent', 'accepted'].includes(invoice.sdi_status)) {
             return {
                 statusCode: 200,
                 body: JSON.stringify({
@@ -43,9 +43,73 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // If invoice was previously sent (rejected/scartata/error), ALWAYS assign a NEW number
+        // This prevents SDI error 00404 (fattura duplicata) when retrying
+        const needsNewNumber = invoice.sdi_status === 'rejected' ||
+            invoice.sdi_status === 'scartata' ||
+            invoice.sdi_status === 'error' ||
+            invoice.aruba_invoice_id // was already uploaded before
+
+        if (needsNewNumber) {
+            const currentYear = new Date().getFullYear()
+            let newNumber = ''
+
+            // Retry loop: ensure the new number doesn't already exist in DB
+            for (let attempt = 0; attempt < 5; attempt++) {
+                const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+
+                if (seqError || seqResult == null) {
+                    console.error('[SDI] Sequence error on retry:', seqError)
+                    return {
+                        statusCode: 500,
+                        body: JSON.stringify({ error: 'Failed to generate new invoice number for retry', details: seqError?.message })
+                    }
+                }
+
+                const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+                const { data: existing } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+                if (!existing) {
+                    newNumber = candidate
+                    break
+                }
+                console.warn(`[SDI] Number ${candidate} already exists, retrying...`)
+            }
+
+            if (!newNumber) {
+                return {
+                    statusCode: 500,
+                    body: JSON.stringify({ error: 'Failed to generate unique invoice number after 5 attempts' })
+                }
+            }
+
+            console.log(`[SDI] Re-send: ${invoice.numero_fattura} → new number ${newNumber}`)
+
+            await supabase.from('fatture').update({
+                numero_fattura: newNumber,
+                sdi_status: 'draft'
+            }).eq('id', invoiceId)
+
+            invoice.numero_fattura = newNumber
+        }
+
+        // Normalize customer data (fix lowercase CF/P.IVA/provincia that SDI rejects)
+        const normalizedTaxCode = (invoice.customer_tax_code || '').toUpperCase().trim()
+        const normalizedVat = (invoice.customer_vat || '').toUpperCase().trim()
+        // Fix provincia in address: (Ss) → (SS), (ca) → (CA)
+        const normalizedAddress = (invoice.customer_address || '').replace(/\(([A-Za-z]{2})\)/, (_: string, prov: string) => `(${prov.toUpperCase()})`)
+        const needsUpdate = normalizedTaxCode !== invoice.customer_tax_code || normalizedVat !== invoice.customer_vat || normalizedAddress !== invoice.customer_address
+        if (needsUpdate) {
+            await supabase.from('fatture').update({
+                customer_tax_code: normalizedTaxCode,
+                customer_vat: normalizedVat,
+                customer_address: normalizedAddress
+            }).eq('id', invoiceId)
+            invoice.customer_tax_code = normalizedTaxCode
+            invoice.customer_vat = normalizedVat
+            invoice.customer_address = normalizedAddress
+        }
+
         // 1. Generate XML
-        // Ensure invoice object matches InvoiceData interface if needed, or cast it
-        // The DB columns largely match standard naming
         const xmlContent = generateFatturaXML(invoice as any)
         const filename = generateInvoiceFilename(invoice as any)
 

@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString, PDFHexString } from 'pdf-lib'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -302,7 +302,11 @@ export const handler: Handler = async (event) => {
 
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
-        const contractNumber = `CNT-${bookingId.substring(0, 8).toUpperCase()}`
+        // Generate sequential contract number: DR71000, DR71001, ...
+        const { count: contractCount } = await supabase
+            .from('contracts')
+            .select('id', { count: 'exact', head: true })
+        const contractNumber = `DR7${1000 + (contractCount || 0)}`
 
         // KM limit: use unlimited_km flag (strict boolean check) or legacy km_limit === 'Illimitati'
         const isUnlimitedKm = booking.booking_details?.unlimited_km === true || booking.booking_details?.km_limit === 'Illimitati'
@@ -894,8 +898,57 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             page.drawText(sanitizeForPDF(`Found fields in PDF: ${availableFields}`), { x: 50, y: height - 70, size: 10, font, color: red })
             page.drawText(sanitizeForPDF(`Expected fields: ${Object.keys(dataMap).join(', ')}`), { x: 50, y: height - 90, size: 8, font, color: red })
         } else {
-            // Flatten if we filled fields
-            try { form.flatten() } catch (e) { }
+            // Fix missing page references (P entry) on form field widgets before flattening.
+            // The PDF template has merged field/widget dicts where pdf-lib creates new objects
+            // that don't match the page's Annots refs. We match by field name (T entry) to find
+            // which page each field belongs to, then set the P reference.
+            const allPages = pdfDoc.getPages()
+            const allFields = form.getFields()
+
+            // Build map: field name -> page ref from each page's Annots
+            const fieldNameToPageRef = new Map<string, any>()
+            for (const page of allPages) {
+                const annotsRaw = page.node.get(PDFName.of('Annots'))
+                if (!annotsRaw) continue
+                const annots = pdfDoc.context.lookup(annotsRaw)
+                if (!(annots instanceof PDFArray)) continue
+                for (let i = 0; i < annots.size(); i++) {
+                    const annotDict = pdfDoc.context.lookup(annots.get(i))
+                    if (annotDict instanceof PDFDict) {
+                        const tRaw = annotDict.get(PDFName.of('T'))
+                        if (tRaw) {
+                            let fieldName = ''
+                            if (tRaw instanceof PDFString) fieldName = tRaw.decodeText()
+                            else if (tRaw instanceof PDFHexString) fieldName = tRaw.decodeText()
+                            else fieldName = tRaw.toString()
+                            if (!fieldNameToPageRef.has(fieldName)) {
+                                fieldNameToPageRef.set(fieldName, page.ref)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Set P on each widget (fallback to page 1 for any unmatched fields)
+            const firstPageRef = allPages[0].ref
+            for (const field of allFields) {
+                const pageRef = fieldNameToPageRef.get(field.getName()) || firstPageRef
+                for (const widget of field.acroField.getWidgets()) {
+                    widget.dict.set(PDFName.of('P'), pageRef)
+                }
+            }
+
+            try {
+                form.flatten()
+                console.log('[generate-contract] Form flattened successfully — PDF is now read-only')
+            } catch (flattenErr: any) {
+                console.error('[generate-contract] Flatten failed:', flattenErr.message)
+                // Fallback: mark all fields read-only so they can't be edited
+                for (const field of allFields) {
+                    try { field.enableReadOnly() } catch (_) { }
+                }
+                console.log('[generate-contract] Fields marked read-only as fallback')
+            }
         }
 
         // 6. Save and Upload

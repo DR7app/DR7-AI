@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import toast from 'react-hot-toast'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
+import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
 
 interface Customer {
   id: string
@@ -96,7 +98,7 @@ function getAllowedTimeRanges(durationMinutes: number, isSaturday: boolean = fal
 }
 
 
-// Generate time slots for car wash, every 15 minutes
+// Generate time slots for car wash, every 5 minutes
 // Weekdays: 9h-13h and 15h-18h | Saturday: 9h-17h continuous
 const generateTimeSlots = (isSaturday: boolean = false) => {
   const slots: string[] = []
@@ -104,7 +106,7 @@ const generateTimeSlots = (isSaturday: boolean = false) => {
   if (isSaturday) {
     // Saturday: continuous 9:00-17:00
     for (let hour = 9; hour <= 17; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
+      for (let minute = 0; minute < 60; minute += 5) {
         if (hour === 17 && minute > 0) break // Stop at 17:00
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         slots.push(time)
@@ -113,7 +115,7 @@ const generateTimeSlots = (isSaturday: boolean = false) => {
   } else {
     // Weekdays: Morning 9h-13h
     for (let hour = 9; hour < 13; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
+      for (let minute = 0; minute < 60; minute += 5) {
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         slots.push(time)
       }
@@ -121,7 +123,7 @@ const generateTimeSlots = (isSaturday: boolean = false) => {
 
     // Weekdays: Afternoon 15h-18h (18:00 is the maximum/last slot)
     for (let hour = 15; hour < 19; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
+      for (let minute = 0; minute < 60; minute += 5) {
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         if (hour === 18 && minute > 0) break
         slots.push(time)
@@ -148,15 +150,27 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [submitting, setSubmitting] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
+  const [editService, setEditService] = useState<CarWashService | null>(null)
+  const [editExtras, setEditExtras] = useState<CarWashService[]>([])
   const [selectedMainTab, setSelectedMainTab] = useState<'lavaggio' | 'meccanica'>('lavaggio')
 
   // Wizard state
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3>(0)
   const [selectedService, setSelectedService] = useState<CarWashService | null>(null)
   const [selectedPriceOption, setSelectedPriceOption] = useState<{ label: string; price: number } | null>(null)
   const [selectedExtras, setSelectedExtras] = useState<CarWashService[]>([])
   const [extraPriceOptions, setExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
+  const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({})
+  const [customPrice, setCustomPrice] = useState('')
   const [showNewClientModal, setShowNewClientModal] = useState(false)
+
+  // Vehicle classification state (Step 0)
+  const [vehiclePlate, setVehiclePlate] = useState('')
+  const [vehicleMakeModel, setVehicleMakeModel] = useState('')
+  const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory | null>(null)
+  const [classificationSource, setClassificationSource] = useState<'local' | 'api' | 'manual' | null>(null)
+  const [lookingUpTarga, setLookingUpTarga] = useState(false)
+  const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -174,21 +188,40 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
 
+  // Manual price override
+  const [manualPrice, setManualPrice] = useState<string | null>(null)
+
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
+
+
+
 
   // Wizard computed values
   const getTotal = () => {
     let total = 0
     if (selectedService) {
-      total += selectedPriceOption?.price ?? selectedService.price
+      if (selectedService.price_unit === 'custom') {
+        total += parseFloat(customPrice) || 0
+      } else {
+        total += selectedPriceOption?.price ?? selectedService.price
+      }
     }
     for (const extra of selectedExtras) {
       const ep = extraPriceOptions[extra.id]
-      total += ep?.price ?? extra.price
+      const qty = extraQuantities[extra.id] || 1
+      total += (ep?.price ?? extra.price) * qty
     }
     return total
+  }
+
+  const getFinalPrice = () => {
+    if (manualPrice !== null && manualPrice !== '') {
+      const parsed = parseFloat(manualPrice)
+      return isNaN(parsed) ? getTotal() : parsed
+    }
+    return getTotal()
   }
 
   const getTotalDuration = () => {
@@ -197,7 +230,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       duration += selectedService.durationMinutes || parseDurationToMinutes(selectedService.duration)
     }
     for (const extra of selectedExtras) {
-      duration += extra.durationMinutes || parseDurationToMinutes(extra.duration)
+      const qty = extraQuantities[extra.id] || 1
+      duration += (extra.durationMinutes || parseDurationToMinutes(extra.duration)) * qty
     }
     return duration
   }
@@ -213,17 +247,50 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       let name = extra.name
       const ep = extraPriceOptions[extra.id]
       if (ep) name += ` (${ep.label})`
+      const qty = extraQuantities[extra.id] || 1
+      if (qty > 1) name += ` x${qty}`
       parts.push(name)
     }
     return parts.join(' + ')
   }
 
+  // Edit modal computed values
+  const getEditTotalDuration = () => {
+    let d = 0
+    if (editService) d += editService.durationMinutes || parseDurationToMinutes(editService.duration)
+    for (const e of editExtras) d += e.durationMinutes || parseDurationToMinutes(e.duration)
+    return d
+  }
+
+  const getEditTotal = () => {
+    let total = 0
+    if (editService) total += editService.price
+    for (const e of editExtras) total += e.price
+    return total
+  }
+
+  const buildEditServiceNames = () => {
+    const parts: string[] = []
+    if (editService) parts.push(editService.name)
+    for (const e of editExtras) parts.push(e.name)
+    return parts.join(' + ')
+  }
+
   const resetWizard = () => {
-    setCurrentStep(1)
+    setCurrentStep(0)
     setSelectedService(null)
     setSelectedPriceOption(null)
     setSelectedExtras([])
     setExtraPriceOptions({})
+    setExtraQuantities({})
+    setManualPrice(null)
+    setCustomPrice('')
+    setVehiclePlate('')
+    setVehicleMakeModel('')
+    setVehicleCategory(null)
+    setClassificationSource(null)
+    setLookingUpTarga(false)
+    setTargaVehicleInfo(null)
     setFormData({
       customer_id: '',
       service_name: '',
@@ -246,9 +313,65 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     tech: 'PRIME TECH SERVICE'
   }
 
+  // Targa lookup handler
+  async function handleTargaLookup() {
+    if (vehiclePlate.length < 5 || lookingUpTarga) return
+    setLookingUpTarga(true)
+    setTargaVehicleInfo(null)
+    try {
+      const response = await fetch('/.netlify/functions/lookup-targa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targa: vehiclePlate }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        toast.error(err.error || 'Targa non trovata')
+        return
+      }
+      const data = await response.json()
+      setTargaVehicleInfo({
+        brand: data.brand,
+        model: data.model,
+        year: data.year,
+        fuel: data.fuel,
+        powerCV: data.powerCV,
+      })
+      // Auto-fill make/model and classify
+      if (data.makeModel) {
+        setVehicleMakeModel(data.makeModel)
+        // Auto-classify
+        const localResult = classifyVehicleLocally(data.makeModel)
+        if (localResult) {
+          setVehicleCategory(localResult.category)
+          setClassificationSource('local')
+        } else {
+          // Fallback to API classification
+          classifyVehicle(data.makeModel).then(result => {
+            setVehicleCategory(result.category)
+            setClassificationSource(result.source === 'local' ? 'local' : 'api')
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Targa lookup error:', err)
+      toast.error('Errore nella ricerca targa')
+    } finally {
+      setLookingUpTarga(false)
+    }
+  }
+
   const filteredByTab = carWashServices.filter(s => s.main_tab === selectedMainTab)
-  const mainServices = filteredByTab.filter(s => s.category !== 'extra')
-  const extraServices = filteredByTab.filter(s => s.category === 'extra')
+  // Filter main services by vehicle category if classified
+  const mainServices = filteredByTab.filter(s => {
+    if (s.category === 'extra' || s.category === 'experience') return false
+    // If vehicle is classified, only show matching urban/maxi services (plus moto, tech)
+    if (vehicleCategory && (s.category === 'urban' || s.category === 'maxi')) {
+      return s.category === vehicleCategory
+    }
+    return true
+  })
+  const extraServices = filteredByTab.filter(s => s.category === 'extra' || s.category === 'experience')
 
   const servicesByCategory = mainServices.reduce<Record<string, CarWashService[]>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = []
@@ -274,20 +397,27 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     } catch (error) {
       console.error('Error fetching customer for edit:', error)
-      alert("Impossibile caricare i dati del cliente per la modifica.")
+      toast.error("Impossibile caricare i dati del cliente per la modifica.")
     }
   }
 
   useEffect(() => {
     loadData()
 
-    // Real-time subscription for new bookings
+    // Real-time subscription for new bookings AND catalog price changes
     const subscription = supabase
       .channel('carwash-bookings-updates')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
         (payload) => {
           console.log('🔄 CarWashBookingsTab: Real-time update received', payload)
+          loadData()
+        }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'car_wash_services' },
+        (payload) => {
+          console.log('🔄 CarWashBookingsTab: Catalog price update received', payload)
           loadData()
         }
       )
@@ -312,6 +442,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     }
   }, [initialData, onDataConsumed])
+
+  // Populate edit service/extras when editing a booking
+  useEffect(() => {
+    if (editingBooking && carWashServices.length > 0) {
+      const cartItems = editingBooking.booking_details?.cartItems || []
+      if (cartItems.length > 0) {
+        const mainItem = cartItems[0]
+        const found = carWashServices.find((s: CarWashService) => s.id === mainItem.serviceId) || null
+        setEditService(found)
+        const extras: CarWashService[] = []
+        for (let i = 1; i < cartItems.length; i++) {
+          const foundExtra = carWashServices.find((s: CarWashService) => s.id === cartItems[i].serviceId)
+          if (foundExtra) extras.push(foundExtra)
+        }
+        setEditExtras(extras)
+      } else {
+        setEditService(null)
+        setEditExtras([])
+      }
+    } else if (!editingBooking) {
+      setEditService(null)
+      setEditExtras([])
+    }
+  }, [editingBooking, carWashServices])
 
   async function loadData() {
     setLoading(true)
@@ -368,32 +522,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
-  async function handleCancelBooking(bookingId: string, customerName: string) {
-    if (!confirm(`Sei sicuro di voler annullare la prenotazione di ${customerName}?`)) {
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('id', bookingId)
-
-      if (error) throw error
-
-      alert('✅ Prenotazione annullata con successo!')
-      loadData()
-    } catch (error: any) {
-      console.error('Failed to cancel booking:', error)
-      alert(`❌ Errore nell'annullamento: ${error.message}`)
-    }
-  }
-
   async function handleDeleteBooking(bookingId: string, customerName: string) {
-    if (!confirm(`⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE DEFINITIVAMENTE la prenotazione di ${customerName}?\n\nQuesta azione è irreversibile e rimuoverà la prenotazione dal database.`)) {
-      return
-    }
-
     try {
       // Try to delete from Google Calendar
       try {
@@ -409,8 +538,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         console.log('Google Calendar event deletion requested for booking:', bookingId)
       } catch (calError) {
         console.warn('Failed to delete from Google Calendar:', calError)
-        // Continue with database deletion even if Google Calendar deletion fails
       }
+
+      // Delete dependent records first (FK constraints)
+      await supabase.from('contracts').delete().eq('booking_id', bookingId)
+      await supabase.from('fatture').delete().eq('booking_id', bookingId)
+      await supabase.from('cauzioni').delete().eq('riferimento_contratto_id', bookingId)
 
       // Delete from database
       const { error } = await supabase
@@ -419,11 +552,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .eq('id', bookingId)
 
       if (error) throw error
-      alert('✅ Prenotazione eliminata definitivamente!')
+
+      toast.success('Prenotazione eliminata')
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
-      alert(`❌ Errore durante l'eliminazione: ${error.message}`)
+      toast.error(`Errore durante l'eliminazione: ${error.message}`)
     }
   }
 
@@ -446,7 +580,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const data = await response.json()
       if (!response.ok) {
         if (data.invoiceNumber) {
-          alert(`⚠️ Fattura già esistente per questa prenotazione:\n\nNumero: ${data.invoiceNumber}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          toast.error(`Fattura già esistente: ${data.invoiceNumber}. Vai alla tab "Fatture" per visualizzarla.`)
         } else {
           const errorMsg = data.message || data.error || 'Impossibile generare la fattura'
           const errorDetails = data.details ? `\n\nDettagli: ${data.details}` : ''
@@ -472,12 +606,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
         if (printWindow) {
           setTimeout(() => URL.revokeObjectURL(url), 3000)
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nLa fattura è stata aperta in una nuova finestra.`)
+          toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}`)
         } else {
-          alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+          toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
         }
       } else {
-        alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
+        toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
       }
 
       loadData()
@@ -487,12 +621,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        if (confirm(`${errorMessage}\n\nVuoi aprire la scheda cliente per aggiungere i dati mancanti ora?`)) {
-          openEditCustomer(booking.customer_id)
-          return
-        }
+        openEditCustomer(booking.booking_details?.customer?.customerId)
+        return
       }
-      alert('Errore nella generazione della fattura:\n\n' + errorMessage)
+      toast.error('Errore nella generazione della fattura: ' + errorMessage)
     } finally {
       setGeneratingInvoice(false)
     }
@@ -513,31 +645,36 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0)
     const appointmentDateTime = appointmentDate.toISOString()
 
-    // Total price from wizard selections
-    const totalPrice = getTotal()
+    // Total price: manual override or wizard selections
+    const totalPrice = getFinalPrice()
     const serviceNames = buildServiceNames()
 
     // Build cart items for booking details (backward compatible format)
     const cartItems: any[] = []
     if (selectedService) {
+      const servicePrice = selectedService.price_unit === 'custom'
+        ? parseFloat(customPrice)
+        : (selectedPriceOption?.price ?? selectedService.price)
       cartItems.push({
         serviceId: selectedService.id,
         serviceName: selectedService.name,
         quantity: 1,
-        price: selectedPriceOption?.price ?? selectedService.price,
+        price: servicePrice,
         option: selectedPriceOption?.label || null,
-        subtotal: selectedPriceOption?.price ?? selectedService.price
+        subtotal: servicePrice
       })
     }
     for (const extra of selectedExtras) {
       const ep = extraPriceOptions[extra.id]
+      const qty = extraQuantities[extra.id] || 1
+      const unitPrice = ep?.price ?? extra.price
       cartItems.push({
         serviceId: extra.id,
         serviceName: extra.name,
-        quantity: 1,
-        price: ep?.price ?? extra.price,
+        quantity: qty,
+        price: unitPrice,
         option: ep?.label || null,
-        subtotal: ep?.price ?? extra.price
+        subtotal: unitPrice * qty
       })
     }
 
@@ -548,13 +685,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       adminOverride: forceBooking,
       createdBy: 'admin_panel',
       cartItems: cartItems,
-      totalDuration: getTotalDuration()
+      totalDuration: getTotalDuration(),
+      customer: { customerId: formData.customer_id },
+      ...(vehicleCategory && { vehicleCategory }),
+      ...(vehicleMakeModel && { vehicleMakeModel }),
+      ...(classificationSource && { classificationSource }),
     }
 
     const bookingPayload: any = {
       service_type: 'car_wash',
       service_name: serviceNames,
-      vehicle_name: 'Car Wash Service',
+      vehicle_name: vehicleMakeModel || 'Car Wash Service',
+      vehicle_plate: vehiclePlate || null,
       customer_name: customerName,
       customer_email: customerEmail || null,
       customer_phone: customerPhone || null,
@@ -589,34 +731,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     console.log('✅ Booking created successfully:', data)
 
-    // Generate PDF invoice for car wash
+    // Generate fattura for car wash booking (also sends to SDI if customer has codice fiscale)
     try {
-      await fetch('/.netlify/functions/generate-invoice-pdf', {
+      const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: data.id || '',
-          bookingType: 'car_wash',
-          customerName,
-          customerEmail,
-          customerPhone,
-          items: [{
-            description: `Servizio Lavaggio: ${serviceNames}`,
-            quantity: 1,
-            unitPrice: totalPrice * 100,
-            total: totalPrice * 100
-          }],
-          subtotal: totalPrice * 100,
-          tax: 0,
-          total: totalPrice * 100,
-          paymentStatus: formData.payment_status || 'pending',
-          bookingDate: new Date().toISOString(),
-          serviceDate: appointmentDateTime,
-          notes: formData.notes || ''
-        })
+        body: JSON.stringify({ bookingId: data.id, includeIVA: true })
       })
+      if (invoiceResponse.ok) {
+        const invoiceData = await invoiceResponse.json()
+        console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
+      } else {
+        const errData = await invoiceResponse.json().catch(() => ({}))
+        const errMsg = errData.message || errData.error || invoiceResponse.statusText
+        console.warn('⚠️ Fattura generation failed:', errMsg)
+        // Open customer edit modal if missing data (address/codice fiscale)
+        if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
+          toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
+          openEditCustomer(formData.customer_id)
+        } else {
+          toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+        }
+      }
     } catch (invoiceError) {
-      console.error('⚠️ Failed to generate invoice:', invoiceError)
+      console.error('⚠️ Failed to generate fattura:', invoiceError)
     }
 
     // Send WhatsApp notification
@@ -624,6 +762,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const paymentStatus = formData.payment_status || 'pending'
       const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
 
+      // Send admin notification (detailed internal format)
       await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -635,6 +774,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             customer_name: customerName,
             customer_email: customerEmail,
             customer_phone: customerPhone,
+            vehicle_plate: vehiclePlate || null,
             appointment_date: appointmentDateTime,
             price_total: totalPrice * 100,
             payment_status: paymentStatus,
@@ -646,6 +786,42 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           }
         })
       })
+
+      // Send customer confirmation message
+      if (customerPhone) {
+        const custFirstName = customerName?.split(' ')[0] || 'Cliente'
+        const apptDt = new Date(appointmentDateTime)
+        const fmtDate = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
+        const fmtTime = apptDt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+        const totalEur = totalPrice.toFixed(2)
+        const bookingIdShort = (data.id || '').substring(0, 8).toUpperCase()
+
+        let paymentLabel = ''
+        if (paymentStatus === 'paid') {
+          paymentLabel = 'Pagato'
+        } else if (amountPaid > 0) {
+          paymentLabel = `${(amountPaid / 100).toFixed(2)}€ pagati - ${((totalPrice * 100 - amountPaid) / 100).toFixed(2)}€ da pagare`
+        } else {
+          paymentLabel = 'Da saldare'
+        }
+
+        let custMsg = `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
+        custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`
+        custMsg += `*ID:* DR7-${bookingIdShort}\n`
+        custMsg += `*Servizio:* ${serviceNames}\n`
+        custMsg += `*Data e Ora:* ${fmtDate} alle ${fmtTime}\n`
+        if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
+        custMsg += `*Totale:* €${totalEur}\n`
+        custMsg += `*Pagamento:* ${paymentLabel}\n`
+        custMsg += `\nCordiali Saluti,\nDR7`
+
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customMessage: custMsg, customPhone: customerPhone })
+        })
+        console.log('✅ WhatsApp customer confirmation sent to', customerPhone)
+      }
     } catch (whatsappError) {
       console.error('⚠️ WhatsApp notification failed:', whatsappError)
     }
@@ -661,7 +837,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          vehicleName: `🧼 ${serviceNames}`,
+          vehicleName: `🧼 ${serviceNames}${vehicleMakeModel ? ` - ${vehicleMakeModel}` : ''}${vehiclePlate ? ` [${vehiclePlate}]` : ''}`,
           customerName,
           customerEmail,
           customerPhone,
@@ -679,7 +855,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       console.error('⚠️ Failed to create Google Calendar event:', calendarError)
     }
 
-    alert('✅ Prenotazione creata con successo!')
+    // Success — UI updates automatically
     setShowForm(false)
     resetWizard()
     loadData()
@@ -709,19 +885,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     try {
       if (!selectedService) {
-        alert('❌ Errore: Seleziona almeno un servizio')
+        toast.error('Seleziona almeno un servizio')
         setSubmitting(false)
         return
       }
 
       if (!formData.customer_id) {
-        alert('❌ Errore: Seleziona un cliente')
+        toast.error('Seleziona un cliente')
         setSubmitting(false)
         return
       }
 
       if (!formData.appointment_time) {
-        alert('❌ Errore: Seleziona un orario')
+        toast.error('Seleziona un orario')
         setSubmitting(false)
         return
       }
@@ -781,7 +957,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
         errorMessage += 'Modifica l\'orario per rispettare le regole di programmazione.'
 
-        alert(errorMessage)
+        toast.error(errorMessage, { duration: 8000 })
         setSubmitting(false)
         return
       }
@@ -833,23 +1009,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }
       }
 
-      // If there's a conflict, show informational warning (but always proceed)
+      // Log overlap info but don't block the admin
       if (hasConflict && conflictingBooking) {
-        const bookingId = conflictingBooking.id.substring(0, 8).toUpperCase()
-        const confirmed = confirm(
-          `ℹ️ INFO: Esiste già una prenotazione a quest'orario\n\n` +
-          `Cliente esistente: ${conflictingBooking.customer_name}\n` +
-          `Servizio: ${conflictingBooking.service_name}\n` +
-          `Orario occupato: ${conflictDetails}\n` +
-          `ID Prenotazione: DR7-${bookingId}\n\n` +
-          `Stai per creare una doppia prenotazione.\n\n` +
-          `• Clicca OK per procedere\n` +
-          `• Clicca ANNULLA per scegliere un altro orario`
-        )
-
-        if (!confirmed) {
-          return // User cancelled
-        }
+        console.log('ℹ️ Overlap with existing booking:', conflictingBooking.customer_name, conflictDetails)
       }
 
       // Admin panel: ALWAYS create as forced booking (bypass all backend checks)
@@ -867,14 +1029,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         errorMessage.includes('Slot già occupato') ||
         errorMessage.includes('duplicate') ||
         errorMessage.includes('constraint')) {
-        alert(
-          `❌ ERRORE: Impossibile creare la prenotazione\n\n` +
-          `Dettaglio tecnico: ${errorMessage}\n\n` +
-          `Possibile causa: Database constraint o trigger che blocca le doppie prenotazioni.\n\n` +
-          `Soluzione: Controlla i constraint del database 'bookings' table.`
+        toast.error(
+          `Impossibile creare la prenotazione. Dettaglio tecnico: ${errorMessage}. Possibile causa: Database constraint o trigger che blocca le doppie prenotazioni.`,
+          { duration: 6000 }
         )
       } else {
-        alert(`❌ Errore nella creazione della prenotazione: ${errorMessage}`)
+        toast.error(`Errore nella creazione della prenotazione: ${errorMessage}`)
       }
     } finally {
       setSubmitting(false)
@@ -888,7 +1048,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Lavaggio</h2>
+        <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Prime Wash</h2>
         <div className="flex items-center gap-4">
           <div className="text-sm text-theme-text-muted">
             {bookings.length} prenotazion{bookings.length !== 1 ? 'i' : 'e'}
@@ -942,6 +1102,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           {/* Step Indicator */}
           <div className="flex items-center justify-center mb-6">
             {[
+              { step: 0 as const, label: 'Veicolo' },
               { step: 1 as const, label: 'Servizio' },
               { step: 2 as const, label: 'Extra' },
               { step: 3 as const, label: 'Conferma' }
@@ -966,12 +1127,132 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {label}
                   </span>
                 </button>
-                {idx < 2 && (
-                  <div className={`w-16 h-0.5 mx-2 mb-4 ${step < currentStep ? 'bg-dr7-gold/60' : 'bg-theme-bg-tertiary'}`} />
+                {idx < 3 && (
+                  <div className={`w-12 h-0.5 mx-1.5 mb-4 ${step < currentStep ? 'bg-dr7-gold/60' : 'bg-theme-bg-tertiary'}`} />
                 )}
               </div>
             ))}
           </div>
+
+          {/* ===== STEP 0: Vehicle Identification ===== */}
+          {currentStep === 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-theme-text-primary">Identificazione Veicolo</h3>
+
+              {/* Targa + Cerca */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Targa</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={vehiclePlate}
+                    onChange={(e) => setVehiclePlate(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    placeholder="ES. AB123CD"
+                    className="flex-1 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono tracking-widest uppercase focus:border-dr7-gold focus:outline-none"
+                    maxLength={10}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && vehiclePlate.length >= 5 && !lookingUpTarga) {
+                        e.preventDefault()
+                        handleTargaLookup()
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={vehiclePlate.length < 5 || lookingUpTarga}
+                    onClick={handleTargaLookup}
+                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
+                      vehiclePlate.length < 5 || lookingUpTarga
+                        ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
+                        : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                    }`}
+                  >
+                    {lookingUpTarga ? 'Ricerca...' : 'Cerca'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Targa lookup result card */}
+              {targaVehicleInfo && (
+                <div className="p-3 bg-green-900/20 border border-green-600/40 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-green-400 text-sm font-bold">Veicolo trovato</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
+                    {targaVehicleInfo.brand && (
+                      <div><span className="text-theme-text-muted">Marca:</span> <span className="text-theme-text-primary font-medium">{targaVehicleInfo.brand}</span></div>
+                    )}
+                    {targaVehicleInfo.model && (
+                      <div><span className="text-theme-text-muted">Modello:</span> <span className="text-theme-text-primary font-medium">{targaVehicleInfo.model}</span></div>
+                    )}
+                    {targaVehicleInfo.year && (
+                      <div><span className="text-theme-text-muted">Anno:</span> <span className="text-theme-text-primary">{targaVehicleInfo.year}</span></div>
+                    )}
+                    {targaVehicleInfo.fuel && (
+                      <div><span className="text-theme-text-muted">Carburante:</span> <span className="text-theme-text-primary">{targaVehicleInfo.fuel}</span></div>
+                    )}
+                    {targaVehicleInfo.powerCV && (
+                      <div><span className="text-theme-text-muted">Potenza:</span> <span className="text-theme-text-primary">{targaVehicleInfo.powerCV} CV</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Classification Result (auto from targa) */}
+              {vehicleCategory && (
+                <div className={`p-4 rounded-lg border-2 ${
+                  vehicleCategory === 'urban'
+                    ? 'bg-blue-900/20 border-blue-500/50'
+                    : 'bg-orange-900/20 border-orange-500/50'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
+                      vehicleCategory === 'urban'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-orange-600 text-white'
+                    }`}>
+                      {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                    </span>
+                    <span className="text-theme-text-primary font-medium">{vehicleMakeModel}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Navigation */}
+              <div className="flex justify-between items-center pt-4 border-t border-theme-border">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                >
+                  Annulla
+                </button>
+                <div className="flex gap-2 items-center">
+                  <button
+                    type="button"
+                    disabled={!targaVehicleInfo}
+                    onClick={() => {
+                      // Clear service selection when changing step from 0 to 1 (category may have changed)
+                      setSelectedService(null)
+                      setSelectedPriceOption(null)
+                      setSelectedExtras([])
+                      setExtraPriceOptions({})
+    setExtraQuantities({})
+                      setCustomPrice('')
+                      setCurrentStep(1)
+                    }}
+                    className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+                      targaVehicleInfo
+                        ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                        : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
+                    }`}
+                  >
+                    Avanti
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ===== STEP 1: Service Selection ===== */}
           {currentStep === 1 && (
@@ -986,6 +1267,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setSelectedPriceOption(null)
                     setSelectedExtras([])
                     setExtraPriceOptions({})
+    setExtraQuantities({})
+                    setCustomPrice('')
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'lavaggio'
@@ -1003,6 +1286,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setSelectedPriceOption(null)
                     setSelectedExtras([])
                     setExtraPriceOptions({})
+    setExtraQuantities({})
+                    setCustomPrice('')
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'meccanica'
@@ -1014,83 +1299,112 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
               </div>
 
-              {/* Service Cards by Category */}
-              {Object.entries(servicesByCategory).map(([category, services]) => (
-                <div key={category}>
-                  <h4 className="text-sm font-semibold text-theme-text-secondary tracking-wider mb-2">
-                    {categoryLabels[category] || category.toUpperCase()}
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {services.map(service => {
-                      const isSelected = selectedService?.id === service.id
-                      const hasPriceOptions = service.price_options && service.price_options.length > 0
+              {/* Service Dropdown Selector */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Servizio</label>
+                <select
+                  value={selectedService?.id || ''}
+                  onChange={(e) => {
+                    const allServices = Object.values(servicesByCategory).flat()
+                    const service = allServices.find(s => s.id === e.target.value) || null
+                    setSelectedService(service)
+                    setSelectedPriceOption(null)
+                    setCustomPrice('')
+                  }}
+                  className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                >
+                  <option value="">Seleziona servizio...</option>
+                  {Object.entries(servicesByCategory).map(([category, services]) => (
+                    <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                      {services.map(service => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
 
-                      return (
-                        <div
-                          key={service.id}
-                          onClick={() => {
-                            if (!hasPriceOptions) {
-                              setSelectedService(service)
-                              setSelectedPriceOption(null)
-                            } else if (!isSelected) {
-                              setSelectedService(service)
-                              setSelectedPriceOption(null)
-                            }
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-dr7-gold bg-dr7-gold/10'
-                              : 'border-theme-border hover:border-theme-border-light bg-theme-bg-tertiary/50'
-                          }`}
-                        >
-                          <div className="font-medium text-theme-text-primary text-sm">{service.name}</div>
-                          <div className="text-xs text-theme-text-muted mt-1">{service.duration}</div>
-                          {!hasPriceOptions ? (
-                            <div className="text-dr7-gold font-bold mt-2">EUR {service.price.toFixed(2)}</div>
-                          ) : (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {service.price_options!.map(opt => (
-                                <button
-                                  key={opt.label}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setSelectedService(service)
-                                    setSelectedPriceOption(opt)
-                                  }}
-                                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                                    isSelected && selectedPriceOption?.label === opt.label
-                                      ? 'bg-dr7-gold text-black border-dr7-gold font-bold'
-                                      : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold hover:text-dr7-gold'
-                                  }`}
-                                >
-                                  {opt.label} EUR {opt.price}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+              {/* Price options (if service has variants) */}
+              {selectedService?.price_options && selectedService.price_options.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Opzione prezzo</label>
+                  <select
+                    value={selectedPriceOption?.label || ''}
+                    onChange={(e) => {
+                      const opt = selectedService.price_options!.find(o => o.label === e.target.value) || null
+                      setSelectedPriceOption(opt)
+                    }}
+                    className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                  >
+                    <option value="">Seleziona opzione...</option>
+                    {selectedService.price_options.map(opt => (
+                      <option key={opt.label} value={opt.label}>
+                        {opt.label} - EUR {opt.price.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ))}
+              )}
+
+              {/* Custom price input for services with price_unit === 'custom' */}
+              {selectedService?.price_unit === 'custom' && (
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Prezzo (EUR) — Minimo €{selectedService.price.toFixed(0)}
+                  </label>
+                  <input
+                    type="number"
+                    min={selectedService.price}
+                    step="0.01"
+                    value={customPrice}
+                    onChange={(e) => setCustomPrice(e.target.value)}
+                    placeholder={`Minimo ${selectedService.price.toFixed(2)}`}
+                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none"
+                  />
+                  {customPrice && parseFloat(customPrice) < selectedService.price && (
+                    <p className="text-red-400 text-sm mt-1">
+                      Il prezzo deve essere almeno €{selectedService.price.toFixed(0)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Category badge reminder */}
+              {vehicleCategory && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-theme-text-muted">Categoria:</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    vehicleCategory === 'urban' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                  }`}>
+                    {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                  </span>
+                  {vehicleMakeModel && <span className="text-theme-text-muted text-xs">({vehicleMakeModel})</span>}
+                </div>
+              )}
 
               {/* Avanti button */}
               <div className="flex justify-between items-center pt-4 border-t border-theme-border">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => setCurrentStep(0)}
                   className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 >
-                  Annulla
+                  Indietro
                 </button>
                 <button
                   type="button"
-                  disabled={!selectedService || (selectedService.price_options && selectedService.price_options.length > 0 && !selectedPriceOption)}
+                  disabled={
+                    !selectedService ||
+                    (selectedService.price_options && selectedService.price_options.length > 0 && !selectedPriceOption) ||
+                    (selectedService?.price_unit === 'custom' && (!customPrice || parseFloat(customPrice) < selectedService.price))
+                  }
                   onClick={() => setCurrentStep(2)}
                   className={`px-6 py-2 rounded-full font-semibold transition-colors ${
-                    selectedService && (!selectedService.price_options?.length || selectedPriceOption)
+                    selectedService &&
+                    (!selectedService.price_options?.length || selectedPriceOption) &&
+                    !(selectedService.price_unit === 'custom' && (!customPrice || parseFloat(customPrice) < selectedService.price))
                       ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
                       : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                   }`}
@@ -1112,7 +1426,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3">
-                  {extraServices.map(extra => {
+                  {extraServices.filter(e => e.id !== selectedService?.id).map(extra => {
                     const isToggled = selectedExtras.some(e => e.id === extra.id)
                     const hasPriceOptions = extra.price_options && extra.price_options.length > 0
                     const currentExtraOption = extraPriceOptions[extra.id]
@@ -1171,6 +1485,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             ))}
                           </div>
                         )}
+                        {/* Quantity selector for per-unit extras */}
+                        {isToggled && extra.price_unit && (
+                          <div className="flex items-center gap-2 ml-2">
+                            <span className="text-xs text-theme-text-muted">{extra.price_unit}:</span>
+                            <button
+                              type="button"
+                              onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.max(1, (prev[extra.id] || 1) - 1) }))}
+                              className="w-7 h-7 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-sm"
+                            >-</button>
+                            <span className="text-sm font-bold text-theme-text-primary w-6 text-center">{extraQuantities[extra.id] || 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.min(10, (prev[extra.id] || 1) + 1) }))}
+                              className="w-7 h-7 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-sm"
+                            >+</button>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1198,6 +1529,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     onClick={() => {
                       setSelectedExtras([])
                       setExtraPriceOptions({})
+    setExtraQuantities({})
                       setCurrentStep(3)
                     }}
                     className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
@@ -1222,6 +1554,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {/* Summary Card */}
               <div className="p-4 bg-theme-bg-tertiary/50 rounded-lg border border-dr7-gold/30">
                 <h4 className="text-sm font-semibold text-dr7-gold mb-2">Riepilogo</h4>
+                {/* Vehicle info */}
+                {(vehicleMakeModel || vehiclePlate) && (
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-theme-border text-sm">
+                    {vehiclePlate && <span className="font-mono text-dr7-gold font-bold">{vehiclePlate}</span>}
+                    {vehicleMakeModel && <span className="text-theme-text-primary">{vehicleMakeModel}</span>}
+                    {vehicleCategory && (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        vehicleCategory === 'urban' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                      }`}>
+                        {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-theme-text-primary">
@@ -1229,7 +1575,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       {selectedPriceOption && <span className="text-theme-text-muted ml-1">({selectedPriceOption.label})</span>}
                     </span>
                     <span className="text-theme-text-primary font-medium">
-                      EUR {(selectedPriceOption?.price ?? selectedService?.price ?? 0).toFixed(2)}
+                      EUR {selectedService?.price_unit === 'custom'
+                        ? (parseFloat(customPrice) || 0).toFixed(2)
+                        : (selectedPriceOption?.price ?? selectedService?.price ?? 0).toFixed(2)}
                     </span>
                   </div>
                   {selectedExtras.map(extra => {
@@ -1241,11 +1589,44 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </div>
                     )
                   })}
-                  <div className="pt-2 mt-2 border-t border-theme-border flex justify-between">
+                  <div className="pt-2 mt-2 border-t border-theme-border flex justify-between items-center">
                     <span className="text-theme-text-muted">Durata: ~{getTotalDuration()} min</span>
                     <span className="text-dr7-gold font-bold text-base">EUR {getTotal().toFixed(2)}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Manual Price Override */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo manuale (opzionale)</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted text-sm">EUR</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={manualPrice ?? ''}
+                      onChange={(e) => setManualPrice(e.target.value === '' ? null : e.target.value)}
+                      placeholder={getTotal().toFixed(2)}
+                      className="w-full pl-12 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary placeholder-theme-text-muted"
+                    />
+                  </div>
+                  {manualPrice !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setManualPrice(null)}
+                      className="px-3 py-2 text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded transition-colors"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+                {manualPrice !== null && manualPrice !== '' && (
+                  <p className="text-xs text-dr7-gold mt-1">
+                    Prezzo manuale: EUR {parseFloat(manualPrice).toFixed(2)} (invece di EUR {getTotal().toFixed(2)})
+                  </p>
+                )}
               </div>
 
               {/* Customer */}
@@ -1293,7 +1674,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <select
                     value={formData.appointment_time}
                     onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                    className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="">Seleziona orario</option>
                     {(() => {
@@ -1336,11 +1717,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     value={formData.payment_status}
                     onChange={(e) => {
                       const newStatus = e.target.value
-                      const total = getTotal()
+                      const total = getFinalPrice()
                       const newAmountPaid = newStatus === 'paid' ? total.toString() : '0'
                       setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid })
                     }}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                    className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="paid">Pagato</option>
                     <option value="pending">Da Saldare</option>
@@ -1378,7 +1759,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       : 'bg-dr7-gold hover:bg-yellow-500 text-black'
                   }`}
                 >
-                  {submitting ? 'Creazione...' : `Conferma - EUR ${getTotal().toFixed(2)}`}
+                  {submitting ? 'Creazione...' : `Conferma - EUR ${getFinalPrice().toFixed(2)}`}
                 </button>
               </div>
             </div>
@@ -1392,10 +1773,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             Nessuna prenotazione lavaggio trovata
           </div>
         ) : (
-          <div className=" rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="rounded-lg overflow-hidden">
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full min-w-max">
-                <thead className="er">
+                <thead>
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Servizio</th>
@@ -1407,27 +1789,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </thead>
                 <tbody>
                   {bookings.filter(booking => {
-
-                    // Search filter
                     if (!bookingSearchQuery) return true
-                    const query = bookingSearchQuery.toLowerCase()
+                    const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
                     const customerName = (booking.customer_name || '').toLowerCase()
-                    return customerName.includes(query)
+                    return words.every(word => customerName.includes(word))
                   }).map((booking) => (
-                    <tr key={booking.id} className="border-t border-theme-border hover:er/50">
+                    <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-hover/50">
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         {booking.customer_name === 'Lavaggio Rientro' ? (
                           <>
                             <div className="font-medium">Lavaggio Rientro</div>
                             {booking.vehicle_name && (
-                              <div className="text-xs text-theme-text-primary mt-1">
-                                {booking.vehicle_name}
-                              </div>
+                              <div className="text-xs text-theme-text-primary mt-1">{booking.vehicle_name}</div>
                             )}
                             {booking.vehicle_plate && (
-                              <div className="text-xs text-dr7-gold font-mono">
-                                {booking.vehicle_plate}
-                              </div>
+                              <div className="text-xs text-dr7-gold font-mono">{booking.vehicle_plate}</div>
                             )}
                           </>
                         ) : (
@@ -1435,84 +1811,165 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             <div className="font-medium">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
+                            {(booking.booking_details?.vehicleMakeModel || (booking.vehicle_name && booking.vehicle_name !== 'Car Wash Service')) && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className="text-xs text-theme-text-primary">{booking.booking_details?.vehicleMakeModel || booking.vehicle_name}</span>
+                                {booking.booking_details?.vehicleCategory && (
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-600/30 text-blue-400' : 'bg-orange-600/30 text-orange-400'
+                                  }`}>
+                                    {booking.booking_details.vehicleCategory === 'urban' ? 'U' : 'M'}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {booking.vehicle_plate && (
+                              <div className="text-xs text-dr7-gold font-mono">{booking.vehicle_plate}</div>
+                            )}
                           </>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-theme-text-primary">
-                        <div className="font-medium">{booking.service_name}</div>
+                      <td className="px-4 py-3 text-sm text-theme-text-primary max-w-[180px]">
+                        <div className="font-medium truncate">{booking.service_name}</div>
                         {booking.booking_details?.additionalService && (
-                          <div className="text-xs text-theme-text-muted">
-                            + {booking.booking_details.additionalService}
-                          </div>
+                          <div className="text-xs text-theme-text-muted truncate">+ {booking.booking_details.additionalService}</div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div>
                           {booking.appointment_date
-                            ? new Date(booking.appointment_date).toLocaleDateString('it-IT', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              timeZone: 'Europe/Rome'
-                            })
+                            ? new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
                             : '-'}
                         </div>
-                        <div className="text-xs text-theme-text-muted">
-                          {booking.appointment_time || '-'}
-                        </div>
+                        <div className="text-xs text-theme-text-muted">{booking.appointment_time || '-'}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary font-bold">
                         EUR {(booking.price_total / 100).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
-                            ? 'bg-green-900 text-green-300'
-                            : 'bg-red-900 text-red-300'
-                            }`}
-                        >
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
+                            ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                        }`}>
                           {booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded' ? 'Pagato' : 'Non Pagato'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditingBooking(booking)}
-                            className="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                          >
-                            Modifica
-                          </button>
-                          <button
-                            onClick={() => handleGenerateInvoice(booking)}
-                            disabled={generatingInvoice}
-                            className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}
-                          >
+                          <button onClick={() => setEditingBooking(booking)} className="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors">Modifica</button>
+                          <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors`}>
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
-                          {booking.status !== 'cancelled' ? (
-                            <button
-                              onClick={() => handleCancelBooking(booking.id, booking.customer_name)}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                            >
-                              Annulla
-                            </button>
-                          ) : (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted">
-                              Annullata
-                            </span>
-                          )}
-                          <button
-                            onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                            className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors"
-                          >
-                            ×
-                          </button>
+                          <button onClick={() => handleDeleteBooking(booking.id, booking.customer_name)} className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors">×</button>
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile cards — Apple style */}
+            <div className="lg:hidden space-y-3">
+              {bookings.filter(booking => {
+                if (!bookingSearchQuery) return true
+                const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
+                const customerName = (booking.customer_name || '').toLowerCase()
+                return words.every(word => customerName.includes(word))
+              }).map((booking) => {
+                const bPaid = booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
+                const isRientro = booking.customer_name === 'Lavaggio Rientro'
+                return (
+                  <div key={booking.id} className="rounded-2xl bg-theme-bg-secondary border border-theme-border/30 shadow-sm overflow-hidden">
+                    {/* Card header */}
+                    <div className="px-4 pt-4 pb-3 flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-theme-text-primary text-[15px] truncate">
+                          {isRientro ? 'Lavaggio Rientro' : (booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A')}
+                        </div>
+                        {!isRientro && (
+                          <div className="text-xs text-theme-text-muted mt-0.5">
+                            {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 ml-2 ${
+                        bPaid ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'
+                      }`}>
+                        {bPaid ? 'Pagato' : 'Non Pagato'}
+                      </span>
+                    </div>
+
+                    {/* Card body — grouped rows */}
+                    <div className="mx-4 rounded-xl bg-theme-bg-tertiary/60 overflow-hidden mb-3">
+                      <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-theme-border/20">
+                        <span className="text-theme-text-muted text-xs">Servizio</span>
+                        <span className="text-theme-text-primary text-xs font-medium text-right max-w-[60%] truncate">{booking.service_name}</span>
+                      </div>
+                      <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-theme-border/20">
+                        <span className="text-theme-text-muted text-xs">Data</span>
+                        <span className="text-theme-text-primary text-xs font-medium">
+                          {booking.appointment_date
+                            ? new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+                            : '-'} · {booking.appointment_time || '-'}
+                        </span>
+                      </div>
+                      {(booking.vehicle_plate || booking.booking_details?.vehicleMakeModel) && (
+                        <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-theme-border/20">
+                          <span className="text-theme-text-muted text-xs">Veicolo</span>
+                          <div className="flex items-center gap-1.5">
+                            {booking.vehicle_plate && (
+                              <span className="font-mono font-bold text-dr7-gold text-xs">{booking.vehicle_plate}</span>
+                            )}
+                            {booking.booking_details?.vehicleCategory && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-500' : 'bg-orange-500/15 text-orange-500'
+                              }`}>
+                                {booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="px-3.5 py-2.5 flex items-center justify-between">
+                        <span className="text-theme-text-primary text-sm font-semibold">Totale</span>
+                        <span className="text-dr7-gold font-bold text-base">€{(booking.price_total / 100).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    {booking.booking_details?.notes && (
+                      <div className="mx-4 mb-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-3.5 py-2.5">
+                        <div className="text-yellow-500 text-[10px] font-semibold uppercase tracking-wider mb-1">Note</div>
+                        <p className="text-theme-text-primary text-xs leading-relaxed">{booking.booking_details.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="px-4 pb-4 flex gap-2">
+                      <button
+                        onClick={() => setEditingBooking(booking)}
+                        className="flex-1 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                      >
+                        Modifica
+                      </button>
+                      <button
+                        onClick={() => handleGenerateInvoice(booking)}
+                        disabled={generatingInvoice}
+                        className="flex-1 py-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                      >
+                        {generatingInvoice ? '...' : 'Fattura'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
+                        className="py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )
@@ -1567,14 +2024,79 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </div>
                 </div>
 
+                {/* Main Service Dropdown */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Servizio</label>
-                  <input
-                    type="text"
-                    value={editingBooking.service_name}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, service_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                  />
+                  <select
+                    value={editService?.id || ''}
+                    onChange={(e) => {
+                      const service = carWashServices.find(s => s.id === e.target.value) || null
+                      setEditService(service)
+                    }}
+                    className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                  >
+                    <option value="">Seleziona servizio...</option>
+                    {Object.entries(
+                      carWashServices
+                        .filter(s => s.category !== 'extra' && s.category !== 'experience')
+                        .reduce<Record<string, CarWashService[]>>((acc, s) => {
+                          if (!acc[s.category]) acc[s.category] = []
+                          acc[s.category].push(s)
+                          return acc
+                        }, {})
+                    ).map(([category, services]) => (
+                      <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                        {services.map(service => (
+                          <option key={service.id} value={service.id}>
+                            {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Extras Checkboxes */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Extra</label>
+                  <div className="flex flex-wrap gap-2">
+                    {carWashServices
+                      .filter(s => (s.category === 'extra' || s.category === 'experience') && s.id !== editService?.id)
+                      .map(extra => {
+                        const isSelected = editExtras.some(e => e.id === extra.id)
+                        return (
+                          <button
+                            key={extra.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setEditExtras(prev => prev.filter(e => e.id !== extra.id))
+                              } else {
+                                setEditExtras(prev => [...prev, extra])
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold'
+                                : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-dr7-gold'
+                            }`}
+                          >
+                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${
+                              isSelected ? 'bg-dr7-gold border-dr7-gold text-black' : 'border-theme-text-muted'
+                            }`}>
+                              {isSelected && '✓'}
+                            </span>
+                            {extra.name} - EUR {extra.price.toFixed(2)}
+                          </button>
+                        )
+                      })}
+                  </div>
+                </div>
+
+                {/* Duration + Price summary */}
+                <div className="p-3 bg-theme-bg-tertiary/50 rounded-lg flex justify-between items-center">
+                  <span className="text-sm text-theme-text-muted">Durata: ~{getEditTotalDuration()} min</span>
+                  <span className="text-lg font-bold text-dr7-gold">Totale: EUR {getEditTotal().toFixed(2)}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1598,24 +2120,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo (€)</label>
-                  <input
-                    type="number"
-                    value={editingBooking.price_total / 100}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, price_total: parseFloat(e.target.value) * 100 })}
-                    step="0.01"
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                  />
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato</label>
                     <select
                       value={editingBooking.status}
                       onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                     >
                       <option value="pending">In Attesa</option>
                       <option value="confirmed">Confermata</option>
@@ -1628,7 +2139,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <select
                       value={editingBooking.payment_status}
                       onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                     >
                       <option value="pending">In Attesa</option>
                       <option value="paid">Pagato</option>
@@ -1642,29 +2153,129 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <button
                   onClick={async () => {
                     try {
+                      // Rebuild cart items from edit selections
+                      const editCartItems: any[] = []
+                      if (editService) {
+                        editCartItems.push({
+                          serviceId: editService.id,
+                          serviceName: editService.name,
+                          quantity: 1,
+                          price: editService.price,
+                          option: null,
+                          subtotal: editService.price
+                        })
+                      }
+                      for (const extra of editExtras) {
+                        editCartItems.push({
+                          serviceId: extra.id,
+                          serviceName: extra.name,
+                          quantity: 1,
+                          price: extra.price,
+                          option: null,
+                          subtotal: extra.price
+                        })
+                      }
+
+                      const updatedServiceName = editService ? buildEditServiceNames() : editingBooking.service_name
+                      const updatedPrice = editService ? Math.round(getEditTotal() * 100) : editingBooking.price_total
+                      const updatedDuration = editService ? getEditTotalDuration() : (editingBooking.booking_details?.totalDuration || 0)
+
+                      const updatedDetails = {
+                        ...(editingBooking.booking_details || {}),
+                        cartItems: editService ? editCartItems : (editingBooking.booking_details?.cartItems || []),
+                        totalDuration: updatedDuration,
+                      }
+
                       const { error } = await supabase
                         .from('bookings')
                         .update({
                           customer_name: editingBooking.customer_name,
                           customer_email: editingBooking.customer_email,
                           customer_phone: editingBooking.customer_phone,
-                          service_name: editingBooking.service_name,
+                          service_name: updatedServiceName,
                           appointment_date: editingBooking.appointment_date,
                           appointment_time: editingBooking.appointment_time,
-                          price_total: editingBooking.price_total,
+                          price_total: updatedPrice,
                           status: editingBooking.status,
                           payment_status: editingBooking.payment_status,
+                          booking_details: updatedDetails,
                         })
                         .eq('id', editingBooking.id)
 
                       if (error) throw error
 
-                      alert('✅ Prenotazione aggiornata!')
+                      // Auto-generate fattura if payment changed to paid
+                      if (editingBooking.payment_status === 'paid') {
+                        try {
+                          // Check if fattura already exists for this booking
+                          const { data: existingFattura } = await supabase
+                            .from('fatture')
+                            .select('id')
+                            .eq('booking_id', editingBooking.id)
+                            .maybeSingle()
+
+                          if (!existingFattura) {
+                            console.log('[Auto-Gen] Generating fattura for paid car wash:', editingBooking.id)
+                            const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ bookingId: editingBooking.id, includeIVA: true })
+                            })
+                            if (invoiceRes.ok) {
+                              console.log('[Auto-Gen] ✅ Fattura generated')
+                            } else {
+                              const errData = await invoiceRes.json()
+                              const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+                              console.warn('[Auto-Gen] ⚠️ Fattura failed:', errMsg)
+                              // Open customer edit modal if missing data
+                              if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
+                                toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
+                                openEditCustomer(editingBooking.booking_details?.customer?.customerId)
+                              } else {
+                                toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+                              }
+                            }
+                          }
+                        } catch (invoiceError) {
+                          console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
+                        }
+                      }
+
+                      // Send WhatsApp modification notification
+                      try {
+                        await fetch('/.netlify/functions/send-whatsapp-notification', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            booking: {
+                              id: editingBooking.id,
+                              service_type: 'car_wash',
+                              isEdit: true,
+                              service_name: updatedServiceName,
+                              customer_name: editingBooking.customer_name,
+                              customer_email: editingBooking.customer_email,
+                              customer_phone: editingBooking.customer_phone,
+                              appointment_date: editingBooking.appointment_date,
+                              price_total: updatedPrice,
+                              payment_status: editingBooking.payment_status,
+                              booking_details: {
+                                serviceName: updatedServiceName,
+                                amountPaid: updatedDetails.amountPaid || 0,
+                                notes: updatedDetails.notes || ''
+                              }
+                            }
+                          })
+                        })
+                      } catch (whatsappError) {
+                        console.error('WhatsApp notification failed:', whatsappError)
+                      }
+
+                      toast.success('Prenotazione aggiornata')
                       setEditingBooking(null)
                       loadData()
                     } catch (error) {
                       console.error('Failed to update booking:', error)
-                      alert('❌ Errore durante l\'aggiornamento')
+                      toast.error('Errore durante l\'aggiornamento')
                     }
                   }}
                   className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"
@@ -1682,6 +2293,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           </div>
         )
       }
+
+
+
     </div >
   )
 }

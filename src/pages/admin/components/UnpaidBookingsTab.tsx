@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface UnpaidBooking {
   id: string
@@ -8,6 +10,8 @@ interface UnpaidBooking {
   customer_name: string
   customer_email: string
   customer_phone: string
+  customer_id?: string
+  user_id?: string
   customer_codice_fiscale?: string
   customer_indirizzo?: string
   customer_numero_civico?: string
@@ -16,10 +20,11 @@ interface UnpaidBooking {
   customer_provincia?: string
   service_name?: string
   vehicle_name?: string
+  vehicle_plate?: string
   appointment_date?: string
   appointment_time?: string
   pickup_date?: string
-  return_date?: string
+  dropoff_date?: string
   price_total: number
   status: string
   payment_status: string
@@ -28,17 +33,67 @@ interface UnpaidBooking {
   created_at: string
 }
 
+interface FatturaItem {
+  fatturaId: string
+  fatturaNumero: string
+  bookingId: string
+  description: string
+  total: number
+  amountPaid: number
+  paymentStatus: string
+  type: 'penalties' | 'danni'
+  itemIndex: number
+}
+
+interface PendingItem {
+  bookingId: string
+  booking: UnpaidBooking
+  label: string
+  amount: number         // EUR total
+  amountPaid: number     // EUR paid
+  remaining: number      // EUR remaining
+  paymentStatus: string
+  source: 'booking_details' | 'fattura'
+  fatturaId?: string
+  fatturaNumero?: string
+  itemIndex?: number
+  type: 'penalties' | 'danni'
+  originalIndex: number
+}
+
+interface CustomerGroup {
+  customerKey: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  noleggioBookings: UnpaidBooking[]
+  primeWashBookings: UnpaidBooking[]
+  penaliItems: PendingItem[]
+  danniItems: PendingItem[]
+  totalRemaining: number  // in cents
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
 export default function UnpaidBookingsTab() {
   const [bookings, setBookings] = useState<UnpaidBooking[]>([])
+  const [fatturaItemsMap, setFatturaItemsMap] = useState<Record<string, FatturaItem[]>>({})
   const [loading, setLoading] = useState(true)
-  const [filterService, setFilterService] = useState<'all' | 'rental' | 'car_wash' | 'mechanical_service'>('all')
-  const [multiSelectMode, setMultiSelectMode] = useState(false)
-  const [selectedBookings, setSelectedBookings] = useState<Set<string>>(new Set())
+  const [filterService, setFilterService] = useState<'all' | 'rental' | 'prime_wash'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [partialPayItemKey, setPartialPayItemKey] = useState<string | null>(null)
+  const [partialPayValue, setPartialPayValue] = useState('')
+  const [editAmountKey, setEditAmountKey] = useState<string | null>(null)
+  const [editAmountValue, setEditAmountValue] = useState('')
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set())
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [processingKey, setProcessingKey] = useState<string | null>(null)
 
   useEffect(() => {
     loadUnpaidBookings()
 
-    // Real-time subscription
     const subscription = supabase
       .channel('unpaid-bookings-updates')
       .on('postgres_changes',
@@ -47,49 +102,73 @@ export default function UnpaidBookingsTab() {
       )
       .subscribe()
 
-    return () => {
-      subscription.unsubscribe()
-    }
+    return () => { subscription.unsubscribe() }
   }, [])
+
+  // ── Data Layer (preserved from original) ──────────────────────────────────
 
   async function loadUnpaidBookings() {
     setLoading(true)
     try {
-      // Load bookings with pending payment OR bookings with pending extension payments
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
-        .neq('status', 'cancelled')
-        .neq('status', 'deleted')
-        .neq('customer_name', 'Lavaggio Rientro')  // Exclude auto-generated car wash rientri
+        .not('status', 'in', '(cancelled,annullata,completed,completata,deleted)')
+        .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      // Filter to include:
-      // 1. Bookings with pending/unpaid payment_status
-      // 2. Bookings with extension_history containing pending payments
-      // 3. Bookings with pending penalties or danni in booking_details
+      const { data: fatture } = await supabase
+        .from('fatture')
+        .select('id, booking_id, numero_fattura, items')
+
+      const fItemsMap: Record<string, FatturaItem[]> = {}
+      const bookingIdsWithFatturaItems = new Set<string>()
+
+      for (const f of (fatture || [])) {
+        if (!f.items || !Array.isArray(f.items) || !f.booking_id) continue
+        f.items.forEach((fi: any, idx: number) => {
+          if (!fi.description) return
+          const desc = fi.description as string
+          const isDanniPenali = desc.includes('Penale prenotazione') || desc.includes('Danno prenotazione')
+          if (!isDanniPenali) return
+          if (fi.paymentStatus === 'paid') return
+
+          const total = fi.total || (fi.unit_price || 0) * (fi.quantity || 1)
+          const type: 'penalties' | 'danni' = desc.includes('Danno prenotazione') ? 'danni' : 'penalties'
+          const item: FatturaItem = {
+            fatturaId: f.id,
+            fatturaNumero: f.numero_fattura || '',
+            bookingId: f.booking_id,
+            description: desc,
+            total,
+            amountPaid: fi.amountPaid || 0,
+            paymentStatus: fi.paymentStatus || 'pending',
+            type,
+            itemIndex: idx,
+          }
+          if (!fItemsMap[f.booking_id]) fItemsMap[f.booking_id] = []
+          fItemsMap[f.booking_id].push(item)
+          bookingIdsWithFatturaItems.add(f.booking_id)
+        })
+      }
+
+      setFatturaItemsMap(fItemsMap)
+
       const unpaidBookings = (data || []).filter(booking => {
-        // Check main payment status
-        if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
-          return true
-        }
+        if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
 
-        // Check extension payments
         const extensions = booking.booking_details?.extension_history || []
-        const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
-        if (hasPendingExtension) return true
+        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')) return true
 
-        // Check pending penalties
         const penalties = booking.booking_details?.penalties || []
-        const hasPendingPenalty = penalties.some((p: any) => p.paymentStatus === 'pending')
-        if (hasPendingPenalty) return true
+        if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')) return true
 
-        // Check pending danni
         const danni = booking.booking_details?.danni || []
-        const hasPendingDanno = danni.some((d: any) => d.paymentStatus === 'pending')
-        if (hasPendingDanno) return true
+        if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')) return true
+
+        if (bookingIdsWithFatturaItems.has(booking.id)) return true
 
         return false
       })
@@ -102,229 +181,216 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function markEverythingPaid(booking: UnpaidBooking) {
+  // ── Payment & Delete functions (preserved) ─────────────────────────────────
+
+  async function updatePaymentStatus(bookingId: string, newStatus: string) {
     try {
-      // 1. Generate ONE fattura FIRST (while penalties/danni are still 'pending' in DB)
-      //    This way the invoice function only picks up pending items, not previously-paid ones
-      try {
-        const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId: booking.id, includeIVA: true, includePenalties: true })
-        })
-        if (invoiceRes.ok) {
-          const invoiceData = await invoiceRes.json()
-          toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata e inviata a SDI`)
-        }
-      } catch (invoiceErr) {
-        console.warn('Auto-invoice generation failed:', invoiceErr)
-      }
-
-      // 2. Build updated booking_details with all penalties/danni/extensions marked as paid
-      // Re-fetch booking to get latest state (invoice function may have been reading it)
-      const { data: freshBooking } = await supabase
-        .from('bookings')
-        .select('booking_details')
-        .eq('id', booking.id)
-        .single()
-
-      const details = { ...(freshBooking?.booking_details || booking.booking_details || {}) }
-
-      const penalties = (details.penalties || []).map((p: any) =>
-        p.paymentStatus === 'pending' ? { ...p, paymentStatus: 'paid' } : p
-      )
-      const danni = (details.danni || []).map((d: any) =>
-        d.paymentStatus === 'pending' ? { ...d, paymentStatus: 'paid' } : d
-      )
-      const extensions = (details.extension_history || []).map((ext: any) =>
-        ext.payment_status === 'pending' ? { ...ext, payment_status: 'paid' } : ext
-      )
-
-      // 3. Update everything in one DB call
       const { error } = await supabase
         .from('bookings')
         .update({
-          payment_status: 'paid',
-          status: 'confirmed',
-          booking_details: {
-            ...details,
-            penalties,
-            danni,
-            extension_history: extensions
-          }
+          payment_status: newStatus,
+          status: newStatus === 'paid' ? 'confirmed' : 'pending'
         })
-        .eq('id', booking.id)
+        .eq('id', bookingId)
 
       if (error) throw error
+      toast.success('Stato pagamento aggiornato!')
 
-      toast.success('Tutto segnato come pagato!')
+      if (newStatus === 'paid') {
+        try {
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId, includeIVA: true })
+          })
+          if (invoiceRes.ok) {
+            const invoiceData = await invoiceRes.json()
+            toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata e inviata a SDI`)
+          }
+        } catch (invoiceErr) {
+          console.warn('Auto-invoice generation failed:', invoiceErr)
+        }
+      }
+
       loadUnpaidBookings()
     } catch (error: any) {
-      console.error('Failed to mark everything as paid:', error)
+      console.error('Failed to update payment status:', error)
       const errorMessage = error?.message || error?.details || JSON.stringify(error)
-      toast.error(`Errore nell'aggiornamento: ${errorMessage} (ID: ${booking.id.substring(0, 8)})`)
+      toast.error(`Errore: ${errorMessage}`)
     }
   }
 
-  // Check if booking is only in list because of pending penalties/danni (main booking is paid)
-  function isOnlyPenaltyDanni(booking: UnpaidBooking): boolean {
-    if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return false
-    const extensions = booking.booking_details?.extension_history || []
-    const hasPendingExtension = extensions.some((ext: any) => ext.payment_status === 'pending')
-    if (hasPendingExtension) return false
-    const penalties = booking.booking_details?.penalties || []
-    const danni = booking.booking_details?.danni || []
-    return penalties.some((p: any) => p.paymentStatus === 'pending') || danni.some((d: any) => d.paymentStatus === 'pending')
-  }
-
-  async function removePendingPenaltiesDanni(booking: UnpaidBooking) {
+  async function removeSinglePenaltyDanno(booking: UnpaidBooking, type: 'penalties' | 'danni', originalIndex: number) {
     try {
       const details = booking.booking_details || {}
-      const penalties = (details.penalties || []).filter((p: any) => p.paymentStatus !== 'pending')
-      const danni = (details.danni || []).filter((d: any) => d.paymentStatus !== 'pending')
+      const arr: any[] = [...(details[type] || [])]
+      arr.splice(originalIndex, 1)
 
       const { error } = await supabase
         .from('bookings')
-        .update({
-          booking_details: {
-            ...details,
-            penalties,
-            danni
-          }
-        })
+        .update({ booking_details: { ...details, [type]: arr } })
         .eq('id', booking.id)
 
       if (error) throw error
-
-      toast.success('Penali/Danni rimossi!')
+      toast.success(`${type === 'danni' ? 'Danno' : 'Penale'} rimosso!`)
+      setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: any) {
-      console.error('Failed to remove penalties/danni:', error)
+      console.error('Failed to remove item:', error)
       toast.error('Errore: ' + (error.message || error))
     }
   }
 
-  async function markExtensionsPaid(booking: UnpaidBooking) {
+  async function updateSinglePenaltyDannoAmount(booking: UnpaidBooking, type: 'penalties' | 'danni', originalIndex: number, newAmount: number) {
     try {
-      // Update all pending extensions to paid
-      const extensions = booking.booking_details?.extension_history || []
-      const updatedExtensions = extensions.map((ext: any) => ({
-        ...ext,
-        payment_status: ext.payment_status === 'pending' ? 'paid' : ext.payment_status
-      }))
+      const details = booking.booking_details || {}
+      const arr: any[] = [...(details[type] || [])]
+      if (arr[originalIndex]) {
+        arr[originalIndex] = { ...arr[originalIndex], total: newAmount, amount: newAmount, quantity: 1 }
+      }
 
       const { error } = await supabase
         .from('bookings')
-        .update({
-          booking_details: {
-            ...booking.booking_details,
-            extension_history: updatedExtensions
-          }
-        })
+        .update({ booking_details: { ...details, [type]: arr } })
         .eq('id', booking.id)
 
       if (error) throw error
-
-      toast.success('Estensioni segnate come pagate!')
+      toast.success('Importo aggiornato!')
+      setEditAmountKey(null)
       loadUnpaidBookings()
     } catch (error: any) {
-      console.error('Failed to update extension payment status:', error)
+      console.error('Failed to update amount:', error)
       toast.error('Errore: ' + (error.message || error))
     }
   }
 
-  async function markSelectedAsPaid() {
-    if (selectedBookings.size === 0) return
-
+  async function deleteSingleExtension(booking: UnpaidBooking, extIndex: number) {
     try {
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      if (!extensions[extIndex]) return
+      extensions.splice(extIndex, 1)
+
       const { error } = await supabase
         .from('bookings')
-        .update({
-          payment_status: 'paid',
-          status: 'confirmed'
-        })
-        .in('id', Array.from(selectedBookings))
+        .update({ booking_details: { ...booking.booking_details, extension_history: extensions } })
+        .eq('id', booking.id)
 
       if (error) throw error
-
-      toast.success(`${selectedBookings.size} prenotazioni segnate come pagate!`)
-      setSelectedBookings(new Set())
-      setMultiSelectMode(false)
+      toast.success('Estensione rimossa!')
+      setConfirmDeleteKey(null)
       loadUnpaidBookings()
-    } catch (error) {
-      console.error('Failed to mark bookings as paid:', error)
-      toast.error('Errore durante l\'aggiornamento dello stato pagamento')
+    } catch (error: any) {
+      toast.error('Errore: ' + (error.message || error))
     }
   }
 
-  async function deleteSelectedBookings() {
-    if (selectedBookings.size === 0) return
-
+  async function markSingleExtensionPaid(booking: UnpaidBooking, extIndex: number) {
     try {
-      // First, get all selected bookings to check for Google Calendar event IDs
-      const { data: bookingsToDelete } = await supabase
-        .from('bookings')
-        .select('*')
-        .in('id', Array.from(selectedBookings))
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      const ext = extensions[extIndex]
+      if (!ext) return
 
-      // Delete from Google Calendar for each booking that has an event ID
-      if (bookingsToDelete) {
-        for (const booking of bookingsToDelete) {
-          try {
-            await fetch('/.netlify/functions/delete-calendar-event', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                bookingId: booking.id,
-                customerName: booking.customer_name,
-                vehicleName: booking.vehicle_name || booking.service_name || 'Servizio'
-              }),
-            })
-            console.log('Google Calendar event deletion requested for:', booking.id)
-          } catch (calError) {
-            console.warn('Failed to delete from Google Calendar:', calError)
-            // Continue with other deletions
+      extensions[extIndex] = { ...ext, payment_status: 'paid' }
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...booking.booking_details, extension_history: extensions } })
+        .eq('id', booking.id)
+
+      if (error) throw error
+      toast.success('Estensione segnata come pagata!')
+
+      // Generate fattura for the extension
+      const extAmount = ext.additional_amount || 0
+      if (extAmount > 0) {
+        try {
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extAmount })
+          })
+          if (invoiceRes.ok) {
+            toast.success('Fattura estensione generata!')
+          } else {
+            const errData = await invoiceRes.json()
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            toast.error(`Fattura estensione non generata: ${errMsg}`, { duration: 8000 })
           }
+        } catch (invoiceError) {
+          console.error('Failed to generate extension fattura:', invoiceError)
         }
       }
 
-      // Delete from database using serverless function to bypass RLS
-      const deletionPromises = Array.from(selectedBookings).map(bookingId =>
-        fetch('/.netlify/functions/delete-booking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId })
-        }).then(async res => {
-          if (!res.ok) {
-            const data = await res.json()
-            throw new Error(data.error || 'Failed to delete booking')
-          }
-          return res.json()
-        })
-      )
-
-      await Promise.all(deletionPromises)
-
-      toast.success(`${selectedBookings.size} prenotazioni eliminate con successo!`)
-      setSelectedBookings(new Set())
-      setMultiSelectMode(false)
       loadUnpaidBookings()
     } catch (error: any) {
-      console.error('Failed to delete bookings:', error)
-      toast.error('Errore durante l\'eliminazione delle prenotazioni: ' + (error.message || error))
+      toast.error('Errore: ' + (error.message || error))
+    }
+  }
+
+  async function handleExtensionPartialPayment(booking: UnpaidBooking, extIndex: number, paymentAmount: number) {
+    try {
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      const ext = extensions[extIndex]
+      if (!ext) return
+
+      const total = ext.additional_amount || 0
+      const currentPaid = ext.amount_paid || 0
+      const newPaid = Math.min(currentPaid + paymentAmount, total)
+
+      extensions[extIndex] = {
+        ...ext,
+        amount_paid: newPaid,
+        payment_status: newPaid >= total ? 'paid' : 'partial'
+      }
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...booking.booking_details, extension_history: extensions } })
+        .eq('id', booking.id)
+
+      if (error) throw error
+      toast.success('Pagamento parziale estensione registrato!')
+      setPartialPayItemKey(null)
+
+      // Generate fattura when fully paid
+      if (newPaid >= total && total > 0) {
+        try {
+          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: total })
+          })
+          if (invoiceRes.ok) {
+            toast.success('Fattura estensione generata!')
+          } else {
+            const errData = await invoiceRes.json()
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            toast.error(`Fattura estensione non generata: ${errMsg}`, { duration: 8000 })
+          }
+        } catch (invoiceError) {
+          console.error('Failed to generate extension fattura:', invoiceError)
+        }
+      }
+
+      loadUnpaidBookings()
+    } catch (error: any) {
+      toast.error('Errore: ' + (error.message || error))
     }
   }
 
   async function deleteSingleBooking(bookingId: string) {
     try {
-      // First, get the booking to check if it has a Google Calendar event ID
       const { data: booking } = await supabase
         .from('bookings')
         .select('*')
         .eq('id', bookingId)
         .single()
 
-      // Try to delete from Google Calendar if event ID exists
+      if (booking && (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded')) {
+        toast.error('Impossibile eliminare una prenotazione gia pagata!')
+        return
+      }
+
       if (booking) {
         try {
           await fetch('/.netlify/functions/delete-calendar-event', {
@@ -336,14 +402,11 @@ export default function UnpaidBookingsTab() {
               vehicleName: booking.vehicle_name || booking.service_name || 'Servizio'
             }),
           })
-          console.log('Google Calendar event deletion requested for:', booking.id)
         } catch (calError) {
           console.warn('Failed to delete from Google Calendar:', calError)
-          // Continue with database deletion even if Google Calendar deletion fails
         }
       }
 
-      // Delete from database using serverless function
       const res = await fetch('/.netlify/functions/delete-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -355,69 +418,659 @@ export default function UnpaidBookingsTab() {
         throw new Error(data.error || 'Failed to delete booking')
       }
 
-      toast.success('Prenotazione eliminata con successo!')
+      toast.success('Prenotazione eliminata!')
+      setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
-      toast.error('Errore durante l\'eliminazione della prenotazione: ' + (error.message || error))
+      toast.error('Errore: ' + (error.message || error))
     }
   }
 
-  function toggleBookingSelection(bookingId: string) {
-    const newSelected = new Set(selectedBookings)
-    if (newSelected.has(bookingId)) {
-      newSelected.delete(bookingId)
-    } else {
-      newSelected.add(bookingId)
+  async function handleFatturaItemPayment(fi: FatturaItem, paymentAmount: number) {
+    try {
+      const { data: fattura, error: fetchErr } = await supabase
+        .from('fatture')
+        .select('id, items')
+        .eq('id', fi.fatturaId)
+        .single()
+
+      if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+      const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+      if (items[fi.itemIndex]) {
+        const existing = items[fi.itemIndex]
+        const total = existing.total || (existing.unit_price || 0) * (existing.quantity || 1)
+        const newAmountPaid = Math.min((existing.amountPaid || 0) + paymentAmount, total)
+        items[fi.itemIndex] = {
+          ...existing,
+          amountPaid: newAmountPaid,
+          paymentStatus: newAmountPaid >= total ? 'paid' : 'partial',
+        }
+      }
+
+      const { error: updateErr } = await supabase
+        .from('fatture')
+        .update({ items })
+        .eq('id', fi.fatturaId)
+
+      if (updateErr) throw updateErr
+      toast.success('Pagamento registrato')
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
     }
-    setSelectedBookings(newSelected)
   }
 
-  function toggleSelectAll() {
-    if (selectedBookings.size === filteredBookings.length) {
-      setSelectedBookings(new Set())
-    } else {
-      setSelectedBookings(new Set(filteredBookings.map(b => b.id)))
+  async function markSingleFatturaItemPaid(fi: FatturaItem) {
+    try {
+      const { data: fattura, error: fetchErr } = await supabase
+        .from('fatture').select('id, items').eq('id', fi.fatturaId).single()
+      if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+      const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+      if (items[fi.itemIndex]) {
+        const existing = items[fi.itemIndex]
+        const total = existing.total || (existing.unit_price || 0) * (existing.quantity || 1)
+        items[fi.itemIndex] = { ...existing, amountPaid: total, paymentStatus: 'paid' }
+      }
+
+      await supabase.from('fatture').update({ items }).eq('id', fi.fatturaId)
+      toast.success('Pagamento registrato')
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
     }
   }
 
-  const filteredBookings = filterService === 'all'
-    ? bookings
-    : bookings.filter(b => b.service_type === filterService)
+  async function markAllTypePaid(booking: UnpaidBooking, type: 'penalties' | 'danni') {
+    const key = `type:${booking.id}:${type}`
+    if (processingKey) return
+    setProcessingKey(key)
+    try {
+      const details = booking.booking_details || {}
+      const arr: any[] = details[type] || []
+      const pending = arr.filter((item: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+
+      if (pending.length > 0) {
+        const invoiceItems = pending.map((item: any) => {
+          const total = item.total || (item.amount || 0) * (item.quantity || 1)
+          const remaining = total - (item.amountPaid || 0)
+          return { label: item.label, amount: remaining, quantity: 1 }
+        }).filter((i: any) => i.amount > 0)
+
+        if (invoiceItems.length > 0) {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: booking.id,
+              customerId: booking.customer_id || booking.user_id,
+              items: invoiceItems,
+              type: type === 'danni' ? 'danni' : undefined,
+              paymentStatus: 'paid'
+            })
+          })
+          if (!res.ok) {
+            const err = await res.json()
+            throw new Error(err.message || err.error || 'Errore generazione fattura')
+          }
+        }
+
+        const updated = arr.map((item: any) => {
+          if (!item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial') {
+            const total = item.total || (item.amount || 0) * (item.quantity || 1)
+            return { ...item, paymentStatus: 'paid', amountPaid: total }
+          }
+          return item
+        })
+        await supabase.from('bookings').update({ booking_details: { ...details, [type]: updated } }).eq('id', booking.id)
+      }
+
+      const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
+      for (const fi of fItems) {
+        await markSingleFatturaItemPaid(fi)
+      }
+
+      toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    } finally {
+      setProcessingKey(null)
+    }
+  }
+
+  async function handleTypePartialPayment(booking: UnpaidBooking, type: 'penalties' | 'danni', paymentAmount: number) {
+    try {
+      let remaining = paymentAmount
+      const details = booking.booking_details || {}
+      const arr: any[] = [...(details[type] || [])]
+      let changed = false
+      for (let i = 0; i < arr.length; i++) {
+        if (remaining <= 0) break
+        const item = arr[i]
+        if (item.paymentStatus === 'paid') continue
+        if (item.paymentStatus && item.paymentStatus !== 'pending' && item.paymentStatus !== 'partial') continue
+        const total = item.total || (item.amount || 0) * (item.quantity || 1)
+        const itemRemaining = total - (item.amountPaid || 0)
+        const toApply = Math.min(remaining, itemRemaining)
+        if (toApply > 0) {
+          const newPaid = (item.amountPaid || 0) + toApply
+          arr[i] = { ...item, amountPaid: newPaid, paymentStatus: newPaid >= total ? 'paid' : 'partial' }
+          remaining -= toApply
+          changed = true
+        }
+      }
+      if (changed) {
+        await supabase.from('bookings').update({ booking_details: { ...details, [type]: arr } }).eq('id', booking.id)
+      }
+
+      if (remaining > 0) {
+        const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
+        for (const fi of fItems) {
+          if (remaining <= 0) break
+          const fiRemaining = fi.total - fi.amountPaid
+          const toApply = Math.min(remaining, fiRemaining)
+          if (toApply > 0) {
+            await handleFatturaItemPayment(fi, toApply)
+            remaining -= toApply
+          }
+        }
+      }
+
+      toast.success('Pagamento parziale registrato')
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  async function handleBookingPartialPayment(bookingId: string, amount: number) {
+    try {
+      const booking = bookings.find(b => b.id === bookingId)
+      if (!booking) return
+
+      const details = booking.booking_details || {}
+      const currentPaid = details.amountPaid || 0
+      const newPaid = currentPaid + Math.round(amount * 100)
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          booking_details: { ...details, amountPaid: newPaid },
+          payment_status: newPaid >= booking.price_total ? 'paid' : 'partial'
+        })
+        .eq('id', bookingId)
+
+      if (error) throw error
+      toast.success('Pagamento parziale registrato')
+      setPartialPayItemKey(null)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  async function markAllCustomerItemsPaid(group: CustomerGroup, type: 'penalties' | 'danni') {
+    const key = `allitems:${group.customerKey}:${type}`
+    if (processingKey) return // Already processing something
+    setProcessingKey(key)
+    try {
+      const items = type === 'penalties' ? group.penaliItems : group.danniItems
+      if (items.length === 0) { setProcessingKey(null); return }
+
+      // Collect invoice line items from booking_details source items
+      const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
+      const bookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
+
+      for (const item of items) {
+        if (item.source === 'booking_details' && item.remaining > 0) {
+          invoiceLineItems.push({ label: item.label, amount: item.remaining, quantity: 1 })
+          if (!bookingUpdates.has(item.bookingId)) {
+            bookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
+          }
+          bookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
+        }
+      }
+
+      // Generate ONE fattura for all booking_details items using first booking as anchor
+      if (invoiceLineItems.length > 0) {
+        const firstItem = items.find(i => i.source === 'booking_details')!
+        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: firstItem.bookingId,
+            customerId: firstItem.booking.customer_id || firstItem.booking.user_id,
+            items: invoiceLineItems,
+            type: type === 'danni' ? 'danni' : undefined,
+            paymentStatus: 'paid'
+          })
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.message || err.error || 'Errore generazione fattura')
+        }
+      }
+
+      // Mark all booking_details items as paid in DB
+      for (const [bookingId, { booking, indices }] of bookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details[type] || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, [type]: arr } }).eq('id', bookingId)
+      }
+
+      // Mark all fattura source items as paid
+      const fatturaItems = items.filter(i => i.source === 'fattura')
+      for (const fItem of fatturaItems) {
+        const fi = (fatturaItemsMap[fItem.bookingId] || []).find(f => f.fatturaId === fItem.fatturaId && f.itemIndex === fItem.itemIndex)
+        if (fi) await markSingleFatturaItemPaid(fi)
+      }
+
+      toast.success(`Tutti ${type === 'danni' ? 'i danni' : 'le penali'} segnati come pagati — fattura unica generata!`)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    } finally {
+      setProcessingKey(null)
+    }
+  }
+
+  async function markBookingAndExtensionsPaid(booking: UnpaidBooking) {
+    try {
+      const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid' || booking.payment_status === 'partial'
+      const vehicle = booking.vehicle_name || booking.booking_details?.vehicle?.name || 'Noleggio'
+      const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || ''
+
+      // 1. Collect unpaid line items for fattura
+      const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
+
+      // Add base booking only if it's actually unpaid
+      if (isPending) {
+        const totalCents = booking.price_total || 0
+        const paidCents = booking.booking_details?.amountPaid || 0
+        const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+        if (remainingEur > 0) {
+          invoiceLineItems.push({
+            label: `Noleggio ${vehicle}${plate ? ` (${plate})` : ''}`,
+            amount: remainingEur,
+            quantity: 1
+          })
+        }
+      }
+
+      // 2. Mark pending extensions as paid and collect their amounts
+      const extensions = [...(booking.booking_details?.extension_history || [])]
+      for (let i = 0; i < extensions.length; i++) {
+        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+          const extTotal = extensions[i].additional_amount || 0
+          const extPaid = extensions[i].amount_paid || 0
+          const extRemaining = Math.max(0, extTotal - extPaid)
+          if (extRemaining > 0) {
+            let days = extensions[i].additional_days
+            if (!days && extensions[i].previous_dropoff && extensions[i].new_dropoff) {
+              const prev = new Date(extensions[i].previous_dropoff)
+              const next = new Date(extensions[i].new_dropoff)
+              days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+            }
+            invoiceLineItems.push({
+              label: `Estensione +${days || '?'}gg ${vehicle}`,
+              amount: extRemaining,
+              quantity: 1
+            })
+          }
+          extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
+        }
+      }
+
+      // 3. Update booking in DB
+      const { error } = await supabase.from('bookings').update({
+        payment_status: 'paid',
+        status: 'confirmed',
+        booking_details: { ...booking.booking_details, extension_history: extensions }
+      }).eq('id', booking.id)
+      if (error) throw error
+      toast.success('Tutto segnato come pagato!')
+
+      // 4. Generate ONE fattura with ONLY unpaid items
+      if (invoiceLineItems.length > 0) {
+        try {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: booking.id,
+              customerId: booking.customer_id || booking.user_id,
+              items: invoiceLineItems,
+              rawDescriptions: true,
+              paymentStatus: 'paid'
+            })
+          })
+          if (res.ok) {
+            const data = await res.json()
+            toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata!`)
+          }
+        } catch (invoiceErr) {
+          console.warn('Auto-invoice generation failed:', invoiceErr)
+        }
+      }
+
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  async function markAllCustomerPaid(group: CustomerGroup) {
+    const key = `allcustomer:${group.customerKey}`
+    if (processingKey) return
+    setProcessingKey(key)
+    try {
+      // Collect ALL line items for ONE combined fattura
+      const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
+
+      // Pick a bookingId to anchor the fattura (first available)
+      let anchorBookingId = group.noleggioBookings[0]?.id || group.primeWashBookings[0]?.id || group.penaliItems[0]?.bookingId || group.danniItems[0]?.bookingId
+      let anchorCustomerId = ''
+
+      // 1. Noleggio bookings + extensions → mark paid, collect line items
+      for (const booking of group.noleggioBookings) {
+        if (!anchorCustomerId) anchorCustomerId = booking.customer_id || booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = booking.id
+
+        const vehicle = booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || 'Noleggio'
+        const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate || ''
+        const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid' || booking.payment_status === 'partial'
+
+        if (isPending) {
+          const totalCents = booking.price_total || 0
+          const paidCents = booking.booking_details?.amountPaid || 0
+          const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+          if (remainingEur > 0) {
+            invoiceLineItems.push({
+              label: `Noleggio ${vehicle}${plate ? ` (${plate})` : ''}`,
+              amount: remainingEur,
+              quantity: 1
+            })
+          }
+        }
+
+        const extensions = [...(booking.booking_details?.extension_history || [])]
+        for (let i = 0; i < extensions.length; i++) {
+          if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+            const extTotal = extensions[i].additional_amount || 0
+            const extPaid = extensions[i].amount_paid || 0
+            const extRemaining = Math.max(0, extTotal - extPaid)
+            if (extRemaining > 0) {
+              let days = extensions[i].additional_days
+              if (!days && extensions[i].previous_dropoff && extensions[i].new_dropoff) {
+                const prev = new Date(extensions[i].previous_dropoff)
+                const next = new Date(extensions[i].new_dropoff)
+                days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+              }
+              invoiceLineItems.push({
+                label: `Estensione +${days || '?'}gg ${vehicle}`,
+                amount: extRemaining,
+                quantity: 1
+              })
+            }
+            extensions[i] = { ...extensions[i], payment_status: 'paid', amount_paid: extensions[i].additional_amount || 0 }
+          }
+        }
+
+        await supabase.from('bookings').update({
+          payment_status: 'paid', status: 'confirmed',
+          booking_details: { ...booking.booking_details, extension_history: extensions }
+        }).eq('id', booking.id)
+      }
+
+      // 2. Prime Wash bookings → mark paid, collect line items
+      for (const booking of group.primeWashBookings) {
+        if (!anchorCustomerId) anchorCustomerId = booking.customer_id || booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = booking.id
+
+        const serviceName = booking.service_name || 'Servizio'
+        const totalCents = booking.price_total || 0
+        const paidCents = booking.booking_details?.amountPaid || 0
+        const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+        if (remainingEur > 0) {
+          invoiceLineItems.push({ label: serviceName, amount: remainingEur, quantity: 1 })
+        }
+
+        await supabase.from('bookings').update({
+          payment_status: 'paid', status: 'confirmed'
+        }).eq('id', booking.id)
+      }
+
+      // 3. Penali → mark paid in booking_details, collect line items
+      const penaliBookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
+      for (const item of group.penaliItems) {
+        if (!anchorCustomerId) anchorCustomerId = item.booking.customer_id || item.booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = item.bookingId
+
+        if (item.source === 'booking_details' && item.remaining > 0) {
+          invoiceLineItems.push({ label: `Penale - ${item.label}`, amount: item.remaining, quantity: 1 })
+          if (!penaliBookingUpdates.has(item.bookingId)) {
+            penaliBookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
+          }
+          penaliBookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
+        }
+      }
+      for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details.penalties || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, penalties: arr } }).eq('id', bookingId)
+      }
+
+      // 4. Danni → mark paid in booking_details, collect line items
+      const danniBookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
+      for (const item of group.danniItems) {
+        if (!anchorCustomerId) anchorCustomerId = item.booking.customer_id || item.booking.user_id || ''
+        if (!anchorBookingId) anchorBookingId = item.bookingId
+
+        if (item.source === 'booking_details' && item.remaining > 0) {
+          invoiceLineItems.push({ label: `Danno - ${item.label}`, amount: item.remaining, quantity: 1 })
+          if (!danniBookingUpdates.has(item.bookingId)) {
+            danniBookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
+          }
+          danniBookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
+        }
+      }
+      for (const [bookingId, { booking, indices }] of danniBookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details.danni || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, danni: arr } }).eq('id', bookingId)
+      }
+
+      // 5. Mark fattura-source penali/danni items as paid
+      const fatturaSourceItems = [...group.penaliItems, ...group.danniItems].filter(i => i.source === 'fattura')
+      for (const fItem of fatturaSourceItems) {
+        const fi = (fatturaItemsMap[fItem.bookingId] || []).find(f => f.fatturaId === fItem.fatturaId && f.itemIndex === fItem.itemIndex)
+        if (fi) await markSingleFatturaItemPaid(fi)
+      }
+
+      // 6. Generate ONE combined fattura for all booking_details items
+      if (invoiceLineItems.length > 0 && anchorBookingId) {
+        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: anchorBookingId,
+            customerId: anchorCustomerId,
+            items: invoiceLineItems,
+            rawDescriptions: true,
+            paymentStatus: 'paid'
+          })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          toast.success(`Fattura unica ${data.invoice?.numero_fattura || ''} generata per ${group.customerName}!`)
+        } else {
+          const err = await res.json()
+          console.warn('Combined invoice generation failed:', err)
+          toast.success(`Tutto pagato per ${group.customerName}! (fattura non generata: ${err.message || err.error || 'errore'})`)
+        }
+      } else {
+        toast.success(`Tutto pagato per ${group.customerName}!`)
+      }
+
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    } finally {
+      setProcessingKey(null)
+    }
+  }
+
+  async function updateBookingAmount(bookingId: string, newAmountEur: number) {
+    try {
+      const newAmountCents = Math.round(newAmountEur * 100)
+      const { error } = await supabase
+        .from('bookings')
+        .update({ price_total: newAmountCents })
+        .eq('id', bookingId)
+
+      if (error) throw error
+      toast.success('Importo aggiornato!')
+      setEditAmountKey(null)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  async function deleteFatturaItem(fi: FatturaItem) {
+    try {
+      const { data: fattura, error: fetchErr } = await supabase
+        .from('fatture')
+        .select('id, items')
+        .eq('id', fi.fatturaId)
+        .single()
+
+      if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+      const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+      items.splice(fi.itemIndex, 1)
+
+      const { error: updateErr } = await supabase
+        .from('fatture')
+        .update({ items })
+        .eq('id', fi.fatturaId)
+
+      if (updateErr) throw updateErr
+      toast.success('Elemento fattura eliminato!')
+      setConfirmDeleteKey(null)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  async function updateFatturaItemAmount(fi: FatturaItem, newAmountEur: number) {
+    try {
+      const { data: fattura, error: fetchErr } = await supabase
+        .from('fatture')
+        .select('id, items')
+        .eq('id', fi.fatturaId)
+        .single()
+
+      if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
+
+      const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+      if (items[fi.itemIndex]) {
+        items[fi.itemIndex] = {
+          ...items[fi.itemIndex],
+          total: newAmountEur,
+          unit_price: newAmountEur,
+          quantity: 1,
+        }
+      }
+
+      const { error: updateErr } = await supabase
+        .from('fatture')
+        .update({ items })
+        .eq('id', fi.fatturaId)
+
+      if (updateErr) throw updateErr
+      toast.success('Importo fattura aggiornato!')
+      setEditAmountKey(null)
+      loadUnpaidBookings()
+    } catch (err: any) {
+      toast.error(err.message || 'Errore')
+    }
+  }
+
+  // ── Helper functions (preserved) ───────────────────────────────────────────
+
+  const getEffectiveType = (booking: UnpaidBooking): 'rental' | 'prime_wash' | 'other' => {
+    if (booking.service_type === 'rental') return 'rental'
+    if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical_service') return 'prime_wash'
+    if (booking.vehicle_name || booking.booking_details?.vehicle) return 'rental'
+    if (booking.service_name) {
+      const sn = booking.service_name.toLowerCase()
+      if (sn.includes('lavaggio') || sn.includes('wash') || sn.includes('meccanica') || sn.includes('mechanical')) return 'prime_wash'
+    }
+    return 'rental'
+  }
 
   const getRemainingAmount = (booking: UnpaidBooking) => {
     let remaining = 0
 
-    // Check main booking payment
-    // price_total already includes extension amounts, so don't double-count
     if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
       const total = booking.price_total || 0
       const paid = booking.booking_details?.amountPaid || 0
       remaining += Math.max(0, total - paid)
     } else {
-      // Main booking is paid — only count pending extension payments separately
       const extensions = booking.booking_details?.extension_history || []
       extensions.forEach((ext: any) => {
-        if (ext.payment_status === 'pending' && ext.additional_amount) {
-          remaining += (ext.additional_amount * 100) // Convert to cents
+        if ((ext.payment_status === 'pending' || ext.payment_status === 'partial') && ext.additional_amount) {
+          const extTotal = ext.additional_amount * 100
+          const extPaid = (ext.amount_paid || 0) * 100
+          remaining += Math.max(0, extTotal - extPaid)
         }
       })
     }
 
-    // Add pending penalties (amounts are in EUR, convert to cents)
     const penalties = booking.booking_details?.penalties || []
     penalties.forEach((p: any) => {
-      if (p.paymentStatus === 'pending') {
-        remaining += Math.round((p.total || (p.amount || 0) * (p.quantity || 1)) * 100)
+      if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') {
+        const total = p.total || (p.amount || 0) * (p.quantity || 1)
+        const paid = p.amountPaid || 0
+        remaining += Math.round((total - paid) * 100)
       }
     })
 
-    // Add pending danni (amounts are in EUR, convert to cents)
     const danni = booking.booking_details?.danni || []
     danni.forEach((d: any) => {
-      if (d.paymentStatus === 'pending') {
-        remaining += Math.round((d.total || (d.amount || 0) * (d.quantity || 1)) * 100)
+      if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial') {
+        const total = d.total || (d.amount || 0) * (d.quantity || 1)
+        const paid = d.amountPaid || 0
+        remaining += Math.round((total - paid) * 100)
       }
+    })
+
+    const fItems = fatturaItemsMap[booking.id] || []
+    fItems.forEach(fi => {
+      remaining += Math.round((fi.total - fi.amountPaid) * 100)
     })
 
     return remaining
@@ -425,59 +1078,663 @@ export default function UnpaidBookingsTab() {
 
   const getPendingExtensions = (booking: UnpaidBooking) => {
     const extensions = booking.booking_details?.extension_history || []
-    return extensions.filter((ext: any) => ext.payment_status === 'pending')
+    return extensions
+      .map((ext: any, idx: number) => ({ ext, idx }))
+      .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
   }
 
-  const getPendingPenalties = (booking: UnpaidBooking) => {
-    const penalties = booking.booking_details?.penalties || []
-    return penalties.filter((p: any) => p.paymentStatus === 'pending')
+  const getPendingWithIndex = (booking: UnpaidBooking, arrayKey: 'penalties' | 'danni') => {
+    const arr = booking.booking_details?.[arrayKey] || []
+    return arr
+      .map((item: any, realIdx: number) => ({ item, realIdx }))
+      .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
   }
 
-  const getPendingDanni = (booking: UnpaidBooking) => {
-    const danni = booking.booking_details?.danni || []
-    return danni.filter((d: any) => d.paymentStatus === 'pending')
-  }
+  // ── Build Customer Groups ──────────────────────────────────────────────────
 
-  const totalUnpaid = filteredBookings.reduce((sum, b) => sum + getRemainingAmount(b), 0)
+  const customerGroups = useMemo((): CustomerGroup[] => {
+    const groupMap = new Map<string, CustomerGroup>()
 
-  const getServiceTypeLabel = (serviceType: string) => {
-    switch (serviceType) {
-      case 'rental': return 'Noleggio'
-      case 'car_wash': return 'Lavaggio'
-      case 'mechanical_service': return 'Meccanica'
-      default: return serviceType || 'Altro'
-    }
-  }
+    for (const booking of bookings) {
+      const name = booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'
+      const key = name.toLowerCase().trim()
 
-  const getServiceLabel = (booking: UnpaidBooking) => {
-    const serviceType = booking.service_type
-
-    // Check known service types first
-    switch (serviceType) {
-      case 'rental': return 'Noleggio'
-      case 'car_wash': return 'Lavaggio'
-      case 'mechanical_service': return 'Meccanica'
-    }
-
-    // Fallback logic: determine service type from booking details
-    if (booking.vehicle_name) {
-      return 'Noleggio' // Has vehicle = rental
-    }
-
-    if (booking.service_name) {
-      const serviceName = booking.service_name.toLowerCase()
-      if (serviceName.includes('lavaggio') || serviceName.includes('wash')) {
-        return 'Lavaggio'
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          customerKey: key,
+          customerName: name,
+          customerEmail: booking.customer_email || booking.booking_details?.customer?.email || '',
+          customerPhone: booking.customer_phone || booking.booking_details?.customer?.phone || '',
+          noleggioBookings: [],
+          primeWashBookings: [],
+          penaliItems: [],
+          danniItems: [],
+          totalRemaining: 0,
+        })
       }
-      if (serviceName.includes('meccanica') || serviceName.includes('mechanical')) {
-        return 'Meccanica'
+
+      const group = groupMap.get(key)!
+      // Update contact info if empty (pick from any booking that has it)
+      if (!group.customerEmail && (booking.customer_email || booking.booking_details?.customer?.email)) {
+        group.customerEmail = booking.customer_email || booking.booking_details?.customer?.email
       }
-      return 'Servizio' // Generic service
+      if (!group.customerPhone && (booking.customer_phone || booking.booking_details?.customer?.phone)) {
+        group.customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+      }
+
+      const effectiveType = getEffectiveType(booking)
+
+      // Only show in Noleggio/PW column if the main booking payment is unpaid
+      // (or has unpaid extensions). If the booking is paid but has only unpaid
+      // danni/penali, it belongs ONLY in those columns.
+      const mainIsUnpaid = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+
+      if (mainIsUnpaid || hasUnpaidExtensions) {
+        if (effectiveType === 'rental') {
+          group.noleggioBookings.push(booking)
+        } else {
+          group.primeWashBookings.push(booking)
+        }
+      }
+
+      // Collect pending penalties from booking_details
+      const pendingPenalties = getPendingWithIndex(booking, 'penalties')
+      for (const { item, realIdx } of pendingPenalties) {
+        const total = item.total || (item.amount || 0) * (item.quantity || 1)
+        const paid = item.amountPaid || 0
+        group.penaliItems.push({
+          bookingId: booking.id,
+          booking,
+          label: item.label || 'Penale',
+          amount: total,
+          amountPaid: paid,
+          remaining: total - paid,
+          paymentStatus: item.paymentStatus || 'pending',
+          source: 'booking_details',
+          type: 'penalties',
+          originalIndex: realIdx,
+        })
+      }
+
+      // Collect pending danni from booking_details
+      const pendingDanni = getPendingWithIndex(booking, 'danni')
+      for (const { item, realIdx } of pendingDanni) {
+        const total = item.total || (item.amount || 0) * (item.quantity || 1)
+        const paid = item.amountPaid || 0
+        group.danniItems.push({
+          bookingId: booking.id,
+          booking,
+          label: item.label || 'Danno',
+          amount: total,
+          amountPaid: paid,
+          remaining: total - paid,
+          paymentStatus: item.paymentStatus || 'pending',
+          source: 'booking_details',
+          type: 'danni',
+          originalIndex: realIdx,
+        })
+      }
+
+      // Collect from fattura items
+      const fItems = fatturaItemsMap[booking.id] || []
+      for (const fi of fItems) {
+        const target = fi.type === 'danni' ? group.danniItems : group.penaliItems
+        target.push({
+          bookingId: booking.id,
+          booking,
+          label: `${fi.description} (${fi.fatturaNumero})`,
+          amount: fi.total,
+          amountPaid: fi.amountPaid,
+          remaining: fi.total - fi.amountPaid,
+          paymentStatus: fi.paymentStatus,
+          source: 'fattura',
+          fatturaId: fi.fatturaId,
+          fatturaNumero: fi.fatturaNumero,
+          itemIndex: fi.itemIndex,
+          type: fi.type,
+          originalIndex: fi.itemIndex,
+        })
+      }
+
+      group.totalRemaining += getRemainingAmount(booking)
     }
 
-    // Last resort: show actual value or 'Altro'
-    return serviceType || 'Altro'
+    let groups = Array.from(groupMap.values())
+
+    // Apply filter
+    if (filterService === 'rental') {
+      groups = groups.filter(g => g.noleggioBookings.length > 0)
+    } else if (filterService === 'prime_wash') {
+      groups = groups.filter(g => g.primeWashBookings.length > 0)
+    }
+
+    // Apply search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      groups = groups.filter(g =>
+        g.customerName.toLowerCase().includes(q) ||
+        g.customerEmail.toLowerCase().includes(q) ||
+        g.customerPhone.includes(q)
+      )
+    }
+
+    // Sort
+    groups.sort((a, b) => {
+      if (sortBy === 'amount') {
+        return sortDir === 'desc' ? b.totalRemaining - a.totalRemaining : a.totalRemaining - b.totalRemaining
+      }
+      // name
+      const cmp = a.customerName.localeCompare(b.customerName, 'it')
+      return sortDir === 'desc' ? -cmp : cmp
+    })
+
+    return groups
+  }, [bookings, fatturaItemsMap, filterService, searchQuery, sortBy, sortDir])
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+
+  const totalUnpaid = customerGroups.reduce((sum, g) => sum + g.totalRemaining, 0)
+  const allGroups = useMemo(() => {
+    // Stats computed on unfiltered bookings (respecting column assignment logic)
+    const gMap = new Map<string, { rental: boolean; pw: boolean; penali: boolean; danni: boolean }>()
+    for (const b of bookings) {
+      const key = (b.customer_name || '').toLowerCase().trim()
+      if (!gMap.has(key)) gMap.set(key, { rental: false, pw: false, penali: false, danni: false })
+      const g = gMap.get(key)!
+      const mainUnpaid = b.payment_status === 'pending' || b.payment_status === 'unpaid'
+      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+      if (mainUnpaid || hasUnpaidExt) {
+        if (getEffectiveType(b) === 'rental') g.rental = true
+        else g.pw = true
+      }
+      const hasPen = (b.booking_details?.penalties || []).some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
+      const hasDan = (b.booking_details?.danni || []).some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
+      if (hasPen || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'penalties')) g.penali = true
+      if (hasDan || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'danni')) g.danni = true
+    }
+    const vals = Array.from(gMap.values())
+    return {
+      total: gMap.size,
+      rental: vals.filter(v => v.rental).length,
+      pw: vals.filter(v => v.pw).length,
+      penali: vals.filter(v => v.penali).length,
+      danni: vals.filter(v => v.danni).length,
+    }
+  }, [bookings, fatturaItemsMap])
+
+  // ── Mobile accordion toggle ────────────────────────────────────────────────
+
+  function handleSort(col: 'amount' | 'name') {
+    if (sortBy === col) {
+      setSortDir(prev => prev === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortBy(col)
+      setSortDir(col === 'amount' ? 'desc' : 'asc')
+    }
   }
+
+  function SortArrow({ col }: { col: 'amount' | 'name' }) {
+    if (sortBy !== col) return <span className="text-theme-text-muted/30 ml-1">↕</span>
+    return <span className="ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>
+  }
+
+  function toggleExpanded(key: string) {
+    setExpandedCustomers(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  // ── Inline partial pay helper ──────────────────────────────────────────────
+
+  function PartialPayInput({ itemKey, onSubmit, onCancel }: { itemKey: string; onSubmit: (v: number) => void; onCancel: () => void }) {
+    if (partialPayItemKey !== itemKey) return null
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <div className="relative flex-1">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+          <input
+            type="number" step="0.01" min="0.01"
+            value={partialPayValue}
+            onChange={e => setPartialPayValue(e.target.value)}
+            placeholder="Importo"
+            className="w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+            onKeyDown={e => {
+              if (e.key === 'Enter') { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) onSubmit(v) }
+              if (e.key === 'Escape') onCancel()
+            }}
+            autoFocus
+          />
+        </div>
+        <button
+          onClick={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) onSubmit(v) }}
+          disabled={!partialPayValue || parseFloat(partialPayValue) <= 0}
+          className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-30"
+        >OK</button>
+        <button onClick={onCancel} className="px-2 py-1 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">x</button>
+      </div>
+    )
+  }
+
+  // ── Edit amount helper ─────────────────────────────────────────────────────
+
+  function EditAmountInput({ itemKey, currentAmount, onSubmit, onCancel }: { itemKey: string; currentAmount: number; onSubmit: (v: number) => void; onCancel: () => void }) {
+    if (editAmountKey !== itemKey) return null
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <div className="relative flex-1">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+          <input
+            type="number" step="0.01" min="0.01"
+            value={editAmountValue}
+            onChange={e => setEditAmountValue(e.target.value)}
+            placeholder={currentAmount.toFixed(2)}
+            className="w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500/50"
+            onKeyDown={e => {
+              if (e.key === 'Enter') { const v = parseFloat(editAmountValue); if (!isNaN(v) && v > 0) onSubmit(v) }
+              if (e.key === 'Escape') onCancel()
+            }}
+            autoFocus
+          />
+        </div>
+        <button
+          onClick={() => { const v = parseFloat(editAmountValue); if (!isNaN(v) && v > 0) onSubmit(v) }}
+          disabled={!editAmountValue || parseFloat(editAmountValue) <= 0}
+          className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold disabled:opacity-30"
+        >OK</button>
+        <button onClick={onCancel} className="px-2 py-1 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">x</button>
+      </div>
+    )
+  }
+
+  // ── Confirm delete helper ──────────────────────────────────────────────────
+
+  function ConfirmDelete({ itemKey, onConfirm, onCancel }: { itemKey: string; onConfirm: () => void; onCancel: () => void }) {
+    if (confirmDeleteKey !== itemKey) return null
+    return (
+      <div className="flex items-center gap-1 mt-1 bg-red-500/10 border border-red-500/30 rounded px-2 py-1">
+        <span className="text-xs text-red-400">Confermi?</span>
+        <button onClick={onConfirm} className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold">Si</button>
+        <button onClick={onCancel} className="px-2 py-0.5 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">No</button>
+      </div>
+    )
+  }
+
+  // ── Render: Noleggio cell content ──────────────────────────────────────────
+
+  function NoleggioCell({ group }: { group: CustomerGroup }) {
+    if (group.noleggioBookings.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
+
+    return (
+      <div className="space-y-3">
+        {group.noleggioBookings.map(booking => {
+          const vehicle = booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicle_name || '-'
+          const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate || ''
+          const pickupDate = booking.pickup_date || booking.booking_details?.pickup_date
+          const dropoffDate = booking.dropoff_date || booking.booking_details?.dropoff_date
+          const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+          const pendingExts = getPendingExtensions(booking)
+          const bkKey = `noleggio:${booking.id}`
+          const editKey = `edit:noleggio:${booking.id}`
+          const totalCents = booking.price_total || 0
+          const paidCents = booking.booking_details?.amountPaid || 0
+          const remainingCents = Math.max(0, totalCents - paidCents)
+
+          return (
+            <div key={booking.id} className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-2.5">
+              <div className="text-sm font-semibold text-theme-text-primary">{vehicle}</div>
+              {plate && <div className="text-xs text-theme-text-muted font-mono">{plate}</div>}
+              <div className="text-xs text-theme-text-muted">
+                {pickupDate && new Date(pickupDate).toLocaleDateString('it-IT')} - {dropoffDate && new Date(dropoffDate).toLocaleDateString('it-IT')}
+              </div>
+              <div className="text-red-400 font-bold text-sm mt-1">
+                €{(remainingCents / 100).toFixed(2)}
+                {paidCents > 0 && (
+                  <span className="text-xs text-theme-text-muted font-normal ml-1">
+                    su €{(totalCents / 100).toFixed(2)}
+                  </span>
+                )}
+              </div>
+
+              {/* Pending extensions */}
+              {pendingExts.length > 0 && (
+                <div className="mt-1.5 space-y-1.5">
+                  {pendingExts.map(({ ext, idx: extIdx }: any) => {
+                    let days = ext.additional_days
+                    if (!days && ext.previous_dropoff && ext.new_dropoff) {
+                      const prev = new Date(ext.previous_dropoff)
+                      const next = new Date(ext.new_dropoff)
+                      days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+                    }
+                    const extTotal = ext.additional_amount || 0
+                    const extPaid = ext.amount_paid || 0
+                    const extRemaining = extTotal - extPaid
+                    const extPartialKey = `ext:${booking.id}:${extIdx}`
+                    return (
+                      <div key={extIdx} className="bg-purple-500/10 border border-purple-500/20 rounded-lg px-2 py-1.5">
+                        <div className="text-xs text-purple-400 font-medium">
+                          Estensione +{days || '?'}gg
+                        </div>
+                        <div className="text-purple-400 font-bold text-sm">
+                          €{extRemaining.toFixed(2)}
+                          {extPaid > 0 && (
+                            <span className="text-xs text-theme-text-muted font-normal ml-1">
+                              su €{extTotal.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        {ext.payment_status === 'partial' && (
+                          <div className="text-[10px] text-blue-400">
+                            €{extPaid.toFixed(2)} pagati
+                          </div>
+                        )}
+                        <div className="flex gap-1 flex-wrap mt-1 pt-1 border-t border-purple-500/10">
+                          <button
+                            onClick={() => markSingleExtensionPaid(booking, extIdx)}
+                            className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                          >Pagato</button>
+                          {partialPayItemKey !== extPartialKey && (
+                            <button
+                              onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue('') }}
+                              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                            >Parziale</button>
+                          )}
+                          {confirmDeleteKey !== extPartialKey ? (
+                            <button
+                              onClick={() => setConfirmDeleteKey(extPartialKey)}
+                              className="px-2 py-0.5 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                            >x</button>
+                          ) : (
+                            <div className="flex gap-1 items-center">
+                              <button
+                                onClick={() => deleteSingleExtension(booking, extIdx)}
+                                className="px-2 py-0.5 bg-red-600 text-white rounded text-xs font-semibold"
+                              >Conferma</button>
+                              <button
+                                onClick={() => setConfirmDeleteKey(null)}
+                                className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs font-semibold"
+                              >Annulla</button>
+                            </div>
+                          )}
+                        </div>
+                        <PartialPayInput
+                          itemKey={extPartialKey}
+                          onSubmit={(v) => handleExtensionPartialPayment(booking, extIdx, v)}
+                          onCancel={() => setPartialPayItemKey(null)}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Segna Tutto Pagato — booking + extensions in one fattura */}
+              {((isPending ? 1 : 0) + pendingExts.length) >= 2 && (
+                <button
+                  onClick={() => markBookingAndExtensionsPaid(booking)}
+                  className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                >Segna Tutto Pagato (fattura unica)</button>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-blue-500/10">
+                {isPending && (
+                  <button
+                    onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                    className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                  >Pagato</button>
+                )}
+                {isPending && partialPayItemKey !== bkKey && (
+                  <button
+                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                  >Parziale</button>
+                )}
+                {editAmountKey !== editKey && (
+                  <button
+                    onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
+                    className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                  >Modifica</button>
+                )}
+                {confirmDeleteKey !== bkKey && (
+                  <button
+                    onClick={() => setConfirmDeleteKey(bkKey)}
+                    className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                  >x</button>
+                )}
+              </div>
+              <PartialPayInput
+                itemKey={bkKey}
+                onSubmit={(v) => { handleBookingPartialPayment(booking.id, v) }}
+                onCancel={() => setPartialPayItemKey(null)}
+              />
+              <EditAmountInput
+                itemKey={editKey}
+                currentAmount={totalCents / 100}
+                onSubmit={(v) => updateBookingAmount(booking.id, v)}
+                onCancel={() => setEditAmountKey(null)}
+              />
+              <ConfirmDelete
+                itemKey={bkKey}
+                onConfirm={() => deleteSingleBooking(booking.id)}
+                onCancel={() => setConfirmDeleteKey(null)}
+              />
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // ── Render: Prime Wash cell content ────────────────────────────────────────
+
+  function PrimeWashCell({ group }: { group: CustomerGroup }) {
+    if (group.primeWashBookings.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
+
+    return (
+      <div className="space-y-3">
+        {group.primeWashBookings.map(booking => {
+          const serviceName = booking.service_name || '-'
+          const bkKey = `pw:${booking.id}`
+          const editKey = `edit:pw:${booking.id}`
+          const totalCents = booking.price_total || 0
+          const paidCents = booking.booking_details?.amountPaid || 0
+          const remainingCents = Math.max(0, totalCents - paidCents)
+
+          return (
+            <div key={booking.id} className="bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2.5">
+              <div className="text-sm font-semibold text-theme-text-primary uppercase">{serviceName}</div>
+              <div className="text-xs text-theme-text-muted">
+                {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time || ''}
+              </div>
+              <div className="text-red-400 font-bold text-sm mt-1">
+                €{(remainingCents / 100).toFixed(2)}
+                {paidCents > 0 && (
+                  <span className="text-xs text-theme-text-muted font-normal ml-1">
+                    su €{(totalCents / 100).toFixed(2)}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-cyan-500/10">
+                <button
+                  onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                >Pagato</button>
+                {partialPayItemKey !== bkKey && (
+                  <button
+                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                  >Parziale</button>
+                )}
+                {editAmountKey !== editKey && (
+                  <button
+                    onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
+                    className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                  >Modifica</button>
+                )}
+                {confirmDeleteKey !== bkKey && (
+                  <button
+                    onClick={() => setConfirmDeleteKey(bkKey)}
+                    className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                  >x</button>
+                )}
+              </div>
+              <PartialPayInput
+                itemKey={bkKey}
+                onSubmit={(v) => { handleBookingPartialPayment(booking.id, v) }}
+                onCancel={() => setPartialPayItemKey(null)}
+              />
+              <EditAmountInput
+                itemKey={editKey}
+                currentAmount={totalCents / 100}
+                onSubmit={(v) => updateBookingAmount(booking.id, v)}
+                onCancel={() => setEditAmountKey(null)}
+              />
+              <ConfirmDelete
+                itemKey={bkKey}
+                onConfirm={() => deleteSingleBooking(booking.id)}
+                onCancel={() => setConfirmDeleteKey(null)}
+              />
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // ── Render: Penali/Danni cell content (shared) ─────────────────────────────
+
+  function PendingItemsCell({ items, type, onMarkAllPaid }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void }) {
+    if (items.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
+
+    const colorClasses = type === 'penalties'
+      ? { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400', divider: 'border-yellow-500/10' }
+      : { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', divider: 'border-red-500/10' }
+
+    return (
+      <div className="space-y-2">
+        {items.length >= 2 && onMarkAllPaid && (
+          <button
+            onClick={onMarkAllPaid}
+            disabled={!!processingKey}
+            className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >{processingKey ? 'Elaborazione...' : `Segna Tutti Pagato (${items.length})`}</button>
+        )}
+        {items.map((item, idx) => {
+          const itemKey = `${type}:${item.bookingId}:${item.source}:${item.originalIndex}`
+          const partialKey = `partial:${itemKey}`
+          const editKey = `edit:${itemKey}`
+
+          return (
+            <div key={idx} className={`${colorClasses.bg} border ${colorClasses.border} rounded-lg p-2.5`}>
+              <div className="text-xs text-theme-text-primary font-medium">{item.label}</div>
+              <div className={`font-bold text-sm ${colorClasses.text}`}>€{item.remaining.toFixed(2)}</div>
+              {item.paymentStatus === 'partial' && (
+                <div className="text-[10px] text-blue-400">
+                  €{item.amountPaid.toFixed(2)} pagati su €{item.amount.toFixed(2)}
+                </div>
+              )}
+
+              <div className={`flex gap-1 flex-wrap mt-2 pt-2 border-t ${colorClasses.divider}`}>
+                {item.source === 'booking_details' ? (
+                  <>
+                    <button
+                      onClick={() => markAllTypePaid(item.booking, type)}
+                      disabled={!!processingKey}
+                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+                    >Pagato</button>
+                    {partialPayItemKey !== partialKey && (
+                      <button
+                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                      >Parziale</button>
+                    )}
+                    {editAmountKey !== editKey && (
+                      <button
+                        onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
+                        className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                      >Modifica</button>
+                    )}
+                    <button
+                      onClick={() => removeSinglePenaltyDanno(item.booking, type, item.originalIndex)}
+                      className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                    >x</button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                        if (fi) markSingleFatturaItemPaid(fi)
+                      }}
+                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
+                    >Pagato</button>
+                    {partialPayItemKey !== partialKey && (
+                      <button
+                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                      >Parziale</button>
+                    )}
+                    {editAmountKey !== editKey && (
+                      <button
+                        onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
+                        className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                      >Modifica</button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                        if (fi) deleteFatturaItem(fi)
+                      }}
+                      className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                    >x</button>
+                  </>
+                )}
+              </div>
+
+              <PartialPayInput
+                itemKey={partialKey}
+                onSubmit={(v) => {
+                  if (item.source === 'booking_details') {
+                    handleTypePartialPayment(item.booking, type, v)
+                  } else {
+                    const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                    if (fi) handleFatturaItemPayment(fi, v)
+                  }
+                  setPartialPayItemKey(null)
+                }}
+                onCancel={() => setPartialPayItemKey(null)}
+              />
+              {item.source === 'booking_details' ? (
+                <EditAmountInput
+                  itemKey={editKey}
+                  currentAmount={item.amount}
+                  onSubmit={(v) => updateSinglePenaltyDannoAmount(item.booking, type, item.originalIndex, v)}
+                  onCancel={() => setEditAmountKey(null)}
+                />
+              ) : (
+                <EditAmountInput
+                  itemKey={editKey}
+                  currentAmount={item.amount}
+                  onSubmit={(v) => {
+                    const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                    if (fi) updateFatturaItemAmount(fi, v)
+                  }}
+                  onCancel={() => setEditAmountKey(null)}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // ── Loading state ──────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -488,381 +1745,253 @@ export default function UnpaidBookingsTab() {
     )
   }
 
+  // ── Main Render ────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-4 lg:space-y-6">
       {/* Header */}
       <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4 border border-theme-border">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-theme-text-primary">Prenotazioni Da Saldare</h2>
-            <p className="text-sm text-theme-text-muted mt-1">
-              Tutte le prenotazioni con pagamento in sospeso
-            </p>
-          </div>
-        </div>
+        <h2 className="text-2xl font-bold text-theme-text-primary">Da Saldare — Vista per Cliente</h2>
+        <p className="text-sm text-theme-text-muted mt-1">
+          Prenotazioni con pagamento in sospeso, raggruppate per cliente
+        </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Totale Da Saldare</div>
-          <div className="text-xl lg:text-2xl font-bold text-red-400">
-            €{(totalUnpaid / 100).toFixed(2)}
-          </div>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 lg:gap-3">
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-theme-border">
+          <div className="text-xs text-theme-text-muted">Totale</div>
+          <div className="text-lg lg:text-xl font-bold text-red-400">€{(totalUnpaid / 100).toFixed(2)}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Prenotazioni</div>
-          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">{filteredBookings.length}</div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-theme-border">
+          <div className="text-xs text-theme-text-muted">Clienti</div>
+          <div className="text-lg lg:text-xl font-bold text-theme-text-primary">{allGroups.total}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Noleggio</div>
-          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">
-            {bookings.filter(b => b.service_type === 'rental').length}
-          </div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-blue-500/30">
+          <div className="text-xs text-blue-400">Noleggio</div>
+          <div className="text-lg lg:text-xl font-bold text-blue-400">{allGroups.rental}</div>
         </div>
-        <div className="bg-theme-bg-secondary p-3 lg:p-4 rounded-lg border border-theme-border">
-          <div className="text-xs lg:text-sm text-theme-text-muted">Lavaggio + Meccanica</div>
-          <div className="text-xl lg:text-2xl font-bold text-theme-text-primary">
-            {bookings.filter(b => b.service_type === 'car_wash' || b.service_type === 'mechanical_service').length}
-          </div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-cyan-500/30">
+          <div className="text-xs text-cyan-400">Prime Wash</div>
+          <div className="text-lg lg:text-xl font-bold text-cyan-400">{allGroups.pw}</div>
+        </div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-yellow-500/30">
+          <div className="text-xs text-yellow-400">Penali</div>
+          <div className="text-lg lg:text-xl font-bold text-yellow-400">{allGroups.penali}</div>
+        </div>
+        <div className="bg-theme-bg-secondary p-3 rounded-lg border border-red-500/30">
+          <div className="text-xs text-red-400">Danni</div>
+          <div className="text-lg lg:text-xl font-bold text-red-400">{allGroups.danni}</div>
         </div>
       </div>
 
-      {/* Filter and Actions */}
+      {/* Filters + Search */}
       <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row justify-between gap-3 lg:gap-4">
           <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0 lg:flex-wrap">
-            <button
-              onClick={() => setFilterService('all')}
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'all'
-                ? 'bg-dr7-gold text-theme-bg-primary'
-                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-                }`}
-            >
-              Tutti ({bookings.length})
-            </button>
-            <button
-              onClick={() => setFilterService('rental')}
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'rental'
-                ? 'bg-dr7-gold text-theme-bg-primary'
-                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-                }`}
-            >
-              Noleggio ({bookings.filter(b => b.service_type === 'rental').length})
-            </button>
-            <button
-              onClick={() => setFilterService('car_wash')}
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'car_wash'
-                ? 'bg-dr7-gold text-theme-bg-primary'
-                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-                }`}
-            >
-              Lavaggio ({bookings.filter(b => b.service_type === 'car_wash').length})
-            </button>
-            <button
-              onClick={() => setFilterService('mechanical_service')}
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${filterService === 'mechanical_service'
-                ? 'bg-dr7-gold text-theme-bg-primary'
-                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-                }`}
-            >
-              Meccanica ({bookings.filter(b => b.service_type === 'mechanical_service').length})
-            </button>
+            {(['all', 'rental', 'prime_wash'] as const).map(f => {
+              const labels: Record<string, string> = { all: `Tutti (${allGroups.total})`, rental: `Noleggio (${allGroups.rental})`, prime_wash: `Prime Wash (${allGroups.pw})` }
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilterService(f)}
+                  className={`px-4 py-2 rounded-full font-medium transition-colors whitespace-nowrap ${
+                    filterService === f
+                      ? 'bg-dr7-gold text-theme-bg-primary'
+                      : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
+                  }`}
+                >{labels[f]}</button>
+              )
+            })}
           </div>
-
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => {
-                setMultiSelectMode(!multiSelectMode)
-                setSelectedBookings(new Set())
-              }}
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${multiSelectMode
-                ? 'bg-blue-600 text-theme-text-primary'
-                : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-                }`}
-            >
-              Selezione Multipla
-            </button>
-            {multiSelectMode && selectedBookings.size > 0 && (
-              <>
-                <button
-                  onClick={markSelectedAsPaid}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full font-medium transition-colors"
-                >
-                  Segna Pagato ({selectedBookings.size})
-                </button>
-                <button
-                  onClick={deleteSelectedBookings}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full font-medium transition-colors"
-                >
-                  × ({selectedBookings.size})
-                </button>
-              </>
-            )}
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Cerca cliente..."
+              className="pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-dr7-gold/50 w-full lg:w-64"
+            />
           </div>
         </div>
       </div>
 
-      {/* Mobile Card View */}
+      {/* ── Mobile Card View ─────────────────────────────────────────────── */}
       <div className="lg:hidden space-y-3">
-        {filteredBookings.map((booking) => (
-          <div key={booking.id} className={`bg-theme-bg-secondary rounded-lg border border-theme-border p-3 ${selectedBookings.has(booking.id) ? 'ring-2 ring-blue-500' : ''}`}>
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                {multiSelectMode && (
-                  <input
-                    type="checkbox"
-                    checked={selectedBookings.has(booking.id)}
-                    onChange={() => toggleBookingSelection(booking.id)}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                )}
-                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                  booking.service_type === 'rental' ? 'bg-blue-900 text-blue-200' :
-                  booking.service_type === 'car_wash' ? 'bg-cyan-900 text-cyan-200' :
-                  'bg-orange-900 text-orange-200'
-                }`}>
-                  {getServiceLabel(booking)}
-                </span>
-                <span className="text-sm font-semibold text-theme-text-primary">
-                  {booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}
-                </span>
-              </div>
-              <span className={`px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 ${booking.payment_status === 'pending'
-                ? 'bg-yellow-600 text-black'
-                : 'bg-red-600 text-theme-text-primary'
-              }`}>
-                {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
-              </span>
-            </div>
+        {/* Mobile sort bar */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleSort('name')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sortBy === 'name' ? 'bg-dr7-gold text-theme-bg-primary' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}
+          >Nome {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</button>
+          <button
+            onClick={() => handleSort('amount')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${sortBy === 'amount' ? 'bg-dr7-gold text-theme-bg-primary' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}
+          >Importo {sortBy === 'amount' && (sortDir === 'asc' ? '↑' : '↓')}</button>
+        </div>
+        {customerGroups.map(group => {
+          const isExpanded = expandedCustomers.has(group.customerKey)
+          const hasNoleggio = group.noleggioBookings.length > 0
+          const hasPW = group.primeWashBookings.length > 0
+          const hasPenali = group.penaliItems.length > 0
+          const hasDanni = group.danniItems.length > 0
 
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-theme-text-muted">
-                {booking.service_type === 'rental' ? (
-                  <>
-                    <div>{booking.vehicle_name}</div>
-                    <div className="text-xs">
-                      {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} - {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>{booking.service_name}</div>
-                    <div className="text-xs">
-                      {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time}
-                    </div>
-                  </>
-                )}
-                {getPendingPenalties(booking).length > 0 && (
-                  <div className="text-xs text-yellow-400 font-medium mt-1">PENALE</div>
-                )}
-                {getPendingDanni(booking).length > 0 && (
-                  <div className="text-xs text-red-400 font-medium mt-1">DANNO</div>
-                )}
-              </div>
-              <div className="text-right">
-                <span className="text-red-400 font-bold text-lg">
-                  €{(getRemainingAmount(booking) / 100).toFixed(2)}
-                </span>
-                {booking.booking_details?.amountPaid > 0 && (
-                  <div className="text-xs text-theme-text-muted">
-                    su €{(booking.price_total / 100).toFixed(2)}
-                  </div>
-                )}
-                {getPendingExtensions(booking).length > 0 && (
-                  <div className="text-xs text-purple-400">
-                    incl. {getPendingExtensions(booking).length} estensione/i
-                  </div>
-                )}
-                {getPendingPenalties(booking).length > 0 && (
-                  <div className="text-xs text-yellow-400">
-                    incl. {getPendingPenalties(booking).length} penale/i
-                  </div>
-                )}
-                {getPendingDanni(booking).length > 0 && (
-                  <div className="text-xs text-red-400">
-                    incl. {getPendingDanni(booking).length} danno/i
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-2 flex-wrap pt-2 border-t border-theme-border/50">
+          return (
+            <div key={group.customerKey} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+              {/* Accordion Header */}
               <button
-                onClick={() => markEverythingPaid(booking)}
-                className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+                onClick={() => toggleExpanded(group.customerKey)}
+                className="w-full flex items-center justify-between p-3 text-left"
               >
-                Segna Pagato Tutto
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-theme-text-primary truncate">{group.customerName}</div>
+                  <div className="flex gap-2 mt-0.5">
+                    {hasNoleggio && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">Noleggio</span>}
+                    {hasPW && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 text-cyan-300">Prime Wash</span>}
+                    {hasPenali && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300">Penali</span>}
+                    {hasDanni && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/50 text-red-300">Danni</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-red-400 font-bold">€{(group.totalRemaining / 100).toFixed(2)}</span>
+                  <svg className={`w-5 h-5 text-theme-text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </button>
-              {isOnlyPenaltyDanni(booking) ? (
-                <button
-                  onClick={() => removePendingPenaltiesDanni(booking)}
-                  className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                >
-                  ×
-                </button>
-              ) : (
-                <button
-                  onClick={() => deleteSingleBooking(booking.id)}
-                  className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                >
-                  ×
-                </button>
+
+              {/* Accordion Body */}
+              {isExpanded && (
+                <div className="border-t border-theme-border p-3 space-y-4">
+                  {/* Contact info */}
+                  <div className="text-xs text-theme-text-muted space-y-0.5">
+                    {group.customerEmail && <div>{group.customerEmail}</div>}
+                    {group.customerPhone && <div>{group.customerPhone}</div>}
+                  </div>
+
+                  {/* Salda Tutto button */}
+                  {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                    <button
+                      onClick={() => markAllCustomerPaid(group)}
+                      disabled={!!processingKey}
+                      className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
+                  )}
+
+                  {/* Noleggio section */}
+                  {hasNoleggio && (
+                    <div>
+                      <div className="text-xs font-bold text-blue-400 uppercase mb-1.5">Noleggio</div>
+                      <NoleggioCell group={group} />
+                    </div>
+                  )}
+
+                  {/* Prime Wash section */}
+                  {hasPW && (
+                    <div>
+                      <div className="text-xs font-bold text-cyan-400 uppercase mb-1.5">Prime Wash</div>
+                      <PrimeWashCell group={group} />
+                    </div>
+                  )}
+
+                  {/* Penali section */}
+                  {hasPenali && (
+                    <div>
+                      <div className="text-xs font-bold text-yellow-400 uppercase mb-1.5">Penali</div>
+                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
+                    </div>
+                  )}
+
+                  {/* Danni section */}
+                  {hasDanni && (
+                    <div>
+                      <div className="text-xs font-bold text-red-400 uppercase mb-1.5">Danni</div>
+                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        ))}
-        {filteredBookings.length === 0 && (
+          )
+        })}
+        {customerGroups.length === 0 && (
           <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-8 text-center text-theme-text-muted">
-            {filterService === 'all'
-              ? 'Nessuna prenotazione da saldare!'
-              : `Nessuna prenotazione ${getServiceTypeLabel(filterService).toLowerCase()} da saldare`
-            }
+            {searchQuery ? 'Nessun cliente trovato' : 'Nessuna prenotazione da saldare!'}
           </div>
         )}
       </div>
 
-      {/* Bookings Table (Desktop) */}
+      {/* ── Desktop Table View ───────────────────────────────────────────── */}
       <div className="hidden lg:block bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="">
-              <tr>
-                {multiSelectMode && (
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">
-                    <input
-                      type="checkbox"
-                      checked={selectedBookings.size === filteredBookings.length && filteredBookings.length > 0}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 cursor-pointer"
-                    />
-                  </th>
-                )}
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Servizio</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Dettagli</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Da Saldare</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
+            <thead>
+              <tr className="border-b-2 border-theme-border">
+                <th className="px-4 py-3 text-left text-sm font-semibold w-[18%]">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleSort('name')} className="flex items-center text-theme-text-primary hover:text-dr7-gold transition-colors">
+                      Cliente<SortArrow col="name" />
+                    </button>
+                    <span className="text-theme-text-muted/40">|</span>
+                    <button onClick={() => handleSort('amount')} className="flex items-center text-red-400 hover:text-red-300 transition-colors text-xs">
+                      €<SortArrow col="amount" />
+                    </button>
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-blue-400 w-[24%] border-l border-theme-border">Noleggio</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cyan-400 w-[18%] border-l border-theme-border">Prime Wash</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-yellow-400 w-[20%] border-l border-theme-border">Penali</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-red-400 w-[20%] border-l border-theme-border">Danni</th>
               </tr>
             </thead>
             <tbody>
-              {filteredBookings.map((booking) => (
-                <tr key={booking.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedBookings.has(booking.id) ? 'bg-blue-900/30' : ''
-                  }`}>
-                  {multiSelectMode && (
-                    <td className="px-4 py-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={selectedBookings.has(booking.id)}
-                        onChange={() => toggleBookingSelection(booking.id)}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </td>
-                  )}
-                  <td className="px-4 py-3 text-sm">
-                    <span className="text-theme-text-primary font-medium">{getServiceLabel(booking)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="text-theme-text-primary font-semibold">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
-                    <div className="text-theme-text-muted text-xs">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
-                    <div className="text-theme-text-muted text-xs">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {booking.service_type === 'rental' ? (
-                      <div>
-                        <div className="text-theme-text-primary">{booking.vehicle_name}</div>
-                        <div className="text-theme-text-muted text-xs">
-                          {booking.pickup_date && new Date(booking.pickup_date).toLocaleDateString('it-IT')} -
-                          {booking.return_date && new Date(booking.return_date).toLocaleDateString('it-IT')}
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="text-theme-text-primary">{booking.service_name}</div>
-                        <div className="text-theme-text-muted text-xs">
-                          {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time}
-                        </div>
-                      </div>
-                    )}
-                    {getPendingPenalties(booking).length > 0 && (
-                      <div className="text-xs text-yellow-400 font-medium mt-1">PENALE</div>
-                    )}
-                    {getPendingDanni(booking).length > 0 && (
-                      <div className="text-xs text-red-400 font-medium mt-1">DANNO</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-theme-text-muted">
-                    {new Date(booking.created_at).toLocaleDateString('it-IT')}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className="text-red-400 font-bold text-lg">
-                      €{(getRemainingAmount(booking) / 100).toFixed(2)}
-                    </span>
-                    {booking.booking_details?.amountPaid > 0 && (
-                      <div className="text-xs text-theme-text-muted">
-                        su €{(booking.price_total / 100).toFixed(2)}
-                      </div>
-                    )}
-                    {getPendingExtensions(booking).length > 0 && (
-                      <div className="text-xs text-purple-400 mt-1">
-                        incl. {getPendingExtensions(booking).length} estensione/i
-                      </div>
-                    )}
-                    {getPendingPenalties(booking).length > 0 && (
-                      <div className="text-xs text-yellow-400 mt-1">
-                        incl. {getPendingPenalties(booking).length} penale/i
-                      </div>
-                    )}
-                    {getPendingDanni(booking).length > 0 && (
-                      <div className="text-xs text-red-400 mt-1">
-                        incl. {getPendingDanni(booking).length} danno/i
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${booking.payment_status === 'pending'
-                      ? 'bg-yellow-600 text-black'
-                      : 'bg-red-600 text-theme-text-primary'
-                      }`}>
-                      {booking.payment_status === 'pending' ? 'Da Saldare' : 'Non Pagato'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex gap-2 flex-wrap">
-                      <button
-                        onClick={() => markEverythingPaid(booking)}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                      >
-                        Segna Pagato Tutto
-                      </button>
-                      {isOnlyPenaltyDanni(booking) ? (
-                        <button
-                          onClick={() => removePendingPenaltiesDanni(booking)}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                        >
-                          ×
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => deleteSingleBooking(booking.id)}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                        >
-                          ×
-                        </button>
-                      )}
+              {customerGroups.map(group => (
+                <tr key={group.customerKey} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 align-top">
+                  {/* Cliente column */}
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-bold text-theme-text-primary">{group.customerName}</div>
+                    {group.customerEmail && <div className="text-xs text-theme-text-muted mt-0.5 truncate max-w-[180px]">{group.customerEmail}</div>}
+                    {group.customerPhone && <div className="text-xs text-theme-text-muted">{group.customerPhone}</div>}
+                    <div className="text-red-400 font-bold text-lg mt-2">
+                      €{(group.totalRemaining / 100).toFixed(2)}
                     </div>
+                    {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                      <button
+                        onClick={() => markAllCustomerPaid(group)}
+                        disabled={!!processingKey}
+                        className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
+                    )}
+                  </td>
+
+                  {/* Noleggio column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
+                    <NoleggioCell group={group} />
+                  </td>
+
+                  {/* Prime Wash column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
+                    <PrimeWashCell group={group} />
+                  </td>
+
+                  {/* Penali column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
+                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
+                  </td>
+
+                  {/* Danni column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
+                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
                   </td>
                 </tr>
               ))}
-              {filteredBookings.length === 0 && (
+              {customerGroups.length === 0 && (
                 <tr>
-                  <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
-                    {filterService === 'all'
-                      ? 'Nessuna prenotazione da saldare!'
-                      : `Nessuna prenotazione ${getServiceTypeLabel(filterService).toLowerCase()} da saldare`
-                    }
+                  <td colSpan={5} className="px-4 py-8 text-center text-theme-text-muted">
+                    {searchQuery ? 'Nessun cliente trovato' : 'Nessuna prenotazione da saldare!'}
                   </td>
                 </tr>
               )}

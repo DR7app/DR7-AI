@@ -1,11 +1,23 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import toast from 'react-hot-toast'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 
-/** Convert EUR string to integer cents without floating point drift */
+/** Convert EUR string to integer cents using string parsing (no floating point) */
 function eurToCents(eur: string): number {
-  const n = parseFloat(eur || '0')
-  return Math.round((n + Number.EPSILON) * 100)
+  const s = (eur || '0').trim()
+  const negative = s.startsWith('-')
+  const abs = negative ? s.substring(1) : s
+  const dotIdx = abs.indexOf('.')
+  let totalCents: number
+  if (dotIdx === -1) {
+    totalCents = (parseInt(abs, 10) || 0) * 100
+  } else {
+    const wholePart = parseInt(abs.substring(0, dotIdx), 10) || 0
+    const decimalStr = abs.substring(dotIdx + 1).padEnd(2, '0').substring(0, 2)
+    totalCents = wholePart * 100 + (parseInt(decimalStr, 10) || 0)
+  }
+  return negative ? -totalCents : totalCents
 }
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
@@ -324,7 +336,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     additional_amount: '0',
     extension_payment_status: 'pending' as 'paid' | 'pending',
     extension_payment_method: '',
-    notes: ''
+    notes: '',
+    change_vehicle: false,
+    new_vehicle_id: ''
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -1123,7 +1137,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const { data: vehiclesData, error: vehiclesError } = await supabase
         .from('vehicles')
         .select('*')
-        .neq('status', 'retired')
+        .or('status.neq.retired,display_name.eq.Test')
         .order('display_name')
 
       if (vehiclesError) {
@@ -1837,7 +1851,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Subtract delivery/pickup fees to get BASE rental amount only
       // (fees are re-added on save at price_total calculation)
       // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
-      total_amount: ((booking.price_total
+      total_amount: (Math.round(booking.price_total
         - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
         - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
       ) / 100).toFixed(2),
@@ -1877,14 +1891,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       delivery_zip: booking.delivery_address?.zip || booking.booking_details?.delivery_address?.zip || '',
       delivery_province: booking.delivery_address?.province || booking.booking_details?.delivery_address?.province || '',
       delivery_notes: booking.delivery_address?.notes || booking.booking_details?.delivery_address?.notes || '',
-      delivery_fee: booking.delivery_fee != null ? (booking.delivery_fee / 100).toString() : (booking.booking_details?.delivery_fee || '0'),
+      delivery_fee: booking.delivery_fee != null ? (Math.round(booking.delivery_fee) / 100).toFixed(2) : (booking.booking_details?.delivery_fee || '0'),
       pickup_enabled: booking.pickup_enabled || booking.booking_details?.pickup_enabled || false,
       pickup_street: booking.pickup_address?.street || booking.booking_details?.pickup_address?.street || '',
       pickup_city: booking.pickup_address?.city || booking.booking_details?.pickup_address?.city || '',
       pickup_zip: booking.pickup_address?.zip || booking.booking_details?.pickup_address?.zip || '',
       pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
-      pickup_fee: booking.pickup_fee != null ? (booking.pickup_fee / 100).toString() : (booking.booking_details?.pickup_fee || '0'),
+      pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
     })
 
     setEditingId(booking.id)
@@ -1907,7 +1921,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       additional_amount: '0',
       extension_payment_status: 'pending',
       extension_payment_method: '',
-      notes: ''
+      notes: '',
+      change_vehicle: false,
+      new_vehicle_id: ''
     })
     setShowExtendModal(true)
   }
@@ -1936,6 +1952,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const additionalAmount = parseFloat(extendData.additional_amount) || 0
       const newTotal = extendingBooking.price_total + (additionalAmount * 100) // price_total is in cents
 
+      // Resolve new vehicle if car change requested
+      let newVehicle: Vehicle | null = null
+      if (extendData.change_vehicle && extendData.new_vehicle_id) {
+        newVehicle = vehicles.find(v => v.id === extendData.new_vehicle_id) || null
+      }
+
       // Update booking_details with extension info
       // Reset deposit_reminder_sent so IBAN message re-sends 60 min after the NEW dropoff
       const updatedBookingDetails = {
@@ -1945,6 +1967,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         iban_request_sent: false,
         day_before_reminder_sent: false,
         day_before_reminder_sent_at: null,
+        // Update vehicle info in booking_details if car changed
+        ...(newVehicle ? {
+          vehicle: {
+            ...extendingBooking.booking_details?.vehicle,
+            id: newVehicle.id,
+            name: newVehicle.display_name,
+            plate: newVehicle.plate || newVehicle.targa || '',
+          },
+          vehicle_id: newVehicle.id,
+        } : {}),
         extension_history: [
           ...(extendingBooking.booking_details?.extension_history || []),
           {
@@ -1953,20 +1985,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             new_dropoff: newDropoffDateTime.toISOString(),
             additional_amount: additionalAmount,
             payment_status: extendData.extension_payment_status, // 'paid' or 'pending'
-            notes: extendData.notes
+            notes: extendData.notes,
+            ...(newVehicle ? {
+              previous_vehicle_id: extendingBooking.vehicle_id,
+              previous_vehicle_name: extendingBooking.vehicle_name,
+              new_vehicle_id: newVehicle.id,
+              new_vehicle_name: newVehicle.display_name,
+            } : {})
           }
         ]
+      }
+
+      // Build update payload
+      const bookingUpdate: Record<string, any> = {
+        dropoff_date: newDropoffDateTime.toISOString(),
+        price_total: newTotal,
+        booking_details: updatedBookingDetails,
+        updated_at: new Date().toISOString()
+      }
+
+      // If car changed, update vehicle fields on the booking
+      if (newVehicle) {
+        bookingUpdate.vehicle_id = newVehicle.id
+        bookingUpdate.vehicle_name = newVehicle.display_name
+        bookingUpdate.vehicle_plate = newVehicle.plate || newVehicle.targa || ''
       }
 
       // Update the booking directly - NO validation checks
       const { error: updateError } = await supabase
         .from('bookings')
-        .update({
-          dropoff_date: newDropoffDateTime.toISOString(),
-          price_total: newTotal,
-          booking_details: updatedBookingDetails,
-          updated_at: new Date().toISOString()
-        })
+        .update(bookingUpdate)
         .eq('id', extendingBooking.id)
 
       if (updateError) {
@@ -1993,7 +2041,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
         extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
         extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
-        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        if (newVehicle) {
+          extensionMsg += `*Veicolo precedente:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+          extensionMsg += `*Nuovo veicolo:* ${newVehicle.display_name} (${newVehicle.plate || newVehicle.targa || ''})\n`
+        } else {
+          extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        }
         extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
@@ -2038,7 +2091,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             + `Confermiamo l'estensione della sua prenotazione.\n\n`
             + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
             + `*ID:* DR7-${bookingIdShort}\n`
-            + `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+            + (newVehicle
+              ? `*Nuovo veicolo:* ${newVehicle.display_name}\n`
+              : `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`)
             + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
             + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
             + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
@@ -2068,7 +2123,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           body: JSON.stringify({
             bookingId: extendingBooking.id,
             customerId: extendingBooking.user_id,
-            vehicleId: extendingBooking.vehicle_id,
+            vehicleId: newVehicle ? newVehicle.id : extendingBooking.vehicle_id,
             returnDate: newDropoffDateTime.toISOString(),
             depositAmount: depositAmount,
             paymentMethod: extendingBooking.payment_method || 'carta',
@@ -2094,7 +2149,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             console.log('[handleConfirmExtend] ✅ Extension fattura generated and sent to SDI')
           } else {
             const errData = await invoiceRes.json()
-            console.warn('[handleConfirmExtend] ⚠️ Extension fattura failed:', errData.message || errData.error)
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            console.warn('[handleConfirmExtend] ⚠️ Extension fattura failed:', errMsg)
+            toast.error(`Fattura estensione non generata: ${errMsg}`, { duration: 8000 })
           }
         } catch (invoiceError) {
           console.error('[handleConfirmExtend] ⚠️ Failed to generate extension fattura:', invoiceError)
@@ -2987,9 +3044,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
-        price_total: eurToCents(formData.total_amount) // Convert to cents (base rental)
+        price_total: Math.round(eurToCents(formData.total_amount) // Convert to cents (base rental)
           + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
-          + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
+          + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0)),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         status: formData.status,
@@ -3095,6 +3152,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       console.log(editingId ? 'Updating rental booking' : 'Creating rental booking', 'with data:', bookingData)
+      console.log('💰 PRICE DEBUG: formData.total_amount =', JSON.stringify(formData.total_amount),
+        '→ eurToCents =', eurToCents(formData.total_amount),
+        '→ EUR =', (eurToCents(formData.total_amount) / 100).toFixed(2),
+        '| price_total (with fees) =', bookingData.price_total,
+        '→ EUR =', (bookingData.price_total / 100).toFixed(2))
 
       let insertedBooking
       if (editingId) {
@@ -3368,8 +3430,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Auto-generate fattura and send to SDI when payment status is "paid"
-      if (formData.payment_status === 'paid' && insertedBooking?.id) {
+      // Auto-generate fattura and send to SDI when payment status is "paid" (NEW bookings only)
+      if (!editingId && formData.payment_status === 'paid' && insertedBooking?.id) {
         try {
           console.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
           const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
@@ -3381,10 +3443,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             console.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
           } else {
             const errData = await invoiceRes.json()
-            console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errData.message || errData.error)
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
+            toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
           }
         } catch (invoiceError) {
           console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
+        }
+      }
+
+      // Auto-send contract for signature via WhatsApp (NEW paid bookings only, after contract + fattura)
+      if (!editingId && formData.payment_status === 'paid' && insertedBooking?.id) {
+        try {
+          // Fetch the contract that was just generated for this booking
+          const { data: contractForSig } = await supabase
+            .from('contracts')
+            .select('id, pdf_url, customer_email, booking_id')
+            .eq('booking_id', insertedBooking.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (contractForSig?.id && contractForSig?.pdf_url) {
+            console.log('[Auto-Gen] Sending contract for signature via WhatsApp:', contractForSig.id)
+            const sigRes = await fetch('/.netlify/functions/signature-init', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractId: contractForSig.id, bookingId: insertedBooking.id })
+            })
+            if (sigRes.ok) {
+              console.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
+            } else {
+              const sigErr = await sigRes.json()
+              console.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
+              toast.error(`Link firma non inviato: ${sigErr.error || 'Errore sconosciuto'}`, { duration: 8000 })
+            }
+          } else {
+            console.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init')
+          }
+        } catch (sigError) {
+          console.error('[Auto-Gen] ⚠️ Failed to send signing link:', sigError)
         }
       }
 
@@ -3610,8 +3708,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             booking={{
               id: selectedBookingForDanni.id,
               customer_name: selectedBookingForDanni.customer_name || 'Cliente',
-              customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || undefined,
-              user_id: selectedBookingForDanni.user_id || undefined
+              customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || selectedBookingForDanni.booking_details?.customer_id || undefined,
+              user_id: selectedBookingForDanni.user_id || undefined,
+              customer_email: selectedBookingForDanni.customer_email || selectedBookingForDanni.booking_details?.customer?.email || undefined
             }}
             onClose={() => {
               setDanniModalOpen(false)
@@ -4330,12 +4429,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 value={formData.total_amount}
                 onChange={(e) => {
                   const newTotal = e.target.value
-                  // If currently paid, update paid amount to match new total (including delivery/pickup fees)
-                  const fullTotal = parseFloat(newTotal || '0')
-                    + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-                    + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                  const newPaid = formData.payment_status === 'paid' ? fullTotal.toFixed(2) : formData.amount_paid
-                  setFormData({ ...formData, total_amount: newTotal, amount_paid: newPaid })
+                  setFormData(prev => {
+                    // If currently paid, update paid amount to match new total (including delivery/pickup fees)
+                    const fullTotal = parseFloat(newTotal || '0')
+                      + (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
+                      + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
+                    const newPaid = prev.payment_status === 'paid' ? fullTotal.toFixed(2) : prev.amount_paid
+                    return { ...prev, total_amount: newTotal, amount_paid: newPaid }
+                  })
                 }}
               />
               <Input
@@ -4379,7 +4480,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   type="checkbox"
                   id="unlimited_km"
                   checked={formData.unlimited_km}
-                  onChange={(e) => setFormData({ ...formData, unlimited_km: e.target.checked, km_overage_fee: e.target.checked ? '0' : '1.80' })}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : '1.80' }))
+                  }}
                   className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
                 />
                 <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
@@ -5064,6 +5168,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     ))}
                   </select>
                 </div>
+
+                {/* Vehicle Change Toggle */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={extendData.change_vehicle}
+                      onChange={(e) => setExtendData({ ...extendData, change_vehicle: e.target.checked, new_vehicle_id: '' })}
+                      className="w-4 h-4 accent-purple-500"
+                    />
+                    <span className="text-sm font-medium text-theme-text-secondary">Cambio Veicolo</span>
+                  </label>
+                </div>
+
+                {extendData.change_vehicle && (
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuovo Veicolo</label>
+                    <select
+                      value={extendData.new_vehicle_id}
+                      onChange={(e) => setExtendData({ ...extendData, new_vehicle_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">-- Seleziona veicolo --</option>
+                      {vehicles
+                        .filter(v => v.status !== 'retired' && v.id !== extendingBooking?.vehicle_id)
+                        .map(v => (
+                          <option key={v.id} value={v.id}>{v.display_name} ({v.plate || v.targa || 'N/A'})</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo Aggiuntivo (€)</label>

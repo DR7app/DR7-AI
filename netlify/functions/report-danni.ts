@@ -189,6 +189,9 @@ export const handler: Handler = async (event) => {
           const name = b.vehicle_name || 'Sconosciuto'
 
           for (const entry of entries) {
+            // Skip paid entries — they're already counted via fatture
+            if (entry.paymentStatus === 'paid') continue
+
             const entryTotal = entry.total || (entry.amount || 0) * (entry.quantity || 1)
 
             if (!vehicleMap[plate]) {

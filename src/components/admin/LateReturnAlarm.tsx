@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import type { Session } from '@supabase/supabase-js';
 
 interface LateBooking {
     id: string;
@@ -16,9 +17,19 @@ const LateReturnAlarm: React.FC = () => {
     const [lateBookings, setLateBookings] = useState<LateBooking[]>([]);
     const [isAlarmActive, setIsAlarmActive] = useState(false);
     const [stoppedAlarms, setStoppedAlarms] = useState<Set<string>>(new Set());
+    const [session, setSession] = useState<Session | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const oscillatorRef = useRef<OscillatorNode | null>(null);
     const gainNodeRef = useRef<GainNode | null>(null);
+
+    // Track auth state
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+        return () => subscription.unsubscribe();
+    }, []);
 
     // Load stopped alarms from localStorage on mount
     useEffect(() => {
@@ -32,8 +43,9 @@ const LateReturnAlarm: React.FC = () => {
         }
     }, []);
 
-    // Check for late bookings every 30 seconds
+    // Check for late bookings every 30 seconds — only when authenticated
     useEffect(() => {
+        if (!session) return;
         const checkLateBookings = async () => {
             try {
                 const { data: bookings, error } = await supabase
@@ -78,7 +90,7 @@ const LateReturnAlarm: React.FC = () => {
         checkLateBookings();
         const interval = setInterval(checkLateBookings, 30000);
         return () => clearInterval(interval);
-    }, [stoppedAlarms]);
+    }, [stoppedAlarms, session]);
 
     useEffect(() => {
         if (isAlarmActive && lateBookings.length > 0) {

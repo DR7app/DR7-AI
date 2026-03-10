@@ -42,13 +42,28 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
       }),
     });
 
-    if (response.ok) {
-      return true;
-    } else {
-      const text = await response.text();
-      console.error(`WhatsApp send failed for ${cleanNum}:`, text);
+    const responseBody = await response.text();
+    let parsed: any = null;
+    try { parsed = JSON.parse(responseBody); } catch { /* not JSON */ }
+
+    if (!response.ok) {
+      console.error(`WhatsApp HTTP ${response.status} for ${cleanNum}:`, responseBody);
       return false;
     }
+
+    // Green API can return 200 but with an error in the body
+    if (parsed?.error) {
+      console.error(`WhatsApp API error for ${cleanNum}:`, JSON.stringify(parsed));
+      return false;
+    }
+
+    if (!parsed?.idMessage) {
+      console.error(`WhatsApp unexpected response for ${cleanNum} (no idMessage):`, responseBody);
+      return false;
+    }
+
+    console.log(`WhatsApp message sent to ${cleanNum}, idMessage: ${parsed.idMessage}`);
+    return true;
   } catch (err: any) {
     console.error(`WhatsApp error for ${cleanNum}:`, err.message);
     return false;
@@ -109,7 +124,7 @@ function getRomeDateString(offsetDays: number): string {
  * 2. EXTENSION OFFER (≤24h bookings): runs EVERY check → sends 4h after pickup
  * 3. IBAN DEPOSIT REQUEST: runs ONLY at 9 AM Rome → bookings ended yesterday
  */
-const reminderHandler: Handler = async () => {
+export const reminderHandler: Handler = async () => {
   console.log('=== Booking Reminders Check Started ===');
 
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -137,7 +152,7 @@ const reminderHandler: Handler = async () => {
     hour12: false,
   });
   const currentRomeHour = parseInt(romeHourFormatter.format(now), 10);
-  const isMorningRun = currentRomeHour >= 8 && currentRomeHour <= 10;
+  const isMorningRun = currentRomeHour >= 8 && currentRomeHour <= 12;
   console.log(`Current Rome hour: ${currentRomeHour} — Morning run: ${isMorningRun}`);
 
   // Load message templates from system_messages table
@@ -440,7 +455,5 @@ const reminderHandler: Handler = async () => {
   return { statusCode: 200, body: `Sent: ${sent}, failed: ${failed}` };
 };
 
-// Run every 2 hours to catch short rental 4h-after-pickup window.
-// Sections 1 (>24h extension) and 3 (IBAN) only execute at 9 AM Rome.
-// Each message is sent ONE TIME only — flags prevent re-sending.
+// Run every 2 hours via Netlify scheduled functions.
 export const handler = schedule('0 */2 * * *', reminderHandler);

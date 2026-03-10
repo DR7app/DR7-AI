@@ -41,25 +41,53 @@ interface AddressParts {
 function parseAddress(address: string): AddressParts {
   const parts = address.split(',').map(p => p.trim())
 
+  let street = ''
+  let cap = '09100'
+  let comune = 'Cagliari'
+  let provincia = 'CA'
+
   if (parts.length >= 2) {
-    const street = parts[0]
+    street = parts[0]
     const cityPart = parts[1]
 
     const capMatch = cityPart.match(/\b(\d{5})\b/)
-    const cap = capMatch ? capMatch[1] : '09100'
+    if (capMatch) cap = capMatch[1]
 
-    const provinciaMatch = cityPart.match(/\(([A-Z]{2})\)/)
-    const provincia = provinciaMatch ? provinciaMatch[1] : 'CA'
+    const provinciaMatch = cityPart.match(/\(([A-Za-z]{2})\)/)
+    if (provinciaMatch) provincia = provinciaMatch[1].toUpperCase()
 
-    let comune = cityPart
+    const parsedComune = cityPart
       .replace(cap, '')
       .replace(`(${provincia})`, '')
       .trim()
-
-    return { street, cap, comune: comune || 'Cagliari', provincia }
+    if (parsedComune) comune = parsedComune
+  } else {
+    street = address || 'N/A'
   }
 
-  return { street: address || 'N/A', cap: '09100', comune: 'Cagliari', provincia: 'CA' }
+  // SDI validation: CAP must be exactly 5 digits
+  if (!/^\d{5}$/.test(cap)) {
+    console.warn(`[XML] Invalid CAP "${cap}", defaulting to 09100`)
+    cap = '09100'
+  }
+
+  // SDI validation: Provincia must be exactly 2 uppercase letters
+  if (!/^[A-Z]{2}$/.test(provincia)) {
+    console.warn(`[XML] Invalid Provincia "${provincia}", defaulting to CA`)
+    provincia = 'CA'
+  }
+
+  // SDI validation: Street must not be empty
+  if (!street || street.trim() === '') {
+    street = 'N/A'
+  }
+
+  // SDI validation: Comune must not be empty
+  if (!comune || comune.trim() === '') {
+    comune = 'Cagliari'
+  }
+
+  return { street, cap, comune, provincia }
 }
 
 /**
@@ -68,6 +96,13 @@ function parseAddress(address: string): AddressParts {
 function escapeXml(unsafe: string): string {
   if (!unsafe) return ''
   return unsafe
+    // Replace Unicode characters outside BasicLatin + Latin-1Supplement with ASCII equivalents
+    .replace(/[\u2018\u2019\u201A\u2039\u203A]/g, "'")  // curly single quotes → '
+    .replace(/[\u201C\u201D\u201E\u00AB\u00BB]/g, '"')   // curly double quotes → "
+    .replace(/[\u2013\u2014]/g, '-')                       // en/em dash → -
+    .replace(/\u2026/g, '...')                             // ellipsis → ...
+    .replace(/[^\x00-\xFF]/g, '')                          // strip anything outside Latin-1Supplement
+    // XML entity escaping
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -107,8 +142,8 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   const progressivoInvio = (rawNum + rndSuffix).substring(0, 10)
 
   // Customer details
-  const customerVAT = invoice.customer_vat || ''
-  const customerFiscalCode = invoice.customer_tax_code || ''
+  const customerVAT = (invoice.customer_vat || '').toUpperCase().trim()
+  const customerFiscalCode = (invoice.customer_tax_code || '').toUpperCase().trim()
   const customerName = escapeXml(invoice.customer_name)
 
   // CodiceDestinatario: use customer's SDI code or default 0000000
@@ -126,10 +161,13 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   let dettaglioLinee = ''
   items.forEach((item, index) => {
     const lineTotal = item.unit_price * item.quantity
+    // SDI validation: Descrizione must be non-empty and max 1000 chars
+    let desc = item.description || 'Servizio'
+    if (desc.length > 1000) desc = desc.substring(0, 1000)
     dettaglioLinee += `
       <DettaglioLinee>
         <NumeroLinea>${index + 1}</NumeroLinea>
-        <Descrizione>${escapeXml(item.description)}</Descrizione>
+        <Descrizione>${escapeXml(desc)}</Descrizione>
         <Quantita>${formatAmount(item.quantity)}</Quantita>
         <UnitaMisura>NR</UnitaMisura>
         <PrezzoUnitario>${formatAmount(item.unit_price)}</PrezzoUnitario>
@@ -155,16 +193,28 @@ export function generateFatturaXML(invoice: InvoiceData): string {
     group.imposta += vatAmount
   })
 
+  // Recalculate ImportoTotaleDocumento from line items to ensure consistency
+  // SDI validates that header total = sum of imponibile + imposta across all groups
+  let calculatedTotal = 0
+  vatGroups.forEach((amounts) => {
+    calculatedTotal += amounts.imponibile + amounts.imposta
+  })
+  // Round to 2 decimal places to avoid floating-point mismatches
+  calculatedTotal = Math.round(calculatedTotal * 100) / 100
+
   // Generate DatiRiepilogo sections
   // XSD order: AliquotaIVA, Natura, ImponibileImporto, Imposta, EsigibilitaIVA, RiferimentoNormativo
   let datiRiepilogo = ''
   vatGroups.forEach((amounts, rate) => {
+    // Round each group to avoid floating-point drift
+    const roundedImponibile = Math.round(amounts.imponibile * 100) / 100
+    const roundedImposta = Math.round(amounts.imposta * 100) / 100
     datiRiepilogo += `
       <DatiRiepilogo>
         <AliquotaIVA>${formatAmount(rate)}</AliquotaIVA>${rate === 0 ? `
         <Natura>N2.2</Natura>` : ''}
-        <ImponibileImporto>${formatAmount(amounts.imponibile)}</ImponibileImporto>
-        <Imposta>${formatAmount(amounts.imposta)}</Imposta>${rate > 0 ? `
+        <ImponibileImporto>${formatAmount(roundedImponibile)}</ImponibileImporto>
+        <Imposta>${formatAmount(roundedImposta)}</Imposta>${rate > 0 ? `
         <EsigibilitaIVA>I</EsigibilitaIVA>` : ''}${rate === 0 ? `
         <RiferimentoNormativo>Art. 7 DPR 633/72</RiferimentoNormativo>` : ''}
       </DatiRiepilogo>`
@@ -172,6 +222,11 @@ export function generateFatturaXML(invoice: InvoiceData): string {
 
   // Customer identification section
   // Per FatturaPA: IdFiscaleIVA for B2B, CodiceFiscale for individuals
+  // SDI rejects if DatiAnagrafici has no identification at all
+  if (!customerVAT && !customerFiscalCode) {
+    throw new Error('XML generation failed: customer has no CodiceFiscale or PartitaIVA')
+  }
+
   // Only include P.IVA for B2B customers (those with a real SDI code, not 0000000)
   // to avoid SDI error 00324 (P.IVA/CF mismatch) for individuals
   let customerIdSection = ''
@@ -201,7 +256,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
       <CondizioniPagamento>TP02</CondizioniPagamento>
       <DettaglioPagamento>
         <ModalitaPagamento>MP05</ModalitaPagamento>
-        <ImportoPagamento>${formatAmount(invoice.importo_totale)}</ImportoPagamento>
+        <ImportoPagamento>${formatAmount(calculatedTotal)}</ImportoPagamento>
       </DettaglioPagamento>
     </DatiPagamento>`
 
@@ -260,7 +315,7 @@ export function generateFatturaXML(invoice: InvoiceData): string {
         <Divisa>EUR</Divisa>
         <Data>${invoice.data_emissione}</Data>
         <Numero>${escapeXml(invoice.numero_fattura)}</Numero>
-        <ImportoTotaleDocumento>${formatAmount(invoice.importo_totale)}</ImportoTotaleDocumento>
+        <ImportoTotaleDocumento>${formatAmount(calculatedTotal)}</ImportoTotaleDocumento>
       </DatiGeneraliDocumento>
     </DatiGenerali>
     <DatiBeniServizi>${dettaglioLinee}${datiRiepilogo}

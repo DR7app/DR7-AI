@@ -9,6 +9,7 @@ interface DanniModalProps {
         customer_name: string
         customer_id?: string
         user_id?: string
+        customer_email?: string
     }
     onClose: () => void
     onSuccess: () => void
@@ -69,6 +70,41 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
         setIsGenerating(true)
         try {
+            // Always save danni to booking_details first (prevents data loss if fattura fails)
+            const { data: currentBooking, error: fetchErr } = await supabase
+                .from('bookings')
+                .select('booking_details')
+                .eq('id', booking.id)
+                .single()
+
+            if (fetchErr) throw new Error('Errore nel recupero della prenotazione.')
+
+            const details = currentBooking?.booking_details || {}
+            const existingDanni = details.danni || []
+            const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+
+            const newEntries = cart.map(c => ({
+                label: c.label,
+                amount: c.unitPrice,
+                quantity: c.quantity,
+                total: Math.round(c.unitPrice * c.quantity * 100) / 100,
+                note: note || '',
+                date: italyDate,
+                paymentStatus
+            }))
+
+            const { error: updateErr } = await supabase
+                .from('bookings')
+                .update({
+                    booking_details: {
+                        ...details,
+                        danni: [...existingDanni, ...newEntries]
+                    }
+                })
+                .eq('id', booking.id)
+
+            if (updateErr) throw new Error('Errore nel salvataggio del danno.')
+
             if (paymentStatus === 'paid') {
                 // PAGATO: generate fattura + send to SDI
                 const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
@@ -85,7 +121,11 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 })
 
                 const data = await response.json()
-                if (!response.ok) throw new Error(data.message || data.error || 'Errore nella generazione.')
+                if (!response.ok) {
+                    const errMsg = data.message || data.error || 'Errore nella generazione.'
+                    toast.error(`Fattura NON generata: ${errMsg}`, { duration: 10000 })
+                    throw new Error(errMsg)
+                }
 
                 if (data.invoiceId) {
                     const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
@@ -104,41 +144,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
                 toast.success(`Fattura danni generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
             } else {
-                // DA SALDARE: save to booking_details.danni[] (no fattura)
-                const { data: currentBooking, error: fetchErr } = await supabase
-                    .from('bookings')
-                    .select('booking_details')
-                    .eq('id', booking.id)
-                    .single()
-
-                if (fetchErr) throw new Error('Errore nel recupero della prenotazione.')
-
-                const details = currentBooking?.booking_details || {}
-                const existingDanni = details.danni || []
-                const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-
-                const newEntries = cart.map(c => ({
-                    label: c.label,
-                    amount: c.unitPrice,
-                    quantity: c.quantity,
-                    total: Math.round(c.unitPrice * c.quantity * 100) / 100,
-                    note: note || '',
-                    date: italyDate,
-                    paymentStatus: 'pending'
-                }))
-
-                const { error: updateErr } = await supabase
-                    .from('bookings')
-                    .update({
-                        booking_details: {
-                            ...details,
-                            danni: [...existingDanni, ...newEntries]
-                        }
-                    })
-                    .eq('id', booking.id)
-
-                if (updateErr) throw new Error('Errore nel salvataggio del danno.')
-
+                // DA SALDARE: already saved above, just show toast
                 toast.success(`Danno registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
             }
 
@@ -326,12 +332,21 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     {error && (
                         <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 space-y-2">
                             <p className="text-red-400 text-[13px]">{error}</p>
-                            {isCustomerDataError && onEditCustomer && (booking.customer_id || booking.user_id) && (
+                            {isCustomerDataError && onEditCustomer && (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        const cid = booking.customer_id || booking.user_id
+                                    onClick={async () => {
+                                        let cid = booking.customer_id || booking.user_id
+                                        if (!cid && booking.customer_email) {
+                                            const { data } = await supabase
+                                                .from('customers_extended')
+                                                .select('id')
+                                                .eq('email', booking.customer_email)
+                                                .maybeSingle()
+                                            if (data?.id) cid = data.id
+                                        }
                                         if (cid && onEditCustomer) { onEditCustomer(cid); handleClose() }
+                                        else toast.error('Cliente non trovato. Aggiorna manualmente il profilo.')
                                     }}
                                     className="w-full py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-[13px] font-medium rounded-xl transition-colors"
                                 >

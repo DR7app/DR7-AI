@@ -14,7 +14,7 @@ import MarketingTab from './components/MarketingTab'
 import ReviewsTab from './components/ReviewsTab'
 import FatturaTab from './components/FatturaTab'
 import ContrattoTab from './components/ContrattoTab'
-import CargosTab from './components/CargosTab'
+import GestioneMulteTab from './components/GestioneMulteTab'
 import DailyCalendarModal from './components/DailyCalendarModal'
 import ScannerTab from './components/ScannerTab'
 import CauzioniTab from './components/CauzioniTab'
@@ -28,10 +28,12 @@ import ReportClientiTab from './components/ReportClientiTab'
 import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
+import GestioneDanniTab from './components/GestioneDanniTab'
+import CargosTab from './components/CargosTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import CarWashCatalogTab from './components/CarWashCatalogTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'cargos' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -131,9 +133,9 @@ export default function AdminDashboard() {
     'calendar': 'Calendario Noleggio',
     'cauzioni': 'Cauzioni',
     'contratto': 'Contratti',
-    'cargos': 'Cargos',
-    'gestione-danni': 'Gestione Danni',
+    'gestione-danni': 'Gestione Danni & Penali & Penali',
     'gestione-multe': 'Gestione Multe',
+    'cargos': 'Cargos',
     'carwash': 'Prenotazioni Prime Wash',
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
@@ -281,9 +283,9 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'calendar')}>Calendario</button>
               <button onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
               <button onClick={() => { setActiveTab('contratto'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'contratto')}>Contratti</button>
-              <button onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cargos')}>Cargos</button>
-              <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Gestione Danni</button>
+              <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Gestione Danni & Penali</button>
               <button onClick={() => { setActiveTab('gestione-multe'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
+              <button onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cargos')}>Cargos</button>
 
               {/* PRIME WASH */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Prime Wash</div>
@@ -364,7 +366,7 @@ export default function AdminDashboard() {
             <nav className="-mb-px flex gap-4 flex-wrap">
               {/* NOLEGGIO Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['reservations', 'calendar', 'cauzioni', 'contratto', 'cargos', 'gestione-danni', 'gestione-multe'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['reservations', 'calendar', 'cauzioni', 'contratto', 'gestione-danni', 'gestione-multe', 'cargos'].includes(activeTab))}>
                   Noleggio
                   <span className="text-xs">▼</span>
                 </button>
@@ -373,9 +375,9 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('calendar')} className={dropdownItemClass(activeTab === 'calendar')}>Calendario</button>
                   <button onClick={() => setActiveTab('cauzioni')} className={dropdownItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
                   <button onClick={() => setActiveTab('contratto')} className={dropdownItemClass(activeTab === 'contratto')}>Contratti</button>
-                  <button onClick={() => setActiveTab('cargos')} className={dropdownItemClass(activeTab === 'cargos')}>Cargos</button>
-                  <button onClick={() => setActiveTab('gestione-danni')} className={dropdownItemClass(activeTab === 'gestione-danni')}>Gestione Danni</button>
+                  <button onClick={() => setActiveTab('gestione-danni')} className={dropdownItemClass(activeTab === 'gestione-danni')}>Gestione Danni & Penali</button>
                   <button onClick={() => setActiveTab('gestione-multe')} className={dropdownItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
+                  <button onClick={() => setActiveTab('cargos')} className={dropdownItemClass(activeTab === 'cargos')}>Cargos</button>
                 </div>
               </div>
 
@@ -536,7 +538,6 @@ export default function AdminDashboard() {
           {activeTab === 'carwash-catalog' && <CarWashCatalogTab />}
           {activeTab === 'fattura' && <FatturaTab />}
           {activeTab === 'contratto' && <ContrattoTab />}
-          {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'cauzioni' && <CauzioniTab />}
           {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'birthdays' && <BirthdaysTab />}
@@ -550,8 +551,9 @@ export default function AdminDashboard() {
           {activeTab === 'bulk-import' && <BulkImportTab />}
           {activeTab === 'referral' && <ReferralProgramTab />}
           {/* Placeholder tabs for new features */}
-          {activeTab === 'gestione-danni' && <PlaceholderTab title="Gestione Danni" />}
-          {activeTab === 'gestione-multe' && <PlaceholderTab title="Gestione Multe" />}
+          {activeTab === 'gestione-danni' && <GestioneDanniTab />}
+          {activeTab === 'gestione-multe' && <GestioneMulteTab />}
+          {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && <ReportLavaggioTab />}

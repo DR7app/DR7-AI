@@ -2,10 +2,14 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
+import { generateInvoicePDF } from './invoice-pdf-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
 // Invoicetronic SDI Configuration
 const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || ''
@@ -20,7 +24,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, includeIVA = true, extensionAmount, includePenalties = false } = JSON.parse(event.body || '{}')
+        const { bookingId, includeIVA = true, extensionAmount, includePenalties = false, includeExtensions } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return {
@@ -42,6 +46,10 @@ export const handler: Handler = async (event) => {
                 body: JSON.stringify({ error: 'Booking not found' })
             }
         }
+
+        // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
+        const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
+        const isTestVehicle = vehicleName === 'test'
 
         // Fetch customer data with robust fallback (Logic from generate-contract.ts)
         const bookingDetails = booking.booking_details || {}
@@ -159,7 +167,7 @@ export const handler: Handler = async (event) => {
             const num = customerData.numero_civico || customerData.streetNumber || ''
             const zip = customerData.codice_postale || customerData.zipCode || customerData.zip || ''
             const city = customerData.citta_residenza || customerData.city || ''
-            const prov = customerData.provincia_residenza || customerData.province || ''
+            const prov = (customerData.provincia_residenza || customerData.province || '').toUpperCase().trim()
 
             if (street) {
                 let streetAddress = street
@@ -187,8 +195,8 @@ export const handler: Handler = async (event) => {
         }
 
         // Ensure tax fields are robustly fetched
-        const taxCode = customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || ''
-        const vatNumber = customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || ''
+        const taxCode = (customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || '').toUpperCase().trim()
+        const vatNumber = (customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || '').toUpperCase().trim()
 
         // Debug: log what was found for diagnostics
         const debugInfo = {
@@ -250,31 +258,28 @@ export const handler: Handler = async (event) => {
         if (existingInvoice) {
             invoiceNumber = existingInvoice.numero_fattura
         } else {
-            // Get next invoice number
-            const { data: lastInvoice } = await supabase
-                .from('fatture')
-                .select('numero_fattura')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single()
-
-            let nextNumber = 1
+            // Atomic invoice numbering via DB sequence (prevents race-condition duplicates)
+            // Retry loop: if the generated number already exists in DB, get the next one
             const currentYear = new Date().getFullYear()
+            for (let attempt = 0; attempt < 5; attempt++) {
+                const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
 
-            if (lastInvoice?.numero_fattura) {
-                // Parse standard "DR7-2025-0013" or legacy "13/2025"
-                const legacyMatch = lastInvoice.numero_fattura.match(/^(\d+)\//)
-                const newMatch = lastInvoice.numero_fattura.match(/DR7-\d+-(\d+)/)
-
-                if (newMatch) {
-                    nextNumber = parseInt(newMatch[1], 10) + 1
-                } else if (legacyMatch) {
-                    nextNumber = parseInt(legacyMatch[1], 10) + 1
+                if (seqError || seqResult == null) {
+                    console.error('[Invoice] Sequence error:', seqError)
+                    throw new Error('Failed to generate invoice number: ' + (seqError?.message || 'sequence returned null'))
                 }
-            }
 
-            const padded = String(nextNumber).padStart(4, '0')
-            invoiceNumber = `DR7-${currentYear}-${padded}`
+                const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+                const { data: existing } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+                if (!existing) {
+                    invoiceNumber = candidate
+                    break
+                }
+                console.warn(`[Invoice] Number ${candidate} already exists, retrying...`)
+            }
+            if (!invoiceNumber) {
+                throw new Error('Failed to generate unique invoice number after 5 attempts')
+            }
         }
 
 
@@ -425,6 +430,31 @@ export const handler: Handler = async (event) => {
             })
         }
 
+        // Include extensions as line items in the same fattura (all extensions, already marked paid)
+        if (includeExtensions) {
+            const extensions = bookingDetails.extension_history || []
+            const vatRate = includeIVA ? 22 : 0
+            const vatDivisor = 1.22
+            extensions.forEach((ext: any) => {
+                const extTotal = ext.additional_amount || 0
+                if (extTotal > 0) {
+                    let days = ext.additional_days
+                    if (!days && ext.previous_dropoff && ext.new_dropoff) {
+                        const prev = new Date(ext.previous_dropoff)
+                        const next = new Date(ext.new_dropoff)
+                        days = Math.round((next.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24))
+                    }
+                    items.push({
+                        description: `Estensione +${days || '?'}gg ${booking.vehicle_name || ''} - ${booking.id.substring(0, 8).toUpperCase()}`,
+                        unit_price: extTotal / vatDivisor,
+                        quantity: 1,
+                        vat_rate: vatRate,
+                        total: extTotal / vatDivisor
+                    })
+                }
+            })
+        }
+
         // Calculate totals
         let subtotal = 0
         let vatAmount = 0
@@ -483,8 +513,10 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // Auto-send to SDI via Aruba if customer has tax code
-        if (invoice.customer_tax_code) {
+        // Auto-send to SDI via Aruba if customer has tax code (skip for test vehicles)
+        if (isTestVehicle) {
+            console.log('[Invoice] Test vehicle — skipping SDI, will send PDF via WhatsApp only')
+        } else if (invoice.customer_tax_code) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
@@ -507,11 +539,70 @@ export const handler: Handler = async (event) => {
             console.log('[Invoice] No tax code — saved as draft. Ready for manual Aruba upload.')
         }
 
+        // --- Generate PDF, upload to storage, send via WhatsApp ---
+        let pdfUrl: string | null = null
+        try {
+            const pdfBytes = await generateInvoicePDF(invoice as any)
+            const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+
+            const { error: uploadError } = await supabase.storage
+                .from('invoices')
+                .upload(pdfFileName, pdfBytes, { contentType: 'application/pdf', upsert: true })
+
+            if (uploadError) {
+                console.error('[Invoice] PDF storage upload failed:', uploadError.message)
+            } else {
+                const { data: { publicUrl } } = supabase.storage
+                    .from('invoices')
+                    .getPublicUrl(pdfFileName)
+
+                pdfUrl = publicUrl
+                console.log('[Invoice] PDF uploaded to storage:', pdfUrl)
+
+                // Save pdf_url to fatture record
+                await supabase.from('fatture').update({ pdf_url: pdfUrl }).eq('id', invoice.id)
+
+                // Send PDF via WhatsApp to customer
+                const customerPhone = invoice.customer_phone || resolvedPhone || ''
+                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    // Normalize phone: strip +, spaces, dashes, parens → remove leading 00 → if 10 digits prepend 39
+                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            urlFile: pdfUrl,
+                            fileName: `Fattura_${invoice.numero_fattura}.pdf`,
+                            caption: `Fattura ${invoice.numero_fattura} - DR7 Empire`
+                        })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && !waResult.error) {
+                        console.log('[Invoice] Fattura PDF sent via WhatsApp:', waResult.idMessage)
+                    } else {
+                        console.error('[Invoice] WhatsApp send failed:', waResult)
+                    }
+                } else {
+                    if (!customerPhone) console.log('[Invoice] No customer phone — skipping WhatsApp PDF send')
+                    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) console.log('[Invoice] Green API not configured — skipping WhatsApp PDF send')
+                }
+            }
+        } catch (pdfError: any) {
+            console.error('[Invoice] PDF generation/send failed (invoice still saved):', pdfError.message)
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
                 invoice: invoice,
+                pdfUrl,
                 message: 'Invoice generated successfully'
             })
         }
