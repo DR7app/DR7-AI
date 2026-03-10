@@ -187,16 +187,23 @@ function buildCargosRecord(booking: BookingForCargos): string {
     const c = booking.customerData
     const bd = booking.booking_details || {}
 
-    // Split customer name if no extended data
-    let surname = c?.cognome || ''
-    let firstName = c?.nome || ''
-    if (!surname && booking.customer_name) {
-        const parts = booking.customer_name.trim().split(/\s+/)
-        if (parts.length >= 2) {
-            surname = parts[parts.length - 1] // Last word = surname (Italian convention)
-            firstName = parts.slice(0, -1).join(' ')
-        } else {
-            surname = parts[0] || ''
+    // For azienda, use denominazione as surname
+    let surname = ''
+    let firstName = ''
+    if (c?.tipo_cliente === 'azienda') {
+        surname = c?.denominazione || c?.cognome || booking.customer_name || ''
+        firstName = ''
+    } else {
+        surname = c?.cognome || ''
+        firstName = c?.nome || ''
+        if (!surname && booking.customer_name) {
+            const parts = booking.customer_name.trim().split(/\s+/)
+            if (parts.length >= 2) {
+                surname = parts[parts.length - 1]
+                firstName = parts.slice(0, -1).join(' ')
+            } else {
+                surname = parts[0] || ''
+            }
         }
     }
 
@@ -271,8 +278,8 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
         issues.push({ field: 'Targa', message: 'Targa veicolo mancante', severity: 'error' })
     }
 
-    if (!c?.cognome && !booking.customer_name) {
-        issues.push({ field: 'Cognome', message: 'Cognome conducente mancante', severity: 'error' })
+    if (!c?.cognome && !c?.denominazione && !booking.customer_name) {
+        issues.push({ field: 'Cognome', message: 'Cognome/Denominazione mancante', severity: 'error' })
     }
 
     // These fields are only required for persona fisica, not azienda
