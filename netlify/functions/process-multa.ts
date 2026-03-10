@@ -114,7 +114,7 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
         .from('bookings')
         .select(`
             id, pickup_date, dropoff_date, customer_name, customer_email,
-            customer_phone, vehicle_name, vehicle_plate, booking_details, user_id
+            customer_phone, vehicle_name, vehicle_plate, booking_details, user_id, contract_url
         `)
         .lte('pickup_date', isoSearch)
         .gte('dropoff_date', isoSearch)
@@ -188,8 +188,10 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
         nome = parts.slice(0, -1).join(' ')
     }
 
-    // Fetch contract PDF URL — prefer signed, fallback to unsigned
+    // Fetch contract PDF URL — check multiple sources
     let contractUrl = ''
+
+    // 1. Check contracts DB table (signed first, then unsigned)
     const { data: contractData } = await supabase
         .from('contracts')
         .select('signed_pdf_url, pdf_url')
@@ -198,6 +200,39 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     if (contractData) {
         contractUrl = contractData.signed_pdf_url || contractData.pdf_url || ''
     }
+
+    // 2. Fallback: check booking.contract_url
+    if (!contractUrl && match.contract_url) {
+        contractUrl = match.contract_url
+    }
+
+    // 3. Fallback: search contracts storage bucket for files matching customer name
+    if (!contractUrl) {
+        const customerName = (match.customer_name || '').split(/\s+/)[0] // first name
+        if (customerName) {
+            // Check 'filled/' folder and root of contracts bucket
+            for (const folder of ['filled', 'signed', '']) {
+                const { data: files } = await supabase.storage
+                    .from('contracts')
+                    .list(folder || undefined, { limit: 200, sortBy: { column: 'created_at', order: 'desc' } })
+                if (files) {
+                    const contractFile = files.find(f =>
+                        f.name.toLowerCase().includes(customerName.toLowerCase()) &&
+                        f.name.endsWith('.pdf')
+                    )
+                    if (contractFile) {
+                        const path = folder ? `${folder}/${contractFile.name}` : contractFile.name
+                        const { data: signed } = await supabase.storage
+                            .from('contracts')
+                            .createSignedUrl(path, 86400)
+                        if (signed?.signedUrl) contractUrl = signed.signedUrl
+                        break
+                    }
+                }
+            }
+        }
+    }
+    console.log(`[process-multa] Contract lookup: contractUrl=${contractUrl ? 'found' : 'not found'}`)
 
     // Fetch customer documents (driver license, ID) from storage
     const licenseUrls: string[] = []
