@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { sendToCargos } from './cargos-auto-send'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -389,6 +390,20 @@ export const handler: Handler = async (event) => {
                 }
             } catch (waErr: any) {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
+            }
+        }
+
+        // Auto-send to CARGOS (Polizia di Stato) after WhatsApp delivery
+        if (contract.booking_id) {
+            try {
+                const cargosResult = await sendToCargos(contract.booking_id)
+                if (cargosResult.success) {
+                    console.log('[signature-complete] ✅ Contract auto-sent to CARGOS')
+                } else {
+                    console.warn('[signature-complete] ⚠️ CARGOS auto-send failed:', cargosResult.error)
+                }
+            } catch (cargosErr: any) {
+                console.error('[signature-complete] ⚠️ CARGOS auto-send error:', cargosErr.message)
             }
         }
 
