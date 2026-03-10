@@ -82,19 +82,7 @@ export const handler: Handler = async (event) => {
             cauzioneMetodo = 'bonifico'
         }
 
-        const cauzioneData: Record<string, any> = {
-            cliente_id: customerId,
-            veicolo_id: vehicleId,
-            riferimento_contratto_id: bookingId,
-            data_restituzione_veicolo: returnDate,
-            importo: depositAmount,
-            metodo: cauzioneMetodo,
-            scadenza_cauzione: scadenzaDate,
-            // Set data_incasso when deposit is marked as collected
-            data_incasso: depositStatus === 'incassata' ? new Date().toISOString() : null,
-        }
-
-        // Calculate scadenza: 14 business days after the day after return
+        // Calculate scadenza: 14 business days starting the day after return
         function calcScadenza(returnDateStr: string): string {
             const returnD = new Date(returnDateStr)
             let current = new Date(returnD)
@@ -116,6 +104,18 @@ export const handler: Handler = async (event) => {
 
         const scadenzaDate = calcScadenza(returnDate)
         console.log(`📅 Calculated scadenza: ${scadenzaDate} (14 business days after ${returnDate})`)
+
+        const cauzioneData: Record<string, any> = {
+            cliente_id: customerId,
+            veicolo_id: vehicleId,
+            riferimento_contratto_id: bookingId,
+            data_restituzione_veicolo: returnDate,
+            importo: depositAmount,
+            metodo: cauzioneMetodo,
+            scadenza_cauzione: scadenzaDate,
+            // Set data_incasso when deposit is marked as collected
+            data_incasso: depositStatus === 'incassata' ? new Date().toISOString() : null,
+        }
 
         if (existingCauzione) {
             // Update existing cauzione — only update return date and amount, don't reset incasso status
