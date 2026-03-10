@@ -89,11 +89,33 @@ export const handler: Handler = async (event) => {
             data_restituzione_veicolo: returnDate,
             importo: depositAmount,
             metodo: cauzioneMetodo,
-            // scadenza_cauzione will be auto-calculated by database trigger
-            // stato will be auto-calculated by database trigger
+            scadenza_cauzione: scadenzaDate,
             // Set data_incasso when deposit is marked as collected
             data_incasso: depositStatus === 'incassata' ? new Date().toISOString() : null,
         }
+
+        // Calculate scadenza: 14 business days after the day after return
+        function calcScadenza(returnDateStr: string): string {
+            const returnD = new Date(returnDateStr)
+            let current = new Date(returnD)
+            current.setDate(current.getDate() + 1) // start day after return
+            let businessDays = 0
+            // skip to first weekday if starting on weekend
+            while (current.getDay() === 0 || current.getDay() === 6) {
+                current.setDate(current.getDate() + 1)
+            }
+            businessDays = 1
+            while (businessDays < 14) {
+                current.setDate(current.getDate() + 1)
+                if (current.getDay() !== 0 && current.getDay() !== 6) {
+                    businessDays++
+                }
+            }
+            return current.toISOString().split('T')[0]
+        }
+
+        const scadenzaDate = calcScadenza(returnDate)
+        console.log(`📅 Calculated scadenza: ${scadenzaDate} (14 business days after ${returnDate})`)
 
         if (existingCauzione) {
             // Update existing cauzione — only update return date and amount, don't reset incasso status
@@ -101,6 +123,7 @@ export const handler: Handler = async (event) => {
 
             const updateData: Record<string, any> = {
                 data_restituzione_veicolo: returnDate,
+                scadenza_cauzione: scadenzaDate,
                 updated_at: new Date().toISOString(),
             }
             // Only update these if explicitly provided
