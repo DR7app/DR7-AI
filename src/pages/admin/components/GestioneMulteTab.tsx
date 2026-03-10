@@ -54,9 +54,31 @@ export default function GestioneMulteTab() {
     const [pecResult, setPecResult] = useState<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // PEC History
+    const [pecHistory, setPecHistory] = useState<any[]>([])
+    const [loadingHistory, setLoadingHistory] = useState(false)
+
     useEffect(() => {
         loadVehicles()
+        loadPecHistory()
     }, [])
+
+    async function loadPecHistory() {
+        setLoadingHistory(true)
+        try {
+            const { data, error } = await supabase
+                .from('multe_pec_log')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(50)
+            if (!error && data) setPecHistory(data)
+        } catch (e) {
+            // Table might not exist yet — that's fine
+            console.warn('[GestioneMulte] multe_pec_log table not found, skipping history')
+        } finally {
+            setLoadingHistory(false)
+        }
+    }
 
     // ── Multa Upload Handlers ────────────────────────────────────────────────
 
@@ -125,6 +147,25 @@ export default function GestioneMulteTab() {
             setPecResult(data)
             setMultaStep('sent')
             toast.success(`PEC inviata con ${data.attachmentCount} allegati!`)
+
+            // Save to history log
+            await supabase.from('multe_pec_log').insert({
+                numero_verbale: multaData.numero_verbale || null,
+                targa: multaData.targa || null,
+                data_infrazione: multaData.data_infrazione || null,
+                importo: multaData.importo || null,
+                conducente_nome: driverData.nome || null,
+                conducente_cognome: driverData.cognome || null,
+                conducente_codice_fiscale: driverData.codice_fiscale || null,
+                booking_id: driverData.booking_id || null,
+                pec_message_id: data.messageId || null,
+                pec_to: 'poliziamunicipale@comune.cagliari.legalmail.it',
+                allegati_count: data.attachmentCount || 0,
+                has_patente: (driverData.license_urls?.length || 0) > 0,
+                has_contratto: !!driverData.contract_url,
+                has_documento_id: (driverData.id_urls?.length || 0) > 0,
+                pdf_filename: multaFile?.name || null,
+            }).then(() => loadPecHistory())
         } catch (err: any) {
             toast.error('Errore: ' + err.message)
         } finally {
@@ -773,6 +814,67 @@ export default function GestioneMulteTab() {
                             </div>
                         </div>
                     )}
+                    {/* ── Storico PEC Inviate ─────────────────────────── */}
+                    <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden mt-6">
+                        <div className="px-5 py-3 border-b border-theme-border bg-theme-bg-tertiary/30 flex justify-between items-center">
+                            <h3 className="text-sm font-bold text-theme-text-primary">Storico PEC Inviate</h3>
+                            <span className="text-xs text-theme-text-muted">{pecHistory.length} invii</span>
+                        </div>
+                        {loadingHistory ? (
+                            <div className="p-6 text-center text-sm text-theme-text-muted">Caricamento...</div>
+                        ) : pecHistory.length === 0 ? (
+                            <div className="p-6 text-center text-sm text-theme-text-muted">Nessuna PEC inviata</div>
+                        ) : (
+                            <div className="divide-y divide-theme-border">
+                                {pecHistory.map((log) => (
+                                    <div key={log.id} className="px-5 py-3 flex items-center gap-4">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-8 h-8 bg-green-500/10 rounded-full flex items-center justify-center">
+                                                <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-medium text-theme-text-primary">
+                                                    {log.conducente_nome} {log.conducente_cognome}
+                                                </span>
+                                                <span className="text-xs font-mono text-theme-text-muted">{log.targa}</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 mt-0.5 text-xs text-theme-text-muted">
+                                                <span>Verbale {log.numero_verbale || 'N/D'}</span>
+                                                <span>Infrazione: {log.data_infrazione || 'N/D'}</span>
+                                                {log.importo && <span>&euro;{log.importo}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex-shrink-0 flex items-center gap-2">
+                                            <div className="flex gap-1">
+                                                {log.has_patente && (
+                                                    <span className="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[10px] rounded border border-green-500/20">Patente</span>
+                                                )}
+                                                {log.has_documento_id && (
+                                                    <span className="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[10px] rounded border border-green-500/20">Doc ID</span>
+                                                )}
+                                                {log.has_contratto && (
+                                                    <span className="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[10px] rounded border border-green-500/20">Contratto</span>
+                                                )}
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs text-theme-text-muted">
+                                                    {new Date(log.created_at).toLocaleDateString('it-IT')}
+                                                </div>
+                                                <div className="text-[10px] text-theme-text-muted opacity-60">
+                                                    {new Date(log.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            </div>
+                                            <div className="text-xs font-medium text-theme-text-muted">
+                                                {log.allegati_count} allegati
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
