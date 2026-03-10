@@ -2381,7 +2381,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }
 
             // Mark ALL required fields as missing since this is a new customer
-            missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza', 'patente']
+            // Patente not required for azienda
+            missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza']
+            if (tempCustData.tipo_cliente !== 'azienda') missing.push('patente')
             if (!tempCustData.email) missing.push('email')
             if (!tempCustData.telefono) missing.push('telefono')
 

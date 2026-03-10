@@ -272,7 +272,7 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
         issues.push({ field: 'Cognome', message: 'Cognome conducente mancante', severity: 'error' })
     }
 
-    if (!c?.patente_numero && !booking.booking_details?.customer?.driverLicense) {
+    if (c?.tipo_cliente !== 'azienda' && !c?.patente_numero && !booking.booking_details?.customer?.driverLicense) {
         issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'error' })
     }
 

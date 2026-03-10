@@ -182,12 +182,13 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         const plate = (booking.vehicle_plate || bd.vehicle_plate || bd.vehicle?.plate || '').toUpperCase()
         const licenseNumber = c?.patente_numero || bd.customer?.driverLicense || ''
         const docNumber = c?.numero_documento || bd.customer?.documentNumber || ''
+        const isAzienda = c?.tipo_cliente === 'azienda'
 
-        if (!plate || !surname || !licenseNumber) {
-            const missing = []
-            if (!plate) missing.push('targa')
-            if (!surname) missing.push('cognome')
-            if (!licenseNumber) missing.push('patente')
+        const missing = []
+        if (!plate) missing.push('targa')
+        if (!surname) missing.push('cognome/denominazione')
+        if (!isAzienda && !licenseNumber) missing.push('patente')
+        if (missing.length > 0) {
             return { success: false, error: `Dati mancanti per CARGOS: ${missing.join(', ')}` }
         }
 
