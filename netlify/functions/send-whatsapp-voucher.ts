@@ -61,7 +61,7 @@ export const handler: Handler = async (event) => {
                 .replace(/{nome}/g, customer.nome || 'Cliente')
                 .replace(/{cognome}/g, customer.cognome || '');
 
-            const wrappedMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+            const wrappedMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
 
             const encodedMessage = encodeURIComponent(wrappedMessage);
             const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedMessage}&apikey=${CALLMEBOT_API_KEY}`;

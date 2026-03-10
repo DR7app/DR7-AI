@@ -162,7 +162,7 @@ export const handler: Handler = async (event) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chatId,
-                        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\nGentile *${signerName}*,\n\ndi seguito trova il contratto di noleggio n. *${contract.contract_number || ''}* da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore: trascorso questo termine, la prenotazione potrà decadere automaticamente come da policy.\n\nLa invitiamo quindi a completare la firma ora per confermare il noleggio.\n\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\nGentile *${signerName}*,\n\ndi seguito trova il contratto di noleggio n. *${contract.contract_number || ''}* da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore: trascorso questo termine, la prenotazione potrà decadere automaticamente come da policy.\n\nLa invitiamo quindi a completare la firma ora per confermare il noleggio.\n\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
                     })
                 })
 
