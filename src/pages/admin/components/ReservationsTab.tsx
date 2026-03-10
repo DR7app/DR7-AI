@@ -927,6 +927,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Then filter out service bookings from main bookings display
       const filteredBookings = (allBookings || []).filter(b =>
+        b.status !== 'deleted' &&
         b.service_type !== 'car_wash' &&
         b.service_type !== 'mechanical_service' &&
         b.service_type !== 'mechanical_service' &&
@@ -1569,59 +1570,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
 
-        // First, delete any related contracts to avoid foreign key constraint
-        const { error: contractDeleteError } = await supabase
-          .from('contracts')
-          .delete()
-          .eq('booking_id', bookingId)
+        // SOFT DELETE: Mark as deleted instead of permanently removing
+        // This preserves the booking record, contracts, and fatture
+        const { error: softDeleteError } = await supabase
+          .from('bookings')
+          .update({ status: 'deleted' })
+          .eq('id', bookingId)
 
-        if (contractDeleteError) {
-          console.warn('Failed to delete related contracts:', contractDeleteError)
-          // Don't fail the whole operation, just log it
-        }
-
-        // Try server-side deletion first (bypasses RLS)
-        try {
-          const response = await fetch('/.netlify/functions/delete-booking', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId })
-          })
-
-          const data = await response.json()
-
-          if (!response.ok) {
-            console.warn('Server-side deletion failed, attempting client-side fallback...', data.error)
-            throw new Error(data.error || 'Failed to delete booking')
-          }
-        } catch (serverError) {
-          // Fallback to client-side deletion (requires RLS fix)
-          console.log('Attempting client-side deletion fallback...')
-
-          // Try to cancel first to bypass constraints
-          await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
-
-          // Manually delete related records if server-side failed (Cascade emulation)
-          console.log('Client-side cascade: Deleting related records...')
-          await supabase.from('fatture').delete().eq('booking_id', bookingId)
-          await supabase.from('contracts').delete().eq('booking_id', bookingId)
-          await supabase.from('cauzioni').delete().eq('riferimento_contratto_id', bookingId)
-
-          const { error: clientError } = await supabase
-            .from('bookings')
-            .delete()
-            .eq('id', bookingId)
-
-          if (clientError) {
-            console.error('Client-side deletion also failed:', clientError)
-            // Throw the original server error if client error is about permissions, 
-            // otherwise throw client error
-            throw new Error(
-              clientError.code === '42501'
-                ? 'Permission denied. Please run the fix_bookings_rls.sql script in Supabase.'
-                : clientError.message
-            )
-          }
+        if (softDeleteError) {
+          throw new Error(softDeleteError.message)
         }
       } else {
         const reservation = reservations.find(r => r.id === bookingId)
@@ -2145,44 +2102,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Close modal
-      const bookingId = extendingBooking.id
       setShowExtendModal(false)
       setExtendingBooking(null)
 
-      // Refresh data to get the updated booking
+      // Refresh data
       await loadData()
-
-      // Automatically generate extension contract
-      {
-        console.log('[handleConfirmExtend] Generating extension addendum contract...')
-        try {
-          const response = await fetch('/.netlify/functions/generate-extension-contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId,
-              extensionData: {
-                previous_dropoff: extendingBooking.dropoff_date,
-                new_dropoff: newDropoffDateTime.toISOString(),
-                additional_amount: additionalAmount,
-                notes: extendData.notes
-              }
-            })
-          })
-
-          const result = await response.json()
-          if (result.success && result.url) {
-            alert('Contratto generato!')
-            window.open(result.url, '_blank')
-          } else {
-            console.error('[handleConfirmExtend] Extension contract error:', result.error)
-            alert('Errore: ' + (result.error || 'Errore sconosciuto'))
-          }
-        } catch (contractError: any) {
-          console.error('[handleConfirmExtend] Contract generation failed:', contractError)
-          alert('Errore: ' + contractError.message)
-        }
-      }
 
     } catch (error: any) {
       console.error('[handleConfirmExtend] Error:', error)

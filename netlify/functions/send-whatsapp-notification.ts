@@ -120,6 +120,7 @@ const handler: Handler = async (event) => {
         message += `*Note:* ${notes}\n`;
       }
       message += `\nCordiali Saluti,\nDR7`;
+      message += `\n\n_Messaggio automatico di sistema._`;
     } else if (serviceType === 'mechanical') {
       const appointmentDate = new Date(booking.appointment_date);
       const serviceName = booking.service_name || 'Servizio Meccanica';
@@ -170,6 +171,7 @@ const handler: Handler = async (event) => {
         message += `*Note:* ${notes}\n`;
       }
       message += `\nCordiali Saluti,\nDR7`;
+      message += `\n\n_Messaggio automatico di sistema._`;
     } else {
       // Car Rental Booking
       const vehicleName = booking.vehicle_name;
@@ -270,6 +272,7 @@ const handler: Handler = async (event) => {
 
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
       message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
+      message += `\n\n_Messaggio automatico di sistema._`;
     }
   } else {
     return {

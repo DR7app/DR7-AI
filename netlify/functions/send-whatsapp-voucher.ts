@@ -59,7 +59,8 @@ export const handler: Handler = async (event) => {
             // Personalize message
             const personalizedMessage = message
                 .replace(/{nome}/g, customer.nome || 'Cliente')
-                .replace(/{cognome}/g, customer.cognome || '');
+                .replace(/{cognome}/g, customer.cognome || '')
+                + '\n\n_Messaggio automatico di sistema._';
 
             const encodedMessage = encodeURIComponent(personalizedMessage);
             const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedMessage}&apikey=${CALLMEBOT_API_KEY}`;

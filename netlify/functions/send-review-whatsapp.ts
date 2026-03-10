@@ -18,7 +18,9 @@ Clicca qui per lasciare la recensione 👇🏻
 https://g.page/r/CQwgJt7OYpsfEBM/review
 
 Grazie mille!
-Dubai Rent 7.0 S.p.A.`;
+Dubai Rent 7.0 S.p.A.
+
+_Messaggio automatico di sistema._`;
 
 const reviewHandler: Handler = async (event) => {
   console.log('[Review WhatsApp] Starting automatic review message sender...');

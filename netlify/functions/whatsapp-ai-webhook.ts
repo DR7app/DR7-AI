@@ -187,7 +187,7 @@ async function sendWhatsAppMessage(chatId: string, message: string): Promise<boo
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chatId: chatId,
-        message: message,
+        message: message + '\n\n_Messaggio automatico di sistema._',
       }),
     });
 

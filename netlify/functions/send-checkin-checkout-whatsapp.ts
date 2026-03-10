@@ -143,6 +143,7 @@ const handler: Handler = async (event) => {
       if (cauzioneText) message += `*Cauzione:* ${cauzioneText}\n`;
       message += `\nTi aspettiamo! Per qualsiasi necessita non esitare a contattarci.\n\n`;
       message += `_DR7 Empire_`;
+      message += `\n\n_Messaggio automatico di sistema._`;
     } else {
       const dropoffDate = new Date(booking.dropoff_date);
       const returnTime =
@@ -170,6 +171,7 @@ const handler: Handler = async (event) => {
       }
       message += `\nTi preghiamo di riconsegnare il veicolo nelle stesse condizioni in cui lo hai ritirato.\n\n`;
       message += `Grazie per aver scelto DR7 Empire!`;
+      message += `\n\n_Messaggio automatico di sistema._`;
     }
 
     try {

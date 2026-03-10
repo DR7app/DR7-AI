@@ -20,7 +20,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, includeIVA = true, extensionAmount } = JSON.parse(event.body || '{}')
+        const { bookingId, includeIVA = true, extensionAmount, includePenalties = false } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return {
@@ -282,7 +282,14 @@ export const handler: Handler = async (event) => {
         const items = []
         let rentalDays = 1
 
-        if (extensionAmount && extensionAmount > 0) {
+        // When includePenalties is true and main booking is already paid,
+        // skip main items (they already have their own fattura) — only include penalties/danni
+        const mainAlreadyPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
+        const skipMainItems = includePenalties && mainAlreadyPaid
+
+        if (skipMainItems) {
+            // Main booking already invoiced — penalties/danni will be added below
+        } else if (extensionAmount && extensionAmount > 0) {
             // Extension invoice: single line for the additional amount
             const extGross = extensionAmount // Amount in EUR, includes IVA
             const vatRate = includeIVA ? 22 : 0
@@ -364,6 +371,60 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Include pending penalties and danni as line items (for "Segna Pagato Tutto")
+        if (includePenalties) {
+            const vatRate = includeIVA ? 22 : 0
+            const vatDivisor = 1.22
+
+            // Only include PENDING items (not already-paid ones that have their own fattura)
+            const penalties = bookingDetails.penalties || []
+            penalties.forEach((p: any) => {
+                if (p.paymentStatus === 'pending') {
+                    const gross = (p.total || (p.amount || 0) * (p.quantity || 1))
+                    if (gross > 0) {
+                        items.push({
+                            description: `Penale: ${p.label || 'Penale'}`,
+                            unit_price: gross / vatDivisor,
+                            quantity: 1,
+                            vat_rate: vatRate,
+                            total: gross / vatDivisor
+                        })
+                    }
+                }
+            })
+
+            const danni = bookingDetails.danni || []
+            danni.forEach((d: any) => {
+                if (d.paymentStatus === 'pending') {
+                    const gross = (d.total || (d.amount || 0) * (d.quantity || 1))
+                    if (gross > 0) {
+                        items.push({
+                            description: `Danno: ${d.label || 'Danno'}`,
+                            unit_price: gross / vatDivisor,
+                            quantity: 1,
+                            vat_rate: vatRate,
+                            total: gross / vatDivisor
+                        })
+                    }
+                }
+            })
+
+            // Only include PENDING extension amounts
+            const extensions = bookingDetails.extension_history || []
+            extensions.forEach((ext: any) => {
+                if (ext.payment_status === 'pending' && ext.additional_amount) {
+                    const extGross = ext.additional_amount
+                    items.push({
+                        description: `Estensione noleggio ${booking.vehicle_name || ''}`,
+                        unit_price: extGross / vatDivisor,
+                        quantity: 1,
+                        vat_rate: vatRate,
+                        total: extGross / vatDivisor
+                    })
+                }
+            })
+        }
+
         // Calculate totals
         let subtotal = 0
         let vatAmount = 0
@@ -387,7 +448,8 @@ export const handler: Handler = async (event) => {
             numero_fattura: invoiceNumber,
             data_emissione: italyDate,
             importo_totale: total,
-            stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded' ? 'paid' :
+            stato: includePenalties ? 'paid' :
+                (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
             customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || bookingCustomer.fullName || customerData?.nome || 'Cliente',
             customer_address: fullAddress || '',

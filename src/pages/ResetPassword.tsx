@@ -13,6 +13,12 @@ export default function ResetPassword() {
   const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
+    // Check URL hash for recovery token (handles race condition where event fires before listener)
+    const hash = window.location.hash
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=magiclink'))) {
+      setReady(true)
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setReady(true)

@@ -60,6 +60,7 @@ export default function UnpaidBookingsTab() {
         .from('bookings')
         .select('*')
         .neq('status', 'cancelled')
+        .neq('status', 'deleted')
         .neq('customer_name', 'Lavaggio Rientro')  // Exclude auto-generated car wash rientri
         .order('created_at', { ascending: false })
 
@@ -101,42 +102,67 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function updatePaymentStatus(bookingId: string, newStatus: string) {
+  async function markEverythingPaid(booking: UnpaidBooking) {
     try {
+      // 1. Generate ONE fattura FIRST (while penalties/danni are still 'pending' in DB)
+      //    This way the invoice function only picks up pending items, not previously-paid ones
+      try {
+        const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: booking.id, includeIVA: true, includePenalties: true })
+        })
+        if (invoiceRes.ok) {
+          const invoiceData = await invoiceRes.json()
+          toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata e inviata a SDI`)
+        }
+      } catch (invoiceErr) {
+        console.warn('Auto-invoice generation failed:', invoiceErr)
+      }
+
+      // 2. Build updated booking_details with all penalties/danni/extensions marked as paid
+      // Re-fetch booking to get latest state (invoice function may have been reading it)
+      const { data: freshBooking } = await supabase
+        .from('bookings')
+        .select('booking_details')
+        .eq('id', booking.id)
+        .single()
+
+      const details = { ...(freshBooking?.booking_details || booking.booking_details || {}) }
+
+      const penalties = (details.penalties || []).map((p: any) =>
+        p.paymentStatus === 'pending' ? { ...p, paymentStatus: 'paid' } : p
+      )
+      const danni = (details.danni || []).map((d: any) =>
+        d.paymentStatus === 'pending' ? { ...d, paymentStatus: 'paid' } : d
+      )
+      const extensions = (details.extension_history || []).map((ext: any) =>
+        ext.payment_status === 'pending' ? { ...ext, payment_status: 'paid' } : ext
+      )
+
+      // 3. Update everything in one DB call
       const { error } = await supabase
         .from('bookings')
         .update({
-          payment_status: newStatus,
-          status: newStatus === 'paid' ? 'confirmed' : 'pending'
+          payment_status: 'paid',
+          status: 'confirmed',
+          booking_details: {
+            ...details,
+            penalties,
+            danni,
+            extension_history: extensions
+          }
         })
-        .eq('id', bookingId)
+        .eq('id', booking.id)
 
       if (error) throw error
 
-      toast.success('Stato pagamento aggiornato!')
-
-      // Auto-generate fattura + send to SDI when marking as paid
-      if (newStatus === 'paid') {
-        try {
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId, includeIVA: true })
-          })
-          if (invoiceRes.ok) {
-            const invoiceData = await invoiceRes.json()
-            toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata e inviata a SDI`)
-          }
-        } catch (invoiceErr) {
-          console.warn('Auto-invoice generation failed:', invoiceErr)
-        }
-      }
-
+      toast.success('Tutto segnato come pagato!')
       loadUnpaidBookings()
     } catch (error: any) {
-      console.error('Failed to update payment status:', error)
+      console.error('Failed to mark everything as paid:', error)
       const errorMessage = error?.message || error?.details || JSON.stringify(error)
-      toast.error(`Errore nell'aggiornamento dello stato pagamento: ${errorMessage} (ID: ${bookingId.substring(0, 8)})`)
+      toast.error(`Errore nell'aggiornamento: ${errorMessage} (ID: ${booking.id.substring(0, 8)})`)
     }
   }
 
@@ -662,22 +688,12 @@ export default function UnpaidBookingsTab() {
             </div>
 
             <div className="flex gap-2 flex-wrap pt-2 border-t border-theme-border/50">
-              {(booking.payment_status === 'pending' || booking.payment_status === 'unpaid') && (
-                <button
-                  onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                  className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
-                >
-                  Segna Pagato
-                </button>
-              )}
-              {getPendingExtensions(booking).length > 0 && (
-                <button
-                  onClick={() => markExtensionsPaid(booking)}
-                  className="px-3 py-2 min-h-[44px] bg-purple-600 hover:bg-purple-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
-                >
-                  Estensioni Pagate
-                </button>
-              )}
+              <button
+                onClick={() => markEverythingPaid(booking)}
+                className="px-3 py-2 min-h-[44px] bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors flex-1"
+              >
+                Segna Pagato Tutto
+              </button>
               {isOnlyPenaltyDanni(booking) ? (
                 <button
                   onClick={() => removePendingPenaltiesDanni(booking)}
@@ -815,22 +831,12 @@ export default function UnpaidBookingsTab() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">
-                      {(booking.payment_status === 'pending' || booking.payment_status === 'unpaid') && (
-                        <button
-                          onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                        >
-                          Segna Pagato
-                        </button>
-                      )}
-                      {getPendingExtensions(booking).length > 0 && (
-                        <button
-                          onClick={() => markExtensionsPaid(booking)}
-                          className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
-                        >
-                          Estensioni Pagate
-                        </button>
-                      )}
+                      <button
+                        onClick={() => markEverythingPaid(booking)}
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded-full text-xs font-semibold transition-colors"
+                      >
+                        Segna Pagato Tutto
+                      </button>
                       {isOnlyPenaltyDanni(booking) ? (
                         <button
                           onClick={() => removePendingPenaltiesDanni(booking)}
