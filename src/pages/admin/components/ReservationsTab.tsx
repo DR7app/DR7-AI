@@ -336,7 +336,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     additional_amount: '0',
     extension_payment_status: 'pending' as 'paid' | 'pending',
     extension_payment_method: '',
-    notes: ''
+    notes: '',
+    change_vehicle: false,
+    new_vehicle_id: ''
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -1962,7 +1964,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       additional_amount: '0',
       extension_payment_status: 'pending',
       extension_payment_method: '',
-      notes: ''
+      notes: '',
+      change_vehicle: false,
+      new_vehicle_id: ''
     })
     setShowExtendModal(true)
   }
@@ -1991,6 +1995,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const additionalAmount = parseFloat(extendData.additional_amount) || 0
       const newTotal = extendingBooking.price_total + (additionalAmount * 100) // price_total is in cents
 
+      // Resolve new vehicle if car change requested
+      let newVehicle: Vehicle | null = null
+      if (extendData.change_vehicle && extendData.new_vehicle_id) {
+        newVehicle = vehicles.find(v => v.id === extendData.new_vehicle_id) || null
+      }
+
       // Update booking_details with extension info
       // Reset deposit_reminder_sent so IBAN message re-sends 60 min after the NEW dropoff
       const updatedBookingDetails = {
@@ -2000,6 +2010,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         iban_request_sent: false,
         day_before_reminder_sent: false,
         day_before_reminder_sent_at: null,
+        // Update vehicle info in booking_details if car changed
+        ...(newVehicle ? {
+          vehicle: {
+            ...extendingBooking.booking_details?.vehicle,
+            id: newVehicle.id,
+            name: newVehicle.display_name,
+            plate: newVehicle.plate || newVehicle.targa || '',
+          },
+          vehicle_id: newVehicle.id,
+        } : {}),
         extension_history: [
           ...(extendingBooking.booking_details?.extension_history || []),
           {
@@ -2008,20 +2028,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             new_dropoff: newDropoffDateTime.toISOString(),
             additional_amount: additionalAmount,
             payment_status: extendData.extension_payment_status, // 'paid' or 'pending'
-            notes: extendData.notes
+            notes: extendData.notes,
+            ...(newVehicle ? {
+              previous_vehicle_id: extendingBooking.vehicle_id,
+              previous_vehicle_name: extendingBooking.vehicle_name,
+              new_vehicle_id: newVehicle.id,
+              new_vehicle_name: newVehicle.display_name,
+            } : {})
           }
         ]
+      }
+
+      // Build update payload
+      const bookingUpdate: Record<string, any> = {
+        dropoff_date: newDropoffDateTime.toISOString(),
+        price_total: newTotal,
+        booking_details: updatedBookingDetails,
+        updated_at: new Date().toISOString()
+      }
+
+      // If car changed, update vehicle fields on the booking
+      if (newVehicle) {
+        bookingUpdate.vehicle_id = newVehicle.id
+        bookingUpdate.vehicle_name = newVehicle.display_name
+        bookingUpdate.vehicle_plate = newVehicle.plate || newVehicle.targa || ''
       }
 
       // Update the booking directly - NO validation checks
       const { error: updateError } = await supabase
         .from('bookings')
-        .update({
-          dropoff_date: newDropoffDateTime.toISOString(),
-          price_total: newTotal,
-          booking_details: updatedBookingDetails,
-          updated_at: new Date().toISOString()
-        })
+        .update(bookingUpdate)
         .eq('id', extendingBooking.id)
 
       if (updateError) {
@@ -2048,7 +2084,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
         extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
         extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
-        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        if (newVehicle) {
+          extensionMsg += `*Veicolo precedente:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+          extensionMsg += `*Nuovo veicolo:* ${newVehicle.display_name} (${newVehicle.plate || newVehicle.targa || ''})\n`
+        } else {
+          extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        }
         extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
@@ -2093,7 +2134,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             + `Confermiamo l'estensione della sua prenotazione.\n\n`
             + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
             + `*ID:* DR7-${bookingIdShort}\n`
-            + `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+            + (newVehicle
+              ? `*Nuovo veicolo:* ${newVehicle.display_name}\n`
+              : `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`)
             + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
             + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
             + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
@@ -2123,7 +2166,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           body: JSON.stringify({
             bookingId: extendingBooking.id,
             customerId: extendingBooking.user_id,
-            vehicleId: extendingBooking.vehicle_id,
+            vehicleId: newVehicle ? newVehicle.id : extendingBooking.vehicle_id,
             returnDate: newDropoffDateTime.toISOString(),
             depositAmount: depositAmount,
             paymentMethod: extendingBooking.payment_method || 'carta',
@@ -5201,6 +5244,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     ))}
                   </select>
                 </div>
+
+                {/* Vehicle Change Toggle */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={extendData.change_vehicle}
+                      onChange={(e) => setExtendData({ ...extendData, change_vehicle: e.target.checked, new_vehicle_id: '' })}
+                      className="w-4 h-4 accent-purple-500"
+                    />
+                    <span className="text-sm font-medium text-theme-text-secondary">Cambio Veicolo</span>
+                  </label>
+                </div>
+
+                {extendData.change_vehicle && (
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuovo Veicolo</label>
+                    <select
+                      value={extendData.new_vehicle_id}
+                      onChange={(e) => setExtendData({ ...extendData, new_vehicle_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">-- Seleziona veicolo --</option>
+                      {vehicles
+                        .filter(v => v.status !== 'retired' && v.id !== extendingBooking?.vehicle_id)
+                        .map(v => (
+                          <option key={v.id} value={v.id}>{v.display_name} ({v.plate || v.targa || 'N/A'})</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo Aggiuntivo (€)</label>

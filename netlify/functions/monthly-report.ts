@@ -315,19 +315,21 @@ async function generateVehicleReport(
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = (vehicle.display_name || '').trim().toLowerCase()
 
-    // Match bookings ONLY by plate (targa) - SOLO TARGA as requested
-    // Do NOT match by vehicle_id because the same vehicle_id can have different plates over time
+    // Match bookings by plate first, then by vehicle_id for bookings without a plate
+    // (website bookings store vehicle_id but not vehicle_plate)
     const vehicleBookings = rentalBookings.filter(b => {
-      // Skip if vehicle has no valid plate
-      if (!vPlate || vPlate.length < 4) return false
-
-      // Match by vehicle_plate field
       const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-      if (bPlate === vPlate) return true
-
-      // Also check booking_details for plate
       const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
-      if (detailsPlate === vPlate) return true
+
+      // 1. Match by plate (targa) — primary method
+      if (vPlate && vPlate.length >= 4) {
+        if (bPlate === vPlate) return true
+        if (detailsPlate === vPlate) return true
+      }
+
+      // 2. Match by vehicle_id — but ONLY if booking has NO plate stored
+      //    (avoids cross-plate matching when vehicle_id was reused with a new plate)
+      if (b.vehicle_id === vehicle.id && !bPlate && !detailsPlate) return true
 
       return false
     })
@@ -632,17 +634,20 @@ async function runDiagnostics(plate: string | undefined, monthStartISO: string, 
 
   // 5. Find bookings for the specific plate (if provided)
   if (plate) {
-    // SOLO TARGA matching - only by plate, NOT by vehicle_id
+    // Match by plate or by vehicle_id (for bookings without plate)
+    const matchedVehicleId = vehicles?.find(v =>
+      v.plate && v.plate.replace(/\s/g, '').toUpperCase() === plate
+    )?.id
     const plateBookings = allBookings?.filter(b => {
-      // Check vehicle_plate
       const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
       if (bPlate === plate) return true
 
-      // Check booking_details
       const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
       if (detailsPlate === plate) return true
 
-      // NO vehicle_id matching - SOLO TARGA
+      // Match by vehicle_id for bookings without plate stored
+      if (matchedVehicleId && b.vehicle_id === matchedVehicleId && !bPlate && !detailsPlate) return true
+
       return false
     })
 
