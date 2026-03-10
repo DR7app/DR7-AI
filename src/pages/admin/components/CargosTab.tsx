@@ -44,6 +44,9 @@ interface CustomerExtended {
     cap?: string
     nazionalita?: string
     telefono?: string
+    tipo_cliente?: string
+    denominazione?: string
+    partita_iva?: string
 }
 
 // ── CARGOS Field Sizes (46 fields, total 1505 chars) ─────────────────────────
