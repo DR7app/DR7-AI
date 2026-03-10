@@ -37,21 +37,10 @@ function getDaySet(
 }
 
 /**
- * Check if dropoff time is in the afternoon/evening (>= 14:00 Rome time).
- * Business rule: evening return = count that day, morning return = don't count it.
- */
-function isEveningReturn(dateStr: string): boolean {
-  const d = new Date(dateStr)
-  const romeHour = parseInt(d.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }))
-  return romeHour >= 14
-}
-
-/**
  * Compute billable days for a booking.
- * Business rule: calendar days between pickup and dropoff dates.
- * Morning return (before 14:00 Rome) = dropoff day NOT counted.
- * Evening return (>= 14:00 Rome) = dropoff day IS counted.
- * Same-day bookings = 1 day minimum.
+ * Business rule: start day inclusive, checkout (end) day exclusive.
+ * Feb 6 → Feb 7 = 1 day. Same-day bookings (Feb 6 → Feb 6) = 1 day minimum.
+ * Uses UTC to avoid DST issues.
  */
 function computeBillableDays(startDateStr: string, endDateStr: string): number {
   const start = startDateStr.substring(0, 10)
@@ -60,17 +49,18 @@ function computeBillableDays(startDateStr: string, endDateStr: string): number {
   const [eY, eM, eD] = end.split('-').map(Number)
   const startMs = Date.UTC(sY, sM - 1, sD)
   const endMs = Date.UTC(eY, eM - 1, eD)
-  const calendarDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
-  const eveningBonus = isEveningReturn(endDateStr) ? 1 : 0
-  return Math.max(1, calendarDays + eveningBonus)
+  const diffDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
+  return Math.max(1, diffDays)
 }
 
 /**
  * Returns occupied day-of-month numbers for a booking within a specific month.
- * Start day inclusive.
- * Morning return (<14:00 Rome) = checkout day excluded.
- * Evening return (>=14:00 Rome) = checkout day included.
+ * Start day inclusive, checkout (end) day exclusive.
  * Returns empty set if no occupied days in the given month.
+ *
+ * Key fix: a booking from a prior month whose checkout falls on day 1 of this
+ * month (e.g. Jan 31 → Feb 1) produces 0 occupied days in this month,
+ * NOT 1. The checkout day is when the car is returned — it's available.
  */
 function getOccupiedDaysInMonth(
   startDateStr: string,
@@ -84,7 +74,6 @@ function getOccupiedDaysInMonth(
   const dropoff = endDateStr.substring(0, 10)
   const [pY, pM, pD] = pickup.split('-').map(Number)
   const [dY, dM, dD] = dropoff.split('-').map(Number)
-  const eveningReturn = isEveningReturn(endDateStr)
 
   // First occupied day in this month
   let firstDay: number
@@ -96,13 +85,12 @@ function getOccupiedDaysInMonth(
     return days // booking starts after this month
   }
 
-  // Last occupied day in this month
-  // Morning return (<14:00) = exclude checkout day, evening return (>=14:00) = include it
+  // Last occupied day in this month (checkout day excluded)
   let lastDay: number
   if (dY > year || (dY === year && dM > monthNum)) {
     lastDay = daysInMonth // booking extends past this month
   } else if (dY === year && dM === monthNum) {
-    lastDay = eveningReturn ? dD : dD - 1 // evening return: count that day
+    lastDay = dD - 1 // checkout in this month: exclude checkout day
     if (lastDay < firstDay) {
       if (pY === year && pM === monthNum) {
         // Same-day booking within this month: count 1 day
@@ -244,72 +232,6 @@ async function generateVehicleReport(
     if (v.display_name) vehicleNameSet.add(v.display_name.trim().toLowerCase())
   })
 
-  // Fetch cauzioni incassate for this month (data_incasso not null = deposit was collected)
-  const { data: cauzioni, error: cauzioniError } = await supabase
-    .from('cauzioni')
-    .select('id, veicolo_id, importo, data_incasso, note')
-    .not('data_incasso', 'is', null)
-    .gte('data_incasso', monthStartISO)
-    .lte('data_incasso', monthEndISO)
-
-  if (cauzioniError) console.error('Cauzioni fetch error (non-fatal):', cauzioniError)
-
-  // Fetch all fatture for this month, filter penalty invoices in JS
-  const { data: fatture, error: fattureError } = await supabase
-    .from('fatture')
-    .select('id, booking_id, importo_totale, data_emissione, items')
-    .gte('data_emissione', monthStartISO)
-    .lte('data_emissione', monthEndISO)
-
-  if (fattureError) console.error('Fatture fetch error (non-fatal):', fattureError)
-
-  // Filter to penalty invoices (items[0].description starts with "Penale prenotazione")
-  const penaltyInvoices = (fatture || []).filter(f => {
-    const items = f.items as any[]
-    if (!items || items.length === 0) return false
-    return (items[0].description || '').startsWith('Penale prenotazione')
-  })
-
-  // Resolve penalty invoice booking_ids to vehicle plates
-  const penaltyBookingIds = penaltyInvoices.map(f => f.booking_id).filter(Boolean)
-  const penaltyBookingPlates = new Map<string, string>()
-  if (penaltyBookingIds.length > 0) {
-    const { data: penaltyBookings } = await supabase
-      .from('bookings')
-      .select('id, vehicle_plate')
-      .in('id', penaltyBookingIds)
-    ;(penaltyBookings || []).forEach(b => {
-      const plate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
-      if (plate) penaltyBookingPlates.set(b.id, plate)
-    })
-  }
-
-  // Build penalty details grouped by plate
-  const penaltyByPlate = new Map<string, { amount: number, date: string, description: string }[]>()
-  penaltyInvoices.forEach(f => {
-    const plate = penaltyBookingPlates.get(f.booking_id)
-    if (!plate) return
-    const items = f.items as any[]
-    if (!penaltyByPlate.has(plate)) penaltyByPlate.set(plate, [])
-    penaltyByPlate.get(plate)!.push({
-      amount: f.importo_totale || 0,
-      date: f.data_emissione,
-      description: items[0]?.description || 'Penale'
-    })
-  })
-
-  // Build cauzioni details grouped by vehicle_id
-  const cauzioniByVehicleId = new Map<string, { amount: number, date: string, description: string }[]>()
-  ;(cauzioni || []).forEach(c => {
-    if (!c.veicolo_id) return
-    if (!cauzioniByVehicleId.has(c.veicolo_id)) cauzioniByVehicleId.set(c.veicolo_id, [])
-    cauzioniByVehicleId.get(c.veicolo_id)!.push({
-      amount: c.importo || 0,
-      date: (c.data_incasso || '').substring(0, 10),
-      description: c.note || 'Cauzione incassata'
-    })
-  })
-
   // Build vehicle report
   const vehicleReports = (vehicles || []).map(vehicle => {
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
@@ -382,17 +304,16 @@ async function generateVehicleReport(
       }
 
       // Find end day in this month
-      // Business rule: morning return (<14:00) = don't count dropoff day, evening return (>=14:00) = count it
-      const eveningReturn = isEveningReturn(dropoffDateRaw)
+      // NOTE: Dropoff day is NOT counted - car is returned that day, so it's available
       let endDay: number
       if (dYear > year || (dYear === year && dMonth > monthNum)) {
         // Dropoff is after this month - car is rented until end of month
         endDay = daysInMonth
       } else if (dYear === year && dMonth === monthNum) {
-        // Dropoff is in this month
-        endDay = eveningReturn ? dDay : dDay - 1
+        // Dropoff is in this month - don't count the dropoff day itself
+        endDay = dDay - 1
         // Same-day booking in this month: count 1 day
-        // Cross-month checkout (pickup was before this month): check if any days
+        // Cross-month checkout (pickup was before this month): 0 days in this month
         if (endDay < startDay) {
           if (pYear === year && pMonth === monthNum) {
             endDay = startDay
@@ -460,20 +381,6 @@ async function generateVehicleReport(
       }
     })
 
-    // Calculate damage revenue for this vehicle
-    const damageDetails: { type: string, amount: number, date: string, description: string }[] = []
-    // Cauzioni incassate matched by veicolo_id
-    const vehicleCauzioni = cauzioniByVehicleId.get(vehicle.id) || []
-    vehicleCauzioni.forEach(c => {
-      damageDetails.push({ type: 'cauzione', amount: c.amount, date: c.date, description: c.description })
-    })
-    // Fatture penali matched by plate
-    const vehiclePenalties = penaltyByPlate.get(vPlate) || []
-    vehiclePenalties.forEach(p => {
-      damageDetails.push({ type: 'penale', amount: p.amount, date: p.date, description: p.description })
-    })
-    const damageRevenue = damageDetails.reduce((sum, d) => sum + d.amount, 0)
-
     // Calculate maintenance days from vehicle metadata (unavailability)
     const maintenanceDays = new Set<number>()
     const meta = vehicle.metadata || {}
@@ -511,8 +418,6 @@ async function generateVehicleReport(
       idleRate: Math.round((Math.max(0, idleCount) / daysInMonth) * 100) / 100,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
-      damageRevenue: Math.round(damageRevenue * 100) / 100,
-      damageDetails: damageDetails.length > 0 ? damageDetails : undefined,
       bookings: bookingDetailsList,
       _bookingIds: vehicleBookings.map(b => b.id)
     }
@@ -570,7 +475,6 @@ async function generateVehicleReport(
       totalBookingsFound: rentalBookings.length,
       unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
-      totalDamageRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + (v.damageRevenue || 0), 0) * 100) / 100,
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
     })
