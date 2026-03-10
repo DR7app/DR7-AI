@@ -117,6 +117,7 @@ export default function GestioneMulteTab() {
                     pdfFileName: multaFile?.name,
                     multaData,
                     driverData,
+                    letterText,
                 }),
             })
             const data = await res.json()

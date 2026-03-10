@@ -402,6 +402,7 @@ interface ProcessMultaRequest {
     // For sendPec
     multaData?: MultaData
     driverData?: DriverData
+    letterText?: string    // User-edited letter text (if not provided, auto-generated)
     pecTo?: string
     pecPassword?: string
     // For fullProcess — all of the above
@@ -468,10 +469,13 @@ const handler: Handler = async (event) => {
                     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Dati multa e conducente richiesti' }) }
                 }
 
-                const letterText = generateLetterText(req.multaData, req.driverData)
+                // Use user-edited letter if provided, otherwise auto-generate
+                const letterText = req.letterText || generateLetterText(req.multaData, req.driverData)
                 const subject = `Comunicazione dati conducente — Verbale n. ${req.multaData.numero_verbale || 'N/D'} — Targa ${req.driverData.vehicle_plate}`
 
                 const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
+
+                console.log(`[process-multa] sendPec: license_urls=${req.driverData.license_urls?.length || 0}, id_urls=${req.driverData.id_urls?.length || 0}, contract_url=${req.driverData.contract_url ? 'yes' : 'no'}, pdfBase64=${req.pdfBase64 ? 'yes' : 'no'}`)
 
                 // 1. Attach original multa PDF
                 if (req.pdfBase64) {
