@@ -30,11 +30,11 @@ export const handler: Handler = async (event) => {
 
         console.log('🔄 Syncing cauzione for booking:', bookingId)
 
-        // Validate required fields
-        if (!bookingId || !customerId || !vehicleId || !returnDate) {
+        // Validate required fields (customerId and vehicleId only required for new cauzioni)
+        if (!bookingId || !returnDate) {
             return {
                 statusCode: 400,
-                body: JSON.stringify({ error: 'Missing required fields' })
+                body: JSON.stringify({ error: 'Missing required fields: bookingId and returnDate are required' })
             }
         }
 
@@ -96,12 +96,26 @@ export const handler: Handler = async (event) => {
         }
 
         if (existingCauzione) {
-            // Update existing cauzione
+            // Update existing cauzione — only update return date and amount, don't reset incasso status
             console.log('📝 Updating existing cauzione:', existingCauzione.id)
+
+            const updateData: Record<string, any> = {
+                data_restituzione_veicolo: returnDate,
+                updated_at: new Date().toISOString(),
+            }
+            // Only update these if explicitly provided
+            if (customerId) updateData.cliente_id = customerId
+            if (vehicleId) updateData.veicolo_id = vehicleId
+            if (depositAmount > 0) updateData.importo = depositAmount
+            if (paymentMethod) updateData.metodo = cauzioneMetodo
+            // Only update data_incasso if explicitly setting to incassata, never reset an existing incasso
+            if (depositStatus === 'incassata' && !existingCauzione.data_incasso) {
+                updateData.data_incasso = new Date().toISOString()
+            }
 
             const { data: updatedCauzione, error: updateError } = await supabase
                 .from('cauzioni')
-                .update(cauzioneData)
+                .update(updateData)
                 .eq('id', existingCauzione.id)
                 .select()
                 .single()
@@ -122,7 +136,13 @@ export const handler: Handler = async (event) => {
                 })
             }
         } else {
-            // Create new cauzione
+            // Create new cauzione — customerId and vehicleId are required
+            if (!customerId || !vehicleId) {
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({ error: 'Missing customerId or vehicleId for new cauzione' })
+                }
+            }
             console.log('➕ Creating new cauzione for booking:', bookingId)
 
             const { data: newCauzione, error: insertError } = await supabase
