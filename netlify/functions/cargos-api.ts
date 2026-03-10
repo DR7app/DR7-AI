@@ -82,16 +82,26 @@ async function callCargosApi(
             opts.body = JSON.stringify(body)
         }
 
-        const res = await fetch(`${CARGOS_BASE_URL}/${endpoint}`, opts)
-
-        if (!res.ok) {
-            const errBody = await res.json().catch(() => ({}))
-            return { error: errBody.error_description || `HTTP ${res.status}: ${res.statusText}` }
+        console.log(`[cargos-api] ${method} ${CARGOS_BASE_URL}/${endpoint}`)
+        if (body && Array.isArray(body)) {
+            console.log(`[cargos-api] Sending ${body.length} records, first record length: ${body[0]?.length || 0}`)
         }
 
-        const data = await res.json()
+        const res = await fetch(`${CARGOS_BASE_URL}/${endpoint}`, opts)
+        const rawText = await res.text()
+        console.log(`[cargos-api] Response status: ${res.status}, body: ${rawText.substring(0, 500)}`)
+
+        if (!res.ok) {
+            let parsed: any = {}
+            try { parsed = JSON.parse(rawText) } catch {}
+            return { error: parsed.error_description || parsed.Message || `HTTP ${res.status}: ${res.statusText} — ${rawText.substring(0, 200)}` }
+        }
+
+        let data: any
+        try { data = JSON.parse(rawText) } catch { data = rawText }
         return { data }
     } catch (err: any) {
+        console.error(`[cargos-api] Error:`, err)
         return { error: `Errore: ${err.message}` }
     }
 }
