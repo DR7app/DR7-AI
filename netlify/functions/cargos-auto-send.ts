@@ -125,12 +125,18 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         // Fetch booking
         const { data: booking, error: bookingErr } = await supabase
             .from('bookings')
-            .select('id, pickup_date, dropoff_date, customer_name, customer_phone, vehicle_name, vehicle_plate, vehicle_id, booking_details, user_id, status')
+            .select('id, pickup_date, dropoff_date, customer_name, customer_phone, vehicle_name, vehicle_plate, vehicle_id, booking_details, user_id, status, service_type')
             .eq('id', bookingId)
             .single()
 
         if (bookingErr || !booking) {
             return { success: false, error: `Booking non trovato: ${bookingErr?.message || bookingId}` }
+        }
+
+        // Skip non-rental bookings (car wash, mechanical, etc.)
+        if (booking.service_type) {
+            console.log(`[cargos-auto-send] Service booking (${booking.service_type}) — skipping CARGOS`)
+            return { success: true }
         }
 
         // Skip test vehicles

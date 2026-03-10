@@ -272,20 +272,23 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
         issues.push({ field: 'Cognome', message: 'Cognome conducente mancante', severity: 'error' })
     }
 
-    if (c?.tipo_cliente !== 'azienda' && !c?.patente_numero && !booking.booking_details?.customer?.driverLicense) {
-        issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'error' })
-    }
+    // These fields are only required for persona fisica, not azienda
+    if (c?.tipo_cliente !== 'azienda') {
+        if (!c?.patente_numero && !booking.booking_details?.customer?.driverLicense) {
+            issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'error' })
+        }
 
-    if (!c?.data_nascita && !booking.booking_details?.customer?.birthDate) {
-        issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'error' })
-    }
+        if (!c?.data_nascita && !booking.booking_details?.customer?.birthDate) {
+            issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'error' })
+        }
 
-    if (!c?.numero_documento && !booking.booking_details?.customer?.documentNumber) {
-        issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
-    }
+        if (!c?.numero_documento && !booking.booking_details?.customer?.documentNumber) {
+            issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
+        }
 
-    if (!c?.luogo_nascita) {
-        issues.push({ field: 'Luogo Nascita', message: 'Luogo di nascita mancante — verrà usato Cagliari', severity: 'warning' })
+        if (!c?.luogo_nascita) {
+            issues.push({ field: 'Luogo Nascita', message: 'Luogo di nascita mancante — verrà usato Cagliari', severity: 'warning' })
+        }
     }
 
     return issues
@@ -372,22 +375,26 @@ export default function CargosTab() {
                 .select(`
                     id, pickup_date, dropoff_date, customer_name, customer_email,
                     customer_phone, vehicle_name, vehicle_plate, vehicle_id,
-                    booking_details, user_id, status
+                    booking_details, user_id, status, service_type
                 `)
                 .gte('pickup_date', startOfDay.toISOString())
                 .lte('pickup_date', endOfDay.toISOString())
                 .not('status', 'in', '(cancelled,annullata)')
 
             if (error) throw error
-            if (!rawBookings || rawBookings.length === 0) {
-                toast('Nessuna prenotazione per questa data', { icon: 'ℹ️' })
+
+            // Filter out car wash and mechanical bookings — only rental bookings go to CARGOS
+            const rentalBookings = (rawBookings || []).filter((b: any) => !b.service_type || b.service_type === '')
+
+            if (rentalBookings.length === 0) {
+                toast('Nessuna prenotazione noleggio per questa data', { icon: 'ℹ️' })
                 setLoading(false)
                 return
             }
 
             // Enrich with customer data
             const enriched: BookingForCargos[] = await Promise.all(
-                rawBookings.map(async (b) => {
+                rentalBookings.map(async (b) => {
                     let customerData: CustomerExtended | null = null
                     if (b.user_id) {
                         const { data: c } = await supabase
