@@ -414,7 +414,8 @@ export default function CargosTab() {
                             .single()
                         if (c) customerData = c
                     }
-                    return { ...b, customerData, cargosStatus: 'pending' as const }
+                    const alreadySent = b.booking_details?.cargos_sent === true
+                    return { ...b, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
                 })
             )
 
@@ -487,16 +488,35 @@ export default function CargosTab() {
             })
             const sendData = await sendRes.json()
 
+            console.log('[CARGOS] Send response:', sendData)
+
             if (sendData.error) {
                 toast.error('Invio CARGOS fallito: ' + sendData.error)
                 setSendResult({ success: 0, errors: selected.length, details: sendData.error })
             } else {
-                toast.success(`${selected.length} contratti inviati a CARGOS!`)
-                setSendResult({ success: selected.length, errors: 0 })
-                // Mark as sent
+                toast.success(`${selected.length} contratti inviati a CARGOS con successo!`, { duration: 5000 })
+                setSendResult({ success: selected.length, errors: 0, details: JSON.stringify(sendData.data || sendData) })
+                // Mark as sent in UI
                 setBookings(prev => prev.map(b =>
                     selectedIds.has(b.id) ? { ...b, cargosStatus: 'sent' as const } : b
                 ))
+                // Persist cargos_sent in booking_details
+                for (const b of selected) {
+                    try {
+                        await supabase
+                            .from('bookings')
+                            .update({
+                                booking_details: {
+                                    ...b.booking_details,
+                                    cargos_sent: true,
+                                    cargos_sent_at: new Date().toISOString(),
+                                }
+                            })
+                            .eq('id', b.id)
+                    } catch (e) {
+                        console.error('[CARGOS] Failed to persist cargos_sent for', b.id, e)
+                    }
+                }
             }
         } catch (err: any) {
             toast.error('Errore invio: ' + err.message)
@@ -900,7 +920,9 @@ export default function CargosTab() {
                                                     </td>
                                                     <td className="px-3 py-2.5 font-mono text-xs">
                                                         {b.customerData?.patente_numero || b.booking_details?.customer?.driverLicense || (
-                                                            <span className="text-yellow-500">Mancante</span>
+                                                            b.customerData?.tipo_cliente === 'azienda'
+                                                                ? <span className="text-theme-text-muted">Azienda</span>
+                                                                : <span className="text-yellow-500">Mancante</span>
                                                         )}
                                                     </td>
                                                     <td className="px-3 py-2.5">
