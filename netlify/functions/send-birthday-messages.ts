@@ -29,9 +29,7 @@ Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo li
 
 Con stima,
 Dubai Rent 7.0 S.p.A.
-Ogni compleanno merita uno stile all'altezza.
-
-_Messaggio automatico di sistema._`;
+Ogni compleanno merita uno stile all'altezza.`;
 
 // Generate unique discount code
 function generateDiscountCode(): string {
@@ -213,7 +211,7 @@ const birthdayHandler: Handler = async (event) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chatId: `${cleanPhone}@c.us`,
-            message: personalizedMessage
+            message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
           })
         });
 
