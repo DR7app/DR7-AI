@@ -146,7 +146,21 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     let patenteNumero = ''
 
     // Try to find customer in customers_extended: first by user_id, then by email
-    let customerFound = false
+    let customerExtendedId = '' // The actual ID in customers_extended (used for storage lookups)
+
+    const applyCustomerData = (c: any) => {
+        customerExtendedId = c.id || ''
+        cognome = c.cognome || ''
+        nome = c.nome || ''
+        codiceFiscale = c.codice_fiscale || ''
+        dataNascita = c.data_nascita || ''
+        luogoNascita = c.luogo_nascita || ''
+        indirizzo = c.indirizzo || ''
+        citta = c.citta || ''
+        provincia = c.provincia || ''
+        cap = c.cap || c.codice_postale || ''
+        patenteNumero = c.patente_numero || ''
+    }
 
     if (match.user_id) {
         const { data: c } = await supabase
@@ -154,43 +168,17 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
             .select('*')
             .eq('id', match.user_id)
             .maybeSingle()
-
-        if (c) {
-            customerFound = true
-            cognome = c.cognome || ''
-            nome = c.nome || ''
-            codiceFiscale = c.codice_fiscale || ''
-            dataNascita = c.data_nascita || ''
-            luogoNascita = c.luogo_nascita || ''
-            indirizzo = c.indirizzo || ''
-            citta = c.citta || ''
-            provincia = c.provincia || ''
-            cap = c.cap || c.codice_postale || ''
-            patenteNumero = c.patente_numero || ''
-        }
+        if (c) applyCustomerData(c)
     }
 
     // Fallback: search by email if user_id didn't work
-    if (!customerFound && match.customer_email) {
+    if (!customerExtendedId && match.customer_email) {
         const { data: c } = await supabase
             .from('customers_extended')
             .select('*')
             .eq('email', match.customer_email)
             .maybeSingle()
-
-        if (c) {
-            customerFound = true
-            cognome = c.cognome || ''
-            nome = c.nome || ''
-            codiceFiscale = c.codice_fiscale || ''
-            dataNascita = c.data_nascita || ''
-            luogoNascita = c.luogo_nascita || ''
-            indirizzo = c.indirizzo || ''
-            citta = c.citta || ''
-            provincia = c.provincia || ''
-            cap = c.cap || c.codice_postale || ''
-            patenteNumero = c.patente_numero || ''
-        }
+        if (c) applyCustomerData(c)
     }
 
     // Fallback name splitting
@@ -215,8 +203,11 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     const licenseUrls: string[] = []
     const idUrls: string[] = []
 
-    // Look up documents using user_id or customer email-based folder
-    const storageUserId = match.user_id || (match.customer_email ? match.customer_email : null)
+    // Storage folder = customers_extended.id (same ID used by admin upload)
+    // Try: customerExtendedId first, then booking.user_id as fallback
+    const storageUserId = customerExtendedId || match.user_id
+
+    console.log(`[process-multa] Customer lookup: customerExtendedId=${customerExtendedId}, booking.user_id=${match.user_id}, storageUserId=${storageUserId}`)
 
     if (storageUserId) {
         const BUCKETS = [
