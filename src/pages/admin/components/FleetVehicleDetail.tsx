@@ -740,6 +740,26 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
+                                    <div>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Prezzo Residenti (€/giorno)</label>
+                                        <input
+                                            type="number"
+                                            value={editedVehicle.price_resident_daily ?? ''}
+                                            onChange={(e) => updateField('price_resident_daily', e.target.value ? parseFloat(e.target.value) : null)}
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            placeholder="Es. 349"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Prezzo Non Residenti (€/giorno)</label>
+                                        <input
+                                            type="number"
+                                            value={editedVehicle.price_nonresident_daily ?? ''}
+                                            onChange={(e) => updateField('price_nonresident_daily', e.target.value ? parseFloat(e.target.value) : null)}
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            placeholder="Es. 449"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
