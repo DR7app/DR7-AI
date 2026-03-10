@@ -61,16 +61,44 @@ export const handler: Handler = async (event) => {
         }
 
         // Check if cauzione already exists for this booking
-        const { data: existingCauzione, error: fetchError } = await supabase
+        let existingCauzione: any = null
+        let fetchError: any = null
+
+        // First try matching by booking ID
+        const { data: byBooking, error: byBookingErr } = await supabase
             .from('cauzioni')
             .select('*')
             .eq('riferimento_contratto_id', bookingId)
             .maybeSingle()
 
-        if (fetchError) {
-            console.error('Error fetching existing cauzione:', fetchError)
-            throw new Error(`Failed to fetch existing cauzione: ${fetchError.message}`)
+        if (byBookingErr && byBookingErr.code !== 'PGRST116') {
+            console.error('Error fetching cauzione by booking:', byBookingErr)
         }
+
+        existingCauzione = byBooking
+
+        // If not found by booking, try matching by customer ID (cauzioni follow the client)
+        if (!existingCauzione && customerId) {
+            const { data: byCustomer, error: byCustomerErr } = await supabase
+                .from('cauzioni')
+                .select('*')
+                .eq('cliente_id', customerId)
+                .not('stato', 'in', '("Restituita","Sbloccata")')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+
+            if (byCustomerErr && byCustomerErr.code !== 'PGRST116') {
+                console.error('Error fetching cauzione by customer:', byCustomerErr)
+            }
+
+            if (byCustomer) {
+                existingCauzione = byCustomer
+                console.log(`📌 Found cauzione by cliente_id instead of bookingId: ${byCustomer.id}`)
+            }
+        }
+
+        fetchError = null // handled above
 
         // Determine payment method based on booking payment method
         let cauzioneMetodo: 'bonifico' | 'carta' | 'preautorizzazione' = paymentMethod || 'carta'
@@ -124,6 +152,7 @@ export const handler: Handler = async (event) => {
             const updateData: Record<string, any> = {
                 data_restituzione_veicolo: returnDate,
                 scadenza_cauzione: scadenzaDate,
+                riferimento_contratto_id: bookingId,
                 updated_at: new Date().toISOString(),
             }
             // Only update these if explicitly provided
