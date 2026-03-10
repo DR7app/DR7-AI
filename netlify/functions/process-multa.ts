@@ -159,7 +159,7 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
         citta = c.citta || ''
         provincia = c.provincia || ''
         cap = c.cap || c.codice_postale || ''
-        patenteNumero = c.patente_numero || ''
+        patenteNumero = c.numero_patente || c.patente || ''
     }
 
     if (match.user_id) {
@@ -207,19 +207,24 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     }
 
     // 3. Fallback: search contracts storage bucket for files matching customer name
+    //    Contracts are named like contratto_Patrizio.pdf or contratto_Campagnola.pdf
     if (!contractUrl) {
-        const customerName = (match.customer_name || '').split(/\s+/)[0] // first name
-        if (customerName) {
-            // Check 'filled/' folder and root of contracts bucket
+        const nameParts = (match.customer_name || '').trim().split(/\s+/).filter(Boolean)
+        // Also include nome/cognome from customers_extended
+        if (nome && !nameParts.includes(nome)) nameParts.push(nome)
+        if (cognome && !nameParts.includes(cognome)) nameParts.push(cognome)
+
+        if (nameParts.length > 0) {
             for (const folder of ['filled', 'signed', '']) {
                 const { data: files } = await supabase.storage
                     .from('contracts')
                     .list(folder || undefined, { limit: 200, sortBy: { column: 'created_at', order: 'desc' } })
                 if (files) {
-                    const contractFile = files.find(f =>
-                        f.name.toLowerCase().includes(customerName.toLowerCase()) &&
-                        f.name.endsWith('.pdf')
-                    )
+                    const contractFile = files.find(f => {
+                        if (!f.name.endsWith('.pdf')) return false
+                        const lower = f.name.toLowerCase()
+                        return nameParts.some(part => lower.includes(part.toLowerCase()))
+                    })
                     if (contractFile) {
                         const path = folder ? `${folder}/${contractFile.name}` : contractFile.name
                         const { data: signed } = await supabase.storage
