@@ -221,6 +221,15 @@ export const handler: Handler = async (event) => {
         const exemptAmount = totalAmount
         const total = totalAmount
 
+        // Skip fattura if total is 0
+        if (total <= 0) {
+            console.log('[Penalty Invoice] Total is €0 — skipping fattura generation')
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Importo totale €0 — fattura non generata', skipped: true })
+            }
+        }
+
         // Create invoice
         const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
         const invoiceData = {
