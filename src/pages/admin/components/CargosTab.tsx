@@ -63,28 +63,41 @@ function padField(value: string, maxLen: number): string {
     return (value || '').substring(0, maxLen).padEnd(maxLen, ' ')
 }
 
-// Known ISTAT codes for common cities (Sardinia focus)
+// CARGOS location codes (9-digit, from reference table 1 - COMUNI_STATI)
+// Format: prefix + standard ISTAT code
 const ISTAT_CODES: Record<string, string> = {
-    'CAGLIARI': '092009',
-    'SASSARI': '092066',
-    'NUORO': '091051',
-    'ORISTANO': '095032',
-    'QUARTU SANT\'ELENA': '092051',
-    'OLBIA': '090044',
-    'ALGHERO': '090003',
-    'CARBONIA': '111006',
-    'IGLESIAS': '111032',
-    'ROMA': '058091',
-    'MILANO': '015146',
-    'TORINO': '001272',
-    'NAPOLI': '063049',
-    'FIRENZE': '048017',
-    'BOLOGNA': '037006',
-    'PALERMO': '082053',
-    'GENOVA': '010025',
-    'BARI': '072006',
-    'CATANIA': '087015',
-    'VENEZIA': '027042',
+    'CAGLIARI': '420092009',
+    'SASSARI': '420090064',
+    'NUORO': '420091051',
+    'ORISTANO': '420092555',
+    'QUARTU SANT\'ELENA': '420092051',
+    'OLBIA': '420090047',
+    'ALGHERO': '420090003',
+    'CARBONIA': '420092012',
+    'IGLESIAS': '420092033',
+    'SELARGIUS': '420092068',
+    'MONSERRATO': '420092109',
+    'VILLACIDRO': '420092092',
+    'SANLURI': '420092057',
+    'LANUSEI': '420091037',
+    'ROMA': '412058091',
+    'MILANO': '403015146',
+    'TORINO': '401001272',
+    'NAPOLI': '415063049',
+    'FIRENZE': '409048017',
+    'BOLOGNA': '408037006',
+    'PALERMO': '419082053',
+    'GENOVA': '407010025',
+    'BARI': '416072006',
+    'CATANIA': '419087015',
+    'VENEZIA': '405027042',
+    // Nationality codes (states)
+    'ITALIA': '100000100',
+    'ITALY': '100000100',
+    'FRANCIA': '100000215',
+    'FRANCE': '100000215',
+    'GERMANIA': '100000216',
+    'GERMANY': '100000216',
 }
 
 // Payment type (field 2) — C=Contanti, B=Bonifico, K=Carta, etc.
@@ -121,7 +134,7 @@ const DOC_TYPE_MAP: Record<string, string> = {
 const AGENCY = {
     id: 'RENTORA',
     name: 'RENTORA',
-    locationCode: '092009', // Cagliari ISTAT
+    locationCode: '420092009', // Cagliari CARGOS code
     address: 'VIALE MARCONI 229 - CAGLIARI (CA)',
     phone: '3472817258',
 }
@@ -179,9 +192,9 @@ function guessVehicleModel(vehicleName: string): string {
 }
 
 function lookupIstatCode(cityName: string): string {
-    if (!cityName) return '092009' // Default Cagliari
+    if (!cityName) return '420092009' // Default Cagliari
     const upper = cityName.toUpperCase().trim()
-    return ISTAT_CODES[upper] || '092009' // Fallback Cagliari
+    return ISTAT_CODES[upper] || '420092009' // Fallback Cagliari
 }
 
 function getPaymentType(booking: BookingForCargos): string {
@@ -244,7 +257,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 23 */ firstName.toUpperCase(),
         /* 24 */ formatDateOnlyCargos(c?.data_nascita || bd.customer?.birthDate || ''),
         /* 25 */ lookupIstatCode(c?.luogo_nascita || bd.customer?.birthPlace || ''),
-        /* 26 */ lookupIstatCode(c?.nazionalita || 'CAGLIARI'), // Nationality code — default IT
+        /* 26 */ lookupIstatCode(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
         /* 27 */ lookupIstatCode(c?.citta || ''),
         /* 28 */ `${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`.trim(),
         /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || 'CI'] || 'IDENT',

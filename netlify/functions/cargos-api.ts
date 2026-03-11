@@ -23,7 +23,7 @@ const CARGOS_BASE_URL = 'https://cargos.poliziadistato.it/CARGOS_API'
 const AGENCY = {
     id: 'RENTORA',
     name: 'RENTORA',
-    locationCode: '092009', // ISTAT code for Cagliari
+    locationCode: '420092009', // CARGOS code for Cagliari
     address: 'VIALE MARCONI 229 - CAGLIARI (CA)',
     phone: '3472817258',
 }
