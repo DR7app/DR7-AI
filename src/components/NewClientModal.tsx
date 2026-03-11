@@ -49,6 +49,7 @@ interface ClientFormData {
   pec_azienda: string
   nome_rappresentante: string
   cognome_rappresentante: string
+  data_nascita_rappresentante: string
   cf_rappresentante: string
   ruolo_rappresentante: string
   tipo_documento_rappresentante: string
@@ -101,6 +102,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     pec_azienda: '',
     nome_rappresentante: '',
     cognome_rappresentante: '',
+    data_nascita_rappresentante: '',
     cf_rappresentante: '',
     ruolo_rappresentante: '',
     tipo_documento_rappresentante: '',
@@ -179,6 +181,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           pec_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.pec || '') : '',
           nome_rappresentante: initialData.nome_rappresentante || '',
           cognome_rappresentante: initialData.cognome_rappresentante || '',
+          data_nascita_rappresentante: initialData.data_nascita_rappresentante || '',
           cf_rappresentante: initialData.cf_rappresentante || '',
           ruolo_rappresentante: initialData.ruolo_rappresentante || '',
           tipo_documento_rappresentante: initialData.tipo_documento_rappresentante || '',
@@ -229,6 +232,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           pec_azienda: '',
           nome_rappresentante: '',
           cognome_rappresentante: '',
+          data_nascita_rappresentante: '',
           cf_rappresentante: '',
           ruolo_rappresentante: '',
           tipo_documento_rappresentante: '',
@@ -423,6 +427,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         // Legal representative information
         customerData.nome_rappresentante = formData.nome_rappresentante
         customerData.cognome_rappresentante = formData.cognome_rappresentante
+        if (formData.data_nascita_rappresentante) customerData.data_nascita_rappresentante = formData.data_nascita_rappresentante
         customerData.cf_rappresentante = formData.cf_rappresentante.toUpperCase()
         if (formData.ruolo_rappresentante) customerData.ruolo_rappresentante = formData.ruolo_rappresentante
         if (formData.tipo_documento_rappresentante) customerData.tipo_documento_rappresentante = formData.tipo_documento_rappresentante
@@ -522,6 +527,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       pec_azienda: '',
       nome_rappresentante: '',
       cognome_rappresentante: '',
+      data_nascita_rappresentante: '',
       cf_rappresentante: '',
       ruolo_rappresentante: '',
       tipo_documento_rappresentante: '',
@@ -1070,7 +1076,18 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                      Data di Nascita
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.data_nascita_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, data_nascita_rappresentante: e.target.value })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Codice Fiscale *

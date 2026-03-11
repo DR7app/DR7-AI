@@ -38,6 +38,7 @@ interface CustomerExtended {
     patente_rilasciata_da?: string
     nome_rappresentante?: string
     cognome_rappresentante?: string
+    data_nascita_rappresentante?: string
     cf_rappresentante?: string
     tipo_documento?: string
     numero_documento?: string
@@ -258,10 +259,15 @@ function buildCargosRecord(booking: BookingForCargos): string {
         }
     }
 
-    // For azienda, extract birth date from rappresentante CF if data_nascita is missing
-    let birthDate = c?.data_nascita || bd.customer?.birthDate || ''
-    if (!birthDate && c?.tipo_cliente === 'azienda' && c?.cf_rappresentante) {
-        birthDate = birthDateFromCF(c.cf_rappresentante) // already DD/MM/YYYY
+    // For azienda, use rappresentante birth date, then extract from CF as fallback
+    let birthDate = ''
+    if (c?.tipo_cliente === 'azienda') {
+        birthDate = c?.data_nascita_rappresentante || c?.data_nascita || ''
+        if (!birthDate && c?.cf_rappresentante) {
+            birthDate = birthDateFromCF(c.cf_rappresentante) // DD/MM/YYYY from CF
+        }
+    } else {
+        birthDate = c?.data_nascita || bd.customer?.birthDate || ''
     }
 
     // Second driver from booking_details

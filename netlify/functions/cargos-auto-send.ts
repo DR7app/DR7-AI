@@ -257,10 +257,14 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             /* 22 */ surname.toUpperCase(),
             /* 23 */ firstName.toUpperCase(),
             /* 24 */ (() => {
+                if (isAzienda) {
+                    const bd2 = c?.data_nascita_rappresentante || c?.data_nascita || ''
+                    if (bd2) return formatDateOnlyCargos(bd2)
+                    if (c?.cf_rappresentante) return birthDateFromCF(c.cf_rappresentante)
+                    return ''
+                }
                 const bd2 = c?.data_nascita || bd.customer?.birthDate || ''
-                if (bd2) return formatDateOnlyCargos(bd2)
-                if (isAzienda && c?.cf_rappresentante) return birthDateFromCF(c.cf_rappresentante)
-                return ''
+                return bd2 ? formatDateOnlyCargos(bd2) : ''
             })(),
             /* 25 */ lookupIstatCode(c?.luogo_nascita || bd.customer?.birthPlace || ''),
             /* 26 */ lookupIstatCode(c?.nazionalita || 'CAGLIARI'),
