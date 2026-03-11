@@ -33,7 +33,8 @@ interface CustomerExtended {
     data_nascita?: string
     luogo_nascita?: string
     codice_fiscale?: string
-    patente_numero?: string
+    numero_patente?: string
+    patente_numero?: string  // legacy alias
     patente_rilasciata_da?: string
     tipo_documento?: string
     numero_documento?: string
@@ -268,7 +269,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || 'CI'] || 'IDENT',
         /* 30 */ c?.numero_documento || bd.customer?.documentNumber || '',
         /* 31 */ lookupIstatCode(c?.citta || ''),
-        /* 32 */ c?.patente_numero || bd.customer?.driverLicense || '',
+        /* 32 */ c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || '',
         /* 33 */ lookupIstatCode(c?.patente_rilasciata_da || c?.citta || ''),
         /* 34 */ c?.telefono || booking.customer_phone || '',
         /* 35 */ driver2?.cognome || driver2?.surname || '',
@@ -279,7 +280,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 40 */ '',  // Driver 2 doc type
         /* 41 */ '',  // Driver 2 doc number
         /* 42 */ '',  // Driver 2 doc issue place
-        /* 43 */ driver2?.patente_numero || driver2?.licenseNumber || '',
+        /* 43 */ driver2?.numero_patente || driver2?.patente_numero || driver2?.licenseNumber || '',
         /* 44 */ lookupIstatCode(driver2?.luogo_nascita || ''),
         /* 45 */ driver2?.telefono || driver2?.phone || '',
     ]
@@ -315,7 +316,7 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
 
     // These fields are only required for persona fisica, not azienda
     if (c?.tipo_cliente !== 'azienda') {
-        if (!c?.patente_numero && !booking.booking_details?.customer?.driverLicense) {
+        if (!c?.numero_patente && !c?.patente_numero && !booking.booking_details?.customer?.driverLicense) {
             issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'error' })
         }
 
@@ -639,7 +640,7 @@ export default function CargosTab() {
                 name.toUpperCase(),
                 formatDateOnlyCargos(c?.data_nascita || ''),
                 c?.luogo_nascita || '',
-                c?.patente_numero || '',
+                c?.numero_patente || c?.patente_numero || '',
                 c?.tipo_documento || 'CI',
                 c?.numero_documento || '',
                 c?.telefono || b.customer_phone || ''
@@ -673,7 +674,7 @@ export default function CargosTab() {
             xml += `    <Restituzione data="${formatDateCargos(b.dropoff_date)}" luogo="${AGENCY.locationCode}" indirizzo="${AGENCY.address}"/>\n`
             xml += `    <Agenzia id="${AGENCY.id}" nome="${AGENCY.name}" indirizzo="${AGENCY.address}" tel="${AGENCY.phone}"/>\n`
             xml += `    <Veicolo tipo="${guessVehicleType(b.vehicle_name || '')}" marca="${guessVehicleBrand(b.vehicle_name || '')}" modello="${guessVehicleModel(b.vehicle_name || '')}" targa="${b.vehicle_plate || ''}"/>\n`
-            xml += `    <Conducente cognome="${surname.toUpperCase()}" nome="${name.toUpperCase()}" nascita="${formatDateOnlyCargos(c?.data_nascita || '')}" luogoNascita="${c?.luogo_nascita || ''}" patente="${c?.patente_numero || ''}" documento="${c?.numero_documento || ''}" tel="${c?.telefono || b.customer_phone || ''}"/>\n`
+            xml += `    <Conducente cognome="${surname.toUpperCase()}" nome="${name.toUpperCase()}" nascita="${formatDateOnlyCargos(c?.data_nascita || '')}" luogoNascita="${c?.luogo_nascita || ''}" patente="${c?.numero_patente || c?.patente_numero || ''}" documento="${c?.numero_documento || ''}" tel="${c?.telefono || b.customer_phone || ''}"/>\n`
             xml += `  </Contratto>\n`
         })
 
@@ -950,7 +951,7 @@ export default function CargosTab() {
                                                         {new Date(b.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                                                     </td>
                                                     <td className="px-3 py-2.5 font-mono text-xs">
-                                                        {b.customerData?.patente_numero || b.booking_details?.customer?.driverLicense || (
+                                                        {b.customerData?.numero_patente || b.customerData?.patente_numero || b.booking_details?.customer?.driverLicense || (
                                                             b.customerData?.tipo_cliente === 'azienda'
                                                                 ? <span className="text-theme-text-muted">Azienda</span>
                                                                 : <span className="text-yellow-500">Mancante</span>

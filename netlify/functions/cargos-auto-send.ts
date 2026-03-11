@@ -186,7 +186,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
 
         // Validate minimum required fields
         const plate = (booking.vehicle_plate || bd.vehicle_plate || bd.vehicle?.plate || '').toUpperCase()
-        const licenseNumber = c?.patente_numero || bd.customer?.driverLicense || ''
+        const licenseNumber = c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
         const docNumber = c?.numero_documento || bd.customer?.documentNumber || ''
         const isAzienda = c?.tipo_cliente === 'azienda'
 
@@ -250,7 +250,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             /* 40 */ '',
             /* 41 */ '',
             /* 42 */ '',
-            /* 43 */ driver2?.patente_numero || driver2?.licenseNumber || '',
+            /* 43 */ driver2?.numero_patente || driver2?.patente_numero || driver2?.licenseNumber || '',
             /* 44 */ lookupIstatCode(driver2?.luogo_nascita || ''),
             /* 45 */ driver2?.telefono || driver2?.phone || '',
         ]
