@@ -47,6 +47,16 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Guard: never generate fattura for unpaid bookings
+        const paymentStatus = booking.payment_status || ''
+        if (paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded') {
+            console.log(`[Invoice] Skipping — booking ${bookingId} not paid (status: ${paymentStatus})`)
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Booking non pagato. Fattura non generata.' })
+            }
+        }
+
         // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
         const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
         const isTestVehicle = vehicleName === 'test'

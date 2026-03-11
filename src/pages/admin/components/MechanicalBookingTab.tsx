@@ -149,6 +149,13 @@ export default function MechanicalBookingTab() {
   async function handleGenerateInvoice(booking: MechanicalBooking) {
     if (!booking.id) return
 
+    // Never generate fattura for unpaid bookings
+    const ps = booking.payment_status
+    if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
+      toast.error('Impossibile generare fattura: la prenotazione non è stata pagata')
+      return
+    }
+
     // Include IVA (22%) in invoice breakdown
     const includeIVA = true
 

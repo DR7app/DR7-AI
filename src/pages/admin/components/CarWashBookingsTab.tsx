@@ -566,6 +566,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   async function handleGenerateInvoice(booking: CarWashBooking) {
     if (!booking.id) return
 
+    // Never generate fattura for unpaid bookings
+    const ps = booking.payment_status
+    if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
+      toast.error('Impossibile generare fattura: il lavaggio non è stato pagato')
+      return
+    }
+
     // Include IVA (22%) in invoice breakdown
     const includeIVA = true
 
@@ -731,30 +738,33 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     console.log('✅ Booking created successfully:', data)
 
-    // Generate fattura for car wash booking (also sends to SDI if customer has codice fiscale)
-    try {
-      const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: data.id, includeIVA: true })
-      })
-      if (invoiceResponse.ok) {
-        const invoiceData = await invoiceResponse.json()
-        console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
-      } else {
-        const errData = await invoiceResponse.json().catch(() => ({}))
-        const errMsg = errData.message || errData.error || invoiceResponse.statusText
-        console.warn('⚠️ Fattura generation failed:', errMsg)
-        // Open customer edit modal if missing data (address/codice fiscale)
-        if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
-          toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
-          openEditCustomer(formData.customer_id)
+    // Generate fattura ONLY if paid — never for unpaid bookings
+    const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
+    if (isPaid) {
+      try {
+        const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: data.id, includeIVA: true })
+        })
+        if (invoiceResponse.ok) {
+          const invoiceData = await invoiceResponse.json()
+          console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
         } else {
-          toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+          const errData = await invoiceResponse.json().catch(() => ({}))
+          const errMsg = errData.message || errData.error || invoiceResponse.statusText
+          console.warn('⚠️ Fattura generation failed:', errMsg)
+          // Open customer edit modal if missing data (address/codice fiscale)
+          if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
+            toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
+            openEditCustomer(formData.customer_id)
+          } else {
+            toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+          }
         }
+      } catch (invoiceError) {
+        console.error('⚠️ Failed to generate fattura:', invoiceError)
       }
-    } catch (invoiceError) {
-      console.error('⚠️ Failed to generate fattura:', invoiceError)
     }
 
     // Send WhatsApp notification
