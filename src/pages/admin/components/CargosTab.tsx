@@ -502,6 +502,7 @@ export default function CargosTab() {
                             .maybeSingle()
                         if (c) customerData = c
                     }
+                    console.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, cf_rapp=${customerData?.cf_rappresentante || 'N/A'}`)
                     const alreadySent = b.booking_details?.cargos_sent === true
                     return { ...b, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
                 })
