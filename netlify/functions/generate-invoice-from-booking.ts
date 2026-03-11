@@ -121,6 +121,27 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // 2b. Fallback: Try by customer_name in customers_extended
+        if (!customerData && booking.customer_name) {
+            console.log(`Fallback: Fetching by name from customers_extended: ${booking.customer_name}`)
+            const nameParts = booking.customer_name.trim().split(/\s+/)
+            if (nameParts.length >= 2) {
+                const nome = nameParts.slice(0, -1).join(' ')
+                const cognome = nameParts[nameParts.length - 1]
+                const { data } = await supabase
+                    .from('customers_extended')
+                    .select('*')
+                    .ilike('nome', nome)
+                    .ilike('cognome', cognome)
+                    .limit(1)
+                    .maybeSingle()
+                if (data) {
+                    customerData = data
+                    console.log('✅ Found customer by Name (extended)')
+                }
+            }
+        }
+
         // 3. Fallback: Try basic customers table
         if (!customerData && resolvedEmail) {
             console.log('Fallback: Fetching by email from basic customers...')
@@ -173,11 +194,11 @@ export const handler: Handler = async (event) => {
         if (customerData) {
             const addressParts = []
             // Check various potential address fields
-            const street = customerData.indirizzo || customerData.address || customerData.street || ''
+            const street = customerData.indirizzo || customerData.sede_legale || customerData.address || customerData.street || ''
             const num = customerData.numero_civico || customerData.streetNumber || ''
-            const zip = customerData.codice_postale || customerData.zipCode || customerData.zip || ''
-            const city = customerData.citta_residenza || customerData.city || ''
-            const prov = (customerData.provincia_residenza || customerData.province || '').toUpperCase().trim()
+            const zip = customerData.codice_postale || customerData.cap || customerData.zipCode || customerData.zip || ''
+            const city = customerData.citta_residenza || customerData.citta || customerData.city || ''
+            const prov = (customerData.provincia_residenza || customerData.provincia || customerData.province || '').toUpperCase().trim()
 
             if (street) {
                 let streetAddress = street
