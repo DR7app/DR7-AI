@@ -25,6 +25,7 @@ export default function FirmaPage() {
     const [remainingAttempts, setRemainingAttempts] = useState(5)
     const [acceptedTerms, setAcceptedTerms] = useState(false)
     const [acceptedMarketing, setAcceptedMarketing] = useState<boolean | null>(null)
+    const [existingMarketingConsent, setExistingMarketingConsent] = useState<boolean | null>(null)
     const [showMarketingInfo, setShowMarketingInfo] = useState(false)
     const [otpChannel, setOtpChannel] = useState<'whatsapp' | 'email' | null>(null)
     const otpRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -58,6 +59,14 @@ export default function FirmaPage() {
             setSignerEmail(data.signerEmail)
             setContract(data.contract)
             if (data.otpChannel) setOtpChannel(data.otpChannel)
+
+            // If customer already consented to marketing, pre-fill and skip the question
+            if (data.existingMarketingConsent === true) {
+                setExistingMarketingConsent(true)
+                setAcceptedMarketing(true)
+            } else {
+                setExistingMarketingConsent(data.existingMarketingConsent ?? null)
+            }
 
             if (data.status === 'signed') {
                 setSignedPdfUrl(data.signedPdfUrl)
@@ -141,7 +150,8 @@ export default function FirmaPage() {
             return
         }
 
-        if (acceptedMarketing === null) {
+        // Only require a marketing answer if the customer hasn't already answered
+        if (acceptedMarketing === null && existingMarketingConsent === null) {
             setError('Seleziona Si o No per le offerte Trustera')
             return
         }
@@ -402,43 +412,49 @@ export default function FirmaPage() {
                             </span>
                         </label>
 
-                        <div className="mb-6">
-                            <p className="text-sm text-gray-700 mb-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowMarketingInfo(true)}
-                                    className="underline text-yellow-700 hover:text-yellow-800 transition-colors"
-                                >
-                                    Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
-                                </button>
-                            </p>
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="marketing"
-                                        checked={acceptedMarketing === true}
-                                        onChange={() => setAcceptedMarketing(true)}
-                                        className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Si</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="marketing"
-                                        checked={acceptedMarketing === false}
-                                        onChange={() => setAcceptedMarketing(false)}
-                                        className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">No</span>
-                                </label>
+                        {existingMarketingConsent === true ? (
+                            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
+                                Consenso marketing gia registrato
                             </div>
-                        </div>
+                        ) : (
+                            <div className="mb-6">
+                                <p className="text-sm text-gray-700 mb-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMarketingInfo(true)}
+                                        className="underline text-yellow-700 hover:text-yellow-800 transition-colors"
+                                    >
+                                        Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
+                                    </button>
+                                </p>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="marketing"
+                                            checked={acceptedMarketing === true}
+                                            onChange={() => setAcceptedMarketing(true)}
+                                            className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">Si</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="marketing"
+                                            checked={acceptedMarketing === false}
+                                            onChange={() => setAcceptedMarketing(false)}
+                                            className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">No</span>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
 
                         <button
                             onClick={handleSign}
-                            disabled={!acceptedTerms || acceptedMarketing === null}
+                            disabled={!acceptedTerms || (existingMarketingConsent !== true && acceptedMarketing === null)}
                             className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-lg transition-colors text-lg"
                         >
                             Firma il Documento

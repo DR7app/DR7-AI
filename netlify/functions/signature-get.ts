@@ -44,12 +44,14 @@ export const handler: Handler = async (event) => {
             .eq('id', sigRequest.contract_id)
             .single()
 
-        // Check if booking has a second driver
+        // Check if booking has a second driver, and fetch existing marketing consent
         let secondDriverName: string | null = null
+        let existingMarketingConsent: boolean | null = null
+
         if (contract?.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('booking_details')
+                .select('booking_details, customer_email')
                 .eq('id', contract.booking_id)
                 .single()
 
@@ -57,6 +59,21 @@ export const handler: Handler = async (event) => {
                 const sd = booking.booking_details.second_driver
                 secondDriverName = sd.fullName || sd.full_name || sd.name ||
                     [sd.nome, sd.cognome].filter(Boolean).join(' ') || null
+            }
+
+            // Look up existing marketing consent from customers_extended
+            const customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email
+            if (customerEmail) {
+                const { data: extCustomer } = await supabase
+                    .from('customers_extended')
+                    .select('marketing_consent')
+                    .eq('email', customerEmail)
+                    .maybeSingle()
+
+                if (extCustomer) {
+                    // null means never asked, true/false means already recorded
+                    existingMarketingConsent = extCustomer.marketing_consent ?? null
+                }
             }
         }
 
@@ -80,6 +97,7 @@ export const handler: Handler = async (event) => {
                 signedPdfUrl: sigRequest.signed_pdf_url,
                 signedAt: sigRequest.signed_at,
                 secondDriverName,
+                existingMarketingConsent,
                 contract: contract ? {
                     contractNumber: contract.contract_number,
                     pdfUrl: contract.pdf_url,

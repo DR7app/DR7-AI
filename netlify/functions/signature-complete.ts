@@ -325,7 +325,7 @@ export const handler: Handler = async (event) => {
             }
         })
 
-        // Save marketing consent on customer record if provided
+        // Save marketing consent on customer record — NEVER overwrite true with false (GDPR: consent once given is kept)
         if (marketingConsent !== undefined && contract.booking_id) {
             try {
                 const { data: booking } = await supabase
@@ -336,14 +336,31 @@ export const handler: Handler = async (event) => {
 
                 const customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email
                 if (customerEmail) {
-                    await supabase
+                    // Fetch the current consent state before writing
+                    const { data: existingCustomer } = await supabase
                         .from('customers_extended')
-                        .update({
-                            marketing_consent: !!marketingConsent,
-                            marketing_consent_date: signedAt.toISOString()
-                        })
+                        .select('marketing_consent')
                         .eq('email', customerEmail)
-                    console.log(`[signature-complete] Marketing consent (${marketingConsent}) saved for ${customerEmail}`)
+                        .maybeSingle()
+
+                    const currentConsent = existingCustomer?.marketing_consent ?? null
+
+                    // Only update if:
+                    // - New consent is true (always record a yes)
+                    // - OR current consent is null (no record yet — record even a no)
+                    // NEVER overwrite true with false
+                    if (currentConsent !== true || !!marketingConsent === true) {
+                        await supabase
+                            .from('customers_extended')
+                            .update({
+                                marketing_consent: !!marketingConsent,
+                                marketing_consent_date: signedAt.toISOString()
+                            })
+                            .eq('email', customerEmail)
+                        console.log(`[signature-complete] Marketing consent (${marketingConsent}) saved for ${customerEmail}`)
+                    } else {
+                        console.log(`[signature-complete] Skipping consent update for ${customerEmail}: existing=true, new=false — kept as true`)
+                    }
                 }
             } catch (mcErr: any) {
                 console.error('[signature-complete] Failed to save marketing consent:', mcErr.message)
