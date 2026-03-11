@@ -186,6 +186,8 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
 
         const c = customerData
         const bd = booking.booking_details || {}
+        const meta = c?.metadata || {}
+        const rapp = meta?.rappresentante || {}
 
         // Split customer name — handle azienda vs persona fisica
         let surname = ''
@@ -195,7 +197,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         if (isAzienda) {
             surname = c?.denominazione || c?.cognome || booking.customer_name || ''
             // CARGOS requires NOME even for azienda — use legal representative or repeat denominazione
-            firstName = c?.nome_rappresentante || c?.nome || surname
+            firstName = c?.nome_rappresentante || rapp.nome || c?.nome || surname
         } else {
             surname = c?.cognome || ''
             firstName = c?.nome || ''
@@ -258,9 +260,10 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             /* 23 */ firstName.toUpperCase(),
             /* 24 */ (() => {
                 if (isAzienda) {
-                    const bd2 = c?.data_nascita_rappresentante || c?.data_nascita || ''
+                    const bd2 = c?.data_nascita_rappresentante || rapp.data_nascita || c?.data_nascita || ''
                     if (bd2) return formatDateOnlyCargos(bd2)
-                    if (c?.cf_rappresentante) return birthDateFromCF(c.cf_rappresentante)
+                    const cfToTry = c?.cf_rappresentante || rapp.cf || ''
+                    if (cfToTry && cfToTry.length === 16) return birthDateFromCF(cfToTry)
                     return ''
                 }
                 const bd2 = c?.data_nascita || bd.customer?.birthDate || ''

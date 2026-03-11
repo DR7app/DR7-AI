@@ -243,7 +243,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
     if (c?.tipo_cliente === 'azienda') {
         surname = c?.denominazione || c?.cognome || booking.customer_name || ''
         // CARGOS requires NOME even for azienda — use legal representative or repeat denominazione
-        firstName = c?.nome_rappresentante || c?.nome || surname
+        firstName = c?.nome_rappresentante || rapp.nome || c?.nome || surname
     } else {
         surname = c?.cognome || ''
         firstName = c?.nome || ''
@@ -264,7 +264,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         birthDate = c?.data_nascita_rappresentante || rapp.data_nascita || c?.data_nascita || ''
         if (!birthDate) {
             // Try extracting from CF rappresentante (16-char personal codice fiscale)
-            const cfToTry = c?.cf_rappresentante || rapp.codice_fiscale || (c?.codice_fiscale?.length === 16 ? c.codice_fiscale : '')
+            const cfToTry = c?.cf_rappresentante || rapp.cf || rapp.codice_fiscale || (c?.codice_fiscale?.length === 16 ? c.codice_fiscale : '')
             if (cfToTry && cfToTry.length === 16) {
                 birthDate = birthDateFromCF(cfToTry)
             }
