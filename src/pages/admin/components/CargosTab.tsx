@@ -311,7 +311,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 30 */ c?.numero_documento || rapp.documento?.numero || bd.customer?.documentNumber || '',
         /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ (() => {
-            if (isAzienda) {
+            if (c?.tipo_cliente === 'azienda') {
                 return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || 'N/D'
             }
             return c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
