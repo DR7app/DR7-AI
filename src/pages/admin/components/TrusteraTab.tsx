@@ -111,15 +111,31 @@ export default function TrusteraTab() {
 
     setUploading(true)
     try {
-      const fileName = `documents/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-      const { error: uploadError } = await supabase.storage
-        .from('contracts')
-        .upload(fileName, file, { contentType: 'application/pdf', upsert: false })
+      // Convert file to base64 and upload via Netlify function (service role)
+      const reader = new FileReader()
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string
+          resolve(result.split(',')[1]) // Remove data:...;base64, prefix
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
 
-      if (uploadError) throw uploadError
+      const res = await fetch('/.netlify/functions/upload-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: base64,
+          fileName: file.name,
+          contentType: 'application/pdf'
+        })
+      })
 
-      const { data: publicUrl } = supabase.storage.from('contracts').getPublicUrl(fileName)
-      setUploadedUrl(publicUrl.publicUrl)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload fallito')
+
+      setUploadedUrl(data.url)
       setUploadedFileName(file.name)
 
       if (!formData.documentName) {
@@ -183,6 +199,20 @@ export default function TrusteraTab() {
     setCustomerSearch('')
     setCustomerResults([])
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Eliminare questa richiesta di firma?')) return
+    try {
+      // Delete audit trail first (FK constraint)
+      await supabase.from('signature_audit_trail').delete().eq('signature_request_id', id)
+      const { error } = await supabase.from('signature_requests').delete().eq('id', id)
+      if (error) throw error
+      toast.success('Richiesta eliminata')
+      loadRequests()
+    } catch (err: any) {
+      toast.error('Errore eliminazione: ' + err.message)
+    }
   }
 
   function getStatusBadge(status: string) {
@@ -392,6 +422,12 @@ export default function TrusteraTab() {
                         Firmato
                       </button>
                     )}
+                    <button
+                      onClick={() => handleDelete(req.id)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-full text-sm transition-colors text-center"
+                    >
+                      Elimina
+                    </button>
                   </div>
                 </div>
               </div>
