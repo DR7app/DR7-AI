@@ -265,6 +265,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           contatti_cliente: '',
           rappresentante_nome: '',
           rappresentante_cognome: '',
+          rappresentante_data_nascita: '',
+          rappresentante_luogo_nascita: '',
           rappresentante_cf: '',
           rappresentante_ruolo: '',
           rappresentante_doc_tipo: '',
