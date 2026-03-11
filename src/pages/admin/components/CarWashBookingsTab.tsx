@@ -2279,7 +2279,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 if (!custId && editingBooking.customer_name) {
                                   const match = customers.find(c =>
                                     (c.email && editingBooking.customer_email && c.email === editingBooking.customer_email) ||
-                                    (`${c.nome || ''} ${c.cognome || ''}`.trim().toLowerCase() === editingBooking.customer_name.toLowerCase())
+                                    ((c.full_name || '').toLowerCase() === editingBooking.customer_name.toLowerCase())
                                   )
                                   if (match) custId = match.id
                                 }
