@@ -278,10 +278,23 @@ export const handler: Handler = async (event) => {
         if (!extensionAmount) {
             const { data } = await supabase
                 .from('fatture')
-                .select('id, numero_fattura')
+                .select('id, numero_fattura, sdi_status, aruba_invoice_id')
                 .eq('booking_id', bookingId)
                 .single()
             existingInvoice = data
+
+            // If fattura already exists and was already sent to SDI, return it immediately
+            if (existingInvoice && (existingInvoice.sdi_status === 'sending' || existingInvoice.sdi_status === 'sent' || existingInvoice.sdi_status === 'delivered' || existingInvoice.aruba_invoice_id)) {
+                console.log(`[Invoice] Fattura ${existingInvoice.numero_fattura} already sent to SDI — returning existing`)
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({
+                        error: 'Fattura già inviata a SDI',
+                        invoiceNumber: existingInvoice.numero_fattura,
+                        message: `Fattura ${existingInvoice.numero_fattura} già esistente e inviata a SDI.`
+                    })
+                }
+            }
         }
 
         let invoiceNumber: string
