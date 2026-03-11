@@ -78,12 +78,25 @@ async function getToken(password?: string): Promise<{ token?: string; error?: st
             return { error: body.error_description || `HTTP ${res.status}: ${res.statusText}` }
         }
 
-        const data = await res.json()
-        // The token endpoint returns a token object with access_token
-        const rawToken = typeof data === 'string' ? data : data.access_token || data.token
-        if (!rawToken) {
-            return { error: 'Token non ricevuto dal server CARGOS' }
+        const rawText = await res.text()
+        console.log(`[cargos-api] Token response status: ${res.status}, body: ${rawText.substring(0, 500)}`)
+
+        let data: any
+        try { data = JSON.parse(rawText) } catch { data = rawText }
+
+        // The token endpoint may return: a plain string, { access_token }, { token_type, access_token, expires_date }, etc.
+        let rawToken: string | undefined
+        if (typeof data === 'string') {
+            // Could be a plain token string (possibly with quotes)
+            rawToken = data.replace(/^"|"$/g, '')
+        } else if (data && typeof data === 'object') {
+            rawToken = data.access_token || data.token || data.Token || data.AccessToken
         }
+
+        if (!rawToken) {
+            return { error: `Token non ricevuto dal server CARGOS. Risposta: ${rawText.substring(0, 200)}` }
+        }
+        console.log(`[cargos-api] Raw token received (length: ${rawToken.length})`)
 
         // Encrypt the token with ApiKey (AES-256-CBC) as required by CARGOS
         const apiKey = CARGOS_APIKEY
