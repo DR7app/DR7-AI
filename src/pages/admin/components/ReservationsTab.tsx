@@ -4726,7 +4726,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden lg:block  rounded-lg overflow-hidden">
+        <div className="hidden lg:block rounded-lg overflow-x-auto">
           <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
             <table className="w-full min-w-max">
               <thead className="sticky top-0 z-10">
@@ -4756,7 +4756,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
                     <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px] truncate" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
                         {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
@@ -4811,8 +4811,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                       </td>
-                      <td className="px-3 py-3 text-sm whitespace-nowrap">
-                        <div className="flex gap-2 items-center">
+                      <td className="px-3 py-3 text-sm">
+                        <div className="flex flex-wrap gap-2 items-center">
                           {booking.status !== 'cancelled' && (
                             <>
                               <button
