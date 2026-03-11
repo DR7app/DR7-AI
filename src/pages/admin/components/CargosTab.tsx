@@ -284,7 +284,13 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 45 */ driver2?.telefono || driver2?.phone || '',
     ]
 
-    return fields.map((val, i) => padField(String(val), FIELD_SIZES[i])).join('')
+    // Sanitize all text fields (skip date fields 1,3,6,24,37 and code fields 2,4,7,12,15,20,21,25,26,27,29,31,33,38,39,42,44)
+    const codeFields = new Set([1,2,3,4,6,7,12,15,20,21,24,25,26,27,29,31,33,37,38,39,42,44])
+    return fields.map((val, i) => {
+        const s = String(val)
+        const clean = codeFields.has(i) ? s : sanitizeCargos(s)
+        return padField(clean, FIELD_SIZES[i])
+    }).join('')
 }
 
 // ── Validation ───────────────────────────────────────────────────────────────
