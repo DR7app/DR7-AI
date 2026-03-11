@@ -10,12 +10,8 @@ import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '.
 interface Customer {
   id: string
   full_name: string
-  nome?: string
-  cognome?: string
-  ragione_sociale?: string
   email: string | null
   phone: string | null
-  telefono?: string | null
 }
 
 interface CarWashBooking {
