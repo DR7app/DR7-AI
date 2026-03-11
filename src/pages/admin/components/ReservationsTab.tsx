@@ -4676,14 +4676,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         >
                           Contratto
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
-                          disabled={generatingContract}
-                          className={`px-3 py-1 ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-orange-600/30 hover:bg-orange-600/50 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
-                          title="Rigenera contratto con dati aggiornati"
-                        >
-                          {generatingContract ? '...' : 'Rigenera'}
-                        </button>
                         {/* Fattura Button (Mobile) */}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
@@ -4823,20 +4815,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div className="flex gap-2 items-center">
                           {booking.status !== 'cancelled' && (
                             <>
-                              {(booking.booking_details?.contract_generated_at || booking.contract_url) && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(booking.contract_url, '_blank') }}
-                                  className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
-                                >
-                                  Contratto
-                                </button>
-                              )}
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
-                                disabled={generatingContract}
-                                className={`px-3 py-1 ${(booking.booking_details?.contract_generated_at || booking.contract_url) ? 'bg-orange-600/30 hover:bg-orange-600/50' : 'bg-green-600/30 hover:bg-green-600/50'} rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap disabled:opacity-50`}
+                                onClick={(e) => { e.stopPropagation(); booking.contract_url ? window.open(booking.contract_url, '_blank') : handleGenerateContract(booking) }}
+                                disabled={!booking.contract_url && generatingContract}
+                                className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap disabled:opacity-50"
                               >
-                                {generatingContract ? '...' : (booking.booking_details?.contract_generated_at || booking.contract_url) ? 'Rigenera' : 'Contratto'}
+                                {!booking.contract_url && generatingContract ? '...' : 'Contratto'}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
@@ -5055,21 +5039,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                  {selectedBooking.status !== 'cancelled' && selectedBooking.contract_url && (
-                    <button
-                      onClick={() => window.open(selectedBooking.contract_url, '_blank')}
-                      className="flex-1 px-4 py-3 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary transition-colors font-medium"
-                    >
-                      Scarica Contratto
-                    </button>
-                  )}
                   {selectedBooking.status !== 'cancelled' && (
                     <button
-                      onClick={() => handleGenerateContract(selectedBooking)}
-                      disabled={generatingContract}
-                      className={`flex-1 px-4 py-3 ${selectedBooking.contract_url ? 'bg-orange-600/30 hover:bg-orange-600/50' : 'bg-green-600/30 hover:bg-green-600/50'} rounded-full text-theme-text-primary transition-colors font-medium disabled:opacity-50`}
+                      onClick={() => selectedBooking.contract_url ? window.open(selectedBooking.contract_url, '_blank') : handleGenerateContract(selectedBooking)}
+                      disabled={!selectedBooking.contract_url && generatingContract}
+                      className="flex-1 px-4 py-3 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary transition-colors font-medium disabled:opacity-50"
                     >
-                      {generatingContract ? 'Generazione in corso...' : selectedBooking.contract_url ? 'Rigenera Contratto' : 'Genera Contratto'}
+                      {!selectedBooking.contract_url && generatingContract ? 'Generazione in corso...' : selectedBooking.contract_url ? 'Scarica Contratto' : 'Genera Contratto'}
                     </button>
                   )}
                   {selectedBooking.status !== 'cancelled' && selectedBooking.booking_details?.deposit && selectedBooking.booking_details.deposit > 0 && (
