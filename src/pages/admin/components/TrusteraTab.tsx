@@ -496,10 +496,33 @@ function MarketingConsentSubTab() {
       const { data, error } = await supabase
         .from('customers_extended')
         .select('id, nome, cognome, denominazione, email, telefono, marketing_consent, marketing_consent_date')
+        .not('email', 'is', null)
+        .neq('email', '')
         .order('marketing_consent_date', { ascending: false, nullsFirst: false })
 
       if (error) throw error
-      setCustomers(data || [])
+
+      // Deduplicate by email (case-insensitive) — keep the one with consent data, or the most recent
+      const emailMap = new Map<string, CustomerConsent>()
+      for (const c of (data || [])) {
+        const key = c.email.toLowerCase().trim()
+        const existing = emailMap.get(key)
+        if (!existing) {
+          emailMap.set(key, c)
+        } else {
+          // Prefer the one with consent answered, or the one with a name
+          const existingHasConsent = existing.marketing_consent !== null
+          const newHasConsent = c.marketing_consent !== null
+          const existingHasName = !!(existing.denominazione || existing.nome || existing.cognome)
+          const newHasName = !!(c.denominazione || c.nome || c.cognome)
+
+          if ((!existingHasConsent && newHasConsent) || (!existingHasName && newHasName)) {
+            emailMap.set(key, c)
+          }
+        }
+      }
+
+      setCustomers(Array.from(emailMap.values()))
     } catch (err: any) {
       console.error('Failed to load customers:', err)
       toast.error('Errore caricamento clienti')
