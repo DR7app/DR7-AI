@@ -135,11 +135,16 @@ const AGENCY = {
     id: 'RENTORA',
     name: 'RENTORA',
     locationCode: '420092009', // Cagliari CARGOS code
-    address: 'VIALE MARCONI 229 - CAGLIARI (CA)',
+    address: 'VIALE MARCONI 229, CAGLIARI CA',
     phone: '3472817258',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Sanitize strings for CARGOS: only allow letters, accented chars, numbers, space, . , '
+function sanitizeCargos(value: string): string {
+    return (value || '').replace(/[^a-zA-Z0-9àèìòùäöüßÀÈÌÒÙÄÖÜ \.,'/]/g, ' ').replace(/\s+/g, ' ').trim()
+}
 
 function formatDateCargos(isoDate: string): string {
     // Convert ISO date to DD/MM/YYYY HH:MM
@@ -259,7 +264,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 25 */ lookupIstatCode(c?.luogo_nascita || bd.customer?.birthPlace || ''),
         /* 26 */ lookupIstatCode(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
         /* 27 */ lookupIstatCode(c?.citta || ''),
-        /* 28 */ `${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`.trim(),
+        /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
         /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || 'CI'] || 'IDENT',
         /* 30 */ c?.numero_documento || bd.customer?.documentNumber || '',
         /* 31 */ lookupIstatCode(c?.citta || ''),

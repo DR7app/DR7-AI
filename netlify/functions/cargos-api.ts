@@ -24,7 +24,7 @@ const AGENCY = {
     id: 'RENTORA',
     name: 'RENTORA',
     locationCode: '420092009', // CARGOS code for Cagliari
-    address: 'VIALE MARCONI 229 - CAGLIARI (CA)',
+    address: 'VIALE MARCONI 229, CAGLIARI CA',
     phone: '3472817258',
 }
 
