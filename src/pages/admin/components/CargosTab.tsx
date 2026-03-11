@@ -265,6 +265,11 @@ function buildCargosRecord(booking: BookingForCargos): string {
         if (!birthDate && c?.cf_rappresentante) {
             birthDate = birthDateFromCF(c.cf_rappresentante) // DD/MM/YYYY from CF
         }
+        // Last resort: extract from codice_fiscale if it looks like a personal CF (16 chars)
+        if (!birthDate && c?.codice_fiscale && c.codice_fiscale.length === 16) {
+            birthDate = birthDateFromCF(c.codice_fiscale)
+        }
+        console.log(`[CARGOS-DEBUG] Azienda birthDate: "${birthDate}", data_nascita_rapp="${c?.data_nascita_rappresentante}", data_nascita="${c?.data_nascita}", cf_rapp="${c?.cf_rappresentante}", codice_fiscale="${c?.codice_fiscale}"`)
     } else {
         birthDate = c?.data_nascita || bd.customer?.birthDate || ''
     }
