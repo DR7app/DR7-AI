@@ -628,7 +628,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        openEditCustomer(booking.booking_details?.customer?.customerId)
+        toast.error(`Dati cliente incompleti per la fattura: ${errorMessage}`, { duration: 8000 })
+        const custId = booking.booking_details?.customer?.customerId || booking.user_id
+        if (custId) openEditCustomer(custId)
         return
       }
       toast.error('Errore nella generazione della fattura: ' + errorMessage)
@@ -2216,7 +2218,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       if (error) throw error
 
                       // Auto-generate fattura if payment changed to paid
-                      if (editingBooking.payment_status === 'paid') {
+                      if (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded') {
                         try {
                           // Check if fattura already exists for this booking
                           const { data: existingFattura } = await supabase
@@ -2240,8 +2242,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               console.warn('[Auto-Gen] ⚠️ Fattura failed:', errMsg)
                               // Open customer edit modal if missing data
                               if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
-                                toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
-                                openEditCustomer(editingBooking.booking_details?.customer?.customerId)
+                                toast.error(`Dati cliente incompleti per la fattura: ${errMsg}`, { duration: 8000 })
+                                const custId = editingBooking.booking_details?.customer?.customerId || editingBooking.user_id
+                                if (custId) openEditCustomer(custId)
                               } else {
                                 toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
                               }
