@@ -261,15 +261,15 @@ function buildCargosRecord(booking: BookingForCargos): string {
     // For azienda, use rappresentante birth date, then extract from CF as fallback
     let birthDate = ''
     if (c?.tipo_cliente === 'azienda') {
-        birthDate = c?.data_nascita_rappresentante || c?.data_nascita || ''
-        if (!birthDate && c?.cf_rappresentante) {
-            birthDate = birthDateFromCF(c.cf_rappresentante) // DD/MM/YYYY from CF
+        birthDate = c?.data_nascita_rappresentante || rapp.data_nascita || c?.data_nascita || ''
+        if (!birthDate) {
+            // Try extracting from CF rappresentante (16-char personal codice fiscale)
+            const cfToTry = c?.cf_rappresentante || rapp.codice_fiscale || (c?.codice_fiscale?.length === 16 ? c.codice_fiscale : '')
+            if (cfToTry && cfToTry.length === 16) {
+                birthDate = birthDateFromCF(cfToTry)
+            }
         }
-        // Last resort: extract from codice_fiscale if it looks like a personal CF (16 chars)
-        if (!birthDate && c?.codice_fiscale && c.codice_fiscale.length === 16) {
-            birthDate = birthDateFromCF(c.codice_fiscale)
-        }
-        console.log(`[CARGOS-DEBUG] Azienda birthDate: "${birthDate}", data_nascita_rapp="${c?.data_nascita_rappresentante}", data_nascita="${c?.data_nascita}", cf_rapp="${c?.cf_rappresentante}", codice_fiscale="${c?.codice_fiscale}"`)
+        console.log(`[CARGOS-DEBUG] Azienda birthDate: "${birthDate}", data_nascita_rapp="${c?.data_nascita_rappresentante}", rapp.data_nascita="${rapp.data_nascita}", cf_rapp="${c?.cf_rappresentante}", rapp.cf="${rapp.codice_fiscale}", codice_fiscale="${c?.codice_fiscale}"`)
     } else {
         birthDate = c?.data_nascita || bd.customer?.birthDate || ''
     }
