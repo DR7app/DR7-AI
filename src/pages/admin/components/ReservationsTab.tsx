@@ -4699,6 +4699,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     )}
 
 
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedBookingForPenalty(booking); setPenaltyModalOpen(true) }}
+                        className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                      >
+                        Penali
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanni(booking); setDanniModalOpen(true) }}
+                        className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                      >
+                        Danni
+                      </button>
+                    </div>
+
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
                       className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap w-full"
