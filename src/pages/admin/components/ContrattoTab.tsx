@@ -561,6 +561,13 @@ export default function ContrattoTab() {
                         Contratto Firmato
                       </button>
                       <button
+                        onClick={() => handleSendSignatureEmail(contract)}
+                        disabled={sendingSignature === contract.id}
+                        className="w-full bg-dr7-gold hover:bg-yellow-500 text-black px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
+                      >
+                        {sendingSignature === contract.id ? 'Invio...' : 'Reinvia Contratto'}
+                      </button>
+                      <button
                         onClick={() => handleViewAuditTrail(contract)}
                         className="w-full bg-gray-600 hover:bg-gray-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
                       >
