@@ -1585,15 +1585,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
 
-        // SOFT DELETE: Mark as deleted instead of permanently removing
-        // This preserves the booking record, contracts, and fatture
-        const { error: softDeleteError } = await supabase
-          .from('bookings')
-          .update({ status: 'deleted' })
-          .eq('id', bookingId)
+        // SOFT DELETE via Netlify function (uses service role key to bypass RLS)
+        const deleteRes = await fetch('/.netlify/functions/delete-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId })
+        })
 
-        if (softDeleteError) {
-          throw new Error(softDeleteError.message)
+        if (!deleteRes.ok) {
+          const errData = await deleteRes.json().catch(() => ({}))
+          throw new Error(errData.error || 'Errore durante l\'eliminazione')
         }
       } else {
         const reservation = reservations.find(r => r.id === bookingId)

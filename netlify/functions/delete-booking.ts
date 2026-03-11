@@ -46,34 +46,18 @@ export const handler: Handler = async (event) => {
 
         console.log(`[delete-booking] Attempting to delete booking: ${bookingId}`)
 
-        // 1. Cancel booking first (to safe-guard status checks)
-        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
+        // Soft delete: mark as deleted (preserves booking, contracts, fatture)
+        const { error } = await supabase
+            .from('bookings')
+            .update({ status: 'deleted' })
+            .eq('id', bookingId)
 
-        // 2. Restore any buono sconto linked to this booking
+        // Restore any buono sconto linked to this booking
         const { error: buonoError } = await supabase
             .from('referral_discount_codes')
             .update({ used: false, used_at: null, booking_id: null })
             .eq('booking_id', bookingId)
         if (buonoError) console.warn('[delete-booking] Buono restore warning:', buonoError.message)
-
-        // 3. Cascade delete related records
-        // Delete related invoices (fatture)
-        const { error: invoiceError } = await supabase.from('fatture').delete().eq('booking_id', bookingId)
-        if (invoiceError) console.warn('[delete-booking] Invoice deletion warning:', invoiceError.message)
-
-        // Delete related contracts
-        const { error: contractError } = await supabase.from('contracts').delete().eq('booking_id', bookingId)
-        if (contractError) console.warn('[delete-booking] Contract deletion warning:', contractError.message)
-
-        // Delete related cauzioni (deposits)
-        const { error: cauzioneError } = await supabase.from('cauzioni').delete().eq('riferimento_contratto_id', bookingId)
-        if (cauzioneError) console.warn('[delete-booking] Cauzioni deletion warning:', cauzioneError.message)
-
-        // 4. Delete the booking
-        const { error } = await supabase
-            .from('bookings')
-            .delete()
-            .eq('id', bookingId)
 
         if (error) {
             console.error('[delete-booking] Supabase error:', error)
