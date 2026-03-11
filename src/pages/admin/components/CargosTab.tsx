@@ -38,6 +38,7 @@ interface CustomerExtended {
     patente_rilasciata_da?: string
     nome_rappresentante?: string
     cognome_rappresentante?: string
+    cf_rappresentante?: string
     tipo_documento?: string
     numero_documento?: string
     documento_rilasciato_da?: string
@@ -211,6 +212,27 @@ function getPaymentType(booking: BookingForCargos): string {
     return PAYMENT_TYPE_MAP[method.toLowerCase()] || '0' // Default: Carta di Credito
 }
 
+/**
+ * Extract birth date from Italian codice fiscale (format: DD/MM/YYYY)
+ * CF format: XXXYYY00A00X000X — positions 6-7=year, 8=month letter, 9-10=day
+ */
+function birthDateFromCF(cf: string): string {
+    if (!cf || cf.length < 11) return ''
+    const monthMap: Record<string, string> = {
+        'A': '01', 'B': '02', 'C': '03', 'D': '04', 'E': '05', 'H': '06',
+        'L': '07', 'M': '08', 'P': '09', 'R': '10', 'S': '11', 'T': '12'
+    }
+    const yearPart = parseInt(cf.substring(6, 8), 10)
+    const monthLetter = cf.charAt(8).toUpperCase()
+    let day = parseInt(cf.substring(9, 11), 10)
+    // Female: day += 40
+    if (day > 40) day -= 40
+    const mm = monthMap[monthLetter]
+    if (!mm) return ''
+    const yyyy = yearPart > 50 ? 1900 + yearPart : 2000 + yearPart
+    return `${String(day).padStart(2, '0')}/${mm}/${yyyy}`
+}
+
 function buildCargosRecord(booking: BookingForCargos): string {
     const c = booking.customerData
     const bd = booking.booking_details || {}
@@ -234,6 +256,12 @@ function buildCargosRecord(booking: BookingForCargos): string {
                 surname = parts[0] || ''
             }
         }
+    }
+
+    // For azienda, extract birth date from rappresentante CF if data_nascita is missing
+    let birthDate = c?.data_nascita || bd.customer?.birthDate || ''
+    if (!birthDate && c?.tipo_cliente === 'azienda' && c?.cf_rappresentante) {
+        birthDate = birthDateFromCF(c.cf_rappresentante) // already DD/MM/YYYY
     }
 
     // Second driver from booking_details
@@ -264,7 +292,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 21 */ '0', // Engine lock
         /* 22 */ surname.toUpperCase(),
         /* 23 */ firstName.toUpperCase(),
-        /* 24 */ formatDateOnlyCargos(c?.data_nascita || bd.customer?.birthDate || ''),
+        /* 24 */ birthDate.includes('/') ? birthDate : formatDateOnlyCargos(birthDate),
         /* 25 */ lookupIstatCode(c?.luogo_nascita || bd.customer?.birthPlace || ''),
         /* 26 */ lookupIstatCode(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
         /* 27 */ lookupIstatCode(c?.citta || ''),

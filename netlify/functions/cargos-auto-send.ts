@@ -54,6 +54,22 @@ function padField(value: string, maxLen: number): string {
     return (value || '').substring(0, maxLen).padEnd(maxLen, ' ')
 }
 
+function birthDateFromCF(cf: string): string {
+    if (!cf || cf.length < 11) return ''
+    const monthMap: Record<string, string> = {
+        'A': '01', 'B': '02', 'C': '03', 'D': '04', 'E': '05', 'H': '06',
+        'L': '07', 'M': '08', 'P': '09', 'R': '10', 'S': '11', 'T': '12'
+    }
+    const yearPart = parseInt(cf.substring(6, 8), 10)
+    const monthLetter = cf.charAt(8).toUpperCase()
+    let day = parseInt(cf.substring(9, 11), 10)
+    if (day > 40) day -= 40
+    const mm = monthMap[monthLetter]
+    if (!mm) return ''
+    const yyyy = yearPart > 50 ? 1900 + yearPart : 2000 + yearPart
+    return `${String(day).padStart(2, '0')}/${mm}/${yyyy}`
+}
+
 function formatDateCargos(isoDate: string): string {
     const d = new Date(isoDate)
     const dd = String(d.getDate()).padStart(2, '0')
@@ -240,7 +256,12 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             /* 21 */ '0',
             /* 22 */ surname.toUpperCase(),
             /* 23 */ firstName.toUpperCase(),
-            /* 24 */ formatDateOnlyCargos(c?.data_nascita || bd.customer?.birthDate || ''),
+            /* 24 */ (() => {
+                const bd2 = c?.data_nascita || bd.customer?.birthDate || ''
+                if (bd2) return formatDateOnlyCargos(bd2)
+                if (isAzienda && c?.cf_rappresentante) return birthDateFromCF(c.cf_rappresentante)
+                return ''
+            })(),
             /* 25 */ lookupIstatCode(c?.luogo_nascita || bd.customer?.birthPlace || ''),
             /* 26 */ lookupIstatCode(c?.nazionalita || 'CAGLIARI'),
             /* 27 */ lookupIstatCode(c?.citta || ''),
