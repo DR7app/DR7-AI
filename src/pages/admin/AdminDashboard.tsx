@@ -30,10 +30,11 @@ import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
 import GestioneDanniTab from './components/GestioneDanniTab'
 import CargosTab from './components/CargosTab'
+import TrusteraTab from './components/TrusteraTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import CarWashCatalogTab from './components/CarWashCatalogTab'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -136,6 +137,7 @@ export default function AdminDashboard() {
     'gestione-danni': 'Gestione Danni & Penali & Penali',
     'gestione-multe': 'Gestione Multe',
     'cargos': 'Cargos',
+    'trustera': 'Trustera',
     'carwash': 'Prenotazioni Prime Wash',
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
@@ -286,6 +288,7 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Gestione Danni & Penali</button>
               <button onClick={() => { setActiveTab('gestione-multe'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
               <button onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cargos')}>Cargos</button>
+              <button onClick={() => { setActiveTab('trustera'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'trustera')}>Trustera</button>
 
               {/* PRIME WASH */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Prime Wash</div>
@@ -366,7 +369,7 @@ export default function AdminDashboard() {
             <nav className="-mb-px flex gap-4 flex-wrap">
               {/* NOLEGGIO Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['reservations', 'calendar', 'cauzioni', 'contratto', 'gestione-danni', 'gestione-multe', 'cargos'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['reservations', 'calendar', 'cauzioni', 'contratto', 'gestione-danni', 'gestione-multe', 'cargos', 'trustera'].includes(activeTab))}>
                   Noleggio
                   <span className="text-xs">▼</span>
                 </button>
@@ -375,6 +378,7 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('calendar')} className={dropdownItemClass(activeTab === 'calendar')}>Calendario</button>
                   <button onClick={() => setActiveTab('cauzioni')} className={dropdownItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
                   <button onClick={() => setActiveTab('contratto')} className={dropdownItemClass(activeTab === 'contratto')}>Contratti</button>
+                  <button onClick={() => setActiveTab('trustera')} className={dropdownItemClass(activeTab === 'trustera')}>Trustera</button>
                   <button onClick={() => setActiveTab('gestione-danni')} className={dropdownItemClass(activeTab === 'gestione-danni')}>Gestione Danni & Penali</button>
                   <button onClick={() => setActiveTab('gestione-multe')} className={dropdownItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
                   <button onClick={() => setActiveTab('cargos')} className={dropdownItemClass(activeTab === 'cargos')}>Cargos</button>
@@ -554,6 +558,7 @@ export default function AdminDashboard() {
           {activeTab === 'gestione-danni' && <GestioneDanniTab />}
           {activeTab === 'gestione-multe' && <GestioneMulteTab />}
           {activeTab === 'cargos' && <CargosTab />}
+          {activeTab === 'trustera' && <TrusteraTab />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && <ReportLavaggioTab />}

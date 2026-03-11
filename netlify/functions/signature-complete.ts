@@ -51,19 +51,32 @@ export const handler: Handler = async (event) => {
             return { statusCode: 410, body: JSON.stringify({ error: 'Il link di firma e scaduto' }) }
         }
 
-        // Fetch original contract
-        const { data: contract } = await supabase
-            .from('contracts')
-            .select('*')
-            .eq('id', sigRequest.contract_id)
-            .single()
+        // Fetch original document — either from contract or standalone document
+        let contract: any = null
+        let pdfUrl: string | null = null
+        let docIdentifier: string = sigRequest.id
 
-        if (!contract || !contract.pdf_url) {
-            return { statusCode: 404, body: JSON.stringify({ error: 'Contratto o PDF non trovato' }) }
+        if (sigRequest.contract_id) {
+            const { data: contractData } = await supabase
+                .from('contracts')
+                .select('*')
+                .eq('id', sigRequest.contract_id)
+                .single()
+            contract = contractData
+            pdfUrl = contract?.pdf_url
+            docIdentifier = contract?.contract_number || sigRequest.contract_id
+        } else {
+            // Standalone document
+            pdfUrl = sigRequest.document_url
+            docIdentifier = sigRequest.document_name || 'documento'
+        }
+
+        if (!pdfUrl) {
+            return { statusCode: 404, body: JSON.stringify({ error: 'Documento PDF non trovato' }) }
         }
 
         // Download original PDF
-        const pdfResponse = await fetch(contract.pdf_url)
+        const pdfResponse = await fetch(pdfUrl)
         if (!pdfResponse.ok) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Impossibile scaricare il PDF' }) }
         }
@@ -188,7 +201,7 @@ export const handler: Handler = async (event) => {
         y -= 20
 
         const infoLines = [
-            ['Contratto:', contract.contract_number || 'N/A'],
+            ['Documento:', contract ? (contract.contract_number || 'N/A') : (sigRequest.document_name || 'Documento')],
             ['Cliente:', sigRequest.signer_name],
             ['Email:', sigRequest.signer_email],
             ['Data firma:', signedAtRome],
@@ -268,7 +281,7 @@ export const handler: Handler = async (event) => {
         const signedPdfHash = crypto.createHash('sha256').update(Buffer.from(signedPdfBytes)).digest('hex')
 
         // Upload signed PDF to Supabase storage
-        const fileName = `signed/${contract.contract_number || sigRequest.contract_id}_firmato_${Date.now()}.pdf`
+        const fileName = `signed/${docIdentifier}_firmato_${Date.now()}.pdf`
         const { error: uploadError } = await supabase
             .storage
             .from('contracts')
@@ -298,14 +311,16 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', sigRequest.id)
 
-        // Update contract record
-        await supabase
-            .from('contracts')
-            .update({
-                signed_pdf_url: signedPdfUrl,
-                updated_at: signedAt.toISOString()
-            })
-            .eq('id', sigRequest.contract_id)
+        // Update contract record (only if this is a contract-based signature)
+        if (sigRequest.contract_id) {
+            await supabase
+                .from('contracts')
+                .update({
+                    signed_pdf_url: signedPdfUrl,
+                    updated_at: signedAt.toISOString()
+                })
+                .eq('id', sigRequest.contract_id)
+        }
 
         // Log final audit event
         await supabase.from('signature_audit_trail').insert({
@@ -320,13 +335,13 @@ export const handler: Handler = async (event) => {
                 original_pdf_hash: currentHash,
                 signed_pdf_hash: signedPdfHash,
                 signed_pdf_url: signedPdfUrl,
-                contract_number: contract.contract_number,
+                document_identifier: docIdentifier,
                 marketing_consent: !!marketingConsent
             }
         })
 
         // Save marketing consent on customer record — NEVER overwrite true with false (GDPR: consent once given is kept)
-        if (marketingConsent !== undefined && contract.booking_id) {
+        if (marketingConsent !== undefined && contract?.booking_id) {
             try {
                 const { data: booking } = await supabase
                     .from('bookings')
@@ -367,18 +382,31 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Send signed contract via WhatsApp
+        // Send signed document via WhatsApp
         const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
         const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
         if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && signedPdfUrl) {
             try {
-                const { data: booking } = await supabase
-                    .from('bookings')
-                    .select('customer_phone, booking_details')
-                    .eq('id', contract.booking_id)
-                    .single()
+                let customerPhone = ''
 
-                const customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
+                if (contract?.booking_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_phone, booking_details')
+                        .eq('id', contract.booking_id)
+                        .single()
+                    customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
+                }
+
+                // For standalone documents, look up phone from customers_extended
+                if (!customerPhone && sigRequest.signer_email) {
+                    const { data: cust } = await supabase
+                        .from('customers_extended')
+                        .select('telefono')
+                        .eq('email', sigRequest.signer_email)
+                        .maybeSingle()
+                    customerPhone = cust?.telefono || ''
+                }
                 if (customerPhone) {
                     let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
@@ -391,8 +419,8 @@ export const handler: Handler = async (event) => {
                         body: JSON.stringify({
                             chatId: `${cleanPhone}@c.us`,
                             urlFile: signedPdfUrl,
-                            fileName: `Contratto_Firmato_${contract.contract_number || ''}.pdf`,
-                            caption: `Contratto ${contract.contract_number || ''} firmato - DR7 Empire`
+                            fileName: `${docIdentifier}_firmato.pdf`,
+                            caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato - DR7 Empire`
                         })
                     })
 
@@ -410,8 +438,8 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Auto-send to CARGOS (Polizia di Stato) after WhatsApp delivery
-        if (contract.booking_id) {
+        // Auto-send to CARGOS (Polizia di Stato) after WhatsApp delivery (only for rental contracts)
+        if (contract?.booking_id) {
             try {
                 const cargosResult = await sendToCargos(contract.booking_id)
                 if (cargosResult.success) {
