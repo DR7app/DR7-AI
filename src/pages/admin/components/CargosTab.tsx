@@ -52,6 +52,7 @@ interface CustomerExtended {
     tipo_cliente?: string
     denominazione?: string
     partita_iva?: string
+    metadata?: any
 }
 
 // ── CARGOS Field Sizes (46 fields, total 1505 chars) ─────────────────────────
@@ -213,10 +214,7 @@ function getPaymentType(booking: BookingForCargos): string {
     return PAYMENT_TYPE_MAP[method.toLowerCase()] || '0' // Default: Carta di Credito
 }
 
-/**
- * Extract birth date from Italian codice fiscale (format: DD/MM/YYYY)
- * CF format: XXXYYY00A00X000X — positions 6-7=year, 8=month letter, 9-10=day
- */
+// Extract birth date from Italian codice fiscale (DD/MM/YYYY format)
 function birthDateFromCF(cf: string): string {
     if (!cf || cf.length < 11) return ''
     const monthMap: Record<string, string> = {
@@ -226,8 +224,7 @@ function birthDateFromCF(cf: string): string {
     const yearPart = parseInt(cf.substring(6, 8), 10)
     const monthLetter = cf.charAt(8).toUpperCase()
     let day = parseInt(cf.substring(9, 11), 10)
-    // Female: day += 40
-    if (day > 40) day -= 40
+    if (day > 40) day -= 40 // Female: day += 40
     const mm = monthMap[monthLetter]
     if (!mm) return ''
     const yyyy = yearPart > 50 ? 1900 + yearPart : 2000 + yearPart
@@ -237,8 +234,10 @@ function birthDateFromCF(cf: string): string {
 function buildCargosRecord(booking: BookingForCargos): string {
     const c = booking.customerData
     const bd = booking.booking_details || {}
+    const meta = c?.metadata || (c as any)?.metadata || {}
+    const rapp = meta?.rappresentante || {}
 
-    // For azienda, use denominazione as surname
+    // For azienda, use denominazione as surname but rappresentante for driver fields
     let surname = ''
     let firstName = ''
     if (c?.tipo_cliente === 'azienda') {
@@ -299,13 +298,13 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 22 */ surname.toUpperCase(),
         /* 23 */ firstName.toUpperCase(),
         /* 24 */ birthDate.includes('/') ? birthDate : formatDateOnlyCargos(birthDate),
-        /* 25 */ lookupIstatCode(c?.luogo_nascita || bd.customer?.birthPlace || ''),
+        /* 25 */ lookupIstatCode(c?.luogo_nascita || rapp.luogo_nascita || bd.customer?.birthPlace || ''),
         /* 26 */ lookupIstatCode(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
         /* 27 */ lookupIstatCode(c?.citta || ''),
         /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
-        /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || 'CI'] || 'IDENT',
-        /* 30 */ c?.numero_documento || bd.customer?.documentNumber || '',
-        /* 31 */ lookupIstatCode(c?.citta || ''),
+        /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || rapp.documento?.tipo || 'CI'] || 'IDENT',
+        /* 30 */ c?.numero_documento || rapp.documento?.numero || bd.customer?.documentNumber || '',
+        /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || '',
         /* 33 */ lookupIstatCode(c?.patente_rilasciata_da || c?.citta || ''),
         /* 34 */ c?.telefono || booking.customer_phone || '',

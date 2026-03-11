@@ -57,6 +57,8 @@ interface ClientFormData {
   rappresentante_nome: string
   rappresentante_cognome: string
   rappresentante_cf: string
+  rappresentante_data_nascita: string
+  rappresentante_luogo_nascita: string
   rappresentante_ruolo: string
   rappresentante_doc_tipo: string
   rappresentante_doc_numero: string
@@ -112,6 +114,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     rappresentante_nome: '',
     rappresentante_cognome: '',
     rappresentante_cf: '',
+    rappresentante_data_nascita: '',
+    rappresentante_luogo_nascita: '',
     rappresentante_ruolo: '',
     rappresentante_doc_tipo: '',
     rappresentante_doc_numero: '',
@@ -204,6 +208,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           rappresentante_nome: metadata.rappresentante?.nome || '',
           rappresentante_cognome: metadata.rappresentante?.cognome || '',
           rappresentante_cf: metadata.rappresentante?.cf || '',
+          rappresentante_data_nascita: metadata.rappresentante?.data_nascita || '',
+          rappresentante_luogo_nascita: metadata.rappresentante?.luogo_nascita || '',
           rappresentante_ruolo: metadata.rappresentante?.ruolo || '',
           rappresentante_doc_tipo: metadata.rappresentante?.documento?.tipo || '',
           rappresentante_doc_numero: metadata.rappresentante?.documento?.numero || '',
@@ -428,6 +434,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             nome: formData.rappresentante_nome,
             cognome: formData.rappresentante_cognome,
             cf: formData.rappresentante_cf,
+            data_nascita: formData.rappresentante_data_nascita,
+            luogo_nascita: formData.rappresentante_luogo_nascita,
             ruolo: formData.rappresentante_ruolo,
             documento: {
               tipo: formData.rappresentante_doc_tipo,
@@ -1116,6 +1124,28 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       onChange={(e) => setFormData({ ...formData, rappresentante_cf: e.target.value.toUpperCase() })}
                       className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data di Nascita</label>
+                      <input
+                        type="date"
+                        value={formData.rappresentante_data_nascita}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_data_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo di Nascita</label>
+                      <input
+                        type="text"
+                        value={formData.rappresentante_luogo_nascita}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_luogo_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                        placeholder="es. Cagliari"
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-4">
