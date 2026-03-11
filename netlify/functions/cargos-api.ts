@@ -1,9 +1,14 @@
 import { Handler } from '@netlify/functions'
+import crypto from 'crypto'
 
 /**
  * CARGOS API Proxy — Polizia di Stato
  * Proxies calls to https://cargos.poliziadistato.it/CARGOS_API/
- * Handles Basic Auth, token management, and CORS.
+ *
+ * Authentication flow (per official docs p2.pdf):
+ *   1. GET api/Token with Basic Auth (username:password) → returns access_token
+ *   2. AES-encrypt the access_token using the APIKEY (first 32 chars = key, chars 32-47 = IV)
+ *   3. Use encrypted token as Bearer + Organization header for Check/Send/Tabella
  *
  * Actions:
  *   - getToken: authenticate and get bearer token
@@ -26,6 +31,7 @@ const AGENCY = {
 // CARGOS credentials from env
 const CARGOS_USERNAME = process.env.CARGOS_USERNAME || 'C00006117'
 const CARGOS_PASSWORD = process.env.CARGOS_PASSWORD || ''
+const CARGOS_APIKEY = process.env.CARGOS_APIKEY || ''
 
 interface CargosRequest {
     action: 'getToken' | 'getTabella' | 'check' | 'send' | 'buildRecords'
@@ -38,6 +44,23 @@ interface CargosRequest {
 function getBasicAuth(password?: string): string {
     const pass = password || CARGOS_PASSWORD
     return 'Basic ' + Buffer.from(`${CARGOS_USERNAME}:${pass}`).toString('base64')
+}
+
+/**
+ * AES-encrypt the access_token using the APIKEY.
+ * Per CARGOS docs (section 3.4.1 - AES example):
+ *   - First 32 chars of ApiKey = AES key
+ *   - Chars 32-47 of ApiKey = IV (initialization vector)
+ *   - AES CBC mode, PKCS7 padding (same as PKCS5 in Node)
+ *   - Result is Base64-encoded
+ */
+function encryptTokenAES(accessToken: string, apiKey: string): string {
+    const key = Buffer.from(apiKey.substring(0, 32), 'utf8')
+    const iv = Buffer.from(apiKey.substring(32, 48), 'utf8')
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
+    let encrypted = cipher.update(accessToken, 'utf8')
+    encrypted = Buffer.concat([encrypted, cipher.final()])
+    return encrypted.toString('base64')
 }
 
 async function getToken(password?: string): Promise<{ token?: string; error?: string }> {
@@ -56,9 +79,20 @@ async function getToken(password?: string): Promise<{ token?: string; error?: st
         }
 
         const data = await res.json()
-        // The token endpoint returns a token string or object
-        const token = typeof data === 'string' ? data : data.access_token || data.token || JSON.stringify(data)
-        return { token }
+        // The token endpoint returns a token object with access_token
+        const rawToken = typeof data === 'string' ? data : data.access_token || data.token
+        if (!rawToken) {
+            return { error: 'Token non ricevuto dal server CARGOS' }
+        }
+
+        // Encrypt the token with ApiKey (AES-256-CBC) as required by CARGOS
+        const apiKey = CARGOS_APIKEY
+        if (!apiKey || apiKey.length < 48) {
+            return { error: 'CARGOS_APIKEY non configurata o troppo corta (servono almeno 48 caratteri). Recuperala dal portale CARGOS → Sicurezza.' }
+        }
+
+        const encryptedToken = encryptTokenAES(rawToken, apiKey)
+        return { token: encryptedToken }
     } catch (err: any) {
         return { error: `Connessione fallita: ${err.message}` }
     }
@@ -73,6 +107,7 @@ async function callCargosApi(
     try {
         const headers: Record<string, string> = {
             'Authorization': `Bearer ${token}`,
+            'Organization': CARGOS_USERNAME,
             'Accept': 'application/json',
         }
         const opts: RequestInit = { method, headers }
@@ -299,6 +334,14 @@ const handler: Handler = async (event) => {
                 statusCode: 400,
                 headers: corsHeaders,
                 body: JSON.stringify({ error: 'Password CARGOS non configurata. Inseriscila nelle impostazioni.' }),
+            }
+        }
+
+        if (!CARGOS_APIKEY || CARGOS_APIKEY.length < 48) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({ error: 'CARGOS_APIKEY non configurata. Recuperala dal portale CARGOS → Sicurezza e aggiungila nelle variabili ambiente di Netlify.' }),
             }
         }
 
