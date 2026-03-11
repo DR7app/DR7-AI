@@ -504,7 +504,9 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const checkData = await checkRes.json()
+            console.log('[CARGOS] Check response:', JSON.stringify(checkData))
 
+            // Top-level error (auth failure, etc.)
             if (checkData.error) {
                 toast.error('Validazione CARGOS fallita: ' + checkData.error)
                 setSendResult({ success: 0, errors: selected.length, details: checkData.error })
@@ -512,22 +514,48 @@ export default function CargosTab() {
                 return
             }
 
-            // Then send
+            // Check per-record results: data is array of {esito, errore, transactionid}
+            const checkResults = Array.isArray(checkData.data) ? checkData.data : (Array.isArray(checkData) ? checkData : [])
+            const checkErrors = checkResults.filter((r: any) => r.esito === false)
+            if (checkErrors.length > 0) {
+                const errorDetails = checkErrors.map((r: any) =>
+                    r.errore?.error_description || r.errore?.error || 'Errore sconosciuto'
+                ).join('; ')
+                toast.error('Validazione CARGOS fallita: ' + errorDetails, { duration: 8000 })
+                setSendResult({ success: 0, errors: checkErrors.length, details: errorDetails })
+                setSending(false)
+                return
+            }
+
+            // All records passed Check — now Send
             const sendRes = await fetch('/.netlify/functions/cargos-api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'send', records, password }),
             })
             const sendData = await sendRes.json()
+            console.log('[CARGOS] Send response:', JSON.stringify(sendData))
 
-            console.log('[CARGOS] Send response:', sendData)
-
+            // Top-level error
             if (sendData.error) {
                 toast.error('Invio CARGOS fallito: ' + sendData.error)
                 setSendResult({ success: 0, errors: selected.length, details: sendData.error })
             } else {
-                toast.success(`${selected.length} contratti inviati a CARGOS con successo!`, { duration: 5000 })
-                setSendResult({ success: selected.length, errors: 0, details: JSON.stringify(sendData.data || sendData) })
+                // Check per-record results
+                const sendResults = Array.isArray(sendData.data) ? sendData.data : (Array.isArray(sendData) ? sendData : [])
+                const sendErrors = sendResults.filter((r: any) => r.esito === false)
+                const sendOk = sendResults.filter((r: any) => r.esito === true)
+
+                if (sendErrors.length > 0) {
+                    const errorDetails = sendErrors.map((r: any) =>
+                        r.errore?.error_description || r.errore?.error || 'Errore sconosciuto'
+                    ).join('; ')
+                    toast.error(`Errore invio: ${errorDetails}`, { duration: 8000 })
+                    setSendResult({ success: sendOk.length, errors: sendErrors.length, details: errorDetails })
+                } else {
+                    toast.success(`${selected.length} contratti inviati a CARGOS con successo!`, { duration: 5000 })
+                    setSendResult({ success: selected.length, errors: 0, details: sendResults.map((r: any) => r.transactionid).filter(Boolean).join(', ') || 'OK' })
+                }
                 // Mark as sent in UI
                 setBookings(prev => prev.map(b =>
                     selectedIds.has(b.id) ? { ...b, cargosStatus: 'sent' as const } : b
@@ -577,12 +605,22 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const data = await res.json()
+            console.log('[CARGOS] Check response:', JSON.stringify(data))
 
             if (data.error) {
                 toast.error('Errori validazione: ' + data.error)
             } else {
-                toast.success('Validazione superata! I record sono pronti per l\'invio.')
-                // Mark as checked
+                // Check per-record results
+                const results = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : [])
+                const errors = results.filter((r: any) => r.esito === false)
+                if (errors.length > 0) {
+                    const errorDetails = errors.map((r: any) =>
+                        r.errore?.error_description || r.errore?.error || 'Errore sconosciuto'
+                    ).join('; ')
+                    toast.error('Validazione fallita: ' + errorDetails, { duration: 8000 })
+                } else {
+                    toast.success('Validazione superata! I record sono pronti per l\'invio.')
+                }
                 setBookings(prev => prev.map(b =>
                     selectedIds.has(b.id) ? { ...b, cargosStatus: 'checking' as const } : b
                 ))
