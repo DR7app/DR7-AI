@@ -88,17 +88,18 @@ const ISTAT_CODES: Record<string, string> = {
 }
 
 // Payment type (field 2) — C=Contanti, B=Bonifico, K=Carta, etc.
+// CARGOS TIPO_PAGAMENTO codes (from reference table 0)
 const PAYMENT_TYPE_MAP: Record<string, string> = {
-    'cash': 'C',
-    'contanti': 'C',
-    'card': 'K',
-    'carta': 'K',
-    'credit_card': 'K',
-    'nexi': 'K',
-    'transfer': 'B',
-    'bonifico': 'B',
-    'wallet': 'K',
-    'credits': 'K',
+    'cash': '1',
+    'contanti': '1',
+    'card': '2',
+    'carta': '2',
+    'credit_card': '2',
+    'nexi': '2',
+    'transfer': '3',
+    'bonifico': '3',
+    'wallet': '2',
+    'credits': '2',
 }
 
 // ID document type codes (field 29)
@@ -180,7 +181,7 @@ function lookupIstatCode(cityName: string): string {
 function getPaymentType(booking: BookingForCargos): string {
     const method = booking.booking_details?.payment_method ||
         booking.booking_details?.paymentMethod || ''
-    return PAYMENT_TYPE_MAP[method.toLowerCase()] || 'K' // Default card
+    return PAYMENT_TYPE_MAP[method.toLowerCase()] || '2' // Default: carta di credito
 }
 
 function buildCargosRecord(booking: BookingForCargos): string {
