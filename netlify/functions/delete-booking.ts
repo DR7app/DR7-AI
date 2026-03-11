@@ -46,10 +46,10 @@ export const handler: Handler = async (event) => {
 
         console.log(`[delete-booking] Attempting to delete booking: ${bookingId}`)
 
-        // Soft delete: mark as deleted (preserves booking, contracts, fatture)
+        // Soft delete: mark as cancelled (preserves booking, contracts, fatture)
         const { error } = await supabase
             .from('bookings')
-            .update({ status: 'deleted' })
+            .update({ status: 'cancelled' })
             .eq('id', bookingId)
 
         // Restore any buono sconto linked to this booking
