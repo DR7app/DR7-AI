@@ -564,12 +564,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
 
   async function handleGenerateInvoice(booking: CarWashBooking) {
-    if (!booking.id) return
+    if (!booking.id) {
+      toast.error('ID prenotazione mancante')
+      return
+    }
 
     // Never generate fattura for unpaid bookings
     const ps = booking.payment_status
     if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
-      toast.error('Impossibile generare fattura: il lavaggio non è stato pagato')
+      toast.error(`Impossibile generare fattura: il lavaggio non è stato pagato (stato: ${ps || 'N/A'})`)
+      return
+    }
+
+    if (generatingInvoice) {
+      toast.error('Generazione fattura già in corso...')
       return
     }
 
@@ -577,6 +585,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const includeIVA = true
 
     setGeneratingInvoice(true)
+    toast.loading('Generazione fattura in corso...', { id: 'gen-invoice' })
     try {
       const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
@@ -584,8 +593,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         body: JSON.stringify({ bookingId: booking.id, includeIVA })
       })
 
-      const data = await response.json()
+      let data: any
+      try {
+        data = await response.json()
+      } catch {
+        toast.dismiss('gen-invoice')
+        throw new Error(`Server ha risposto con status ${response.status} (risposta non valida)`)
+      }
+
       if (!response.ok) {
+        toast.dismiss('gen-invoice')
         if (data.invoiceNumber) {
           toast.error(`Fattura già esistente: ${data.invoiceNumber}. Vai alla tab "Fatture" per visualizzarla.`)
         } else {
@@ -597,6 +614,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         return
       }
 
+      toast.dismiss('gen-invoice')
       // Generate and open the invoice PDF
       const invoiceId = data.invoice.id
       const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
@@ -623,6 +641,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       loadData()
     } catch (error: any) {
+      toast.dismiss('gen-invoice')
       console.error('Error generating invoice:', error)
       const errorMessage = error.message || ''
 
