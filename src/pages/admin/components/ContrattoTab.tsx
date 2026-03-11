@@ -576,6 +576,31 @@ export default function ContrattoTab() {
                       {sendingSignature === contract.id ? 'Invio...' : 'Firma via WhatsApp'}
                     </button>
                   ) : null}
+                  {contract.booking_id && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          toast.loading('Rigenerazione contratto...', { id: 'regen' })
+                          const res = await fetch('/.netlify/functions/generate-contract', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ bookingId: contract.booking_id })
+                          })
+                          if (!res.ok) {
+                            const err = await res.json().catch(() => ({}))
+                            throw new Error(err.error || err.message || res.statusText)
+                          }
+                          toast.success('Contratto rigenerato!', { id: 'regen' })
+                          loadContracts()
+                        } catch (err: any) {
+                          toast.error('Errore: ' + err.message, { id: 'regen' })
+                        }
+                      }}
+                      className="w-full bg-orange-600/30 hover:bg-orange-600/50 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      Rigenera Contratto
+                    </button>
+                  )}
                   <div className="flex gap-2 w-full">
                     <button
                       onClick={() => handleEdit(contract)}
