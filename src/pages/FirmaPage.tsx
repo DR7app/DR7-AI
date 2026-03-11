@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
+import PdfViewer from '../components/PdfViewer'
 
 type SigningStatus = 'loading' | 'viewing' | 'otp_sending' | 'otp_sent' | 'otp_verifying' | 'signing' | 'signed' | 'expired' | 'error'
 
@@ -278,12 +279,7 @@ export default function FirmaPage() {
                         <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 font-medium border-b">
                             Documento da firmare
                         </div>
-                        <iframe
-                            src={contract.pdfUrl}
-                            className="w-full border-0"
-                            style={{ height: '500px' }}
-                            title="Contratto PDF"
-                        />
+                        <PdfViewer url={contract.pdfUrl} />
                     </div>
                 )}
 
