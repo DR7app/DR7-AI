@@ -369,7 +369,7 @@ export default function AdminDashboard() {
             <nav className="-mb-px flex gap-4 flex-wrap">
               {/* NOLEGGIO Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['reservations', 'calendar', 'cauzioni', 'contratto', 'gestione-danni', 'gestione-multe', 'cargos', 'trustera'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['reservations', 'calendar', 'cauzioni', 'contratto', 'gestione-danni', 'gestione-multe', 'cargos'].includes(activeTab))}>
                   Noleggio
                   <span className="text-xs">▼</span>
                 </button>
@@ -378,7 +378,6 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('calendar')} className={dropdownItemClass(activeTab === 'calendar')}>Calendario</button>
                   <button onClick={() => setActiveTab('cauzioni')} className={dropdownItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
                   <button onClick={() => setActiveTab('contratto')} className={dropdownItemClass(activeTab === 'contratto')}>Contratti</button>
-                  <button onClick={() => setActiveTab('trustera')} className={dropdownItemClass(activeTab === 'trustera')}>Trustera</button>
                   <button onClick={() => setActiveTab('gestione-danni')} className={dropdownItemClass(activeTab === 'gestione-danni')}>Gestione Danni & Penali</button>
                   <button onClick={() => setActiveTab('gestione-multe')} className={dropdownItemClass(activeTab === 'gestione-multe')}>Gestione Multe</button>
                   <button onClick={() => setActiveTab('cargos')} className={dropdownItemClass(activeTab === 'cargos')}>Cargos</button>
@@ -501,6 +500,11 @@ export default function AdminDashboard() {
               {/* FATTURA - standalone */}
               <button onClick={() => setActiveTab('fattura')} className={standaloneBtnClass(activeTab === 'fattura')}>
                 Fattura
+              </button>
+
+              {/* TRUSTERA - standalone */}
+              <button onClick={() => setActiveTab('trustera')} className={standaloneBtnClass(activeTab === 'trustera')}>
+                Trustera
               </button>
             </nav>
           </div>
