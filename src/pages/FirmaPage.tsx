@@ -412,11 +412,7 @@ export default function FirmaPage() {
                             </span>
                         </label>
 
-                        {existingMarketingConsent === true ? (
-                            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
-                                Consenso marketing gia registrato
-                            </div>
-                        ) : (
+                        {existingMarketingConsent !== true && (
                             <div className="mb-6">
                                 <p className="text-sm text-gray-700 mb-3">
                                     <button
