@@ -193,7 +193,7 @@ function guessVehicleBrand(vehicleName: string): string {
     if (lower.includes('ferrari')) return 'FERRARI'
     if (lower.includes('maserati')) return 'MASERATI'
     if (lower.includes('alfa')) return 'ALFA ROMEO'
-    return vehicleName.split(' ')[0]?.toUpperCase() || 'N/D'
+    return vehicleName.split(' ')[0]?.toUpperCase() || 'ND000000000'
 }
 
 function guessVehicleModel(vehicleName: string): string {
@@ -312,7 +312,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ (() => {
             if (c?.tipo_cliente === 'azienda') {
-                return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || 'N/D'
+                return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || 'ND000000000'
             }
             return c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
         })(),
@@ -1040,7 +1040,7 @@ export default function CargosTab() {
                                                         <div className="font-medium text-theme-text-primary">
                                                             {b.customerData?.cognome && b.customerData?.nome
                                                                 ? `${b.customerData.cognome} ${b.customerData.nome}`
-                                                                : b.customer_name || 'N/D'}
+                                                                : b.customer_name || 'ND000000000'}
                                                         </div>
                                                         <div className="text-xs text-theme-text-muted">{b.customer_phone || ''}</div>
                                                     </td>
