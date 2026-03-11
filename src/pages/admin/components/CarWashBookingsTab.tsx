@@ -649,8 +649,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
         toast.error(`Dati cliente incompleti per la fattura: ${errorMessage}`, { duration: 8000 })
-        const custId = booking.customer_id || booking.booking_details?.customer?.customerId || booking.user_id
-        if (custId) openEditCustomer(custId)
+        let custId = booking.customer_id || booking.booking_details?.customer?.customerId || booking.user_id
+        // Fallback: find customer by name/email
+        if (!custId && booking.customer_name) {
+          const match = customers.find(c =>
+            (c.email && booking.customer_email && c.email === booking.customer_email) ||
+            (`${c.nome || ''} ${c.cognome || ''}`.trim().toLowerCase() === booking.customer_name.toLowerCase())
+          )
+          if (match) custId = match.id
+        }
+        if (custId) {
+          openEditCustomer(custId)
+        } else {
+          toast.error('Cliente non trovato. Completa i dati manualmente dalla tab Clienti.', { duration: 8000 })
+        }
         return
       }
       toast.error('Errore nella generazione della fattura: ' + errorMessage)
@@ -2263,7 +2275,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               // Open customer edit modal if missing data
                               if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
                                 toast.error(`Dati cliente incompleti per la fattura: ${errMsg}`, { duration: 8000 })
-                                const custId = editingBooking.customer_id || editingBooking.booking_details?.customer?.customerId || editingBooking.user_id
+                                let custId = editingBooking.customer_id || editingBooking.booking_details?.customer?.customerId || editingBooking.user_id
+                                if (!custId && editingBooking.customer_name) {
+                                  const match = customers.find(c =>
+                                    (c.email && editingBooking.customer_email && c.email === editingBooking.customer_email) ||
+                                    (`${c.nome || ''} ${c.cognome || ''}`.trim().toLowerCase() === editingBooking.customer_name.toLowerCase())
+                                  )
+                                  if (match) custId = match.id
+                                }
                                 if (custId) openEditCustomer(custId)
                               } else {
                                 toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
