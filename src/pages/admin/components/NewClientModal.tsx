@@ -329,11 +329,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     return emailRegex.test(email)
   }
 
-  // Basic check for Italian tax code format
+  // Basic check for Italian tax code format (16 chars for persona fisica, 11 digits for azienda)
   const validateCodiceFiscale = (cf: string): boolean => {
-    // 16 alphanumeric characters
-    const cfRegex = /^[A-Z0-9]{16}$/i
-    return cfRegex.test(cf.replace(/\s/g, ''))
+    const clean = cf.replace(/\s/g, '')
+    return /^[A-Z0-9]{16}$/i.test(clean) || /^[0-9]{11}$/.test(clean)
   }
 
   const validatePartitaIVA = (piva: string): boolean => {
