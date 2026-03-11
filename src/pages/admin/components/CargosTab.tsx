@@ -36,6 +36,8 @@ interface CustomerExtended {
     numero_patente?: string
     patente_numero?: string  // legacy alias
     patente_rilasciata_da?: string
+    nome_rappresentante?: string
+    cognome_rappresentante?: string
     tipo_documento?: string
     numero_documento?: string
     documento_rilasciato_da?: string

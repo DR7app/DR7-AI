@@ -152,7 +152,7 @@ export default function MechanicalBookingTab() {
     // Never generate fattura for unpaid bookings
     const ps = booking.payment_status
     if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
-      toast.error('Impossibile generare fattura: la prenotazione non è stata pagata')
+      alert('Impossibile generare fattura: la prenotazione non è stata pagata')
       return
     }
 
