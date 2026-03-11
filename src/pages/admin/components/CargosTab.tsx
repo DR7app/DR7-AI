@@ -312,7 +312,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ (() => {
             if (isAzienda) {
-                return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
+                return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || 'N/D'
             }
             return c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
         })(),
