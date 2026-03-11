@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 
+type SubTab = 'documenti' | 'marketing'
+
 interface SignatureRequest {
   id: string
   contract_id: string | null
@@ -20,7 +22,45 @@ interface SignatureRequest {
   }
 }
 
+interface CustomerConsent {
+  id: string
+  nome: string | null
+  cognome: string | null
+  denominazione: string | null
+  email: string
+  telefono: string | null
+  marketing_consent: boolean | null
+  marketing_consent_date: string | null
+}
+
 export default function TrusteraTab() {
+  const [subTab, setSubTab] = useState<SubTab>('documenti')
+
+  return (
+    <div className="space-y-6">
+      {/* Sub-tabs */}
+      <div className="flex gap-2 border-b border-theme-border pb-2">
+        <button
+          onClick={() => setSubTab('documenti')}
+          className={`px-4 py-2 rounded-t-lg font-bold text-sm transition-colors ${subTab === 'documenti' ? 'bg-dr7-gold text-black' : 'bg-theme-bg-secondary text-theme-text-muted hover:text-theme-text-primary'}`}
+        >
+          Documenti
+        </button>
+        <button
+          onClick={() => setSubTab('marketing')}
+          className={`px-4 py-2 rounded-t-lg font-bold text-sm transition-colors ${subTab === 'marketing' ? 'bg-dr7-gold text-black' : 'bg-theme-bg-secondary text-theme-text-muted hover:text-theme-text-primary'}`}
+        >
+          Marketing Consent
+        </button>
+      </div>
+
+      {subTab === 'documenti' ? <DocumentiSubTab /> : <MarketingConsentSubTab />}
+    </div>
+  )
+}
+
+// ==================== DOCUMENTI SUB-TAB ====================
+function DocumentiSubTab() {
   const [requests, setRequests] = useState<SignatureRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
@@ -435,6 +475,157 @@ export default function TrusteraTab() {
           })
         )}
       </div>
+    </div>
+  )
+}
+
+// ==================== MARKETING CONSENT SUB-TAB ====================
+function MarketingConsentSubTab() {
+  const [customers, setCustomers] = useState<CustomerConsent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<'all' | 'yes' | 'no' | 'unknown'>('all')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    loadCustomers()
+  }, [])
+
+  async function loadCustomers() {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('customers_extended')
+        .select('id, nome, cognome, denominazione, email, telefono, marketing_consent, marketing_consent_date')
+        .order('marketing_consent_date', { ascending: false, nullsFirst: false })
+
+      if (error) throw error
+      setCustomers(data || [])
+    } catch (err: any) {
+      console.error('Failed to load customers:', err)
+      toast.error('Errore caricamento clienti')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = customers.filter(c => {
+    // Filter by consent status
+    if (filter === 'yes' && c.marketing_consent !== true) return false
+    if (filter === 'no' && c.marketing_consent !== false) return false
+    if (filter === 'unknown' && c.marketing_consent !== null) return false
+
+    // Search
+    if (search.length >= 2) {
+      const q = search.toLowerCase()
+      const name = (c.denominazione || [c.nome, c.cognome].filter(Boolean).join(' ')).toLowerCase()
+      const email = (c.email || '').toLowerCase()
+      if (!name.includes(q) && !email.includes(q)) return false
+    }
+
+    return true
+  })
+
+  const counts = {
+    all: customers.length,
+    yes: customers.filter(c => c.marketing_consent === true).length,
+    no: customers.filter(c => c.marketing_consent === false).length,
+    unknown: customers.filter(c => c.marketing_consent === null).length,
+  }
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
+        <p className="text-theme-text-primary">Caricamento...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-theme-text-primary">Marketing Consent</h2>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <button onClick={() => setFilter('all')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'all' ? 'bg-dr7-gold/20 border-dr7-gold' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
+          <p className="text-2xl font-bold text-theme-text-primary">{counts.all}</p>
+          <p className="text-sm text-theme-text-muted">Totale</p>
+        </button>
+        <button onClick={() => setFilter('yes')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'yes' ? 'bg-green-600/20 border-green-500' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
+          <p className="text-2xl font-bold text-green-400">{counts.yes}</p>
+          <p className="text-sm text-theme-text-muted">Consenso</p>
+        </button>
+        <button onClick={() => setFilter('no')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'no' ? 'bg-red-600/20 border-red-500' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
+          <p className="text-2xl font-bold text-red-400">{counts.no}</p>
+          <p className="text-sm text-theme-text-muted">Rifiutato</p>
+        </button>
+        <button onClick={() => setFilter('unknown')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'unknown' ? 'bg-yellow-600/20 border-yellow-500' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
+          <p className="text-2xl font-bold text-yellow-400">{counts.unknown}</p>
+          <p className="text-sm text-theme-text-muted">Non risposto</p>
+        </button>
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Cerca per nome o email..."
+        className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+      />
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-theme-border text-theme-text-muted text-left">
+              <th className="py-3 px-4">Cliente</th>
+              <th className="py-3 px-4">Email</th>
+              <th className="py-3 px-4">Telefono</th>
+              <th className="py-3 px-4 text-center">Consenso</th>
+              <th className="py-3 px-4">Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-theme-text-muted">Nessun cliente trovato</td>
+              </tr>
+            ) : (
+              filtered.map((c) => {
+                const name = c.denominazione || [c.nome, c.cognome].filter(Boolean).join(' ') || 'N/A'
+                return (
+                  <tr key={c.id} className="border-b border-theme-border/30 hover:bg-theme-bg-hover/50">
+                    <td className="py-3 px-4 font-semibold text-theme-text-primary">{name}</td>
+                    <td className="py-3 px-4 text-theme-text-secondary">{c.email || '-'}</td>
+                    <td className="py-3 px-4 text-theme-text-secondary">{c.telefono || '-'}</td>
+                    <td className="py-3 px-4 text-center">
+                      {c.marketing_consent === true && (
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-green-600 text-white">Si</span>
+                      )}
+                      {c.marketing_consent === false && (
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white">No</span>
+                      )}
+                      {c.marketing_consent === null && (
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-gray-600 text-white">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-theme-text-muted">
+                      {c.marketing_consent_date
+                        ? new Date(c.marketing_consent_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
+                        : '-'}
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-sm text-theme-text-muted">
+        Mostrando {filtered.length} di {customers.length} clienti
+      </p>
     </div>
   )
 }
