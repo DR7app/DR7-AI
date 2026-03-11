@@ -65,6 +65,7 @@ interface ClientFormData {
   rappresentante_doc_rilascio: string
   rappresentante_doc_scadenza: string
   rappresentante_doc_luogo: string
+  rappresentante_patente: string
 
   // Pubblica Amministrazione
   codice_univoco: string
@@ -122,6 +123,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     rappresentante_doc_rilascio: '',
     rappresentante_doc_scadenza: '',
     rappresentante_doc_luogo: '',
+    rappresentante_patente: '',
     codice_univoco: '',
     cf_pa: '',
     ente_ufficio: '',
@@ -216,6 +218,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           rappresentante_doc_rilascio: metadata.rappresentante?.documento?.rilascio || '',
           rappresentante_doc_scadenza: metadata.rappresentante?.documento?.scadenza || '',
           rappresentante_doc_luogo: metadata.rappresentante?.documento?.luogo || '',
+          rappresentante_patente: metadata.rappresentante?.patente || '',
 
           // PA
           codice_univoco: initialData.codice_univoco || '',
@@ -274,6 +277,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           rappresentante_doc_rilascio: '',
           rappresentante_doc_scadenza: '',
           rappresentante_doc_luogo: '',
+          rappresentante_patente: '',
           codice_univoco: '',
           cf_pa: '',
           ente_ufficio: '',
@@ -438,6 +442,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             data_nascita: formData.rappresentante_data_nascita,
             luogo_nascita: formData.rappresentante_luogo_nascita,
             ruolo: formData.rappresentante_ruolo,
+            patente: formData.rappresentante_patente?.toUpperCase() || '',
             documento: {
               tipo: formData.rappresentante_doc_tipo,
               numero: formData.rappresentante_doc_numero,
@@ -1203,6 +1208,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                           placeholder="es. Comune di Roma"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Patente Rappresentante</h4>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Patente</label>
+                      <input
+                        type="text"
+                        value={formData.rappresentante_patente}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_patente: e.target.value.toUpperCase() })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
+                        placeholder="es. CA1234567X"
+                      />
                     </div>
                   </div>
                 </div>

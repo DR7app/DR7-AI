@@ -310,7 +310,12 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || rapp.documento?.tipo || 'CI'] || 'IDENT',
         /* 30 */ c?.numero_documento || rapp.documento?.numero || bd.customer?.documentNumber || '',
         /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
-        /* 32 */ c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || '',
+        /* 32 */ (() => {
+            if (isAzienda) {
+                return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
+            }
+            return c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
+        })(),
         /* 33 */ lookupIstatCode(c?.patente_rilasciata_da || c?.citta || ''),
         /* 34 */ c?.telefono || booking.customer_phone || '',
         /* 35 */ driver2?.cognome || driver2?.surname || '',
