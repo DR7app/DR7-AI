@@ -70,7 +70,7 @@ export const handler: Handler = async (event) => {
                     const { data: extCustomer } = await supabase
                         .from('customers_extended')
                         .select('marketing_consent')
-                        .eq('email', customerEmail)
+                        .ilike('email', customerEmail)
                         .maybeSingle()
 
                     if (extCustomer) {
@@ -83,7 +83,7 @@ export const handler: Handler = async (event) => {
             const { data: extCustomer } = await supabase
                 .from('customers_extended')
                 .select('marketing_consent')
-                .eq('email', sigRequest.signer_email)
+                .ilike('email', sigRequest.signer_email)
                 .maybeSingle()
             if (extCustomer) {
                 existingMarketingConsent = extCustomer.marketing_consent ?? null

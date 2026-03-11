@@ -341,21 +341,26 @@ export const handler: Handler = async (event) => {
         })
 
         // Save marketing consent on customer record — NEVER overwrite true with false (GDPR: consent once given is kept)
-        if (marketingConsent !== undefined && contract?.booking_id) {
+        if (marketingConsent !== undefined) {
             try {
-                const { data: booking } = await supabase
-                    .from('bookings')
-                    .select('customer_email, booking_details')
-                    .eq('id', contract.booking_id)
-                    .single()
+                // Determine customer email — from booking (contract) or signer email (standalone doc)
+                let customerEmail = sigRequest.signer_email || ''
 
-                const customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email
+                if (contract?.booking_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_email, booking_details')
+                        .eq('id', contract.booking_id)
+                        .single()
+                    customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email || customerEmail
+                }
+
                 if (customerEmail) {
-                    // Fetch the current consent state before writing
+                    // Case-insensitive lookup
                     const { data: existingCustomer } = await supabase
                         .from('customers_extended')
-                        .select('marketing_consent')
-                        .eq('email', customerEmail)
+                        .select('marketing_consent, email')
+                        .ilike('email', customerEmail)
                         .maybeSingle()
 
                     const currentConsent = existingCustomer?.marketing_consent ?? null
@@ -364,15 +369,17 @@ export const handler: Handler = async (event) => {
                     // - New consent is true (always record a yes)
                     // - OR current consent is null (no record yet — record even a no)
                     // NEVER overwrite true with false
-                    if (currentConsent !== true || !!marketingConsent === true) {
+                    if (existingCustomer && (currentConsent !== true || !!marketingConsent === true)) {
                         await supabase
                             .from('customers_extended')
                             .update({
                                 marketing_consent: !!marketingConsent,
                                 marketing_consent_date: signedAt.toISOString()
                             })
-                            .eq('email', customerEmail)
+                            .ilike('email', customerEmail)
                         console.log(`[signature-complete] Marketing consent (${marketingConsent}) saved for ${customerEmail}`)
+                    } else if (!existingCustomer) {
+                        console.log(`[signature-complete] No customer_extended record for ${customerEmail} — consent not saved`)
                     } else {
                         console.log(`[signature-complete] Skipping consent update for ${customerEmail}: existing=true, new=false — kept as true`)
                     }
