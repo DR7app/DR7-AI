@@ -255,29 +255,35 @@ export default function FirmaPage() {
                 {contract && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                         <h1 className="text-xl font-bold text-gray-800 mb-1">
-                            Contratto {contract.contractNumber}
+                            {contract.vehicleName ? `Contratto ${contract.contractNumber}` : contract.contractNumber || 'Documento'}
                         </h1>
                         <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
                             <div>
                                 <span className="text-gray-500 block">Cliente</span>
                                 <span className="font-semibold">{signerName}</span>
                             </div>
-                            <div>
-                                <span className="text-gray-500 block">Veicolo</span>
-                                <span className="font-semibold">{contract.vehicleName}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 block">Ritiro</span>
-                                <span className="font-semibold">
-                                    {contract.rentalStartDate ? new Date(contract.rentalStartDate).toLocaleDateString('it-IT') : 'N/A'}
-                                </span>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 block">Riconsegna</span>
-                                <span className="font-semibold">
-                                    {contract.rentalEndDate ? new Date(contract.rentalEndDate).toLocaleDateString('it-IT') : 'N/A'}
-                                </span>
-                            </div>
+                            {contract.vehicleName && (
+                                <div>
+                                    <span className="text-gray-500 block">Veicolo</span>
+                                    <span className="font-semibold">{contract.vehicleName}</span>
+                                </div>
+                            )}
+                            {contract.rentalStartDate && (
+                                <div>
+                                    <span className="text-gray-500 block">Ritiro</span>
+                                    <span className="font-semibold">
+                                        {new Date(contract.rentalStartDate).toLocaleDateString('it-IT')}
+                                    </span>
+                                </div>
+                            )}
+                            {contract.rentalEndDate && (
+                                <div>
+                                    <span className="text-gray-500 block">Riconsegna</span>
+                                    <span className="font-semibold">
+                                        {new Date(contract.rentalEndDate).toLocaleDateString('it-IT')}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -390,7 +396,7 @@ export default function FirmaPage() {
 
                         <div className="bg-gray-50 rounded-lg p-4 mb-6 text-sm text-gray-700">
                             <p className="mb-2">
-                                Io, <strong>{signerName}</strong>, dichiaro di aver preso visione del contratto
+                                Io, <strong>{signerName}</strong>, dichiaro di aver preso visione del documento
                                 {contract?.contractNumber ? ` n. ${contract.contractNumber}` : ''} e di approvarne
                                 integralmente il contenuto.
                             </p>

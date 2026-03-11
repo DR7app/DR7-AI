@@ -94,7 +94,7 @@ export const handler: Handler = async (event) => {
         }
 
         // If no phone from booking, try contract
-        if (!customerPhone) {
+        if (!customerPhone && sigRequest.contract_id) {
             const { data: contract } = await supabase
                 .from('contracts')
                 .select('customer_phone')
@@ -105,6 +105,19 @@ export const handler: Handler = async (event) => {
                 console.log(`[signature-send-otp] Contract phone: "${contract.customer_phone}"`)
             } else {
                 console.log(`[signature-send-otp] No contract found for contract_id=${sigRequest.contract_id}`)
+            }
+        }
+
+        // If still no phone, try customers_extended by email (for standalone documents)
+        if (!customerPhone && sigRequest.signer_email) {
+            const { data: customer } = await supabase
+                .from('customers_extended')
+                .select('telefono')
+                .eq('email', sigRequest.signer_email)
+                .maybeSingle()
+            if (customer?.telefono) {
+                customerPhone = customer.telefono
+                console.log(`[signature-send-otp] Customer phone from email lookup: "${customerPhone}"`)
             }
         }
 
