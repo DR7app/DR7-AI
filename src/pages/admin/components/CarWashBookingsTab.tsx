@@ -809,6 +809,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`
         custMsg += `*ID:* DR7-${bookingIdShort}\n`
         custMsg += `*Servizio:* ${serviceNames}\n`
+        if (vehiclePlate) custMsg += `*Targa:* ${vehiclePlate}\n`
         custMsg += `*Data e Ora:* ${fmtDate} alle ${fmtTime}\n`
         if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
         custMsg += `*Totale:* €${totalEur}\n`
