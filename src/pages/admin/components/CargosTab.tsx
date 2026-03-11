@@ -89,27 +89,31 @@ const ISTAT_CODES: Record<string, string> = {
 
 // Payment type (field 2) — C=Contanti, B=Bonifico, K=Carta, etc.
 // CARGOS TIPO_PAGAMENTO codes (from reference table 0)
+// 0=Carta di Credito, 1=Contanti, 2=Carta di Debito, 3=Bonifico, 4=RID, 9=Altro
 const PAYMENT_TYPE_MAP: Record<string, string> = {
     'cash': '1',
     'contanti': '1',
-    'card': '2',
-    'carta': '2',
-    'credit_card': '2',
-    'nexi': '2',
+    'card': '0',
+    'carta': '0',
+    'credit_card': '0',
+    'nexi': '0',
     'transfer': '3',
     'bonifico': '3',
-    'wallet': '2',
-    'credits': '2',
+    'wallet': '9',
+    'credits': '9',
 }
 
-// ID document type codes (field 29)
+// CARGOS TIPO_DOCUMENTO codes (from reference table 3)
+// IDENT=Carta di Identità, IDELE=Carta ID Elettronica, PASOR=Passaporto, PATEN=Patente
 const DOC_TYPE_MAP: Record<string, string> = {
-    'carta_identita': 'CI',
-    'CI': 'CI',
-    'passaporto': 'PA',
-    'PA': 'PA',
-    'patente': 'PT',
-    'PT': 'PT',
+    'carta_identita': 'IDENT',
+    'CI': 'IDENT',
+    'carta_identita_elettronica': 'IDELE',
+    'CIE': 'IDELE',
+    'passaporto': 'PASOR',
+    'PA': 'PASOR',
+    'patente': 'PATEN',
+    'PT': 'PATEN',
 }
 
 // ── Agency constants ─────────────────────────────────────────────────────────
@@ -146,10 +150,12 @@ function formatDateOnlyCargos(dateStr: string): string {
     return `${dd}/${mm}/${yyyy}`
 }
 
+// CARGOS TIPO_VEICOLO codes (from reference table 2)
+// 0=Autovetture, 1=Furgoni, 9=Autocaravan
 function guessVehicleType(vehicleName: string): string {
     const lower = (vehicleName || '').toLowerCase()
-    if (lower.includes('vito') || lower.includes('ducato') || lower.includes('furgon')) return 'F'
-    return 'A' // Default to Auto
+    if (lower.includes('vito') || lower.includes('ducato') || lower.includes('furgon')) return '1'
+    return '0' // Default: Autovetture
 }
 
 function guessVehicleBrand(vehicleName: string): string {
@@ -181,7 +187,7 @@ function lookupIstatCode(cityName: string): string {
 function getPaymentType(booking: BookingForCargos): string {
     const method = booking.booking_details?.payment_method ||
         booking.booking_details?.paymentMethod || ''
-    return PAYMENT_TYPE_MAP[method.toLowerCase()] || '2' // Default: carta di credito
+    return PAYMENT_TYPE_MAP[method.toLowerCase()] || '0' // Default: Carta di Credito
 }
 
 function buildCargosRecord(booking: BookingForCargos): string {
@@ -241,7 +247,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 26 */ lookupIstatCode(c?.nazionalita || 'CAGLIARI'), // Nationality code — default IT
         /* 27 */ lookupIstatCode(c?.citta || ''),
         /* 28 */ `${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`.trim(),
-        /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || 'CI'] || 'CI',
+        /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || 'CI'] || 'IDENT',
         /* 30 */ c?.numero_documento || bd.customer?.documentNumber || '',
         /* 31 */ lookupIstatCode(c?.citta || ''),
         /* 32 */ c?.patente_numero || bd.customer?.driverLicense || '',
