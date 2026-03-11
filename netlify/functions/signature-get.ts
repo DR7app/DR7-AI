@@ -78,8 +78,10 @@ export const handler: Handler = async (event) => {
                     }
                 }
             }
-        } else if (sigRequest.signer_email) {
-            // For standalone documents, look up marketing consent by email
+        }
+
+        // Fallback: always try signer_email if consent still unknown
+        if (existingMarketingConsent === null && sigRequest.signer_email) {
             const { data: extCustomer } = await supabase
                 .from('customers_extended')
                 .select('marketing_consent')
