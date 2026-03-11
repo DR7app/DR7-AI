@@ -4678,6 +4678,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         >
                           Contratto
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
+                          disabled={generatingContract}
+                          className={`px-3 py-1 ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-orange-600/30 hover:bg-orange-600/50 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
+                          title="Rigenera contratto con dati aggiornati"
+                        >
+                          {generatingContract ? '...' : 'Rigenera'}
+                        </button>
                         {/* Fattura Button (Mobile) */}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
