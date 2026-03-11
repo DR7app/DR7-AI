@@ -469,12 +469,31 @@ export default function CargosTab() {
             const enriched: BookingForCargos[] = await Promise.all(
                 rentalBookings.map(async (b) => {
                     let customerData: CustomerExtended | null = null
+                    // Try by user_id first
                     if (b.user_id) {
                         const { data: c } = await supabase
                             .from('customers_extended')
                             .select('*')
                             .eq('id', b.user_id)
-                            .single()
+                            .maybeSingle()
+                        if (c) customerData = c
+                    }
+                    // Fallback: by customer_id from booking_details
+                    if (!customerData && b.booking_details?.customer?.customerId) {
+                        const { data: c } = await supabase
+                            .from('customers_extended')
+                            .select('*')
+                            .eq('id', b.booking_details.customer.customerId)
+                            .maybeSingle()
+                        if (c) customerData = c
+                    }
+                    // Fallback: by email
+                    if (!customerData && b.customer_email) {
+                        const { data: c } = await supabase
+                            .from('customers_extended')
+                            .select('*')
+                            .eq('email', b.customer_email)
+                            .maybeSingle()
                         if (c) customerData = c
                     }
                     const alreadySent = b.booking_details?.cargos_sent === true
