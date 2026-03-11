@@ -171,16 +171,26 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         const c = customerData
         const bd = booking.booking_details || {}
 
-        // Split customer name if no extended data
-        let surname = c?.cognome || ''
-        let firstName = c?.nome || ''
-        if (!surname && booking.customer_name) {
-            const parts = booking.customer_name.trim().split(/\s+/)
-            if (parts.length >= 2) {
-                surname = parts[parts.length - 1]
-                firstName = parts.slice(0, -1).join(' ')
-            } else {
-                surname = parts[0] || ''
+        // Split customer name — handle azienda vs persona fisica
+        let surname = ''
+        let firstName = ''
+        const isAzienda = c?.tipo_cliente === 'azienda'
+
+        if (isAzienda) {
+            surname = c?.denominazione || c?.cognome || booking.customer_name || ''
+            // CARGOS requires NOME even for azienda — use legal representative or repeat denominazione
+            firstName = c?.nome_rappresentante || c?.nome || surname
+        } else {
+            surname = c?.cognome || ''
+            firstName = c?.nome || ''
+            if (!surname && booking.customer_name) {
+                const parts = booking.customer_name.trim().split(/\s+/)
+                if (parts.length >= 2) {
+                    surname = parts[parts.length - 1]
+                    firstName = parts.slice(0, -1).join(' ')
+                } else {
+                    surname = parts[0] || ''
+                }
             }
         }
 
@@ -188,7 +198,6 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         const plate = (booking.vehicle_plate || bd.vehicle_plate || bd.vehicle?.plate || '').toUpperCase()
         const licenseNumber = c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
         const docNumber = c?.numero_documento || bd.customer?.documentNumber || ''
-        const isAzienda = c?.tipo_cliente === 'azienda'
 
         const missing = []
         if (!plate) missing.push('targa')

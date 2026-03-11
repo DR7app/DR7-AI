@@ -218,7 +218,8 @@ function buildCargosRecord(booking: BookingForCargos): string {
     let firstName = ''
     if (c?.tipo_cliente === 'azienda') {
         surname = c?.denominazione || c?.cognome || booking.customer_name || ''
-        firstName = ''
+        // CARGOS requires NOME even for azienda — use legal representative or repeat denominazione
+        firstName = c?.nome_rappresentante || c?.nome || surname
     } else {
         surname = c?.cognome || ''
         firstName = c?.nome || ''
