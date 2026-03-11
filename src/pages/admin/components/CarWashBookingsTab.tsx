@@ -9,12 +9,12 @@ import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '.
 
 interface Customer {
   id: string
-  full_name?: string
+  full_name: string
   nome?: string
   cognome?: string
   ragione_sociale?: string
   email: string | null
-  phone?: string | null
+  phone: string | null
   telefono?: string | null
 }
 
@@ -658,7 +658,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         if (!custId && booking.customer_name) {
           const match = customers.find(c =>
             (c.email && booking.customer_email && c.email === booking.customer_email) ||
-            ((c.full_name || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.ragione_sociale || '').toLowerCase() === booking.customer_name.toLowerCase())
+            ((c.full_name || '').toLowerCase() === booking.customer_name.toLowerCase())
           )
           if (match) custId = match.id
         }
