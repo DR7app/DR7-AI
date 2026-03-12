@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import NewClientModal from './NewClientModal'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface Customer {
   id: string
@@ -138,6 +139,7 @@ export default function MechanicalBookingTab() {
         .eq('id', id)
 
       if (error) throw error
+      logAdminAction('delete_mechanical', 'mechanical_booking', id)
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
@@ -205,6 +207,7 @@ export default function MechanicalBookingTab() {
         alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
+      logAdminAction('generate_mechanical_fattura', 'mechanical_booking', booking.id)
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)

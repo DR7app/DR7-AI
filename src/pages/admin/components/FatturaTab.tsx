@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface Invoice {
   id: string
@@ -79,6 +80,7 @@ export default function FatturaTab() {
     try {
       const { error } = await supabase.from('fatture').delete().eq('id', id)
       if (error) throw error
+      logAdminAction('delete_fattura', 'fattura', id)
       loadInvoices()
     } catch (error) {
       console.error('Error deleting invoice:', error)
@@ -192,6 +194,8 @@ export default function FatturaTab() {
 
       if (!response.ok) {
         console.error('SDI send failed:', result.error, result.details)
+      } else {
+        logAdminAction('send_sdi', 'fattura', invoice.id)
       }
 
       loadInvoices()

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useTheme } from '../contexts/ThemeContext'
+import { logAdminAction } from '../utils/logAdminAction'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -30,6 +31,7 @@ export default function Login() {
       if (error) throw error
 
       if (data.session) {
+        logAdminAction('login', 'session', undefined, { email })
         navigate('/admin')
       }
     } catch (err: any) {

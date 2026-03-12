@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface Customer {
   id: string
@@ -553,6 +554,7 @@ export default function CustomersTab() {
       }
 
       console.log('[handleDelete] Success! Removing from state. Current allCustomers count:', allCustomers.length)
+      logAdminAction('delete_customer', 'customer', id)
 
       // Remove from allCustomers - the useEffect will update customers automatically
       setAllCustomers(prevAll => {
@@ -995,6 +997,7 @@ export default function CustomersTab() {
         c.id === customerId ? { ...c, status: newStatus } : c
       ))
 
+      logAdminAction('update_customer_status', 'customer', customerId, { status: newStatus })
       alert(`Status aggiornato a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer status:', error)

@@ -22,6 +22,7 @@ function eurToCents(eur: string): number {
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
 import { validateRentalBooking } from '../../../utils/schedulingRules'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 import {
   getAvailableVehicles,
@@ -1366,6 +1367,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         window.open(data.url, '_blank')
       }
 
+      logAdminAction('generate_contract', 'booking', booking.id)
+
       // Reload data to show the contract link and Yousign button in the UI
       await loadData()
     } catch (error: any) {
@@ -1472,6 +1475,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       } catch (err) {
         console.warn('PDF auto-open failed, continuing flow:', err)
       }
+
+      logAdminAction('generate_fattura', 'booking', booking.id)
 
       // SDI send is now handled automatically by the backend
       loadData()
@@ -1633,6 +1638,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole deletion if calendar delete fails
       }
 
+      logAdminAction('delete_booking', 'booking', bookingId, { customer: customerName })
       alert('Prenotazione eliminata definitivamente')
       loadData()
     } catch (error) {
@@ -2029,6 +2035,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       console.log('[handleConfirmExtend] ✅ Booking extended successfully')
+      logAdminAction('extend_booking', 'booking', extendingBooking.id, { new_dropoff: newDropoffDateTime.toISOString() })
 
       // Send WhatsApp notification for extension
       try {
@@ -3182,6 +3189,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         console.log('Booking updated successfully:', insertedBooking)
+        logAdminAction('edit_booking', 'booking', editingId, { customer: formData.customer_name, vehicle: formData.vehicle_name })
       } else {
         // Create new booking - direct insert
         console.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
@@ -3198,6 +3206,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         console.log('Booking created successfully:', insertedBooking)
+        logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: formData.customer_name, vehicle: formData.vehicle_name })
       }
 
       // Create Google Calendar event

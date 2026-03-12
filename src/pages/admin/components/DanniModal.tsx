@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface DanniModalProps {
     isOpen: boolean
@@ -143,9 +144,11 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 }
 
                 toast.success(`Fattura danni generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
             } else {
                 // DA SALDARE: already saved above, just show toast
                 toast.success(`Danno registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
             }
 
             setCart([]); setNote(''); onSuccess(); onClose()

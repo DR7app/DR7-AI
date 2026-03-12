@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -195,6 +196,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Stato pagamento aggiornato!')
+      logAdminAction('mark_paid', 'booking', bookingId, { method: newStatus })
 
       if (newStatus === 'paid') {
         try {
@@ -277,6 +279,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Estensione rimossa!')
+      logAdminAction('delete_extension', 'booking', booking.id)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: any) {
@@ -299,6 +302,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Estensione segnata come pagata!')
+      logAdminAction('mark_extension_paid', 'booking', booking.id, { extension_index: extIndex })
 
       // Generate fattura for the extension
       const extAmount = ext.additional_amount || 0
@@ -350,6 +354,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Pagamento parziale estensione registrato!')
+      logAdminAction('partial_payment', 'booking', booking.id, { amount: paymentAmount })
       setPartialPayItemKey(null)
 
       // Generate fattura when fully paid
@@ -419,6 +424,7 @@ export default function UnpaidBookingsTab() {
       }
 
       toast.success('Prenotazione eliminata!')
+      logAdminAction('delete_unpaid_booking', 'booking', bookingId)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: any) {
@@ -476,6 +482,7 @@ export default function UnpaidBookingsTab() {
       }
 
       await supabase.from('fatture').update({ items }).eq('id', fi.fatturaId)
+      logAdminAction('mark_fattura_item_paid', 'fattura', fi.fatturaId)
       toast.success('Pagamento registrato')
       loadUnpaidBookings()
     } catch (err: any) {
@@ -533,6 +540,7 @@ export default function UnpaidBookingsTab() {
       }
 
       toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
+      logAdminAction('mark_type_paid', 'booking', booking.id, { type })
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
@@ -738,6 +746,7 @@ export default function UnpaidBookingsTab() {
       }).eq('id', booking.id)
       if (error) throw error
       toast.success('Tutto segnato come pagato!')
+      logAdminAction('mark_booking_extensions_paid', 'booking', booking.id)
 
       // 4. Generate ONE fattura with ONLY unpaid items
       if (invoiceLineItems.length > 0) {
@@ -933,6 +942,7 @@ export default function UnpaidBookingsTab() {
         toast.success(`Tutto pagato per ${group.customerName}!`)
       }
 
+      logAdminAction('mark_all_customer_paid', 'customer', group.customerKey)
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')

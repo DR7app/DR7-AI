@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import toast from 'react-hot-toast'
+import { logAdminAction } from '../../../utils/logAdminAction'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
@@ -555,6 +556,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (error) throw error
 
       toast.success('Prenotazione eliminata')
+      logAdminAction('delete_carwash', 'carwash_booking', bookingId)
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
@@ -640,6 +642,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
       }
 
+      logAdminAction('generate_carwash_fattura', 'carwash_booking', booking.id)
       loadData()
     } catch (error: any) {
       toast.dismiss('gen-invoice')
@@ -771,6 +774,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     console.log('✅ Booking created successfully:', data)
+    logAdminAction('create_carwash', 'carwash_booking', data.id, { customer: customerName, service: serviceNames })
 
     // Generate fattura ONLY if paid — never for unpaid bookings
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
