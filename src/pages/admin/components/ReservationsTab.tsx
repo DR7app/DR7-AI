@@ -144,6 +144,7 @@ interface Customer {
   notes: string | null
   created_at: string
   updated_at: string
+  scadenza_patente?: string | null
 }
 
 interface Vehicle {
@@ -1059,7 +1060,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             driver_license_number: c.numero_patente || null,
             notes: c.note || null,
             created_at: c.created_at,
-            updated_at: c.updated_at || c.created_at
+            updated_at: c.updated_at || c.created_at,
+            scadenza_patente: c.scadenza_patente || c.data_scadenza_patente || c.metadata?.patente?.scadenza || null
           }
 
           // ✅ FIX: ALWAYS use customer ID as the Map key
@@ -3848,11 +3850,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const selectedCustomer = customers.find(c => c.id === formData.customer_id)
                       if (selectedCustomer) {
                         return (
-                          <div className="mt-3 p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
-                            <p className="text-green-400 font-medium mb-1">Cliente selezionato:</p>
+                          <div className={`mt-3 p-3 rounded-lg ${selectedCustomer.scadenza_patente && new Date(selectedCustomer.scadenza_patente) < new Date() ? 'bg-red-900/40 border border-red-500/70' : 'bg-green-900/30 border border-green-600/50'}`}>
+                            <p className={`font-medium mb-1 ${selectedCustomer.scadenza_patente && new Date(selectedCustomer.scadenza_patente) < new Date() ? 'text-red-400' : 'text-green-400'}`}>Cliente selezionato:</p>
                             <p className="text-theme-text-primary font-bold">{selectedCustomer.full_name}</p>
                             {selectedCustomer.email && <p className="text-theme-text-secondary text-sm">{selectedCustomer.email}</p>}
                             {selectedCustomer.phone && <p className="text-theme-text-secondary text-sm">{selectedCustomer.phone}</p>}
+                            {selectedCustomer.scadenza_patente && new Date(selectedCustomer.scadenza_patente) < new Date() && (
+                              <div className="mt-2 px-3 py-2 bg-red-500/20 border border-red-500/40 rounded-lg flex items-center gap-2">
+                                <span className="text-red-400 text-lg">&#9888;</span>
+                                <div>
+                                  <p className="text-red-400 font-bold text-sm">PATENTE SCADUTA</p>
+                                  <p className="text-red-300 text-xs">Scaduta il {new Date(selectedCustomer.scadenza_patente).toLocaleDateString('it-IT')}</p>
+                                </div>
+                              </div>
+                            )}
+                            {selectedCustomer.scadenza_patente && (() => {
+                              const exp = new Date(selectedCustomer.scadenza_patente)
+                              const now = new Date()
+                              const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                              if (diffDays > 0 && diffDays <= 30) {
+                                return (
+                                  <div className="mt-2 px-3 py-2 bg-amber-500/20 border border-amber-500/40 rounded-lg flex items-center gap-2">
+                                    <span className="text-amber-400 text-lg">&#9888;</span>
+                                    <p className="text-amber-400 font-medium text-sm">Patente scade tra {diffDays} giorni ({new Date(selectedCustomer.scadenza_patente).toLocaleDateString('it-IT')})</p>
+                                  </div>
+                                )
+                              }
+                              return null
+                            })()}
                           </div>
                         )
                       }

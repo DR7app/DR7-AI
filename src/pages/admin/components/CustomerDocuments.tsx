@@ -481,7 +481,16 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
                         {customerDetails.numero_patente && <div><span className="text-theme-text-muted">Numero:</span> <span className="text-theme-text-primary">{customerDetails.numero_patente}</span></div>}
                         {customerDetails.emessa_da && <div><span className="text-theme-text-muted">Emessa da:</span> <span className="text-theme-text-primary">{customerDetails.emessa_da}</span></div>}
                         {customerDetails.data_rilascio_patente && <div><span className="text-theme-text-muted">Rilascio:</span> <span className="text-theme-text-primary">{new Date(customerDetails.data_rilascio_patente).toLocaleDateString('it-IT')}</span></div>}
-                        {customerDetails.scadenza_patente && <div><span className="text-theme-text-muted">Scadenza:</span> <span className="text-theme-text-primary">{new Date(customerDetails.scadenza_patente).toLocaleDateString('it-IT')}</span></div>}
+                        {customerDetails.scadenza_patente && (() => {
+                          const isExpired = new Date(customerDetails.scadenza_patente) < new Date()
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Scadenza:</span>
+                              <span className={isExpired ? 'text-red-400 font-bold' : 'text-theme-text-primary'}>{new Date(customerDetails.scadenza_patente).toLocaleDateString('it-IT')}</span>
+                              {isExpired && <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400">SCADUTA</span>}
+                            </div>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>

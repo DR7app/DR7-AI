@@ -1278,7 +1278,22 @@ export default function CustomersTab() {
                     </div>
                     <div>
                       <span className="text-sm text-theme-text-muted">Data Scadenza:</span>
-                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza || '-'}</p>
+                      {(() => {
+                        const scad = viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza
+                        if (!scad) return <p className="text-sm text-theme-text-primary font-medium">-</p>
+                        const isExpired = new Date(scad) < new Date()
+                        const diffDays = Math.ceil((new Date(scad).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                        const isExpiringSoon = diffDays > 0 && diffDays <= 30
+                        return (
+                          <div className="flex items-center gap-2">
+                            <p className={`text-sm font-medium ${isExpired ? 'text-red-400' : isExpiringSoon ? 'text-amber-400' : 'text-theme-text-primary'}`}>
+                              {new Date(scad).toLocaleDateString('it-IT')}
+                            </p>
+                            {isExpired && <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400">SCADUTA</span>}
+                            {isExpiringSoon && <span className="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-[10px] font-bold text-amber-400">SCADE TRA {diffDays}gg</span>}
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-sm text-theme-text-muted">Indirizzo:</span>
