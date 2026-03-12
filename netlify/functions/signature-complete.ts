@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { sendToCargos } from './cargos-auto-send'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -13,7 +14,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { token } = JSON.parse(event.body || '{}')
+        const { token, signatureImage, signatureImage2, marketingConsent } = JSON.parse(event.body || '{}')
 
         if (!token) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Token richiesto' }) }
@@ -50,19 +51,32 @@ export const handler: Handler = async (event) => {
             return { statusCode: 410, body: JSON.stringify({ error: 'Il link di firma e scaduto' }) }
         }
 
-        // Fetch original contract
-        const { data: contract } = await supabase
-            .from('contracts')
-            .select('*')
-            .eq('id', sigRequest.contract_id)
-            .single()
+        // Fetch original document — either from contract or standalone document
+        let contract: any = null
+        let pdfUrl: string | null = null
+        let docIdentifier: string = sigRequest.id
 
-        if (!contract || !contract.pdf_url) {
-            return { statusCode: 404, body: JSON.stringify({ error: 'Contratto o PDF non trovato' }) }
+        if (sigRequest.contract_id) {
+            const { data: contractData } = await supabase
+                .from('contracts')
+                .select('*')
+                .eq('id', sigRequest.contract_id)
+                .single()
+            contract = contractData
+            pdfUrl = contract?.pdf_url
+            docIdentifier = contract?.contract_number || sigRequest.contract_id
+        } else {
+            // Standalone document
+            pdfUrl = sigRequest.document_url
+            docIdentifier = sigRequest.document_name || 'documento'
+        }
+
+        if (!pdfUrl) {
+            return { statusCode: 404, body: JSON.stringify({ error: 'Documento PDF non trovato' }) }
         }
 
         // Download original PDF
-        const pdfResponse = await fetch(contract.pdf_url)
+        const pdfResponse = await fetch(pdfUrl)
         if (!pdfResponse.ok) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Impossibile scaricare il PDF' }) }
         }
@@ -93,6 +107,74 @@ export const handler: Handler = async (event) => {
         const signedAt = new Date()
         const signedAtRome = signedAt.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })
 
+        // Embed handwritten signature on the last page of the original contract
+        if (signatureImage && signatureImage.startsWith('data:image/png;base64,')) {
+            try {
+                const base64Data = signatureImage.replace('data:image/png;base64,', '')
+                const sigBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+                const sigImage = await pdfDoc.embedPng(sigBytes)
+
+                const pages = pdfDoc.getPages()
+                const lastPage = pages[pages.length - 1]
+                const { width: pageWidth, height: pageHeight } = lastPage.getSize()
+
+                // Place signature in the "Firma del 1 guidatore" box area
+                // Typically the signature boxes are at the bottom of the last page
+                // Position: center-right area (second column), near the bottom
+                const sigMaxWidth = 160
+                const sigMaxHeight = 50
+                const sigDims = sigImage.scale(Math.min(sigMaxWidth / sigImage.width, sigMaxHeight / sigImage.height))
+
+                // "Firma del 1 guidatore" box is roughly in the middle third of the page width, near the bottom
+                const sigX = pageWidth * 0.35 + (sigMaxWidth - sigDims.width) / 2
+                const sigY = 45 // Near the very bottom of the page, inside the signature box
+
+                lastPage.drawImage(sigImage, {
+                    x: sigX,
+                    y: sigY,
+                    width: sigDims.width,
+                    height: sigDims.height,
+                })
+
+                console.log(`[signature-complete] Handwritten signature 1 embedded at (${sigX}, ${sigY}) size ${sigDims.width}x${sigDims.height}`)
+            } catch (sigErr: any) {
+                console.error('[signature-complete] Failed to embed signature image:', sigErr.message)
+                // Continue without signature image — OTP alone is still valid
+            }
+        }
+
+        // Embed 2nd driver signature if provided
+        if (signatureImage2 && signatureImage2.startsWith('data:image/png;base64,')) {
+            try {
+                const base64Data2 = signatureImage2.replace('data:image/png;base64,', '')
+                const sigBytes2 = Uint8Array.from(atob(base64Data2), c => c.charCodeAt(0))
+                const sigImage2 = await pdfDoc.embedPng(sigBytes2)
+
+                const pages = pdfDoc.getPages()
+                const lastPage = pages[pages.length - 1]
+                const { width: pageWidth } = lastPage.getSize()
+
+                const sigMaxWidth = 160
+                const sigMaxHeight = 50
+                const sigDims2 = sigImage2.scale(Math.min(sigMaxWidth / sigImage2.width, sigMaxHeight / sigImage2.height))
+
+                // "Firma del 2 guidatore" box is in the right third of the page
+                const sigX2 = pageWidth * 0.67 + (sigMaxWidth - sigDims2.width) / 2
+                const sigY2 = 45
+
+                lastPage.drawImage(sigImage2, {
+                    x: sigX2,
+                    y: sigY2,
+                    width: sigDims2.width,
+                    height: sigDims2.height,
+                })
+
+                console.log(`[signature-complete] Handwritten signature 2 embedded at (${sigX2}, ${sigY2})`)
+            } catch (sigErr: any) {
+                console.error('[signature-complete] Failed to embed 2nd driver signature:', sigErr.message)
+            }
+        }
+
         // Add attestation page
         const page = pdfDoc.addPage([595.28, 841.89]) // A4
         const { width, height } = page.getSize()
@@ -119,7 +201,7 @@ export const handler: Handler = async (event) => {
         y -= 20
 
         const infoLines = [
-            ['Contratto:', contract.contract_number || 'N/A'],
+            ['Documento:', contract ? (contract.contract_number || 'N/A') : (sigRequest.document_name || 'Documento')],
             ['Cliente:', sigRequest.signer_name],
             ['Email:', sigRequest.signer_email],
             ['Data firma:', signedAtRome],
@@ -139,7 +221,7 @@ export const handler: Handler = async (event) => {
         y -= 20
 
         const verifyLines = [
-            ['Metodo:', 'Firma Elettronica Avanzata via OTP Email'],
+            ['Metodo:', signatureImage ? 'Firma Elettronica Avanzata via OTP Email + Firma Autografa' : 'Firma Elettronica Avanzata via OTP Email'],
             ['Email OTP:', sigRequest.signer_email],
             ['IP firmatario:', ipAddress],
             ['User Agent:', (userAgent || '').substring(0, 70)],
@@ -199,7 +281,7 @@ export const handler: Handler = async (event) => {
         const signedPdfHash = crypto.createHash('sha256').update(Buffer.from(signedPdfBytes)).digest('hex')
 
         // Upload signed PDF to Supabase storage
-        const fileName = `signed/${contract.contract_number || sigRequest.contract_id}_firmato_${Date.now()}.pdf`
+        const fileName = `signed/${docIdentifier}_firmato_${Date.now()}.pdf`
         const { error: uploadError } = await supabase
             .storage
             .from('contracts')
@@ -229,14 +311,16 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', sigRequest.id)
 
-        // Update contract record
-        await supabase
-            .from('contracts')
-            .update({
-                signed_pdf_url: signedPdfUrl,
-                updated_at: signedAt.toISOString()
-            })
-            .eq('id', sigRequest.contract_id)
+        // Update contract record (only if this is a contract-based signature)
+        if (sigRequest.contract_id) {
+            await supabase
+                .from('contracts')
+                .update({
+                    signed_pdf_url: signedPdfUrl,
+                    updated_at: signedAt.toISOString()
+                })
+                .eq('id', sigRequest.contract_id)
+        }
 
         // Log final audit event
         await supabase.from('signature_audit_trail').insert({
@@ -251,9 +335,129 @@ export const handler: Handler = async (event) => {
                 original_pdf_hash: currentHash,
                 signed_pdf_hash: signedPdfHash,
                 signed_pdf_url: signedPdfUrl,
-                contract_number: contract.contract_number
+                document_identifier: docIdentifier,
+                marketing_consent: !!marketingConsent
             }
         })
+
+        // Save marketing consent on customer record — NEVER overwrite true with false (GDPR: consent once given is kept)
+        if (marketingConsent !== undefined) {
+            try {
+                // Determine customer email — from booking (contract) or signer email (standalone doc)
+                let customerEmail = sigRequest.signer_email || ''
+
+                if (contract?.booking_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_email, booking_details')
+                        .eq('id', contract.booking_id)
+                        .single()
+                    customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email || customerEmail
+                }
+
+                if (customerEmail) {
+                    // Case-insensitive lookup
+                    const { data: existingCustomer } = await supabase
+                        .from('customers_extended')
+                        .select('marketing_consent, email')
+                        .ilike('email', customerEmail)
+                        .maybeSingle()
+
+                    const currentConsent = existingCustomer?.marketing_consent ?? null
+
+                    // Only update if:
+                    // - New consent is true (always record a yes)
+                    // - OR current consent is null (no record yet — record even a no)
+                    // NEVER overwrite true with false
+                    if (existingCustomer && (currentConsent !== true || !!marketingConsent === true)) {
+                        await supabase
+                            .from('customers_extended')
+                            .update({
+                                marketing_consent: !!marketingConsent,
+                                marketing_consent_date: signedAt.toISOString()
+                            })
+                            .ilike('email', customerEmail)
+                        console.log(`[signature-complete] Marketing consent (${marketingConsent}) saved for ${customerEmail}`)
+                    } else if (!existingCustomer) {
+                        console.log(`[signature-complete] No customer_extended record for ${customerEmail} — consent not saved`)
+                    } else {
+                        console.log(`[signature-complete] Skipping consent update for ${customerEmail}: existing=true, new=false — kept as true`)
+                    }
+                }
+            } catch (mcErr: any) {
+                console.error('[signature-complete] Failed to save marketing consent:', mcErr.message)
+            }
+        }
+
+        // Send signed document via WhatsApp
+        const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+        const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
+        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && signedPdfUrl) {
+            try {
+                let customerPhone = ''
+
+                if (contract?.booking_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_phone, booking_details')
+                        .eq('id', contract.booking_id)
+                        .single()
+                    customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
+                }
+
+                // For standalone documents, look up phone from customers_extended
+                if (!customerPhone && sigRequest.signer_email) {
+                    const { data: cust } = await supabase
+                        .from('customers_extended')
+                        .select('telefono')
+                        .eq('email', sigRequest.signer_email)
+                        .maybeSingle()
+                    customerPhone = cust?.telefono || ''
+                }
+                if (customerPhone) {
+                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            urlFile: signedPdfUrl,
+                            fileName: `${docIdentifier}_firmato.pdf`,
+                            caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato - DR7 Empire`
+                        })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && !waResult.error) {
+                        console.log('[signature-complete] Signed contract sent via WhatsApp:', waResult.idMessage)
+                    } else {
+                        console.error('[signature-complete] WhatsApp send failed:', waResult)
+                    }
+                } else {
+                    console.log('[signature-complete] No customer phone — skipping WhatsApp send')
+                }
+            } catch (waErr: any) {
+                console.error('[signature-complete] WhatsApp send failed:', waErr.message)
+            }
+        }
+
+        // Auto-send to CARGOS (Polizia di Stato) after WhatsApp delivery (only for rental contracts)
+        if (contract?.booking_id) {
+            try {
+                const cargosResult = await sendToCargos(contract.booking_id)
+                if (cargosResult.success) {
+                    console.log('[signature-complete] ✅ Contract auto-sent to CARGOS')
+                } else {
+                    console.warn('[signature-complete] ⚠️ CARGOS auto-send failed:', cargosResult.error)
+                }
+            } catch (cargosErr: any) {
+                console.error('[signature-complete] ⚠️ CARGOS auto-send error:', cargosErr.message)
+            }
+        }
 
         return {
             statusCode: 200,
