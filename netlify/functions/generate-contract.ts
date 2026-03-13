@@ -959,7 +959,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             const { width } = page.getSize()
             const textWidth = footerFont.widthOfTextAtSize(footerText, footerSize)
             page.drawText(footerText, {
-                x: (width - textWidth) / 2,
+                x: width - textWidth - 30,
                 y: 15,
                 size: footerSize,
                 font: footerFont,
