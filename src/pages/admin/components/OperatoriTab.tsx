@@ -85,8 +85,16 @@ export default function OperatoriTab() {
 
   async function loadAdmins() {
     setLoading(true)
-    const { data } = await supabase.from('admins').select('id, email, nome, role').order('nome')
-    if (data) setAdmins(data)
+    const ADMIN_ORDER = ['Valerio', 'Ilenia', 'Salvatore', 'Ophélie', 'Davide']
+    const { data } = await supabase.from('admins').select('id, email, nome, role')
+    if (data) {
+      data.sort((a, b) => {
+        const ai = ADMIN_ORDER.indexOf(a.nome || '')
+        const bi = ADMIN_ORDER.indexOf(b.nome || '')
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
+      setAdmins(data)
+    }
     setLoading(false)
   }
 
