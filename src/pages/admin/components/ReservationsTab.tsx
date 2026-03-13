@@ -3189,7 +3189,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         console.log('Booking updated successfully:', insertedBooking)
-        logAdminAction('edit_booking', 'booking', editingId, { customer: formData.customer_name, vehicle: formData.vehicle_name })
+        logAdminAction('edit_booking', 'booking', editingId, { customer: customerInfo?.full_name })
       } else {
         // Create new booking - direct insert
         console.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
@@ -3206,7 +3206,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         console.log('Booking created successfully:', insertedBooking)
-        logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: formData.customer_name, vehicle: formData.vehicle_name })
+        logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: customerInfo?.full_name })
       }
 
       // Create Google Calendar event

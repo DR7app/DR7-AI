@@ -14,6 +14,7 @@ interface Customer {
   created_at: string
   // Azienda
   denominazione?: string
+  ragione_sociale?: string
   partita_iva?: string
   // Persona Fisica
   nome?: string

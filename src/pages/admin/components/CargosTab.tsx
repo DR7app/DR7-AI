@@ -51,6 +51,7 @@ interface CustomerExtended {
     telefono?: string
     tipo_cliente?: string
     denominazione?: string
+    ragione_sociale?: string
     partita_iva?: string
     metadata?: any
 }
