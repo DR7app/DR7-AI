@@ -951,6 +951,22 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             }
         }
 
+        // 5b. Add client name footer on every page
+        const footerFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
+        const footerSize = 8
+        const footerText = sanitizeForPDF(clientName)
+        for (const page of pdfDoc.getPages()) {
+            const { width } = page.getSize()
+            const textWidth = footerFont.widthOfTextAtSize(footerText, footerSize)
+            page.drawText(footerText, {
+                x: (width - textWidth) / 2,
+                y: 15,
+                size: footerSize,
+                font: footerFont,
+                color: rgb(0.3, 0.3, 0.3),
+            })
+        }
+
         // 6. Save and Upload
         const pdfBytes = await pdfDoc.save()
         // Save to 'filled' folder to keep things organized
