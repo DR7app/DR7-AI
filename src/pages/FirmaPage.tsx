@@ -478,16 +478,6 @@ export default function FirmaPage() {
                         <p className="text-gray-500 text-sm mb-6">
                             Riceverai una copia del contratto firmato via WhatsApp.
                         </p>
-                        {signedPdfUrl && (
-                            <a
-                                href={signedPdfUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition-colors"
-                            >
-                                Scarica Contratto Firmato
-                            </a>
-                        )}
                     </div>
                 )}
             </div>
