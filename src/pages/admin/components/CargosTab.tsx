@@ -312,9 +312,9 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ (() => {
             if (c?.tipo_cliente === 'azienda') {
-                return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || 'ND000000000'
+                return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || 'ND000000000'
             }
-            return c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || ''
+            return c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || ''
         })(),
         /* 33 */ lookupIstatCode(c?.patente_rilasciata_da || c?.citta || ''),
         /* 34 */ c?.telefono || booking.customer_phone || '',
@@ -362,7 +362,7 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
 
     // These fields are only required for persona fisica, not azienda
     if (c?.tipo_cliente !== 'azienda') {
-        if (!c?.numero_patente && !c?.patente_numero && !booking.booking_details?.customer?.driverLicense) {
+        if (!c?.numero_patente && !c?.patente_numero && !booking.booking_details?.customer?.licenseNumber && !booking.booking_details?.customer?.driverLicense) {
             issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'error' })
         }
 
@@ -1055,7 +1055,7 @@ export default function CargosTab() {
                                                         {new Date(b.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                                                     </td>
                                                     <td className="px-3 py-2.5 font-mono text-xs">
-                                                        {b.customerData?.numero_patente || b.customerData?.patente_numero || b.booking_details?.customer?.driverLicense || (
+                                                        {b.customerData?.numero_patente || b.customerData?.patente_numero || b.booking_details?.customer?.licenseNumber || b.booking_details?.customer?.driverLicense || (
                                                             b.customerData?.tipo_cliente === 'azienda'
                                                                 ? <span className="text-theme-text-muted">Azienda</span>
                                                                 : <span className="text-yellow-500">Mancante</span>

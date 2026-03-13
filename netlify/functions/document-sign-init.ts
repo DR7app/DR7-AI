@@ -60,6 +60,7 @@ export const handler: Handler = async (event) => {
                 token,
                 signer_name: signerName,
                 signer_email: signerEmail,
+                signer_phone: signerPhone,
                 status: 'pending',
                 token_expires_at: tokenExpiresAt.toISOString(),
                 original_pdf_hash: originalPdfHash,
