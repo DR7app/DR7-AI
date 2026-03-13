@@ -42,6 +42,8 @@ const ACTION_LABELS: Record<string, string> = {
   update_customer_status: 'Aggiornamento stato cliente',
   delete_fattura: 'Eliminazione fattura',
   send_sdi: 'Invio SDI',
+  send_trustera_document: 'Invio documento Trustera',
+  delete_trustera_document: 'Eliminazione documento Trustera',
   mark_extension_paid: 'Segna estensione pagata',
   mark_booking_extensions_paid: 'Segna prenotazione+estensioni pagata',
   mark_all_customer_paid: 'Segna tutto cliente pagato',

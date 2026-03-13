@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 type SubTab = 'documenti' | 'marketing'
 
@@ -218,6 +219,7 @@ function DocumentiSubTab() {
       const data = await res.json()
       if (res.ok) {
         toast.success(data.message || 'Link di firma inviato via WhatsApp')
+        logAdminAction('send_trustera_document', 'signature', data.requestId, { document: formData.documentName, signer: formData.signerName })
         setShowUpload(false)
         resetForm()
         loadRequests()
@@ -249,6 +251,7 @@ function DocumentiSubTab() {
       const { error } = await supabase.from('signature_requests').delete().eq('id', id)
       if (error) throw error
       toast.success('Richiesta eliminata')
+      logAdminAction('delete_trustera_document', 'signature', id)
       loadRequests()
     } catch (err: any) {
       toast.error('Errore eliminazione: ' + err.message)
