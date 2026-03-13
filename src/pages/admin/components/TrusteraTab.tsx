@@ -217,9 +217,13 @@ function DocumentiSubTab() {
       })
 
       const data = await res.json()
+      console.log('[TRUSTERA] Response:', res.status, res.ok, data)
       if (res.ok) {
         toast.success(data.message || 'Link di firma inviato via WhatsApp')
+        console.log('[TRUSTERA] About to log action, requestId:', data.requestId)
         logAdminAction('send_trustera_document', 'signature', data.requestId, { document: formData.documentName, signer: formData.signerName })
+          .then(() => console.log('[TRUSTERA] logAdminAction completed'))
+          .catch((err: any) => console.error('[TRUSTERA] logAdminAction FAILED:', err))
         setShowUpload(false)
         resetForm()
         loadRequests()

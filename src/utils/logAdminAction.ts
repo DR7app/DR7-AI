@@ -43,9 +43,13 @@ export async function logAdminAction(
 ) {
   try {
     const admin = await getAdminInfo()
-    if (!admin) return
+    if (!admin) {
+      console.warn('[LOG] No admin info found, skipping log for:', action)
+      return
+    }
+    console.log('[LOG] Inserting:', action, entity_type, entity_id)
 
-    await supabase.from('admin_activity_log').insert({
+    const { error: insertError } = await supabase.from('admin_activity_log').insert({
       admin_id: admin.id,
       admin_email: admin.email,
       admin_name: admin.nome,
@@ -54,6 +58,8 @@ export async function logAdminAction(
       entity_id: entity_id || null,
       details: details || {},
     })
+    if (insertError) console.error('[LOG] Insert failed:', insertError)
+    else console.log('[LOG] Insert OK:', action)
   } catch (err) {
     console.error('Failed to log admin action:', err)
   }
