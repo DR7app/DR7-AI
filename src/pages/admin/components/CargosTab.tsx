@@ -485,12 +485,12 @@ export default function CargosTab() {
             const enriched: BookingForCargos[] = await Promise.all(
                 rentalBookings.map(async (b) => {
                     let customerData: CustomerExtended | null = null
-                    // Try by user_id first
+                    // Try by user_id first (user_id links to auth.users.id)
                     if (b.user_id) {
                         const { data: c } = await supabase
                             .from('customers_extended')
                             .select('*')
-                            .eq('id', b.user_id)
+                            .eq('user_id', b.user_id)
                             .maybeSingle()
                         if (c) customerData = c
                     }
