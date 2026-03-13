@@ -131,13 +131,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
           if (emails.length > 0) {
             const { data } = await supabase.from('customers_extended')
-              .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+              .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
               .in('email', emails)
             if (data) for (const c of data) { if (c.email) customersByEmail.set(c.email, c) }
           }
           if (userIds.length > 0) {
             const { data } = await supabase.from('customers_extended')
-              .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+              .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
               .in('id', userIds)
             if (data) for (const c of data) { customersById.set(c.id, c) }
           }
@@ -147,7 +147,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             const cust = (email && customersByEmail.get(email)) || (b.user_id && customersById.get(b.user_id))
             if (cust) {
               const fullName = cust.tipo_cliente === 'azienda'
-                ? cust.denominazione
+                ? (cust.ragione_sociale || cust.denominazione)
                 : `${cust.nome || ''} ${cust.cognome || ''}`.trim()
               if (fullName) b.customer_name = fullName
               if (!b.customer_phone && cust.telefono) b.customer_phone = cust.telefono

@@ -65,7 +65,7 @@ export default function ClientiTab() {
 
   const getDisplayName = (customer: Customer) => {
     if (customer.tipo_cliente === 'azienda') {
-      return customer.denominazione || 'N/A'
+      return customer.ragione_sociale || customer.denominazione || 'N/A'
     } else if (customer.tipo_cliente === 'persona_fisica') {
       return `${customer.nome || ''} ${customer.cognome || ''}`.trim() || 'N/A'
     } else if (customer.tipo_cliente === 'pubblica_amministrazione') {

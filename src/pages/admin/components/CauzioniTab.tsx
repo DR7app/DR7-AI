@@ -63,7 +63,7 @@ export default function CauzioniTab() {
                 .from('cauzioni')
                 .select(`
           *,
-          customers_extended!cliente_id(nome, cognome, denominazione, tipo_cliente, email),
+          customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente, email),
           vehicles!veicolo_id(display_name, plate)
         `)
                 .order('scadenza_cauzione', { ascending: true })
@@ -82,8 +82,8 @@ export default function CauzioniTab() {
 
                 let clienteName = 'Cliente Sconosciuto';
                 if (c.customers_extended) {
-                    if (c.customers_extended.tipo_cliente === 'azienda' && c.customers_extended.denominazione) {
-                        clienteName = c.customers_extended.denominazione;
+                    if (c.customers_extended.tipo_cliente === 'azienda' && (c.customers_extended.ragione_sociale || c.customers_extended.denominazione)) {
+                        clienteName = c.customers_extended.ragione_sociale || c.customers_extended.denominazione;
                     } else if (c.customers_extended.nome || c.customers_extended.cognome) {
                         clienteName = `${c.customers_extended.nome || ''} ${c.customers_extended.cognome || ''}`.trim();
                     }

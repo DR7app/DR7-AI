@@ -534,7 +534,7 @@ export const handler: Handler = async (event) => {
             stato: includePenalties ? 'paid' :
                 (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
-            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || bookingCustomer.fullName || customerData?.nome || 'Cliente',
+            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || bookingCustomer.fullName || (customerData?.nome ? `${customerData.nome} ${customerData.cognome || ''}`.trim() : null) || 'Cliente',
             customer_address: fullAddress || '',
             customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || resolvedPhone || '',
             customer_email: customerData?.email || bookingCustomer.email || resolvedEmail || '',

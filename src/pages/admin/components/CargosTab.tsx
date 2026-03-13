@@ -241,7 +241,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
     let surname = ''
     let firstName = ''
     if (c?.tipo_cliente === 'azienda') {
-        surname = c?.denominazione || c?.cognome || booking.customer_name || ''
+        surname = c?.ragione_sociale || c?.denominazione || c?.cognome || booking.customer_name || ''
         // CARGOS requires NOME even for azienda — use legal representative or repeat denominazione
         firstName = c?.nome_rappresentante || rapp.nome || c?.nome || surname
     } else {
@@ -356,7 +356,7 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
         issues.push({ field: 'Targa', message: 'Targa veicolo mancante', severity: 'error' })
     }
 
-    if (!c?.cognome && !c?.denominazione && !booking.customer_name) {
+    if (!c?.cognome && !c?.ragione_sociale && !c?.denominazione && !booking.customer_name) {
         issues.push({ field: 'Cognome', message: 'Cognome/Denominazione mancante', severity: 'error' })
     }
 
