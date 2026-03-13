@@ -581,16 +581,16 @@ function MarketingConsentSubTab() {
           <p className="text-2xl font-bold text-theme-text-primary">{counts.all}</p>
           <p className="text-sm text-theme-text-muted">Totale</p>
         </button>
-        <button onClick={() => setFilter('yes')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'yes' ? 'bg-green-600/20 border-green-500' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
-          <p className="text-2xl font-bold text-green-400">{counts.yes}</p>
+        <button onClick={() => setFilter('yes')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'yes' ? 'bg-dr7-gold/20 border-dr7-gold' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
+          <p className="text-2xl font-bold text-theme-text-primary">{counts.yes}</p>
           <p className="text-sm text-theme-text-muted">Consenso</p>
         </button>
-        <button onClick={() => setFilter('no')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'no' ? 'bg-red-600/20 border-red-500' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
-          <p className="text-2xl font-bold text-red-400">{counts.no}</p>
+        <button onClick={() => setFilter('no')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'no' ? 'bg-dr7-gold/20 border-dr7-gold' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
+          <p className="text-2xl font-bold text-theme-text-primary">{counts.no}</p>
           <p className="text-sm text-theme-text-muted">Rifiutato</p>
         </button>
-        <button onClick={() => setFilter('unknown')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'unknown' ? 'bg-yellow-600/20 border-yellow-500' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
-          <p className="text-2xl font-bold text-yellow-400">{counts.unknown}</p>
+        <button onClick={() => setFilter('unknown')} className={`rounded-lg p-4 border text-center transition-colors ${filter === 'unknown' ? 'bg-dr7-gold/20 border-dr7-gold' : 'bg-theme-bg-secondary border-theme-border hover:border-theme-text-muted'}`}>
+          <p className="text-2xl font-bold text-theme-text-primary">{counts.unknown}</p>
           <p className="text-sm text-theme-text-muted">Non risposto</p>
         </button>
       </div>
@@ -631,13 +631,13 @@ function MarketingConsentSubTab() {
                     <td className="py-3 px-4 text-theme-text-secondary">{c.telefono || '-'}</td>
                     <td className="py-3 px-4 text-center">
                       {c.marketing_consent === true && (
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-green-600 text-white">Si</span>
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold">Si</span>
                       )}
                       {c.marketing_consent === false && (
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white">No</span>
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-theme-bg-tertiary text-theme-text-muted">No</span>
                       )}
                       {c.marketing_consent === null && (
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-gray-600 text-white">-</span>
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-theme-bg-tertiary text-theme-text-muted">-</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-theme-text-muted">
