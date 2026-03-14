@@ -206,12 +206,14 @@ export const handler: Handler = async (event) => {
             const description = rawDescriptions
                 ? (item.label || 'Servizio')
                 : (item.label ? `${bookingPrefix} - ${item.label}` : bookingPrefix)
+            const itemTotal = Math.round(item.amount * item.quantity * 100) / 100
             return {
                 description,
                 unit_price: item.amount,
                 quantity: item.quantity,
                 vat_rate: 0,
-                total: Math.round(item.amount * item.quantity * 100) / 100
+                total: itemTotal,
+                ...(paymentStatus === 'paid' ? { paymentStatus: 'paid', amountPaid: itemTotal } : {})
             }
         })
 
