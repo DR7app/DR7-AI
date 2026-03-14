@@ -167,7 +167,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             const { data: cust } = await supabase
                 .from('customers_extended')
                 .select('*')
-                .eq('id', booking.user_id)
+                .eq('user_id', booking.user_id)
                 .maybeSingle()
             customerData = cust
         }
