@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 
 /**
  * CARGOS Auto-Send — called after contract is signed
@@ -8,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 const CARGOS_BASE_URL = 'https://cargos.poliziadistato.it/CARGOS_API'
 const CARGOS_USERNAME = process.env.CARGOS_USERNAME || 'C00006117'
 const CARGOS_PASSWORD = process.env.CARGOS_PASSWORD || ''
+const CARGOS_APIKEY = process.env.CARGOS_APIKEY || ''
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -16,7 +18,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 const AGENCY = {
     id: 'RENTORA',
     name: 'RENTORA',
-    locationCode: '092009',
+    locationCode: '420092009',
     address: 'VIALE MARCONI 229 - CAGLIARI (CA)',
     phone: '3472817258',
 }
@@ -30,13 +32,15 @@ const FIELD_SIZES = [
 ]
 
 const ISTAT_CODES: Record<string, string> = {
-    'CAGLIARI': '092009', 'SASSARI': '092066', 'NUORO': '091051',
-    'ORISTANO': '095032', 'QUARTU SANT\'ELENA': '092051', 'OLBIA': '090044',
-    'ALGHERO': '090003', 'CARBONIA': '111006', 'IGLESIAS': '111032',
-    'ROMA': '058091', 'MILANO': '015146', 'TORINO': '001272',
-    'NAPOLI': '063049', 'FIRENZE': '048017', 'BOLOGNA': '037006',
-    'PALERMO': '082053', 'GENOVA': '010025', 'BARI': '072006',
-    'CATANIA': '087015', 'VENEZIA': '027042',
+    'CAGLIARI': '420092009', 'SASSARI': '420090064', 'NUORO': '420091051',
+    'ORISTANO': '420092555', 'QUARTU SANT\'ELENA': '420092051', 'OLBIA': '420090047',
+    'ALGHERO': '420090003', 'CARBONIA': '420092012', 'IGLESIAS': '420092033',
+    'SELARGIUS': '420092068', 'MONSERRATO': '420092109',
+    'ROMA': '412058091', 'MILANO': '403015146', 'TORINO': '401001272',
+    'NAPOLI': '415063049', 'FIRENZE': '409048017', 'BOLOGNA': '408037006',
+    'PALERMO': '419082053', 'GENOVA': '407010025', 'BARI': '416072006',
+    'CATANIA': '419087015', 'VENEZIA': '405027042',
+    'ITALIA': '100000100', 'ITALY': '100000100',
 }
 
 const PAYMENT_TYPE_MAP: Record<string, string> = {
@@ -120,9 +124,9 @@ function guessVehicleModel(name: string): string {
 }
 
 function lookupIstatCode(cityName: string): string {
-    if (!cityName) return '092009'
+    if (!cityName) return '420092009'
     const upper = cityName.toUpperCase().trim()
-    return ISTAT_CODES[upper] || '092009'
+    return ISTAT_CODES[upper] || '420092009'
 }
 
 /**
@@ -294,6 +298,11 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
 
         const record = fields.map((val, i) => padField(String(val), FIELD_SIZES[i])).join('')
 
+        // Validate APIKEY
+        if (!CARGOS_APIKEY || CARGOS_APIKEY.length < 48) {
+            return { success: false, error: 'CARGOS_APIKEY non configurata o troppo corta' }
+        }
+
         // Authenticate with CARGOS
         const basicAuth = 'Basic ' + Buffer.from(`${CARGOS_USERNAME}:${CARGOS_PASSWORD}`).toString('base64')
         const tokenRes = await fetch(`${CARGOS_BASE_URL}/api/Token`, {
@@ -306,18 +315,35 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             return { success: false, error: `CARGOS auth fallita: ${body.error_description || tokenRes.statusText}` }
         }
 
-        const tokenData = await tokenRes.json()
-        const bearerToken = typeof tokenData === 'string' ? tokenData : tokenData.access_token || tokenData.token
+        const rawText = await tokenRes.text()
+        let tokenData: any
+        try { tokenData = JSON.parse(rawText) } catch { tokenData = rawText }
 
-        if (!bearerToken) {
+        let rawToken: string | undefined
+        if (typeof tokenData === 'string') {
+            rawToken = tokenData.replace(/^"|"$/g, '')
+        } else if (tokenData && typeof tokenData === 'object') {
+            rawToken = tokenData.access_token || tokenData.token || tokenData.Token || tokenData.AccessToken
+        }
+
+        if (!rawToken) {
             return { success: false, error: 'CARGOS token non ricevuto' }
         }
+
+        // AES-encrypt token with APIKEY (required by CARGOS API)
+        const aesKey = Buffer.from(CARGOS_APIKEY.substring(0, 32), 'utf8')
+        const aesIv = Buffer.from(CARGOS_APIKEY.substring(32, 48), 'utf8')
+        const cipher = crypto.createCipheriv('aes-256-cbc', aesKey, aesIv)
+        let encrypted = cipher.update(rawToken, 'utf8')
+        encrypted = Buffer.concat([encrypted, cipher.final()])
+        const bearerToken = encrypted.toString('base64')
 
         // Send to CARGOS
         const sendRes = await fetch(`${CARGOS_BASE_URL}/api/Send`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${bearerToken}`,
+                'Organization': CARGOS_USERNAME,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
             },
@@ -330,7 +356,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         }
 
         const sendResult = await sendRes.json()
-        console.log(`[cargos-auto-send] ✅ Booking ${bookingId} sent to CARGOS successfully`, sendResult)
+        console.log(`[cargos-auto-send] Booking ${bookingId} sent to CARGOS successfully`, sendResult)
 
         // Mark booking as sent to CARGOS
         await supabase
