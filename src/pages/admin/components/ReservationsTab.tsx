@@ -1025,11 +1025,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       console.log('[ReservationsTab] Customers from bookings:', customerMap.size)
 
-      // Also fetch from customers_extended (the main source of truth)
-      const { data: customersExtendedData, error: customersExtendedError } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // Also fetch from customers_extended via Netlify function (bypasses RLS, paginates beyond 1000 limit)
+      let customersExtendedData: any[] | null = null
+      let customersExtendedError: any = null
+      try {
+        const custResponse = await fetch('/.netlify/functions/list-customers')
+        const custResult = await custResponse.json()
+        if (custResponse.ok && custResult.customers) {
+          customersExtendedData = custResult.customers
+        } else {
+          customersExtendedError = { message: custResult.error }
+        }
+      } catch (e: any) {
+        customersExtendedError = { message: e.message }
+      }
 
       if (customersExtendedError) {
         console.error('Failed to load customers_extended:', customersExtendedError)
