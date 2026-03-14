@@ -486,13 +486,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       if (bookingsError) throw bookingsError
 
-      // Load customers from customers_extended (includes all customers from all sources)
-      const { data: customersData, error: customersError } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .order('cognome')
-
-      if (customersError) throw customersError
+      // Load customers via Netlify function (bypasses RLS, paginates beyond 1000 limit)
+      let customersData: any[] = []
+      try {
+        const custResponse = await fetch('/.netlify/functions/list-customers')
+        const custResult = await custResponse.json()
+        if (custResponse.ok && custResult.customers) {
+          customersData = custResult.customers
+        }
+      } catch (custErr) {
+        console.error('Failed to load customers via function:', custErr)
+      }
 
       // Load car wash services from database
       const { data: servicesData, error: servicesError } = await supabase
