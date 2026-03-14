@@ -217,6 +217,7 @@ interface Booking {
   pickup_enabled?: boolean
   pickup_address?: { street: string; city: string; zip: string; province: string; notes: string } | null
   pickup_fee?: number
+  notes?: string | null
   contracts?: {
     yousign_status: string | null
     signed_pdf_url: string | null
