@@ -425,6 +425,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     pickup_province: '',
     pickup_notes: '',
     pickup_fee: '0',
+    notes: '',
   })
 
   // Auto-populate second driver fields when customer is selected
@@ -1918,6 +1919,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
       pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
+      notes: booking.booking_details?.notes || booking.notes || '',
     })
 
     setEditingId(booking.id)
@@ -3170,7 +3172,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             province: formData.pickup_province,
             notes: formData.pickup_notes
           } : null,
-          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0'
+          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+          notes: formData.notes || null
         }
       }
 
@@ -3347,6 +3350,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   province: formData.pickup_province
                 } : null,
                 pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+                notes: formData.notes || null,
                 depositOption: insertedBooking?.booking_details?.depositOption,
                 noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
               }
@@ -3372,7 +3376,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             : formData.insurance_option === 'DR7' ? 'Kasko DR7'
             : formData.insurance_option || '-'
           const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
-          const bookingNotes = insertedBooking?.booking_details?.notes || ''
+          const bookingNotes = formData.notes || insertedBooking?.booking_details?.notes || ''
 
           const totalEur = insertedBooking?.price_total ? (insertedBooking.price_total / 100).toFixed(2) : parseFloat(formData.total_amount).toFixed(2)
 
@@ -3595,6 +3599,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_province: '',
       pickup_notes: '',
       pickup_fee: '0',
+      notes: '',
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
@@ -4555,6 +4560,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 label="Valuta"
                 value={formData.currency}
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+              />
+            </div>
+
+            {/* Note */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Note interne sulla prenotazione..."
+                rows={2}
+                className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold text-sm resize-none"
               />
             </div>
 
