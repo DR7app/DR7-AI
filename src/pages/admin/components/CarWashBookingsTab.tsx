@@ -404,7 +404,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   useEffect(() => {
     loadData()
 
-    // Real-time subscription for new bookings AND catalog price changes
+    // Real-time subscription for new bookings, catalog price changes, AND new customers
     const subscription = supabase
       .channel('carwash-bookings-updates')
       .on('postgres_changes',
@@ -420,6 +420,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           console.log('🔄 CarWashBookingsTab: Catalog price update received', payload)
           loadData()
         }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'customers_extended' },
+        () => loadData()
       )
       .subscribe()
 
@@ -483,7 +487,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // Load customers from customers_extended (includes all customers from all sources)
       const { data: customersData, error: customersError } = await supabase
         .from('customers_extended')
-        .select('id, nome, cognome, ragione_sociale, email, telefono')
+        .select('id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono')
         .order('cognome')
 
       if (customersError) throw customersError
@@ -504,13 +508,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         allowedTimeRanges: getAllowedTimeRanges(parseDurationToMinutes(s.duration))
       }))
 
-      // Map customers_extended to Customer interface
-      const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
-        id: c.id,
-        full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),
-        email: c.email,
-        phone: c.telefono
-      }))
+      // Map customers_extended to Customer interface (handle all tipo_cliente)
+      const mappedCustomers: Customer[] = (customersData || []).map((c: any) => {
+        let fullName = ''
+        if (c.tipo_cliente === 'azienda') {
+          fullName = c.denominazione || c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim()
+        } else if (c.tipo_cliente === 'pubblica_amministrazione') {
+          fullName = c.ente_ufficio || c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim()
+        } else {
+          fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || c.ragione_sociale || c.denominazione || ''
+        }
+        return {
+          id: c.id,
+          full_name: fullName || 'N/A',
+          email: c.email,
+          phone: c.telefono
+        }
+      })
 
       setBookings(bookingsData || [])
       setCustomers(mappedCustomers)
