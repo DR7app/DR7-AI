@@ -363,18 +363,18 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
         issues.push({ field: 'Cognome', message: 'Cognome/Denominazione mancante', severity: 'error' })
     }
 
-    // For persona fisica: these are warnings (not blocking) — CARGOS will use defaults
+    // For persona fisica: patente and documento are required by CARGOS
     if (c?.tipo_cliente !== 'azienda') {
         if (!c?.numero_patente && !c?.patente_numero && !bd.customer?.licenseNumber && !bd.customer?.driverLicense) {
-            issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'warning' })
+            issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'error' })
         }
 
         if (!c?.data_nascita && !bd.customer?.birthDate) {
-            issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'warning' })
+            issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'error' })
         }
 
         if (!c?.numero_documento && !bd.customer?.documentNumber) {
-            issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'warning' })
+            issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
         }
 
         if (!c?.luogo_nascita) {

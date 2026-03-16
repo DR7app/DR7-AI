@@ -1291,6 +1291,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.data_nascita) missing.push('data_nascita')
       if (!customer.luogo_nascita) missing.push('luogo_nascita')
       if (!customer.patente && !customer.numero_patente) missing.push('patente')
+      if (!customer.numero_documento) missing.push('numero_documento')
+      if (!customer.tipo_documento) missing.push('tipo_documento')
     }
 
     // Azienda specific

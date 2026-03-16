@@ -32,7 +32,9 @@ const FIELD_LABELS: Record<string, string> = {
     codice_univoco: 'Codice Univoco',
     cf_pa: 'Codice Fiscale',
     ente_ufficio: 'Ente/Ufficio',
-    citta: 'Città'
+    citta: 'Città',
+    numero_documento: 'Numero Documento Identità',
+    tipo_documento: 'Tipo Documento'
 }
 
 export default function MissingFieldsModal({
@@ -173,6 +175,29 @@ export default function MissingFieldsModal({
                         <option value="">Seleziona...</option>
                         <option value="M">Maschio</option>
                         <option value="F">Femmina</option>
+                    </select>
+                    {errors[field] && (
+                        <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
+                    )}
+                </div>
+            )
+        }
+
+        if (field === 'tipo_documento') {
+            return (
+                <div key={field} className="mb-4">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                        {label} *
+                    </label>
+                    <select
+                        value={value}
+                        onChange={(e) => handleChange(field, e.target.value)}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    >
+                        <option value="">Seleziona...</option>
+                        <option value="carta_identita">Carta d'Identità</option>
+                        <option value="passaporto">Passaporto</option>
+                        <option value="patente">Patente di Guida</option>
                     </select>
                     {errors[field] && (
                         <p className="text-red-500 text-xs mt-1">{errors[field]}</p>

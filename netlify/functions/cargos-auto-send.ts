@@ -224,11 +224,10 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         const missing = []
         if (!plate) missing.push('targa')
         if (!surname) missing.push('cognome/denominazione')
+        if (!isAzienda && !licenseNumber) missing.push('patente')
+        if (!isAzienda && !docNumber) missing.push('documento')
         if (missing.length > 0) {
             return { success: false, error: `Dati mancanti per CARGOS: ${missing.join(', ')}` }
-        }
-        if (!licenseNumber) {
-            console.warn(`[cargos-auto-send] Patente mancante per booking ${bookingId} — invio comunque`)
         }
 
         // Payment type
