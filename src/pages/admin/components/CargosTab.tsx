@@ -352,8 +352,10 @@ interface ValidationIssue {
 function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] {
     const issues: ValidationIssue[] = []
     const c = booking.customerData
+    const bd = booking.booking_details || {}
 
-    if (!booking.vehicle_plate && !booking.booking_details?.vehicle_plate) {
+    // Targa is the only hard requirement — CARGOS cannot work without it
+    if (!booking.vehicle_plate && !bd.vehicle_plate && !bd.vehicle?.plate) {
         issues.push({ field: 'Targa', message: 'Targa veicolo mancante', severity: 'error' })
     }
 
@@ -361,18 +363,18 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
         issues.push({ field: 'Cognome', message: 'Cognome/Denominazione mancante', severity: 'error' })
     }
 
-    // These fields are only required for persona fisica, not azienda
+    // For persona fisica: these are warnings (not blocking) — CARGOS will use defaults
     if (c?.tipo_cliente !== 'azienda') {
-        if (!c?.numero_patente && !c?.patente_numero && !booking.booking_details?.customer?.licenseNumber && !booking.booking_details?.customer?.driverLicense) {
-            issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'error' })
+        if (!c?.numero_patente && !c?.patente_numero && !bd.customer?.licenseNumber && !bd.customer?.driverLicense) {
+            issues.push({ field: 'Patente', message: 'Numero patente mancante', severity: 'warning' })
         }
 
-        if (!c?.data_nascita && !booking.booking_details?.customer?.birthDate) {
-            issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'error' })
+        if (!c?.data_nascita && !bd.customer?.birthDate) {
+            issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'warning' })
         }
 
-        if (!c?.numero_documento && !booking.booking_details?.customer?.documentNumber) {
-            issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
+        if (!c?.numero_documento && !bd.customer?.documentNumber) {
+            issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'warning' })
         }
 
         if (!c?.luogo_nascita) {
