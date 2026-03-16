@@ -583,10 +583,21 @@ export default function CargosTab() {
 
             // Check per-record results: data is array of {esito, errore, transactionid}
             const checkResults = Array.isArray(checkData.data) ? checkData.data : (Array.isArray(checkData) ? checkData : [])
+
+            // If response is not an array or empty — unexpected format
+            if (checkResults.length === 0) {
+                const rawResp = JSON.stringify(checkData).substring(0, 300)
+                console.error('[CARGOS] Unexpected Check response format:', rawResp)
+                toast.error(`Risposta Check CARGOS inattesa: ${rawResp}`, { duration: 10000 })
+                setSendResult({ success: 0, errors: selected.length, details: `Check risposta inattesa: ${rawResp}` })
+                setSending(false)
+                return
+            }
+
             const checkErrors = checkResults.filter((r: any) => r.esito === false)
             if (checkErrors.length > 0) {
                 const errorDetails = checkErrors.map((r: any) =>
-                    r.errore?.error_description || r.errore?.error || 'Errore sconosciuto'
+                    r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore) || 'Errore sconosciuto'
                 ).join('; ')
                 toast.error('Validazione CARGOS fallita: ' + errorDetails, { duration: 8000 })
                 setSendResult({ success: 0, errors: checkErrors.length, details: errorDetails })
@@ -613,35 +624,43 @@ export default function CargosTab() {
                 const sendErrors = sendResults.filter((r: any) => r.esito === false)
                 const sendOk = sendResults.filter((r: any) => r.esito === true)
 
-                if (sendErrors.length > 0) {
+                // If response is not an array or empty — something unexpected
+                if (sendResults.length === 0) {
+                    const rawResp = JSON.stringify(sendData).substring(0, 300)
+                    console.error('[CARGOS] Unexpected Send response format:', rawResp)
+                    toast.error(`Risposta CARGOS inattesa: ${rawResp}`, { duration: 10000 })
+                    setSendResult({ success: 0, errors: selected.length, details: `Risposta inattesa: ${rawResp}` })
+                } else if (sendErrors.length > 0) {
                     const errorDetails = sendErrors.map((r: any) =>
-                        r.errore?.error_description || r.errore?.error || 'Errore sconosciuto'
+                        r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore) || 'Errore sconosciuto'
                     ).join('; ')
                     toast.error(`Errore invio: ${errorDetails}`, { duration: 8000 })
                     setSendResult({ success: sendOk.length, errors: sendErrors.length, details: errorDetails })
                 } else {
-                    toast.success(`${selected.length} contratti inviati a CARGOS con successo!`, { duration: 5000 })
-                    setSendResult({ success: selected.length, errors: 0, details: sendResults.map((r: any) => r.transactionid).filter(Boolean).join(', ') || 'OK' })
-                }
-                // Mark as sent in UI
-                setBookings(prev => prev.map(b =>
-                    selectedIds.has(b.id) ? { ...b, cargosStatus: 'sent' as const } : b
-                ))
-                // Persist cargos_sent in booking_details
-                for (const b of selected) {
-                    try {
-                        await supabase
-                            .from('bookings')
-                            .update({
-                                booking_details: {
-                                    ...b.booking_details,
-                                    cargos_sent: true,
-                                    cargos_sent_at: new Date().toISOString(),
-                                }
-                            })
-                            .eq('id', b.id)
-                    } catch (e) {
-                        console.error('[CARGOS] Failed to persist cargos_sent for', b.id, e)
+                    // Real success — mark as sent
+                    const txIds = sendResults.map((r: any) => r.transactionid).filter(Boolean).join(', ')
+                    toast.success(`${selected.length} contratti inviati a CARGOS! TX: ${txIds || 'OK'}`, { duration: 5000 })
+                    setSendResult({ success: selected.length, errors: 0, details: txIds || 'OK' })
+
+                    // Only mark as sent when we have actual successful results
+                    setBookings(prev => prev.map(b =>
+                        selectedIds.has(b.id) ? { ...b, cargosStatus: 'sent' as const } : b
+                    ))
+                    for (const b of selected) {
+                        try {
+                            await supabase
+                                .from('bookings')
+                                .update({
+                                    booking_details: {
+                                        ...b.booking_details,
+                                        cargos_sent: true,
+                                        cargos_sent_at: new Date().toISOString(),
+                                    }
+                                })
+                                .eq('id', b.id)
+                        } catch (e) {
+                            console.error('[CARGOS] Failed to persist cargos_sent for', b.id, e)
+                        }
                     }
                 }
             }
