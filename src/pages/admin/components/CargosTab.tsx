@@ -1096,20 +1096,38 @@ export default function CargosTab() {
                                                             </span>
                                                         )}
                                                         {b.cargosStatus === 'error' && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs" title={b.cargosError}>
-                                                                Errore
-                                                            </span>
+                                                            <div>
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs">
+                                                                    Errore
+                                                                </span>
+                                                                {b.cargosError && (
+                                                                    <p className="text-[10px] text-red-400 mt-1 max-w-[200px] break-words">{b.cargosError}</p>
+                                                                )}
+                                                            </div>
                                                         )}
                                                         {b.cargosStatus === 'pending' && hasError && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs" title={issues.map(i => i.message).join('\n')}>
-                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" /></svg>
-                                                                Dati incompleti
-                                                            </span>
+                                                            <div>
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs">
+                                                                    Dati incompleti
+                                                                </span>
+                                                                <ul className="text-[10px] text-red-400 mt-1 list-disc list-inside">
+                                                                    {issues.filter(i => i.severity === 'error').map((i, idx) => (
+                                                                        <li key={idx}>{i.message}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
                                                         )}
                                                         {b.cargosStatus === 'pending' && !hasError && hasWarning && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-xs">
-                                                                Pronto (avvisi)
-                                                            </span>
+                                                            <div>
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-xs">
+                                                                    Pronto (avvisi)
+                                                                </span>
+                                                                <ul className="text-[10px] text-yellow-400/70 mt-1 list-disc list-inside">
+                                                                    {issues.filter(i => i.severity === 'warning').map((i, idx) => (
+                                                                        <li key={idx}>{i.field}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
                                                         )}
                                                         {b.cargosStatus === 'pending' && !hasError && !hasWarning && (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-muted text-xs">
