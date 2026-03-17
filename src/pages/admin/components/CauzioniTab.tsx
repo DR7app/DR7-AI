@@ -154,6 +154,11 @@ export default function CauzioniTab() {
         visibleCauzioni.filter(c => !c.data_incasso)
     ).sort((a, b) => a.days_until_deadline - b.days_until_deadline)
 
+    // Storico: processed cauzioni (Restituita, Sbloccata, Bloccata, Danno)
+    const storicoCauzioni = applySearch(
+        cauzioni.filter(c => c.stato === 'Restituita' || c.stato === 'Sbloccata' || c.stato === 'Bloccata' || c.stato === 'Danno')
+    ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
     // --- Handlers ---
 
     const handleMarkRestituita = async (cauzione: Cauzione) => {
@@ -360,6 +365,34 @@ export default function CauzioniTab() {
         }
     }
 
+    const handleRevertStato = async (cauzione: Cauzione, newStato: string) => {
+        try {
+            const updateData: any = {
+                stato: newStato,
+                updated_at: new Date().toISOString()
+            }
+            // Clear date fields when reverting
+            if (newStato === 'Attiva' || newStato === 'In scadenza') {
+                updateData.data_restituzione = null
+                updateData.data_sblocco = null
+                updateData.data_incasso = null
+                updateData.note = `Ripristinata da ${cauzione.stato}`
+            }
+
+            const { error } = await supabase
+                .from('cauzioni')
+                .update(updateData)
+                .eq('id', cauzione.id)
+
+            if (error) throw error
+            toast.success(`Cauzione ripristinata a "${newStato}"`)
+            fetchCauzioni()
+        } catch (error: any) {
+            console.error('Error reverting cauzione:', error)
+            toast.error(`Errore: ${error.message}`)
+        }
+    }
+
     const handleEdit = (cauzione: Cauzione) => {
         setSelectedCauzione(cauzione)
         setShowModal(true)
@@ -389,6 +422,16 @@ export default function CauzioniTab() {
         if (cauzione.is_overdue) return 'Scaduta'
         if (cauzione.stato === 'In scadenza') return 'In scadenza'
         return 'Attiva' // Incassata and within deadline
+    }
+
+    const getStoricoStatoBadge = (stato: string) => {
+        switch (stato) {
+            case 'Restituita': return 'bg-green-600 text-white'
+            case 'Sbloccata': return 'bg-blue-600 text-white'
+            case 'Bloccata': return 'bg-orange-600 text-white'
+            case 'Danno': return 'bg-red-600 text-white'
+            default: return 'bg-gray-600 text-white'
+        }
     }
 
     // --- Shared table row renderer ---
@@ -637,6 +680,93 @@ export default function CauzioniTab() {
                                             )}
                                         </>)
                                     )
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* === SECTION: STORICO === */}
+            <div className="mb-8">
+                <h3 className="text-lg font-bold text-theme-text-secondary mb-3 flex items-center gap-2">
+                    STORICO
+                    <span className="text-sm font-normal text-theme-text-secondary">({storicoCauzioni.length})</span>
+                </h3>
+                <div className="border border-theme-border rounded-3xl overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-theme-bg-hover border-b border-theme-border">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Veicolo</th>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Importo</th>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Metodo</th>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Note</th>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
+                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {storicoCauzioni.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="px-4 py-6 text-center text-theme-text-secondary">
+                                            Nessuna cauzione nello storico
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    storicoCauzioni.map((cauzione) => (
+                                        <tr
+                                            key={cauzione.id}
+                                            className="border-b border-theme-border hover:bg-theme-bg-hover transition-colors"
+                                        >
+                                            <td className="px-4 py-3 text-sm text-theme-text-primary">{cauzione.cliente_nome}</td>
+                                            <td className="px-4 py-3 text-sm text-theme-text-primary">
+                                                <div>{cauzione.veicolo_modello}</div>
+                                                <div className="text-xs text-theme-text-secondary">{cauzione.veicolo_targa}</div>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm font-semibold text-theme-text-primary">
+                                                €{Number(cauzione.importo).toFixed(2)}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-theme-text-primary capitalize">{cauzione.metodo}</td>
+                                            <td className="px-4 py-3">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStoricoStatoBadge(cauzione.stato)}`}>
+                                                    {cauzione.stato}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-theme-text-secondary max-w-[200px] truncate">
+                                                {cauzione.note || '—'}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                                                {new Date(cauzione.updated_at).toLocaleDateString('it-IT')}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex gap-2 flex-wrap">
+                                                    <button
+                                                        onClick={() => handleEdit(cauzione)}
+                                                        className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
+                                                    >
+                                                        Modifica
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRevertStato(cauzione, 'Attiva')}
+                                                        className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
+                                                    >
+                                                        RIPRISTINA
+                                                    </button>
+                                                    {cauzione.stato === 'Danno' && (
+                                                        <button
+                                                            onClick={() => handleRevertStato(cauzione, 'Incassata')}
+                                                            className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                        >
+                                                            INCASSATA
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
                                 )}
                             </tbody>
                         </table>
