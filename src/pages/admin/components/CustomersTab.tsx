@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
-import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface Customer {
   id: string
@@ -113,6 +113,8 @@ export default function CustomersTab() {
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
+  const [exporting, setExporting] = useState(false)
+
   // Gift Voucher feature
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
@@ -195,6 +197,73 @@ export default function CustomersTab() {
     }
 
   }, [allCustomers, searchQuery, currentPage])
+
+  async function exportCustomersCSV() {
+    setExporting(true)
+    try {
+      const csvHeaders = [
+        'Nome', 'Cognome', 'Email', 'Telefono', 'Tipo Cliente',
+        'Codice Fiscale', 'Partita IVA', 'Indirizzo', 'CAP', 'Città',
+        'Provincia', 'Nazione', 'Data Nascita', 'Luogo Nascita',
+        'Ragione Sociale', 'Denominazione', 'Numero Patente',
+        'Tipo Patente', 'Scadenza Patente', 'Note', 'Status',
+        'Membership', 'Creato il'
+      ]
+
+      const escapeCSV = (val: any) => {
+        if (val == null) return ''
+        const str = String(val)
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`
+        }
+        return str
+      }
+
+      const rows = allCustomers.map(c => [
+        c.nome || '', c.cognome || '', c.email || '', c.telefono || c.phone || '',
+        c.tipo_cliente || '', c.codice_fiscale || '', c.partita_iva || '',
+        c.indirizzo || '', c.codice_postale || '', c.citta_residenza || c.citta || '',
+        c.provincia_residenza || '', c.nazione || '', c.data_nascita || '',
+        c.luogo_nascita || '', c.ragione_sociale || '', c.denominazione || '',
+        c.numero_patente || c.metadata?.patente?.numero || '',
+        c.tipo_patente || c.metadata?.patente?.tipo || '',
+        c.scadenza_patente || c.metadata?.patente?.scadenza || '',
+        c.notes || '', c.status || '', c.membership_tier || '',
+        c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : ''
+      ].map(escapeCSV))
+
+      const csvContent = [csvHeaders.join(','), ...rows.map(r => r.join(','))].join('\n')
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+
+      // Zip if > 5MB
+      if (blob.size > 5 * 1024 * 1024) {
+        const { default: JSZip } = await import('jszip')
+        const zip = new JSZip()
+        zip.file('clienti_dr7.csv', csvContent)
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        const url = URL.createObjectURL(zipBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `clienti_dr7_${new Date().toISOString().slice(0, 10)}.zip`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `clienti_dr7_${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+
+      toast.success(`${allCustomers.length} clienti esportati!`)
+    } catch (err: any) {
+      console.error('Export error:', err)
+      toast.error('Errore durante esportazione')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   async function loadCustomers() {
     setLoading(true)
@@ -554,7 +623,6 @@ export default function CustomersTab() {
       }
 
       console.log('[handleDelete] Success! Removing from state. Current allCustomers count:', allCustomers.length)
-      logAdminAction('delete_customer', 'customer', id)
 
       // Remove from allCustomers - the useEffect will update customers automatically
       setAllCustomers(prevAll => {
@@ -997,7 +1065,6 @@ export default function CustomersTab() {
         c.id === customerId ? { ...c, status: newStatus } : c
       ))
 
-      logAdminAction('update_customer_status', 'customer', customerId, { status: newStatus })
       alert(`Status aggiornato a: ${statusLabel}`)
     } catch (error: any) {
       console.error('Error updating customer status:', error)
@@ -1281,22 +1348,7 @@ export default function CustomersTab() {
                     </div>
                     <div>
                       <span className="text-sm text-theme-text-muted">Data Scadenza:</span>
-                      {(() => {
-                        const scad = viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza
-                        if (!scad) return <p className="text-sm text-theme-text-primary font-medium">-</p>
-                        const isExpired = new Date(scad) < new Date()
-                        const diffDays = Math.ceil((new Date(scad).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-                        const isExpiringSoon = diffDays > 0 && diffDays <= 30
-                        return (
-                          <div className="flex items-center gap-2">
-                            <p className={`text-sm font-medium ${isExpired ? 'text-red-400' : isExpiringSoon ? 'text-amber-400' : 'text-theme-text-primary'}`}>
-                              {new Date(scad).toLocaleDateString('it-IT')}
-                            </p>
-                            {isExpired && <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400">SCADUTA</span>}
-                            {isExpiringSoon && <span className="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-[10px] font-bold text-amber-400">SCADE TRA {diffDays}gg</span>}
-                          </div>
-                        )
-                      })()}
+                      <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza || '-'}</p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-sm text-theme-text-muted">Indirizzo:</span>
@@ -1905,6 +1957,16 @@ export default function CustomersTab() {
                 </button>
               </div>
             )}
+            <button
+              onClick={exportCustomersCSV}
+              disabled={exporting || allCustomers.length === 0}
+              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {exporting ? 'Esportando...' : 'Esporta CSV'}
+            </button>
             <Button onClick={() => {
               setSelectedCustomer(null)  // Clear any previous selection
               setShowNewClientModal(true)
