@@ -14,7 +14,7 @@ interface Cauzione {
     scadenza_cauzione: string
     importo: number
     metodo: 'bonifico' | 'carta' | 'preautorizzazione'
-    stato: 'Attiva' | 'In scadenza' | 'Restituita' | 'Sbloccata' | 'Incassata' | 'Bloccata'
+    stato: 'Attiva' | 'In scadenza' | 'Restituita' | 'Sbloccata' | 'Incassata' | 'Bloccata' | 'Danno'
     note: string | null
     data_restituzione: string | null
     data_sblocco: string | null
