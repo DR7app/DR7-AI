@@ -86,16 +86,31 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
 
             const paidAmount = amountPaid ? parseFloat(amountPaid) : cartTotal
-            const newEntries = cart.map(c => ({
-                label: c.label,
-                amount: c.unitPrice,
-                quantity: c.quantity,
-                total: Math.round(c.unitPrice * c.quantity * 100) / 100,
-                note: note || '',
-                date: italyDate,
-                paymentStatus,
-                amountPaid: paymentStatus === 'paid' ? paidAmount : 0
-            }))
+            const isPartial = paymentStatus === 'paid' && paidAmount < cartTotal
+
+            // For partial payments, distribute paid amount proportionally across items
+            const newEntries = cart.map(c => {
+                const itemTotal = Math.round(c.unitPrice * c.quantity * 100) / 100
+                let itemPaid = 0
+                if (paymentStatus === 'paid') {
+                    if (isPartial) {
+                        // Proportional: each item gets (its share / total) * amountPaid
+                        itemPaid = Math.round((itemTotal / cartTotal) * paidAmount * 100) / 100
+                    } else {
+                        itemPaid = itemTotal
+                    }
+                }
+                return {
+                    label: c.label,
+                    amount: c.unitPrice,
+                    quantity: c.quantity,
+                    total: itemTotal,
+                    note: note || '',
+                    date: italyDate,
+                    paymentStatus: isPartial ? 'partial' : paymentStatus,
+                    amountPaid: itemPaid
+                }
+            })
 
             const { error: updateErr } = await supabase
                 .from('bookings')
