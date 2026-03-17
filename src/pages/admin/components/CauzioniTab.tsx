@@ -36,6 +36,7 @@ export default function CauzioniTab() {
     const [selectedCauzione, setSelectedCauzione] = useState<Cauzione | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [filterMetodo, setFilterMetodo] = useState<string>('all')
+    const [showStorico, setShowStorico] = useState(false)
 
     // KPI Stats
     const [stats, setStats] = useState({
@@ -506,12 +507,23 @@ export default function CauzioniTab() {
             {/* Header */}
             <div className="mb-6 flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-theme-text-primary">Cauzioni</h2>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors"
-                >
-                    Nuova Cauzione
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowStorico(true)}
+                        className="p-2 bg-theme-bg-tertiary border border-theme-border rounded-full hover:bg-theme-bg-hover transition-colors"
+                        title="Storico"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors"
+                    >
+                        Nuova Cauzione
+                    </button>
+                </div>
             </div>
 
             {/* KPI Cards */}
@@ -687,92 +699,85 @@ export default function CauzioniTab() {
                 </div>
             </div>
 
-            {/* === SECTION: STORICO === */}
-            <div className="mb-8">
-                <h3 className="text-lg font-bold text-theme-text-secondary mb-3 flex items-center gap-2">
-                    STORICO
-                    <span className="text-sm font-normal text-theme-text-secondary">({storicoCauzioni.length})</span>
-                </h3>
-                <div className="border border-theme-border rounded-3xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-theme-bg-hover border-b border-theme-border">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Veicolo</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Importo</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Metodo</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Note</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {storicoCauzioni.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="px-4 py-6 text-center text-theme-text-secondary">
-                                            Nessuna cauzione nello storico
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    storicoCauzioni.map((cauzione) => (
-                                        <tr
-                                            key={cauzione.id}
-                                            className="border-b border-theme-border hover:bg-theme-bg-hover transition-colors"
-                                        >
-                                            <td className="px-4 py-3 text-sm text-theme-text-primary">{cauzione.cliente_nome}</td>
-                                            <td className="px-4 py-3 text-sm text-theme-text-primary">
-                                                <div>{cauzione.veicolo_modello}</div>
-                                                <div className="text-xs text-theme-text-secondary">{cauzione.veicolo_targa}</div>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm font-semibold text-theme-text-primary">
-                                                €{Number(cauzione.importo).toFixed(2)}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-theme-text-primary capitalize">{cauzione.metodo}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStoricoStatoBadge(cauzione.stato)}`}>
-                                                    {cauzione.stato}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-theme-text-secondary max-w-[200px] truncate">
-                                                {cauzione.note || '—'}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                                                {new Date(cauzione.updated_at).toLocaleDateString('it-IT')}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex gap-2 flex-wrap">
-                                                    <button
-                                                        onClick={() => handleEdit(cauzione)}
-                                                        className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
-                                                    >
-                                                        Modifica
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleRevertStato(cauzione, 'Attiva')}
-                                                        className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
-                                                    >
-                                                        RIPRISTINA
-                                                    </button>
-                                                    {cauzione.stato === 'Danno' && (
-                                                        <button
-                                                            onClick={() => handleRevertStato(cauzione, 'Incassata')}
-                                                            className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
-                                                        >
-                                                            INCASSATA
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+            {/* === STORICO SLIDE-OVER PANEL === */}
+            {showStorico && (
+                <div className="fixed inset-0 z-50 flex justify-end">
+                    <div className="absolute inset-0 bg-black/50" onClick={() => setShowStorico(false)} />
+                    <div className="relative w-full max-w-3xl bg-theme-bg-primary shadow-xl overflow-y-auto animate-slide-in-right">
+                        <div className="sticky top-0 bg-theme-bg-primary border-b border-theme-border p-4 flex justify-between items-center z-10">
+                            <h3 className="text-xl font-bold text-theme-text-primary">Storico Cauzioni ({storicoCauzioni.length})</h3>
+                            <button
+                                onClick={() => setShowStorico(false)}
+                                className="p-2 hover:bg-theme-bg-hover rounded-full transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            {storicoCauzioni.length === 0 ? (
+                                <p className="text-center text-theme-text-secondary py-8">Nessuna cauzione nello storico</p>
+                            ) : (
+                                storicoCauzioni.map((cauzione) => (
+                                    <div key={cauzione.id} className="bg-theme-bg-tertiary border border-theme-border rounded-2xl p-4">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <div className="font-semibold text-theme-text-primary">{cauzione.cliente_nome}</div>
+                                                <div className="text-sm text-theme-text-secondary">{cauzione.veicolo_modello} — {cauzione.veicolo_targa}</div>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStoricoStatoBadge(cauzione.stato)}`}>
+                                                {cauzione.stato}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                                            <div>
+                                                <span className="text-theme-text-secondary">Importo: </span>
+                                                <span className="font-semibold text-theme-text-primary">€{Number(cauzione.importo).toFixed(2)}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-theme-text-secondary">Metodo: </span>
+                                                <span className="text-theme-text-primary capitalize">{cauzione.metodo}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-theme-text-secondary">Data: </span>
+                                                <span className="text-theme-text-primary">{new Date(cauzione.updated_at).toLocaleDateString('it-IT')}</span>
+                                            </div>
+                                        </div>
+                                        {cauzione.note && (
+                                            <div className="text-sm text-theme-text-secondary mb-3">
+                                                <span className="font-medium">Note:</span> {cauzione.note}
+                                            </div>
+                                        )}
+                                        <div className="flex gap-2 flex-wrap">
+                                            <button
+                                                onClick={() => { setShowStorico(false); handleEdit(cauzione) }}
+                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
+                                            >
+                                                Modifica
+                                            </button>
+                                            <button
+                                                onClick={() => handleRevertStato(cauzione, 'Attiva')}
+                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
+                                            >
+                                                RIPRISTINA
+                                            </button>
+                                            {cauzione.stato === 'Danno' && (
+                                                <button
+                                                    onClick={() => handleRevertStato(cauzione, 'Incassata')}
+                                                    className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                >
+                                                    INCASSATA
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Modal */}
             {showModal && (
