@@ -126,7 +126,7 @@ export default function CauzioniTab() {
     }
 
     // --- Section Filters ---
-    const visibleCauzioni = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata' && c.stato !== 'Bloccata')
+    const visibleCauzioni = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata' && c.stato !== 'Bloccata' && c.stato !== 'Danno')
 
     const applySearch = (list: Cauzione[]) => list.filter(c => {
         const matchesSearch = searchTerm === '' ||
@@ -346,6 +346,7 @@ export default function CauzioniTab() {
                 .update({
                     stato: 'Danno',
                     note: 'CASSA: Danno',
+                    data_incasso: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', cauzione.id)
