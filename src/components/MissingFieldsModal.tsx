@@ -33,8 +33,8 @@ const FIELD_LABELS: Record<string, string> = {
     cf_pa: 'Codice Fiscale',
     ente_ufficio: 'Ente/Ufficio',
     citta: 'Città',
-    numero_documento: 'Numero Documento Identità',
-    tipo_documento: 'Tipo Documento'
+    documento_numero: 'Numero Documento Identità',
+    documento_tipo: 'Tipo Documento'
 }
 
 export default function MissingFieldsModal({
@@ -183,7 +183,7 @@ export default function MissingFieldsModal({
             )
         }
 
-        if (field === 'tipo_documento') {
+        if (field === 'documento_tipo') {
             return (
                 <div key={field} className="mb-4">
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">

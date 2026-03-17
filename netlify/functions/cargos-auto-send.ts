@@ -219,7 +219,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         // Validate minimum required fields — only block on targa and surname
         const plate = (booking.vehicle_plate || bd.vehicle_plate || bd.vehicle?.plate || '').toUpperCase()
         const licenseNumber = (isAzienda ? rapp.patente : '') || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || (isAzienda ? 'ND000000000' : '')
-        const docNumber = c?.numero_documento || bd.customer?.documentNumber || ''
+        const docNumber = c?.documento_numero || bd.customer?.documentNumber || ''
 
         const missing = []
         if (!plate) missing.push('targa')
@@ -278,7 +278,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             /* 26 */ lookupIstatCode(c?.nazionalita || 'CAGLIARI'),
             /* 27 */ lookupIstatCode(c?.citta || ''),
             /* 28 */ `${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`.trim(),
-            /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || 'CI'] || 'CI',
+            /* 29 */ DOC_TYPE_MAP[c?.documento_tipo || 'CI'] || 'CI',
             /* 30 */ docNumber,
             /* 31 */ lookupIstatCode(c?.citta || ''),
             /* 32 */ licenseNumber,

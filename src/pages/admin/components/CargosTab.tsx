@@ -40,8 +40,8 @@ interface CustomerExtended {
     cognome_rappresentante?: string
     data_nascita_rappresentante?: string
     cf_rappresentante?: string
-    tipo_documento?: string
-    numero_documento?: string
+    documento_tipo?: string
+    documento_numero?: string
     documento_rilasciato_da?: string
     indirizzo?: string
     citta?: string
@@ -308,8 +308,8 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 26 */ lookupIstatCode(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
         /* 27 */ lookupIstatCode(c?.citta || ''),
         /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
-        /* 29 */ DOC_TYPE_MAP[c?.tipo_documento || rapp.documento?.tipo || 'CI'] || 'IDENT',
-        /* 30 */ c?.numero_documento || rapp.documento?.numero || bd.customer?.documentNumber || '',
+        /* 29 */ DOC_TYPE_MAP[c?.documento_tipo || rapp.documento?.tipo || 'CI'] || 'IDENT',
+        /* 30 */ c?.documento_numero || rapp.documento?.numero || bd.customer?.documentNumber || '',
         /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ (() => {
             if (c?.tipo_cliente === 'azienda') {
@@ -373,7 +373,7 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
             issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'error' })
         }
 
-        if (!c?.numero_documento && !bd.customer?.documentNumber) {
+        if (!c?.documento_numero && !bd.customer?.documentNumber) {
             issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
         }
 
@@ -767,8 +767,8 @@ export default function CargosTab() {
                 formatDateOnlyCargos(c?.data_nascita || ''),
                 c?.luogo_nascita || '',
                 c?.numero_patente || c?.patente_numero || '',
-                c?.tipo_documento || 'CI',
-                c?.numero_documento || '',
+                c?.documento_tipo || 'CI',
+                c?.documento_numero || '',
                 c?.telefono || b.customer_phone || ''
             ].join(',')
         })
@@ -800,7 +800,7 @@ export default function CargosTab() {
             xml += `    <Restituzione data="${formatDateCargos(b.dropoff_date)}" luogo="${AGENCY.locationCode}" indirizzo="${AGENCY.address}"/>\n`
             xml += `    <Agenzia id="${AGENCY.id}" nome="${AGENCY.name}" indirizzo="${AGENCY.address}" tel="${AGENCY.phone}"/>\n`
             xml += `    <Veicolo tipo="${guessVehicleType(b.vehicle_name || '')}" marca="${guessVehicleBrand(b.vehicle_name || '')}" modello="${guessVehicleModel(b.vehicle_name || '')}" targa="${b.vehicle_plate || ''}"/>\n`
-            xml += `    <Conducente cognome="${surname.toUpperCase()}" nome="${name.toUpperCase()}" nascita="${formatDateOnlyCargos(c?.data_nascita || '')}" luogoNascita="${c?.luogo_nascita || ''}" patente="${c?.numero_patente || c?.patente_numero || ''}" documento="${c?.numero_documento || ''}" tel="${c?.telefono || b.customer_phone || ''}"/>\n`
+            xml += `    <Conducente cognome="${surname.toUpperCase()}" nome="${name.toUpperCase()}" nascita="${formatDateOnlyCargos(c?.data_nascita || '')}" luogoNascita="${c?.luogo_nascita || ''}" patente="${c?.numero_patente || c?.patente_numero || ''}" documento="${c?.documento_numero || ''}" tel="${c?.telefono || b.customer_phone || ''}"/>\n`
             xml += `  </Contratto>\n`
         })
 
