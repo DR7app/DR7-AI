@@ -109,8 +109,14 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
             if (updateErr) throw new Error('Errore nel salvataggio del danno.')
 
-            if (paymentStatus === 'paid') {
-                // PAGATO: generate fattura + send to SDI
+            const isFullyPaid = paymentStatus === 'paid' && paidAmount >= cartTotal
+
+            if (paymentStatus === 'paid' && paidAmount < cartTotal) {
+                // PARTIAL: save but no fattura
+                toast.success(`Danno registrato (Parziale: €${paidAmount.toFixed(2)} / €${cartTotal.toFixed(2)}) — fattura non generata`)
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
+            } else if (isFullyPaid) {
+                // FULLY PAID: generate fattura + send to SDI
                 const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
