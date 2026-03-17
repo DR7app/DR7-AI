@@ -1278,7 +1278,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const missing: string[] = []
 
     // Common fields
-    if (!customer.codice_fiscale) missing.push('codice_fiscale')
     if (!customer.indirizzo) missing.push('indirizzo')
     if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
     if (!customer.provincia_residenza) missing.push('provincia_residenza')
@@ -1286,6 +1285,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     // Persona Fisica specific
     if (customer.tipo_cliente === 'persona_fisica' || !customer.tipo_cliente) {
+      if (!customer.codice_fiscale) missing.push('codice_fiscale')
       if (!customer.nome) missing.push('nome')
       if (!customer.cognome) missing.push('cognome')
       if (!customer.data_nascita) missing.push('data_nascita')
@@ -1295,9 +1295,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.documento_tipo) missing.push('documento_tipo')
     }
 
-    // Azienda specific
-    if (customer.tipo_cliente === 'azienda' && !customer.partita_iva) {
-      missing.push('partita_iva')
+    // Azienda specific — partita_iva is enough, codice_fiscale not required
+    if (customer.tipo_cliente === 'azienda') {
+      if (!customer.partita_iva && !customer.codice_fiscale) missing.push('partita_iva')
     }
 
     return missing
