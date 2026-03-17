@@ -333,11 +333,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
       if (!formData.sede_legale) newErrors.sede_legale = 'Sede legale obbligatoria'
 
-      // Optional CF validation if provided
-      if (formData.cf_azienda && !validateCodiceFiscale(formData.cf_azienda)) {
-        newErrors.cf_azienda = 'Codice Fiscale non valido (16 caratteri)'
-      }
-
       // Legal representative validations
       if (!formData.nome_rappresentante) newErrors.nome_rappresentante = 'Nome rappresentante obbligatorio'
       if (!formData.cognome_rappresentante) newErrors.cognome_rappresentante = 'Cognome rappresentante obbligatorio'
@@ -977,19 +972,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   />
                   {errors.partita_iva && <p className="text-red-500 text-xs mt-1">{errors.partita_iva}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Codice Fiscale
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.cf_azienda}
-                    onChange={(e) => setFormData({ ...formData, cf_azienda: e.target.value.toUpperCase() })}
-                    maxLength={16}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                  />
-                  {errors.cf_azienda && <p className="text-red-500 text-xs mt-1">{errors.cf_azienda}</p>}
-                </div>
+                <div></div>
               </div>
 
               <div>
