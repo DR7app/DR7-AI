@@ -350,15 +350,15 @@ export default function CauzioniTab() {
             const { error } = await supabase
                 .from('cauzioni')
                 .update({
-                    stato: 'Danno',
-                    note: 'CASSA: Danno',
+                    stato: 'Bloccata',
+                    note: 'Incassata in cassa',
                     data_incasso: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', cauzione.id)
 
             if (error) throw error
-            toast.success('Cauzione incassata come danno')
+            toast.success('Cauzione incassata in cassa')
             fetchCauzioni()
         } catch (error: any) {
             console.error('Error marking cauzione as danno:', error)
