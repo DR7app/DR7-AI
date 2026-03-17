@@ -56,6 +56,30 @@ interface InternalWashBreakdown {
   count: number
 }
 
+interface CauzioneReportItem {
+  id: string
+  cliente: string
+  veicolo: string
+  targa: string
+  importo: number
+  metodo: string
+  stato: string
+  note: string | null
+  data_incasso: string | null
+  updated_at: string
+}
+
+interface CauzioniReportData {
+  month: string
+  totaleCauzioni: number
+  totaleIncassato: number
+  totaleRestituito: number
+  totaleSbloccato: number
+  totaleDanni: number
+  byStato: { stato: string; count: number; totale: number }[]
+  cauzioni: CauzioneReportItem[]
+}
+
 interface WashReportData {
   month: string
   daysInMonth: number
@@ -95,12 +119,13 @@ export default function ReportsTab() {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [activeReport, setActiveReport] = useState<'vehicles' | 'washes'>('vehicles')
+  const [activeReport, setActiveReport] = useState<'vehicles' | 'washes' | 'cauzioni'>('vehicles')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const [vehicleData, setVehicleData] = useState<VehicleReportData | null>(null)
   const [washData, setWashData] = useState<WashReportData | null>(null)
+  const [cauzioniData, setCauzioniData] = useState<CauzioniReportData | null>(null)
 
   const [plateSearch, setPlateSearch] = useState('')
   const [sortField, setSortField] = useState<keyof VehicleReport>('utilizationRate')
@@ -115,8 +140,10 @@ export default function ReportsTab() {
       if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
       if (activeReport === 'vehicles') {
         setVehicleData(data)
-      } else {
+      } else if (activeReport === 'washes') {
         setWashData(data)
+      } else {
+        setCauzioniData(data)
       }
     } catch (err: any) {
       setError(err.message || 'Errore sconosciuto')
@@ -344,6 +371,16 @@ export default function ReportsTab() {
                 }`}
               >
                 Lavaggi
+              </button>
+              <button
+                onClick={() => setActiveReport('cauzioni')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                  activeReport === 'cauzioni'
+                    ? 'bg-dr7-gold text-black border-dr7-gold'
+                    : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
+                }`}
+              >
+                Cauzioni
               </button>
             </div>
           </div>
@@ -623,8 +660,132 @@ export default function ReportsTab() {
         </div>
       )}
 
+      {/* Cauzioni Report */}
+      {activeReport === 'cauzioni' && cauzioniData && (
+        <div className="space-y-4">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <p className="text-xs text-theme-text-muted">Totale Operazioni</p>
+              <p className="text-2xl font-bold text-theme-text-primary">{cauzioniData.totaleCauzioni}</p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-red-500/30 p-4">
+              <p className="text-xs text-theme-text-muted">Incassato (Cassa)</p>
+              <p className="text-2xl font-bold text-red-500">{formatCurrency(cauzioniData.totaleIncassato)}</p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-green-500/30 p-4">
+              <p className="text-xs text-theme-text-muted">Restituito</p>
+              <p className="text-2xl font-bold text-green-500">{formatCurrency(cauzioniData.totaleRestituito)}</p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-blue-500/30 p-4">
+              <p className="text-xs text-theme-text-muted">Sbloccato</p>
+              <p className="text-2xl font-bold text-blue-500">{formatCurrency(cauzioniData.totaleSbloccato)}</p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-orange-500/30 p-4">
+              <p className="text-xs text-theme-text-muted">Danni</p>
+              <p className="text-2xl font-bold text-orange-500">{formatCurrency(cauzioniData.totaleDanni)}</p>
+            </div>
+          </div>
+
+          {/* Cauzioni Table */}
+          {cauzioniData.cauzioni.length > 0 ? (
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-theme-bg-primary/50 text-theme-text-muted">
+                      <th className="text-left px-4 py-3">Cliente</th>
+                      <th className="text-left px-4 py-3">Veicolo</th>
+                      <th className="text-right px-4 py-3">Importo</th>
+                      <th className="text-center px-4 py-3">Metodo</th>
+                      <th className="text-center px-4 py-3">Stato</th>
+                      <th className="text-left px-4 py-3">Note</th>
+                      <th className="text-left px-4 py-3">Data</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cauzioniData.cauzioni.map(c => {
+                      const statoBadge =
+                        c.stato === 'Bloccata' ? 'bg-red-500/20 text-red-400' :
+                        c.stato === 'Restituita' ? 'bg-green-500/20 text-green-400' :
+                        c.stato === 'Sbloccata' ? 'bg-blue-500/20 text-blue-400' :
+                        c.stato === 'Incassata' ? 'bg-yellow-500/20 text-yellow-400' :
+                        c.stato === 'Danno' ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-theme-bg-hover/20 text-theme-text-muted'
+                      return (
+                        <tr key={c.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
+                          <td className="px-4 py-3 font-medium text-theme-text-primary">{c.cliente}</td>
+                          <td className="px-4 py-3 text-theme-text-primary">
+                            <div>{c.veicolo}</div>
+                            <div className="text-xs text-theme-text-muted">{c.targa}</div>
+                          </td>
+                          <td className="text-right px-4 py-3 font-semibold text-theme-text-primary">{formatCurrency(c.importo)}</td>
+                          <td className="text-center px-4 py-3 text-theme-text-muted capitalize">{c.metodo}</td>
+                          <td className="text-center px-4 py-3">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statoBadge}`}>
+                              {c.stato === 'Bloccata' ? 'Cassa' : c.stato}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-theme-text-muted text-xs max-w-[200px] truncate">{c.note || '—'}</td>
+                          <td className="px-4 py-3 text-theme-text-muted text-xs">
+                            {new Date(c.updated_at).toLocaleDateString('it-IT')}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile Cards */}
+              <div className="md:hidden p-3 space-y-3">
+                {cauzioniData.cauzioni.map(c => {
+                  const statoBadge =
+                    c.stato === 'Bloccata' ? 'bg-red-500/20 text-red-400' :
+                    c.stato === 'Restituita' ? 'bg-green-500/20 text-green-400' :
+                    c.stato === 'Sbloccata' ? 'bg-blue-500/20 text-blue-400' :
+                    c.stato === 'Danno' ? 'bg-orange-500/20 text-orange-400' :
+                    'bg-theme-bg-hover/20 text-theme-text-muted'
+                  return (
+                    <div key={c.id} className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="font-semibold text-theme-text-primary text-sm">{c.cliente}</p>
+                          <p className="text-xs text-theme-text-muted">{c.veicolo} — {c.targa}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statoBadge}`}>
+                          {c.stato === 'Bloccata' ? 'Cassa' : c.stato}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div>
+                          <p className="font-bold text-theme-text-primary">{formatCurrency(c.importo)}</p>
+                          <p className="text-theme-text-muted">Importo</p>
+                        </div>
+                        <div>
+                          <p className="font-bold text-theme-text-primary capitalize">{c.metodo}</p>
+                          <p className="text-theme-text-muted">Metodo</p>
+                        </div>
+                        <div>
+                          <p className="font-bold text-theme-text-primary">{new Date(c.updated_at).toLocaleDateString('it-IT')}</p>
+                          <p className="text-theme-text-muted">Data</p>
+                        </div>
+                      </div>
+                      {c.note && <p className="text-xs text-theme-text-muted mt-2">{c.note}</p>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-8 text-center">
+              <p className="text-theme-text-muted">Nessuna cauzione processata per questo mese.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Empty state */}
-      {!vehicleData && !washData && !loading && !error && (
+      {!vehicleData && !washData && !cauzioniData && !loading && !error && (
         <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-12 text-center">
           <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

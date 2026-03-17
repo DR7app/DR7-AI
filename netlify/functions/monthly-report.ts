@@ -152,6 +152,8 @@ export const handler: Handler = async (event) => {
       return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, month, debug)
     } else if (reportType === 'washes') {
       return await generateWashReport(monthStartISO, monthEndISO, month, daysInMonth)
+    } else if (reportType === 'cauzioni') {
+      return await generateCauzioniReport(monthStartISO, monthEndISO, month)
     } else if (reportType === 'diagnose') {
       // Diagnostic mode - show raw data for a specific plate
       const plate = params.plate?.toUpperCase().replace(/\s/g, '')
@@ -798,6 +800,89 @@ async function generateWashReport(
           count: data.count
         }))
         .sort((a, b) => b.count - a.count)
+    })
+  }
+}
+
+async function generateCauzioniReport(
+  monthStartISO: string,
+  monthEndISO: string,
+  month: string
+) {
+  // Fetch cauzioni that were processed (incassate/restituite/sbloccate/bloccate) in this month
+  const { data: cauzioni, error } = await supabase
+    .from('cauzioni')
+    .select(`
+      *,
+      customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente),
+      vehicles!veicolo_id(display_name, plate)
+    `)
+    .gte('updated_at', monthStartISO + 'T00:00:00')
+    .lte('updated_at', monthEndISO + 'T23:59:59')
+    .in('stato', ['Restituita', 'Sbloccata', 'Bloccata', 'Danno', 'Incassata'])
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+
+  const items = (cauzioni || []).map((c: any) => {
+    let clienteName = 'Sconosciuto'
+    if (c.customers_extended) {
+      if (c.customers_extended.tipo_cliente === 'azienda' && (c.customers_extended.ragione_sociale || c.customers_extended.denominazione)) {
+        clienteName = c.customers_extended.ragione_sociale || c.customers_extended.denominazione
+      } else if (c.customers_extended.nome || c.customers_extended.cognome) {
+        clienteName = `${c.customers_extended.nome || ''} ${c.customers_extended.cognome || ''}`.trim()
+      }
+    }
+
+    return {
+      id: c.id,
+      cliente: clienteName,
+      veicolo: c.vehicles?.display_name || 'N/A',
+      targa: c.vehicles?.plate || 'N/A',
+      importo: Number(c.importo),
+      metodo: c.metodo,
+      stato: c.stato,
+      note: c.note,
+      data_incasso: c.data_incasso,
+      data_restituzione: c.data_restituzione,
+      data_sblocco: c.data_sblocco,
+      updated_at: c.updated_at
+    }
+  })
+
+  // Summary by stato
+  const byStato: Record<string, { count: number; totale: number }> = {}
+  items.forEach(item => {
+    if (!byStato[item.stato]) byStato[item.stato] = { count: 0, totale: 0 }
+    byStato[item.stato].count++
+    byStato[item.stato].totale += item.importo
+  })
+
+  const incassate = items.filter(i => i.stato === 'Bloccata' || i.stato === 'Incassata')
+  const restituite = items.filter(i => i.stato === 'Restituita')
+  const sbloccate = items.filter(i => i.stato === 'Sbloccata')
+  const danni = items.filter(i => i.stato === 'Danno')
+
+  const totaleIncassato = incassate.reduce((s, i) => s + i.importo, 0)
+  const totaleRestituito = restituite.reduce((s, i) => s + i.importo, 0)
+  const totaleSbloccato = sbloccate.reduce((s, i) => s + i.importo, 0)
+  const totaleDanni = danni.reduce((s, i) => s + i.importo, 0)
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      month,
+      totaleCauzioni: items.length,
+      totaleIncassato: Math.round(totaleIncassato * 100) / 100,
+      totaleRestituito: Math.round(totaleRestituito * 100) / 100,
+      totaleSbloccato: Math.round(totaleSbloccato * 100) / 100,
+      totaleDanni: Math.round(totaleDanni * 100) / 100,
+      byStato: Object.entries(byStato).map(([stato, data]) => ({
+        stato,
+        count: data.count,
+        totale: Math.round(data.totale * 100) / 100
+      })),
+      cauzioni: items
     })
   }
 }
