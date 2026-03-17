@@ -30,6 +30,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     const [customLabel, setCustomLabel] = useState('')
     const [note, setNote] = useState('')
     const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending')
+    const [amountPaid, setAmountPaid] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
 
@@ -84,6 +85,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             const existingDanni = details.danni || []
             const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
 
+            const paidAmount = amountPaid ? parseFloat(amountPaid) : cartTotal
             const newEntries = cart.map(c => ({
                 label: c.label,
                 amount: c.unitPrice,
@@ -91,7 +93,8 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 total: Math.round(c.unitPrice * c.quantity * 100) / 100,
                 note: note || '',
                 date: italyDate,
-                paymentStatus
+                paymentStatus,
+                amountPaid: paymentStatus === 'paid' ? paidAmount : 0
             }))
 
             const { error: updateErr } = await supabase
@@ -162,7 +165,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
     const handleClose = () => {
         if (isGenerating) return
-        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setError(''); onClose()
+        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setAmountPaid(''); setError(''); onClose()
     }
 
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
@@ -364,14 +367,30 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select
                             value={paymentStatus}
-                            onChange={e => setPaymentStatus(e.target.value as 'paid' | 'pending')}
+                            onChange={e => { setPaymentStatus(e.target.value as 'paid' | 'pending'); if (e.target.value === 'pending') setAmountPaid('') }}
                             disabled={isGenerating}
-                            className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                            className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
                         >
-                            <option value="pending">Da Saldare</option>
-                            <option value="paid">Pagato</option>
+                            <option value="pending" className="bg-theme-bg-secondary text-theme-text-primary">Da Saldare</option>
+                            <option value="paid" className="bg-theme-bg-secondary text-theme-text-primary">Pagato</option>
                         </select>
                     </div>
+
+                    {/* Amount paid - shown when Pagato */}
+                    {paymentStatus === 'paid' && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-[13px] text-theme-text-muted">Importo pagato (€)</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={amountPaid}
+                                onChange={e => setAmountPaid(e.target.value)}
+                                placeholder={cartTotal.toFixed(2)}
+                                disabled={isGenerating}
+                                className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50 placeholder-theme-text-muted/50"
+                            />
+                        </div>
+                    )}
 
                     {/* CTA buttons */}
                     <div className="flex gap-3 pt-1">
