@@ -88,6 +88,7 @@ export const handler: Handler = async (event) => {
         for (const tryId of uniqueIds) {
             if (customerData) break
             console.log(`[Invoice] Trying customer lookup by ID: ${tryId}`)
+            // Try by table PK first
             const { data, error: customerError } = await supabase
                 .from('customers_extended')
                 .select('*')
@@ -97,8 +98,18 @@ export const handler: Handler = async (event) => {
             if (data) {
                 customerData = data
                 console.log(`✅ Found customer by ID: ${tryId}`)
-            } else if (customerError) {
-                console.warn(`Customer fetch error for ID ${tryId}:`, customerError.message)
+            } else {
+                if (customerError) console.warn(`Customer fetch error for ID ${tryId}:`, customerError.message)
+                // Fallback: try by user_id (auth user ID — for website bookings)
+                const { data: dataByUserId } = await supabase
+                    .from('customers_extended')
+                    .select('*')
+                    .eq('user_id', tryId)
+                    .maybeSingle()
+                if (dataByUserId) {
+                    customerData = dataByUserId
+                    console.log(`✅ Found customer by user_id: ${tryId}`)
+                }
             }
         }
 
@@ -261,13 +272,13 @@ export const handler: Handler = async (event) => {
                 })
             }
         }
-        if (!taxCode || taxCode.trim() === '') {
+        if (!taxCode && !vatNumber) {
             return {
                 statusCode: 400,
                 body: JSON.stringify({
                     error: 'Client data incomplete',
-                    message: 'Codice Fiscale cliente obbligatorio. Aggiorna il profilo cliente o la prenotazione.',
-                    details: `Tax Code missing. Debug: customerId=${customerId}, customerFound=${!!customerData}, dbCF=${customerData?.codice_fiscale || 'NULL'}, dbPIVA=${customerData?.partita_iva || 'NULL'}`
+                    message: 'Codice Fiscale o Partita IVA obbligatorio. Aggiorna il profilo cliente.',
+                    details: `Tax Code/VAT missing. Debug: customerId=${customerId}, customerFound=${!!customerData}, dbCF=${customerData?.codice_fiscale || 'NULL'}, dbPIVA=${customerData?.partita_iva || 'NULL'}`
                 })
             }
         }
