@@ -3228,6 +3228,61 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: customerInfo?.full_name })
       }
 
+      // Generate Nexi Pay by Link if payment method is Nexi
+      if (!editingId && formData.payment_method === 'Nexi Pay by Link' && insertedBooking) {
+        try {
+          const totalEur = parseFloat(formData.total_amount || '0')
+            + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+            + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+
+          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: insertedBooking.id,
+              amount: totalEur,
+              customerEmail: customerInfo?.email || '',
+              customerName: customerInfo?.full_name || 'Cliente',
+              description: `Noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
+              expirationDays: 1
+            })
+          })
+          const linkData = await linkRes.json()
+
+          if (linkRes.ok && linkData.paymentUrl) {
+            // Store link on booking
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...insertedBooking.booking_details,
+                nexi_payment_link: linkData.paymentUrl,
+                nexi_order_id: linkData.orderId
+              }
+            }).eq('id', insertedBooking.id)
+
+            // Send payment link to customer via WhatsApp
+            const custPhone = customerInfo?.phone
+            if (custPhone) {
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: custPhone,
+                  customMessage: `Gentile ${customerInfo?.full_name},\n\nLa sua prenotazione #${insertedBooking.id.substring(0, 8).toUpperCase()} è stata registrata.\n\nPer confermare, completi il pagamento di *€${totalEur.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7 Empire`
+                })
+              })
+            }
+
+            toast.success(`Pay by Link generato e inviato al cliente!`)
+            console.log('✅ Nexi Pay by Link created:', linkData.paymentUrl)
+          } else {
+            toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
+          }
+        } catch (linkErr: any) {
+          console.error('⚠️ Nexi Pay by Link error:', linkErr)
+          toast.error('Errore Pay by Link: ' + linkErr.message)
+        }
+      }
+
       // Create Google Calendar event
       try {
         await fetch('/.netlify/functions/create-calendar-event', {
@@ -4450,8 +4505,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Metodo di Pagamento"
                   required
                   value={formData.payment_method}
-                  onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                  onChange={(e) => {
+                    const method = e.target.value
+                    const updates: any = { payment_method: method }
+                    // Nexi Pay by Link = always pending until customer pays
+                    if (method === 'Nexi Pay by Link') {
+                      updates.payment_status = 'pending'
+                      updates.status = 'pending'
+                      updates.amount_paid = '0'
+                    }
+                    setFormData(prev => ({ ...prev, ...updates }))
+                  }}
                   options={[
+                    { value: 'Nexi Pay by Link', label: 'Nexi - Pay by Link' },
                     { value: 'Bonifico', label: 'Bonifico' },
                     { value: 'Contanti', label: 'Contanti' },
                     { value: 'Credit Wallet', label: 'Credit Wallet' },
