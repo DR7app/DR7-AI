@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -114,6 +114,8 @@ export default function CustomersTab() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Gift Voucher feature
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
@@ -262,6 +264,139 @@ export default function CustomersTab() {
       toast.error('Errore durante esportazione')
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function importCustomersCSV(file: File) {
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) {
+        toast.error('File vuoto o senza dati')
+        return
+      }
+
+      // Parse header row
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = []
+        let current = ''
+        let inQuotes = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') {
+              current += '"'
+              i++
+            } else if (ch === '"') {
+              inQuotes = false
+            } else {
+              current += ch
+            }
+          } else {
+            if (ch === '"') {
+              inQuotes = true
+            } else if (ch === ',' || ch === ';') {
+              result.push(current.trim())
+              current = ''
+            } else {
+              current += ch
+            }
+          }
+        }
+        result.push(current.trim())
+        return result
+      }
+
+      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, '_'))
+
+      // Map CSV headers to customers_extended columns
+      const headerMap: Record<string, string> = {
+        'nome': 'nome', 'cognome': 'cognome', 'email': 'email',
+        'telefono': 'telefono', 'phone': 'telefono',
+        'tipo_cliente': 'tipo_cliente', 'codice_fiscale': 'codice_fiscale',
+        'partita_iva': 'partita_iva', 'indirizzo': 'indirizzo',
+        'cap': 'codice_postale', 'codice_postale': 'codice_postale',
+        'città': 'citta_residenza', 'citta': 'citta_residenza', 'citta_residenza': 'citta_residenza',
+        'provincia': 'provincia_residenza', 'provincia_residenza': 'provincia_residenza',
+        'nazione': 'nazione', 'data_nascita': 'data_nascita',
+        'luogo_nascita': 'luogo_nascita',
+        'ragione_sociale': 'ragione_sociale', 'denominazione': 'denominazione',
+        'numero_patente': 'numero_patente', 'tipo_patente': 'tipo_patente',
+        'scadenza_patente': 'scadenza_patente', 'note': 'note',
+      }
+
+      let imported = 0
+      let skipped = 0
+      const errors: string[] = []
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i])
+        if (values.every(v => !v)) continue // skip empty rows
+
+        const customerData: Record<string, string> = { source: 'csv_import' }
+        headers.forEach((header, idx) => {
+          const dbCol = headerMap[header]
+          if (dbCol && values[idx]) {
+            customerData[dbCol] = values[idx]
+          }
+        })
+
+        // Need at least nome or email or ragione_sociale
+        if (!customerData.nome && !customerData.email && !customerData.ragione_sociale && !customerData.denominazione) {
+          skipped++
+          continue
+        }
+
+        // Default tipo_cliente
+        if (!customerData.tipo_cliente) {
+          customerData.tipo_cliente = customerData.ragione_sociale || customerData.denominazione
+            ? 'azienda' : 'persona_fisica'
+        }
+
+        // Normalize phone
+        if (customerData.telefono) {
+          let phone = customerData.telefono.replace(/[\s\-\+\(\)]/g, '')
+          if (phone.startsWith('00')) phone = phone.substring(2)
+          if (phone.length === 10) phone = '39' + phone
+          customerData.telefono = phone
+        }
+
+        try {
+          const response = await fetch('/.netlify/functions/save-customer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customerData })
+          })
+          if (response.ok) {
+            imported++
+          } else {
+            const err = await response.json()
+            errors.push(`Riga ${i + 1}: ${err.error || 'Errore'}`)
+            skipped++
+          }
+        } catch {
+          errors.push(`Riga ${i + 1}: Errore di rete`)
+          skipped++
+        }
+      }
+
+      if (imported > 0) {
+        toast.success(`${imported} clienti importati!${skipped > 0 ? ` (${skipped} saltati)` : ''}`)
+        loadCustomers()
+      } else {
+        toast.error(`Nessun cliente importato. ${skipped} righe saltate.`)
+      }
+
+      if (errors.length > 0) {
+        console.warn('Import errors:', errors)
+      }
+    } catch (err: any) {
+      console.error('Import error:', err)
+      toast.error('Errore durante importazione: ' + (err.message || ''))
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -1967,6 +2102,26 @@ export default function CustomersTab() {
               </svg>
               {exporting ? 'Esportando...' : 'Esporta CSV'}
             </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              {importing ? 'Importando...' : 'Importa CSV'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) importCustomersCSV(file)
+              }}
+            />
             <Button onClick={() => {
               setSelectedCustomer(null)  // Clear any previous selection
               setShowNewClientModal(true)
