@@ -869,6 +869,20 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 if (field) {
                     // Sanitize the value to prevent WinAnsi encoding errors
                     const sanitizedValue = sanitizeForPDF(value)
+
+                    // Reduce font size for fields that tend to overflow their boxes
+                    const smallFontFields = ['Date', 'Data', 'DataStipula', 'DataRilascioPatente', 'DataRilascio',
+                        'DataScadenzaPatente', 'ScadenzaPatente', 'Scadenza', 'DataNascita',
+                        'DriverLicenseIssueDate', 'DriverLicenseExpiryDate',
+                        'NomeCognome', 'CustomerName', 'CodiceFiscale', 'CustomerVAT',
+                        'Indirizzo', 'IndirizzoCap', 'CustomerAddress',
+                        'SecondDriverName', 'NomeCognomeSecondoGuidatore',
+                        'SecondDriverLicenseIssueDate', 'SecondDriverLicenseExpiryDate',
+                        'DataRilascioDocumentoRappresentante', 'DataScadenzaDocumentoRappresentante']
+                    if (smallFontFields.includes(key)) {
+                        field.setFontSize(8)
+                    }
+
                     field.setText(sanitizedValue)
                     filledFields++
 
