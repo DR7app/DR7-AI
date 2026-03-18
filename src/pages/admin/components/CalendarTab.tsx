@@ -37,6 +37,8 @@ interface Booking {
   customer_email: string
   price_total: number
   service_type?: string
+  payment_method?: string | null
+  payment_status?: string | null
   booking_details?: any
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }

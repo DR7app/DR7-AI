@@ -44,6 +44,8 @@ export interface Booking {
     dropoff_date: string
     status: string
     service_type?: string
+    payment_method?: string | null
+    payment_status?: string | null
 }
 
 export interface AvailabilityResult {
