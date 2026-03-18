@@ -133,9 +133,43 @@ const handler: Handler = async (event) => {
                     });
                 }
 
+                // Auto-generate contract → then send signing link via WhatsApp
+                // (Fattura is generated after the customer signs, in signature-complete)
+                try {
+                    const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
+                    const contractRes = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId: booking.id })
+                    });
+                    const contractData = await contractRes.json();
+
+                    if (contractRes.ok && contractData.contractId) {
+                        console.log('[nexi-payment-callback] Contract generated:', contractData.contractId);
+
+                        // Send signing link to customer via WhatsApp
+                        const sigRes = await fetch(`${baseUrl}/.netlify/functions/signature-init`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ contractId: contractData.contractId, bookingId: booking.id })
+                        });
+                        const sigData = await sigRes.json();
+
+                        if (sigRes.ok) {
+                            console.log('[nexi-payment-callback] Signing link sent to customer');
+                        } else {
+                            console.error('[nexi-payment-callback] Signature init failed:', sigData.error);
+                        }
+                    } else {
+                        console.error('[nexi-payment-callback] Contract generation failed:', contractData.error);
+                    }
+                } catch (contractErr) {
+                    console.error('[nexi-payment-callback] Contract/signing error:', contractErr);
+                }
+
                 // Auto-generate fattura for paid booking
                 try {
-                    await fetch(`${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/generate-invoice-from-booking`, {
+                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ bookingId: booking.id, includeIVA: true })
