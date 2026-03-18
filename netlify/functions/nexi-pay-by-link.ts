@@ -60,10 +60,12 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Calculate expiration date (minimum tomorrow to avoid past-date errors)
+        // Calculate expiration date (minimum 2 days from now to avoid date boundary issues)
         const expirationDate = new Date();
-        expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 1));
+        expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 2));
+        // Nexi wants YYYY-MM-DD format
         const expirationDateStr = expirationDate.toISOString().split('T')[0];
+        console.log('[nexi-pay-by-link] Expiration date:', expirationDateStr);
 
         // Create payment link request (using /v2/orders/paybylink endpoint)
         const payload = {
@@ -84,7 +86,7 @@ const handler: Handler = async (event) => {
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
                 notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`,
-                expirationDate: expirationDateStr
+                expirationDate: expirationDate.toISOString()
             }
         };
 
