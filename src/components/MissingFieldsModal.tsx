@@ -34,7 +34,10 @@ const FIELD_LABELS: Record<string, string> = {
     ente_ufficio: 'Ente/Ufficio',
     citta: 'Città',
     documento_numero: 'Numero Documento Identità',
-    documento_tipo: 'Tipo Documento'
+    documento_tipo: 'Tipo Documento',
+    emessa_da: 'Patente Emessa Da',
+    data_rilascio_patente: 'Data Rilascio Patente',
+    scadenza_patente: 'Scadenza Patente'
 }
 
 export default function MissingFieldsModal({
@@ -206,7 +209,7 @@ export default function MissingFieldsModal({
             )
         }
 
-        if (field === 'data_nascita' || field.includes('data_')) {
+        if (field === 'data_nascita' || field.includes('data_') || field === 'scadenza_patente') {
             return (
                 <div key={field} className="mb-4">
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">
