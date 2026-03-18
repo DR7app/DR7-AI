@@ -81,7 +81,12 @@ const handler: Handler = async (event) => {
                 language: 'ita',
                 resultUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`
+                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`,
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId.slice(0, 18),
+                    contractType: 'MIT_UNSCHEDULED'
+                }
             }
         };
 
@@ -135,6 +140,7 @@ const handler: Handler = async (event) => {
                 payment_link: paymentUrl,
                 description: description || `Pagamento DR7 Empire`,
                 customer_email: customerEmail || null,
+                contract_id: orderId.slice(0, 18),
                 metadata: {
                     type: 'pay_by_link',
                     customer_name: customerName,

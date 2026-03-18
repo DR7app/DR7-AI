@@ -38,7 +38,8 @@ const handler: Handler = async (event) => {
             resultCode,
             authorizationCode,
             amount,
-            currency
+            currency,
+            contractId
         } = callbackData;
 
         console.log('Parsed callback data:', { orderId, operationId, result, authorizationCode });
@@ -76,7 +77,11 @@ const handler: Handler = async (event) => {
 
         if (isSuccess) {
             updateData.nexi_transaction_id = transactionId || operationId;
-            updateData.note = `Preautorizzazione completata - Auth: ${authorizationCode || operationId}`;
+            // Store contractId from Nexi response (or derive from orderId)
+            if (contractId) {
+                updateData.nexi_contract_id = contractId;
+            }
+            updateData.note = `Preautorizzazione completata - Auth: ${authorizationCode || operationId}${contractId ? ` - Carta registrata (${contractId})` : ''}`;
             // Keep stato as 'Attiva' - ready for SBLOCCA or INCASSA
         } else {
             updateData.note = `Preautorizzazione fallita - ${result || resultCode}`;
