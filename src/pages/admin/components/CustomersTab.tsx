@@ -122,6 +122,11 @@ export default function CustomersTab() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
+  // Duplicates
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false)
+  const [duplicateGroups, setDuplicateGroups] = useState<Customer[][]>([])
+  const [mergingDuplicates, setMergingDuplicates] = useState(false)
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCustomers, setTotalCustomers] = useState(0)
@@ -735,6 +740,151 @@ export default function CustomersTab() {
   }
 
 
+
+  function findDuplicates() {
+    // Group by normalized email or phone — same name alone is NOT enough
+    const emailGroups = new Map<string, Customer[]>()
+    const phoneGroups = new Map<string, Customer[]>()
+
+    allCustomers.forEach(c => {
+      // Only consider DB customers (with real IDs, not temp-)
+      if (c.id.startsWith('temp-')) return
+
+      const email = (c.email || '').trim().toLowerCase()
+      const phone = (c.phone || c.telefono || '').trim().replace(/\s/g, '')
+
+      if (email) {
+        if (!emailGroups.has(email)) emailGroups.set(email, [])
+        emailGroups.get(email)!.push(c)
+      }
+      if (phone && phone.length >= 8) {
+        if (!phoneGroups.has(phone)) phoneGroups.set(phone, [])
+        phoneGroups.get(phone)!.push(c)
+      }
+    })
+
+    // Collect groups with 2+ entries, dedup by group members
+    const seenIds = new Set<string>()
+    const groups: Customer[][] = []
+
+    const addGroup = (group: Customer[]) => {
+      // Skip if any member already in another group
+      if (group.some(c => seenIds.has(c.id))) return
+      group.forEach(c => seenIds.add(c.id))
+      groups.push(group)
+    }
+
+    emailGroups.forEach(group => {
+      if (group.length >= 2) addGroup(group)
+    })
+    phoneGroups.forEach(group => {
+      if (group.length >= 2) addGroup(group)
+    })
+
+    setDuplicateGroups(groups)
+    setShowDuplicatesModal(true)
+
+    if (groups.length === 0) {
+      toast.success('Nessun duplicato trovato!')
+    }
+  }
+
+  // Count non-null fields to determine completeness
+  function getCompleteness(c: Customer): number {
+    const fields = [
+      c.email, c.phone, c.telefono, c.nome, c.cognome,
+      c.codice_fiscale, c.data_nascita, c.luogo_nascita,
+      c.indirizzo, c.citta_residenza, c.codice_postale,
+      c.numero_patente, c.tipo_patente, c.scadenza_patente,
+      c.partita_iva, c.ragione_sociale, c.pec,
+      c.nazione, c.provincia_nascita, c.provincia_residenza,
+      c.sesso, c.notes
+    ]
+    return fields.filter(f => f != null && String(f).trim() !== '').length
+  }
+
+  async function mergeDuplicateGroup(group: Customer[]) {
+    // Sort by completeness — most complete first
+    const sorted = [...group].sort((a, b) => getCompleteness(b) - getCompleteness(a))
+    const keeper = sorted[0]
+    const toDelete = sorted.slice(1)
+
+    // Merge missing fields from less complete records into keeper
+    const mergeFields: (keyof Customer)[] = [
+      'email', 'phone', 'telefono', 'nome', 'cognome',
+      'codice_fiscale', 'data_nascita', 'luogo_nascita',
+      'indirizzo', 'citta_residenza', 'codice_postale',
+      'numero_patente', 'tipo_patente', 'scadenza_patente',
+      'emessa_da', 'data_rilascio_patente',
+      'partita_iva', 'ragione_sociale', 'denominazione',
+      'pec', 'nazione', 'provincia_nascita', 'provincia_residenza',
+      'sesso', 'notes', 'numero_civico', 'tipo_cliente',
+      'codice_destinatario', 'indirizzo_azienda'
+    ]
+
+    const updates: Record<string, any> = {}
+    for (const donor of toDelete) {
+      for (const field of mergeFields) {
+        const keeperVal = keeper[field]
+        const donorVal = donor[field]
+        if ((!keeperVal || String(keeperVal).trim() === '') && donorVal && String(donorVal).trim() !== '') {
+          updates[field] = donorVal
+          ;(keeper as any)[field] = donorVal
+        }
+      }
+    }
+
+    try {
+      // Update keeper with merged fields if any
+      if (Object.keys(updates).length > 0) {
+        const response = await fetch('/.netlify/functions/manage-customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', customerId: keeper.id, updates })
+        })
+        if (!response.ok) {
+          const err = await response.json()
+          throw new Error(err.error || 'Errore aggiornamento')
+        }
+      }
+
+      // Delete less complete duplicates
+      for (const dup of toDelete) {
+        const response = await fetch('/.netlify/functions/manage-customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', customerId: dup.id })
+        })
+        if (!response.ok) {
+          const err = await response.json()
+          console.error(`Failed to delete duplicate ${dup.id}:`, err)
+        }
+      }
+
+      return true
+    } catch (err: any) {
+      console.error('Merge error:', err)
+      toast.error(`Errore merge: ${err.message}`)
+      return false
+    }
+  }
+
+  async function mergeAllDuplicates() {
+    setMergingDuplicates(true)
+    let merged = 0
+    let failed = 0
+
+    for (const group of duplicateGroups) {
+      const ok = await mergeDuplicateGroup(group)
+      if (ok) merged++
+      else failed++
+    }
+
+    setMergingDuplicates(false)
+    setShowDuplicatesModal(false)
+    toast.success(`${merged} gruppi unificati${failed > 0 ? `, ${failed} errori` : ''}. ${duplicateGroups.reduce((s, g) => s + g.length - 1, 0)} duplicati rimossi.`)
+    loadCustomers()
+  }
 
   async function handleDelete(id: string) {
     console.log('[handleDelete] Starting delete for ID:', id)
@@ -2093,6 +2243,16 @@ export default function CustomersTab() {
               </div>
             )}
             <button
+              onClick={findDuplicates}
+              disabled={allCustomers.length === 0}
+              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Rimuovi Duplicati
+            </button>
+            <button
               onClick={exportCustomersCSV}
               disabled={exporting || allCustomers.length === 0}
               className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2547,6 +2707,91 @@ export default function CustomersTab() {
         }}
         initialData={selectedCustomer}
       />
+
+      {/* Duplicates Modal */}
+      {showDuplicatesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !mergingDuplicates && setShowDuplicatesModal(false)} />
+          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-theme-bg-secondary rounded-3xl shadow-2xl border border-white/10 overflow-hidden">
+            <div className="px-6 py-4 border-b border-theme-border flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-theme-text-primary">Rimuovi Duplicati</h3>
+                <p className="text-sm text-theme-text-muted mt-1">
+                  {duplicateGroups.length === 0
+                    ? 'Nessun duplicato trovato'
+                    : `${duplicateGroups.length} gruppi di duplicati (${duplicateGroups.reduce((s, g) => s + g.length - 1, 0)} da rimuovere)`
+                  }
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDuplicatesModal(false)}
+                disabled={mergingDuplicates}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {duplicateGroups.map((group, gi) => {
+                const sorted = [...group].sort((a, b) => getCompleteness(b) - getCompleteness(a))
+                return (
+                  <div key={gi} className="rounded-2xl border border-theme-border bg-theme-bg-tertiary/50 p-4">
+                    <div className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider mb-3">
+                      Gruppo {gi + 1} — {group[0].email || group[0].phone || group[0].telefono}
+                    </div>
+                    {sorted.map((c, ci) => {
+                      const isKeeper = ci === 0
+                      const completeness = getCompleteness(c)
+                      return (
+                        <div
+                          key={c.id}
+                          className={`flex items-center justify-between py-2 px-3 rounded-xl mb-1 ${isKeeper ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/20'}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isKeeper ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {isKeeper ? 'MANTIENI' : 'ELIMINA'}
+                              </span>
+                              <span className="text-sm font-medium text-theme-text-primary truncate">{c.full_name}</span>
+                            </div>
+                            <div className="text-xs text-theme-text-muted mt-1">
+                              {c.email && <span className="mr-3">{c.email}</span>}
+                              {(c.phone || c.telefono) && <span className="mr-3">{c.phone || c.telefono}</span>}
+                              <span className="text-theme-text-muted/50">{completeness} campi compilati</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
+
+            {duplicateGroups.length > 0 && (
+              <div className="px-6 py-4 border-t border-theme-border flex gap-3">
+                <button
+                  onClick={() => setShowDuplicatesModal(false)}
+                  disabled={mergingDuplicates}
+                  className="flex-1 py-3 bg-white/[0.08] hover:bg-white/[0.12] text-theme-text-primary text-sm font-medium rounded-2xl transition-all"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={mergeAllDuplicates}
+                  disabled={mergingDuplicates}
+                  className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-2xl transition-all disabled:opacity-50"
+                >
+                  {mergingDuplicates ? 'Unificando...' : `Unifica ${duplicateGroups.length} gruppi`}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
