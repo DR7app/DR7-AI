@@ -103,21 +103,18 @@ const handler: Handler = async (event) => {
 
                 console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid`);
 
-                // Send WhatsApp confirmation to customer
+                // Send WhatsApp confirmation to customer (through send-whatsapp-notification for Rentora wrapper)
                 const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
-                if (custPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    let cleanPhone = custPhone.replace(/[\s\-\+\(\)]/g, '');
-                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2);
-                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone;
-
+                if (custPhone) {
                     const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
+                    const bookingRef = booking.id.substring(0, 8).toUpperCase();
 
-                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            chatId: `${cleanPhone}@c.us`,
-                            message: `✅ *Pagamento ricevuto!*\n\nGentile ${custName},\n\nIl pagamento di *€${amountEur}* per la prenotazione #${booking.id.substring(0, 8).toUpperCase()} è stato confermato.\n\nLa sua prenotazione è ora *CONFERMATA*.\n\nGrazie,\nDR7 Empire`
+                            customPhone: custPhone,
+                            customMessage: `✅ *Pagamento ricevuto!*\n\nGentile ${custName},\n\nIl pagamento di *€${amountEur}* per la prenotazione #${bookingRef} è stato confermato.\n\nLa sua prenotazione è ora *CONFERMATA*.\n\nGrazie,\nDR7`
                         })
                     });
                     console.log('[nexi-payment-callback] WhatsApp confirmation sent to customer');

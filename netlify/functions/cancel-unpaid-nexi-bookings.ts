@@ -54,19 +54,17 @@ const cancelHandler: Handler = async () => {
             cancelled++;
             console.log(`[cancel-unpaid-nexi] Cancelled booking ${booking.id} (${booking.customer_name})`);
 
-            // Notify customer via WhatsApp
+            // Notify customer via WhatsApp (through send-whatsapp-notification for Rentora wrapper)
             const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
-            if (custPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                let cleanPhone = custPhone.replace(/[\s\-\+\(\)]/g, '');
-                if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2);
-                if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone;
-
-                await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+            if (custPhone) {
+                const custName = booking.customer_name || 'Cliente';
+                const bookingRef = booking.id.substring(0, 8).toUpperCase();
+                await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        chatId: `${cleanPhone}@c.us`,
-                        message: `⚠️ *Prenotazione annullata*\n\nGentile ${booking.customer_name || 'Cliente'},\n\nLa prenotazione #${booking.id.substring(0, 8).toUpperCase()} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7 Empire`
+                        customPhone: custPhone,
+                        customMessage: `⚠️ *Prenotazione annullata*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`
                     })
                 });
             }

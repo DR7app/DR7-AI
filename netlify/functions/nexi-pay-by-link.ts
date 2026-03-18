@@ -60,11 +60,9 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Calculate expiration date
+        // Calculate expiration date (minimum tomorrow to avoid past-date errors)
         const expirationDate = new Date();
-        expirationDate.setDate(expirationDate.getDate() + expirationDays);
-
-        // Format expiration date as YYYY-MM-DD
+        expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 1));
         const expirationDateStr = expirationDate.toISOString().split('T')[0];
 
         // Create payment link request (using /v2/orders/paybylink endpoint)
