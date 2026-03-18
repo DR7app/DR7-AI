@@ -2245,7 +2245,7 @@ export default function CustomersTab() {
             <button
               onClick={findDuplicates}
               disabled={allCustomers.length === 0}
-              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -2783,7 +2783,7 @@ export default function CustomersTab() {
                 <button
                   onClick={mergeAllDuplicates}
                   disabled={mergingDuplicates}
-                  className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-2xl transition-all disabled:opacity-50"
+                  className="flex-1 py-3 bg-dr7-gold hover:bg-yellow-500 text-black text-sm font-semibold rounded-2xl transition-all disabled:opacity-50"
                 >
                   {mergingDuplicates ? 'Unificando...' : `Unifica ${duplicateGroups.length} gruppi`}
                 </button>
