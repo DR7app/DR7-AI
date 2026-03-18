@@ -92,7 +92,10 @@ const handler: Handler = async (event) => {
 
         console.log('[nexi-pay-by-link] Request:', JSON.stringify(payload));
 
-        const correlationId = crypto.randomUUID()
+        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
         // Use v2 paybylink endpoint (base URL has /v1, replace with /v2)
         const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
         console.log('[nexi-pay-by-link] URL:', payByLinkUrl);
