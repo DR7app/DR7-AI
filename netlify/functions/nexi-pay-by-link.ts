@@ -64,7 +64,10 @@ const handler: Handler = async (event) => {
         const expirationDate = new Date();
         expirationDate.setDate(expirationDate.getDate() + expirationDays);
 
-        // Create payment link request
+        // Format expiration date as YYYY-MM-DD
+        const expirationDateStr = expirationDate.toISOString().split('T')[0];
+
+        // Create payment link request (using /v2/orders/paybylink endpoint)
         const payload = {
             order: {
                 orderId: orderId,
@@ -77,19 +80,23 @@ const handler: Handler = async (event) => {
                 }
             },
             paymentSession: {
-                actionType: 'PAY',  // PAY = direct payment (not pre-auth)
+                actionType: 'PAY',
                 amount: amountCents.toString(),
                 language: 'ita',
-                resultUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-success?order=${orderId}`,
-                cancelUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`
+                resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
+                cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
+                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`,
+                expirationDate: expirationDateStr
             }
         };
 
-        console.log('Creating Nexi Pay by Link:', { orderId, amountCents, bookingId, payload: JSON.stringify(payload) });
+        console.log('[nexi-pay-by-link] Request:', JSON.stringify(payload));
 
         const correlationId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-        const response = await fetch(`${NEXI_BASE_URL}/orders/build`, {
+        // Use v2 paybylink endpoint (base URL has /v1, replace with /v2)
+        const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
+        console.log('[nexi-pay-by-link] URL:', payByLinkUrl);
+        const response = await fetch(payByLinkUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -128,7 +135,9 @@ const handler: Handler = async (event) => {
             };
         }
 
-        const paymentUrl = responseData.hostedPage;
+        // paybylink returns paymentLink.link, build returns hostedPage
+        const paymentUrl = responseData.paymentLink?.link || responseData.hostedPage;
+        console.log('[nexi-pay-by-link] Payment URL:', paymentUrl);
 
         // Store in database
         const { error: dbError } = await supabase
