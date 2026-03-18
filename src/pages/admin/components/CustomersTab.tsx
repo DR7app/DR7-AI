@@ -767,8 +767,19 @@ export default function CustomersTab() {
 
     const addGroup = (group: Customer[]) => {
       if (group.some(c => seenIds.has(c.id))) return
-      group.forEach(c => seenIds.add(c.id))
-      groups.push(group)
+      // Split by tipo_cliente — never merge azienda with persona_fisica
+      const byType = new Map<string, Customer[]>()
+      group.forEach(c => {
+        const tipo = c.tipo_cliente || 'persona_fisica'
+        if (!byType.has(tipo)) byType.set(tipo, [])
+        byType.get(tipo)!.push(c)
+      })
+      byType.forEach(subGroup => {
+        if (subGroup.length < 2) return
+        if (subGroup.some(c => seenIds.has(c.id))) return
+        subGroup.forEach(c => seenIds.add(c.id))
+        groups.push(subGroup)
+      })
     }
 
     emailGroups.forEach(group => { if (group.length >= 2) addGroup(group) })
