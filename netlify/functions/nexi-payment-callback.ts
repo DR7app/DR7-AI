@@ -135,7 +135,6 @@ const handler: Handler = async (event) => {
                 }
 
                 // Auto-generate contract → then send signing link via WhatsApp
-                // (Fattura is generated after the customer signs, in signature-complete)
                 try {
                     const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
                     const contractRes = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {
@@ -145,24 +144,35 @@ const handler: Handler = async (event) => {
                     });
                     const contractData = await contractRes.json();
 
-                    if (contractRes.ok && contractData.contractId) {
-                        console.log('[nexi-payment-callback] Contract generated:', contractData.contractId);
+                    if (contractRes.ok && contractData.success) {
+                        console.log('[nexi-payment-callback] Contract PDF generated:', contractData.url);
 
-                        // Send signing link to customer via WhatsApp
-                        const sigRes = await fetch(`${baseUrl}/.netlify/functions/signature-init`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ contractId: contractData.contractId, bookingId: booking.id })
-                        });
-                        const sigData = await sigRes.json();
+                        // Fetch the contract record from DB to get its ID for signature-init
+                        const { data: contractRow } = await supabase
+                            .from('contracts')
+                            .select('id')
+                            .eq('booking_id', booking.id)
+                            .single();
 
-                        if (sigRes.ok) {
-                            console.log('[nexi-payment-callback] Signing link sent to customer');
+                        if (contractRow) {
+                            // Send signing link to customer via WhatsApp
+                            const sigRes = await fetch(`${baseUrl}/.netlify/functions/signature-init`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
+                            });
+                            const sigData = await sigRes.json();
+
+                            if (sigRes.ok) {
+                                console.log('[nexi-payment-callback] Signing link sent to customer');
+                            } else {
+                                console.error('[nexi-payment-callback] Signature init failed:', sigData.error);
+                            }
                         } else {
-                            console.error('[nexi-payment-callback] Signature init failed:', sigData.error);
+                            console.error('[nexi-payment-callback] Contract record not found in DB for booking:', booking.id);
                         }
                     } else {
-                        console.error('[nexi-payment-callback] Contract generation failed:', contractData.error);
+                        console.error('[nexi-payment-callback] Contract generation failed:', contractData.error || contractData);
                     }
                 } catch (contractErr) {
                     console.error('[nexi-payment-callback] Contract/signing error:', contractErr);
