@@ -83,11 +83,13 @@ const handler: Handler = async (event) => {
                 actionType: 'PAY',
                 amount: amountCents.toString(),
                 language: 'ita',
+                expirationDate: expirationDateStr,
+                expirationTime: expirationDate.toISOString(),
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`,
-                expirationTime: expirationDate.toISOString()
-            }
+                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`
+            },
+            expirationDate: expirationDateStr
         };
 
         console.log('[nexi-pay-by-link] Request:', JSON.stringify(payload));
