@@ -123,8 +123,6 @@ export default function CustomersTab() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Duplicates
-  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false)
-  const [duplicateGroups, setDuplicateGroups] = useState<Customer[][]>([])
   const [mergingDuplicates, setMergingDuplicates] = useState(false)
 
   // Pagination
@@ -741,13 +739,14 @@ export default function CustomersTab() {
 
 
 
-  function findDuplicates() {
+  async function handleRemoveDuplicates() {
+    setMergingDuplicates(true)
+
     // Group by normalized email or phone — same name alone is NOT enough
     const emailGroups = new Map<string, Customer[]>()
     const phoneGroups = new Map<string, Customer[]>()
 
     allCustomers.forEach(c => {
-      // Only consider DB customers (with real IDs, not temp-)
       if (c.id.startsWith('temp-')) return
 
       const email = (c.email || '').trim().toLowerCase()
@@ -763,30 +762,37 @@ export default function CustomersTab() {
       }
     })
 
-    // Collect groups with 2+ entries, dedup by group members
     const seenIds = new Set<string>()
     const groups: Customer[][] = []
 
     const addGroup = (group: Customer[]) => {
-      // Skip if any member already in another group
       if (group.some(c => seenIds.has(c.id))) return
       group.forEach(c => seenIds.add(c.id))
       groups.push(group)
     }
 
-    emailGroups.forEach(group => {
-      if (group.length >= 2) addGroup(group)
-    })
-    phoneGroups.forEach(group => {
-      if (group.length >= 2) addGroup(group)
-    })
-
-    setDuplicateGroups(groups)
-    setShowDuplicatesModal(true)
+    emailGroups.forEach(group => { if (group.length >= 2) addGroup(group) })
+    phoneGroups.forEach(group => { if (group.length >= 2) addGroup(group) })
 
     if (groups.length === 0) {
       toast.success('Nessun duplicato trovato!')
+      setMergingDuplicates(false)
+      return
     }
+
+    let merged = 0
+    let failed = 0
+    const totalToRemove = groups.reduce((s, g) => s + g.length - 1, 0)
+
+    for (const group of groups) {
+      const ok = await mergeDuplicateGroup(group)
+      if (ok) merged++
+      else failed++
+    }
+
+    setMergingDuplicates(false)
+    toast.success(`${totalToRemove} duplicati rimossi (${merged} gruppi unificati)${failed > 0 ? ` — ${failed} errori` : ''}`)
+    loadCustomers()
   }
 
   // Count non-null fields to determine completeness
@@ -867,23 +873,6 @@ export default function CustomersTab() {
       toast.error(`Errore merge: ${err.message}`)
       return false
     }
-  }
-
-  async function mergeAllDuplicates() {
-    setMergingDuplicates(true)
-    let merged = 0
-    let failed = 0
-
-    for (const group of duplicateGroups) {
-      const ok = await mergeDuplicateGroup(group)
-      if (ok) merged++
-      else failed++
-    }
-
-    setMergingDuplicates(false)
-    setShowDuplicatesModal(false)
-    toast.success(`${merged} gruppi unificati${failed > 0 ? `, ${failed} errori` : ''}. ${duplicateGroups.reduce((s, g) => s + g.length - 1, 0)} duplicati rimossi.`)
-    loadCustomers()
   }
 
   async function handleDelete(id: string) {
@@ -2243,14 +2232,14 @@ export default function CustomersTab() {
               </div>
             )}
             <button
-              onClick={findDuplicates}
-              disabled={allCustomers.length === 0}
+              onClick={handleRemoveDuplicates}
+              disabled={allCustomers.length === 0 || mergingDuplicates}
               className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              Rimuovi Duplicati
+              {mergingDuplicates ? 'Rimuovendo...' : 'Rimuovi Duplicati'}
             </button>
             <button
               onClick={exportCustomersCSV}
@@ -2708,90 +2697,6 @@ export default function CustomersTab() {
         initialData={selectedCustomer}
       />
 
-      {/* Duplicates Modal */}
-      {showDuplicatesModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !mergingDuplicates && setShowDuplicatesModal(false)} />
-          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-theme-bg-secondary rounded-3xl shadow-2xl border border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-theme-border flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold text-theme-text-primary">Rimuovi Duplicati</h3>
-                <p className="text-sm text-theme-text-muted mt-1">
-                  {duplicateGroups.length === 0
-                    ? 'Nessun duplicato trovato'
-                    : `${duplicateGroups.length} gruppi di duplicati (${duplicateGroups.reduce((s, g) => s + g.length - 1, 0)} da rimuovere)`
-                  }
-                </p>
-              </div>
-              <button
-                onClick={() => setShowDuplicatesModal(false)}
-                disabled={mergingDuplicates}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-all"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {duplicateGroups.map((group, gi) => {
-                const sorted = [...group].sort((a, b) => getCompleteness(b) - getCompleteness(a))
-                return (
-                  <div key={gi} className="rounded-2xl border border-theme-border bg-theme-bg-tertiary/50 p-4">
-                    <div className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider mb-3">
-                      Gruppo {gi + 1} — {group[0].email || group[0].phone || group[0].telefono}
-                    </div>
-                    {sorted.map((c, ci) => {
-                      const isKeeper = ci === 0
-                      const completeness = getCompleteness(c)
-                      return (
-                        <div
-                          key={c.id}
-                          className={`flex items-center justify-between py-2 px-3 rounded-xl mb-1 ${isKeeper ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/20'}`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isKeeper ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                {isKeeper ? 'MANTIENI' : 'ELIMINA'}
-                              </span>
-                              <span className="text-sm font-medium text-theme-text-primary truncate">{c.full_name}</span>
-                            </div>
-                            <div className="text-xs text-theme-text-muted mt-1">
-                              {c.email && <span className="mr-3">{c.email}</span>}
-                              {(c.phone || c.telefono) && <span className="mr-3">{c.phone || c.telefono}</span>}
-                              <span className="text-theme-text-muted/50">{completeness} campi compilati</span>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-            </div>
-
-            {duplicateGroups.length > 0 && (
-              <div className="px-6 py-4 border-t border-theme-border flex gap-3">
-                <button
-                  onClick={() => setShowDuplicatesModal(false)}
-                  disabled={mergingDuplicates}
-                  className="flex-1 py-3 bg-white/[0.08] hover:bg-white/[0.12] text-theme-text-primary text-sm font-medium rounded-2xl transition-all"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={mergeAllDuplicates}
-                  disabled={mergingDuplicates}
-                  className="flex-1 py-3 bg-dr7-gold hover:bg-yellow-500 text-black text-sm font-semibold rounded-2xl transition-all disabled:opacity-50"
-                >
-                  {mergingDuplicates ? 'Unificando...' : `Unifica ${duplicateGroups.length} gruppi`}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
