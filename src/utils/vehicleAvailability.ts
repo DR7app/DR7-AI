@@ -186,6 +186,8 @@ export function getEarliestValidPickupTime(
     const vehicleBookings = existingBookings.filter(booking => {
         if (excludeBookingId && booking.id === excludeBookingId) return false
         if (booking.status === 'cancelled') return false
+        // Exclude pending Nexi Pay by Link bookings (awaiting payment)
+        if (booking.payment_method === 'Nexi Pay by Link' && booking.payment_status === 'pending') return false
         return matchVehicleByPlate(booking, vehicle)
     })
 
@@ -309,6 +311,8 @@ export function isVehicleAvailable(
 
         // Skip cancelled bookings
         if (booking.status === 'cancelled') return false
+        // Skip pending Nexi Pay by Link bookings (awaiting payment)
+        if (booking.payment_method === 'Nexi Pay by Link' && booking.payment_status === 'pending') return false
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions

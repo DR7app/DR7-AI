@@ -183,7 +183,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     appointment_date: todayStr,
     appointment_time: '',
     price_total: 0,
-    payment_status: 'paid',
+    payment_status: 'pending',
     amount_paid: '0',
     notes: ''
   })
@@ -817,9 +817,52 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     }
 
+    // Handle Nexi Pay by Link
+    const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
+    if (isNexiPayByLink && data) {
+      // Update booking to pending with Nexi payment method
+      await supabase.from('bookings').update({
+        payment_status: 'pending',
+        payment_method: 'Nexi Pay by Link'
+      }).eq('id', data.id)
+
+      try {
+        const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: data.id,
+            amount: totalPrice,
+            customerEmail: customerEmail || '',
+            customerName: customerName || 'Cliente',
+            description: `Lavaggio DR7 - ${serviceNames}`,
+            expirationDays: 1
+          })
+        })
+        const linkData = await linkRes.json()
+        if (linkRes.ok && linkData.paymentUrl) {
+          if (customerPhone) {
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: customerPhone,
+                customMessage: `Gentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7`
+              })
+            })
+          }
+          toast.success('Pay by Link generato e inviato al cliente!')
+        } else {
+          toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
+        }
+      } catch (linkErr: any) {
+        toast.error('Errore Pay by Link: ' + linkErr.message)
+      }
+    }
+
     // Send WhatsApp notification
     try {
-      const paymentStatus = formData.payment_status || 'pending'
+      const paymentStatus = isNexiPayByLink ? 'pending' : (formData.payment_status || 'pending')
       const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
 
       // Send admin notification (detailed internal format)
@@ -847,8 +890,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
       })
 
-      // Send customer confirmation message
-      if (customerPhone) {
+      // Send customer confirmation message (skip for Nexi — link message sent separately)
+      if (customerPhone && !isNexiPayByLink) {
         const custFirstName = customerName?.split(' ')[0] || 'Cliente'
         const apptDt = new Date(appointmentDateTime)
         const fmtDate = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
@@ -1784,8 +1827,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
-                    <option value="paid">Pagato</option>
                     <option value="pending">Da Saldare</option>
+                    <option value="nexi_pay_by_link">Nexi - Pay by Link</option>
+                    <option value="paid">Pagato</option>
                     <option value="unpaid">Non Pagato</option>
                   </select>
                 </div>

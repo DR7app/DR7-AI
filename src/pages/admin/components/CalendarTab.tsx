@@ -205,6 +205,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     const bookingToVehicleId = new Map<string, string>()
     bookings.forEach(b => {
       if (b.status === 'cancelled') return
+      // Exclude pending Nexi Pay by Link bookings (awaiting payment — not confirmed yet)
+      if (b.payment_method === 'Nexi Pay by Link' && b.payment_status === 'pending') return
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
 
