@@ -199,9 +199,12 @@ const handler: Handler = async (event) => {
       const amountPaidEuros = (amountPaid / 100).toFixed(2);
       const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
 
+      const isNexiPayByLink = (booking.payment_method || '').includes('Nexi Pay by Link');
       let paymentInfo = '';
       if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
         paymentInfo = `Pagato`;
+      } else if (isNexiPayByLink) {
+        paymentInfo = `In attesa di pagamento (Nexi Pay by Link) - se non pagato entro 1 ora, la prenotazione verrà annullata`;
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
       } else {
@@ -209,7 +212,8 @@ const handler: Handler = async (event) => {
       }
 
       const isEdit = booking.isEdit;
-      message = isEdit ? `*MODIFICA PRENOTAZIONE NOLEGGIO*\n\n` : `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
+      const headerLabel = isNexiPayByLink ? `*PRENOTAZIONE IN ATTESA DI PAGAMENTO*` : (isEdit ? `*MODIFICA PRENOTAZIONE NOLEGGIO*` : `*NUOVA PRENOTAZIONE NOLEGGIO*`);
+      message = `${headerLabel}\n\n`;
       message += `*ID:* DR7-${bookingId}\n`;
       message += `*Cliente:* ${customerName}\n`;
       message += `*Email:* ${customerEmail}\n`;
