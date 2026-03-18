@@ -218,7 +218,8 @@ const handler: Handler = async (event) => {
       message += `*Cliente:* ${customerName}\n`;
       message += `*Email:* ${customerEmail}\n`;
       message += `*Telefono:* ${customerPhone}\n`;
-      message += `*Veicolo:* ${vehicleName}\n`;
+      const vehiclePlate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '';
+      message += `*Veicolo:* ${vehicleName}${vehiclePlate ? ` (${vehiclePlate})` : ''}\n`;
       message += `*Ritiro:* ${pickupDateFormatted} alle ${pickupTimeFormatted}\n`;
       message += `*Riconsegna:* ${dropoffDateFormatted} alle ${dropoffTimeFormatted}\n`;
 
@@ -273,7 +274,8 @@ const handler: Handler = async (event) => {
       }
 
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
+      // Don't append payment method again if already included in paymentInfo (e.g. Nexi Pay by Link)
+      message += `*Pagamento:* ${paymentInfo}${!isNexiPayByLink && paymentMethod ? ` (${paymentMethod})` : ''}`;
     }
   } else {
     return {
