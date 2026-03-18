@@ -31,17 +31,18 @@ const handler: Handler = async (event) => {
             callbackData = Object.fromEntries(params.entries());
         }
 
-        const {
-            orderId,
-            operationId,
-            transactionId,
-            result,
-            resultCode,
-            authorizationCode,
-            contractId
-        } = callbackData;
+        // Nexi Pay by Link v2 sends nested format: { operation: { orderId, operationResult, ... } }
+        // Nexi hosted payment sends flat format: { orderId, result, resultCode, ... }
+        const op = callbackData.operation || {};
+        const orderId = callbackData.orderId || op.orderId;
+        const operationId = callbackData.operationId || op.operationId;
+        const transactionId = callbackData.transactionId || op.paymentEndToEndId;
+        const result = callbackData.result || op.operationResult;
+        const resultCode = callbackData.resultCode;
+        const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
+        const contractId = callbackData.contractId;
 
-        console.log('[nexi-payment-callback] Parsed:', { orderId, result, resultCode, authorizationCode, contractId });
+        console.log('[nexi-payment-callback] Parsed:', { orderId, result, resultCode, authorizationCode, operationId, raw_keys: Object.keys(callbackData) });
 
         if (!orderId) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing orderId' }) };
