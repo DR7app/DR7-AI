@@ -51,10 +51,11 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // Generate unique order ID
+        // Generate unique order ID (max 18 chars for Nexi)
+        const ts = Date.now().toString(36)
         const orderId = bookingId
-            ? `PAY-${bookingId.slice(0, 8)}-${Date.now()}`
-            : `PAY-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+            ? `P${bookingId.slice(0, 8)}${ts}`.slice(0, 18)
+            : `P${ts}${Math.floor(Math.random() * 1000)}`.slice(0, 18);
 
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
@@ -90,13 +91,15 @@ const handler: Handler = async (event) => {
             }
         };
 
-        console.log('Creating Nexi Pay by Link:', { orderId, amountCents, bookingId });
+        console.log('Creating Nexi Pay by Link:', { orderId, amountCents, bookingId, payload: JSON.stringify(payload) });
 
+        const correlationId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
         const response = await fetch(`${NEXI_BASE_URL}/orders/build`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Api-Key': NEXI_API_KEY,
+                'Correlation-Id': correlationId
             },
             body: JSON.stringify(payload)
         });
