@@ -82,12 +82,7 @@ const handler: Handler = async (event) => {
                 language: 'ita',
                 resultUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`,
-                recurrence: {
-                    action: 'CONTRACT_CREATION',
-                    contractId: orderId.slice(0, 18),
-                    contractType: 'MIT_UNSCHEDULED'
-                }
+                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`
             }
         };
 
@@ -105,7 +100,10 @@ const handler: Handler = async (event) => {
         });
 
         const responseText = await response.text();
-        console.log('Nexi response status:', response.status, 'body:', responseText.substring(0, 1000));
+        console.log('Nexi response status:', response.status);
+        console.log('Nexi response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+        console.log('Nexi response body:', responseText || '(empty)');
+        console.log('API key first/last 4:', NEXI_API_KEY?.slice(0, 4) + '...' + NEXI_API_KEY?.slice(-4));
 
         let responseData: any;
         try {
