@@ -86,7 +86,7 @@ const handler: Handler = async (event) => {
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
                 notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`,
-                expirationDate: expirationDate.toISOString()
+                expirationTime: expirationDate.toISOString()
             }
         };
 
