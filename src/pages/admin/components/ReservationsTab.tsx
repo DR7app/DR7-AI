@@ -3403,7 +3403,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             kmLabel = 'Illimitati'
           } else if (formData.km_limit === '50/giorno') {
             const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
-            const dropoff = new Date(formData.dropoff_date + 'T' + formData.dropoff_time)
+            const dropoff = new Date(formData.return_date + 'T' + formData.return_time)
             const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
             kmLabel = `${50 * days} Km (50/g x ${days}gg)`
           } else if (formData.km_limit) {
