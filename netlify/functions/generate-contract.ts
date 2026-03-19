@@ -185,21 +185,24 @@ export const handler: Handler = async (event) => {
         // Final fallback: Use booking data directly if no customer record exists
         if (!customer) {
             console.warn('[generate-contract] WARNING: No customer record found by any method! Using booking data as fallback.')
+            const bd = booking.booking_details?.customer || {}
             const nameParts = (resolvedName || '').split(' ')
             customer = {
                 tipo_cliente: 'persona_fisica',
-                nome: nameParts[0] || '',
-                cognome: nameParts.slice(1).join(' ') || '',
+                nome: bd.firstName || nameParts[0] || '',
+                cognome: bd.lastName || nameParts.slice(1).join(' ') || '',
                 email: resolvedEmail || '',
                 telefono: resolvedPhone || '',
-                indirizzo: booking.booking_details?.customer?.address || '',
-                codice_fiscale: booking.booking_details?.customer?.taxCode || '',
-                patente: booking.booking_details?.customer?.driverLicense || '',
-                data_nascita: booking.booking_details?.customer?.birthDate || null,
-                luogo_nascita: booking.booking_details?.customer?.birthPlace || null,
-                citta_residenza: booking.booking_details?.customer?.city || null,
-                provincia_residenza: booking.booking_details?.customer?.province || null,
-                codice_postale: booking.booking_details?.customer?.zipCode || null,
+                indirizzo: bd.address || '',
+                codice_fiscale: bd.taxCode || bd.codiceFiscale || '',
+                numero_patente: bd.licenseNumber || bd.driverLicense || '',
+                patente: bd.licenseNumber || bd.driverLicense || '',
+                data_nascita: bd.birthDate || null,
+                luogo_nascita: bd.birthPlace || null,
+                citta_residenza: bd.city || null,
+                provincia_residenza: bd.province || null,
+                codice_postale: bd.zipCode || null,
+                data_rilascio_patente: bd.licenseIssueDate || null,
             }
             console.log('[generate-contract] Using fallback customer data:', JSON.stringify(customer))
         }
@@ -678,16 +681,16 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
             'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
 
-            // Customer Info
+            // Customer Info — use resolved values (booking top-level can be null for credit wallet bookings)
             'CustomerName': clientName || '',
             'NomeCognome': clientName || '',
             'CustomerVAT': clientVat || '',
             'CodiceFiscale': clientVat || '',
             'PartitaIVA': clientVat || '',
-            'CustomerPhone': booking.customer_phone || '',
-            'Telefono': booking.customer_phone || '',
-            'CustomerEmail': booking.customer_email || '',
-            'Email': booking.customer_email || '',
+            'CustomerPhone': customer?.telefono || resolvedPhone || '',
+            'Telefono': customer?.telefono || resolvedPhone || '',
+            'CustomerEmail': customer?.email || resolvedEmail || '',
+            'Email': customer?.email || resolvedEmail || '',
             'CustomerAddress': clientAddress || '',
             'Indirizzo': clientAddress || '',
             'CustomerCity': customer?.citta_residenza || '',
@@ -1028,9 +1031,9 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 booking_id: bookingId,
                 contract_number: contractNumber,
                 contract_date: new Date().toISOString().split('T')[0],
-                customer_name: clientName,
-                customer_email: booking.customer_email || customer?.email,
-                customer_phone: booking.customer_phone || customer?.telefono,
+                customer_name: clientName || resolvedName || '',
+                customer_email: customer?.email || resolvedEmail || '',
+                customer_phone: customer?.telefono || resolvedPhone || '',
                 customer_address: clientAddress,
                 customer_tax_code: clientVat,
                 customer_license_number: driverLicense,

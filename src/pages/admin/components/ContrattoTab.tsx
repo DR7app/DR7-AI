@@ -61,11 +61,25 @@ export default function ContrattoTab() {
     try {
       const { data, error } = await supabase
         .from('contracts')
-        .select('*')
+        .select('*, bookings:booking_id(customer_name, customer_email, customer_phone, booking_details)')
         .order('updated_at', { ascending: false })
 
       if (error) throw error
-      setContracts(data || [])
+      // Resolve customer_name from booking if contract's customer_name is empty
+      const resolved = (data || []).map((c: any) => {
+        const b = c.bookings
+        if (!c.customer_name && b) {
+          c.customer_name = b.customer_name || b.booking_details?.customer?.fullName || ''
+        }
+        if (!c.customer_email && b) {
+          c.customer_email = b.customer_email || b.booking_details?.customer?.email || ''
+        }
+        if (!c.customer_phone && b) {
+          c.customer_phone = b.customer_phone || b.booking_details?.customer?.phone || ''
+        }
+        return c
+      })
+      setContracts(resolved)
     } catch (error) {
       console.error('Failed to load contracts:', error)
     } finally {
