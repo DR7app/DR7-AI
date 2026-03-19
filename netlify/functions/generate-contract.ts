@@ -103,10 +103,10 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // 2. Fallback: Try by email (use maybeSingle to handle duplicates)
+        // 2. Fallback: Try by email (case-insensitive, use maybeSingle to handle duplicates)
         if (!customer && resolvedEmail) {
-            console.log('[generate-contract] Fallback: Fetching by email from customers_extended...')
-            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', resolvedEmail).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+            console.log('[generate-contract] Fallback: Fetching by email from customers_extended...', resolvedEmail)
+            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').ilike('email', resolvedEmail).order('updated_at', { ascending: false }).limit(1).maybeSingle()
             if (cError) console.error('[generate-contract] Error fetching by email:', cError)
             if (cData) {
                 console.log('[generate-contract] Found customer by Email:', cData.id, cData.nome, cData.cognome)
@@ -115,17 +115,26 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // 3. Fallback: Try by phone number
+        // 3. Fallback: Try by phone number (multiple format variations)
         if (!customer && resolvedPhone) {
-            console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...')
+            console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...', resolvedPhone)
             let phone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
             if (phone.startsWith('00')) phone = phone.substring(2)
-            if (phone.length === 10) phone = '39' + phone
-            const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', phone).order('updated_at', { ascending: false }).limit(1).maybeSingle()
-            if (cData) {
-                console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome)
-                customer = cData
-                matchedBy = 'phone'
+            if (phone.length === 10 && phone.startsWith('3')) phone = '39' + phone
+            // Try exact match, with prefix, and without prefix
+            const phoneVariants = [phone]
+            if (phone.startsWith('39') && phone.length === 12) phoneVariants.push(phone.substring(2)) // without 39
+            if (!phone.startsWith('39') && phone.length === 10) phoneVariants.push('39' + phone) // with 39
+            phoneVariants.push('+' + phone) // with +
+
+            for (const pv of phoneVariants) {
+                const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', pv).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+                if (cData) {
+                    console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome, 'variant:', pv)
+                    customer = cData
+                    matchedBy = 'phone'
+                    break
+                }
             }
         }
 
