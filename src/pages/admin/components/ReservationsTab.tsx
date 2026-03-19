@@ -3431,7 +3431,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
           const depositEur = parseFloat(formData.deposit) || 0
           const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
-          const kmLabel = formData.unlimited_km ? 'Illimitati' : (formData.km_limit ? `${formData.km_limit} km` : '-')
+          const kmLabel = formData.unlimited_km ? 'Illimitati' : (formData.km_limit === '50/giorno' ? '50 Km/Giorno' : (formData.km_limit ? `${formData.km_limit} km` : '-'))
           const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
             : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
             : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
@@ -5092,7 +5092,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               ? `€${selectedBooking.deposit_amount || selectedBooking.booking_details?.deposit}`
                               : 'N/A'
                         }</span></div>
-                        <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
+                        <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.unlimited_km || selectedBooking.booking_details?.km_limit === 'Illimitati' ? 'KM Illimitati' : selectedBooking.booking_details?.km_limit === '50/giorno' ? '50 Km/Giorno' : selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
                         {(selectedBooking.delivery_enabled || selectedBooking.booking_details?.delivery_enabled) && (
                           <div className="mt-2 pt-2 border-t border-theme-border/30">
                             <span className="text-theme-text-muted">Consegna a domicilio:</span>

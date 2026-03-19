@@ -311,11 +311,13 @@ export const handler: Handler = async (event) => {
         // KM limit: use unlimited_km flag (strict boolean check) or legacy km_limit === 'Illimitati'
         const isUnlimitedKm = booking.booking_details?.unlimited_km === true || booking.booking_details?.km_limit === 'Illimitati'
         const rawKmLimit = booking.booking_details?.km_limit
-        const kmLimitValue = isUnlimitedKm
+        const kmLimitRaw = isUnlimitedKm
             ? 'Illimitati'
             : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
                 ? rawKmLimit
                 : (booking.booking_details?.total_km || 'Illimitati'))
+        // Format "50/giorno" as "50 Km/Giorno" for display
+        const kmLimitValue = kmLimitRaw === '50/giorno' ? '50 Km/Giorno' : kmLimitRaw
         console.log(`[generate-contract] KM DEBUG: unlimited_km=${booking.booking_details?.unlimited_km} (type: ${typeof booking.booking_details?.unlimited_km}), km_limit=${rawKmLimit}, resolved=${kmLimitValue}`)
 
         // Helper to format date/time in Rome timezone correctly
