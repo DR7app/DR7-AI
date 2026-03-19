@@ -316,8 +316,15 @@ export const handler: Handler = async (event) => {
             : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
                 ? rawKmLimit
                 : (booking.booking_details?.total_km || 'Illimitati'))
-        // Format "50/giorno" as "50 Km/Giorno" for display
-        const kmLimitValue = kmLimitRaw === '50/giorno' ? '50 Km/Giorno' : kmLimitRaw
+        // For "50/giorno", calculate total KM based on rental days
+        let kmLimitValue: string
+        if (kmLimitRaw === '50/giorno') {
+            const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            const totalKm = 50 * rentalDays
+            kmLimitValue = `${totalKm} Km (50 Km/Giorno x ${rentalDays} gg)`
+        } else {
+            kmLimitValue = kmLimitRaw
+        }
         console.log(`[generate-contract] KM DEBUG: unlimited_km=${booking.booking_details?.unlimited_km} (type: ${typeof booking.booking_details?.unlimited_km}), km_limit=${rawKmLimit}, resolved=${kmLimitValue}`)
 
         // Helper to format date/time in Rome timezone correctly

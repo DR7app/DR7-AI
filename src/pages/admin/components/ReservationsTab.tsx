@@ -3431,7 +3431,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
           const depositEur = parseFloat(formData.deposit) || 0
           const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
-          const kmLabel = formData.unlimited_km ? 'Illimitati' : (formData.km_limit === '50/giorno' ? '50 Km/Giorno' : (formData.km_limit ? `${formData.km_limit} km` : '-'))
+          let kmLabel = '-'
+          if (formData.unlimited_km) {
+            kmLabel = 'Illimitati'
+          } else if (formData.km_limit === '50/giorno') {
+            const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
+            const dropoff = new Date(formData.dropoff_date + 'T' + formData.dropoff_time)
+            const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
+            kmLabel = `${50 * days} Km (50/g x ${days}gg)`
+          } else if (formData.km_limit) {
+            kmLabel = `${formData.km_limit} km`
+          }
           const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
             : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
             : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
@@ -5092,7 +5102,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               ? `€${selectedBooking.deposit_amount || selectedBooking.booking_details?.deposit}`
                               : 'N/A'
                         }</span></div>
-                        <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.unlimited_km || selectedBooking.booking_details?.km_limit === 'Illimitati' ? 'KM Illimitati' : selectedBooking.booking_details?.km_limit === '50/giorno' ? '50 Km/Giorno' : selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
+                        <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{(() => {
+                          const bd = selectedBooking.booking_details;
+                          if (bd?.unlimited_km || bd?.km_limit === 'Illimitati') return 'KM Illimitati';
+                          if (bd?.km_limit === '50/giorno' && selectedBooking.pickup_date && selectedBooking.dropoff_date) {
+                            const days = Math.ceil((new Date(selectedBooking.dropoff_date).getTime() - new Date(selectedBooking.pickup_date).getTime()) / (1000 * 60 * 60 * 24));
+                            return `${50 * days} Km (50/g x ${days}gg)`;
+                          }
+                          return bd?.km_limit ? `${bd.km_limit} km` : 'KM Illimitati';
+                        })()}</span></div>
                         {(selectedBooking.delivery_enabled || selectedBooking.booking_details?.delivery_enabled) && (
                           <div className="mt-2 pt-2 border-t border-theme-border/30">
                             <span className="text-theme-text-muted">Consegna a domicilio:</span>
