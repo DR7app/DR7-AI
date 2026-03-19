@@ -410,7 +410,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // KM Overage Fee
     km_overage_fee: '1.80',
     unlimited_km: false,
-    km_limit: '0', // Default KM limit when not unlimited
+    km_limit: '50/giorno', // Default KM limit when not unlimited
     // Home Delivery & Pickup
     delivery_enabled: false,
     delivery_street: '',
@@ -1910,7 +1910,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '1.80',
       unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
-      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '0'),
+      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '50/giorno'),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
@@ -3645,7 +3645,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
       unlimited_km: false,
-      km_limit: '0',
+      km_limit: '50/giorno',
       // Home Delivery & Pickup
       delivery_enabled: false,
       delivery_street: '',
@@ -4573,20 +4573,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 disabled={formData.unlimited_km}
               />
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM (Da inserire):</h4>
-                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                  {[100, 180, 240, 280, 300].map((kmLimit) => (
-                    <div
-                      key={kmLimit}
-                      className={`p-2 rounded-md border cursor-pointer transition-all flex flex-col items-center justify-center text-center ${parseInt(formData.km_limit) === kmLimit && !formData.unlimited_km
-                        ? 'border-theme-text-primary bg-theme-text-primary/5'
-                        : 'border-theme-border hover:border-theme-border'
-                        } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: kmLimit.toString() }))}
-                    >
-                      <span className="text-theme-text-primary font-bold text-xs">{kmLimit} km</span>
-                    </div>
-                  ))}
+                <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
+                <div
+                  className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === '50/giorno' && !formData.unlimited_km
+                    ? 'border-theme-text-primary bg-theme-text-primary/5'
+                    : 'border-theme-border hover:border-theme-border'
+                    } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: '50/giorno' }))}
+                >
+                  <span className="text-theme-text-primary font-bold text-sm">50 Km / Giorno</span>
                 </div>
               </div>
 
