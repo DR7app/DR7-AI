@@ -1326,42 +1326,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (missing.length > 0) {
       console.warn('⚠️ Missing fields for contract:', missing)
-
-      // Fetch full customer data to populate modal
-      const customerId = booking.user_id || booking.booking_details?.customer?.id || booking.booking_details?.customer_id
-      let customerData = {}
-
-      if (customerId) {
-        try {
-          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
-          if (resp.ok) {
-            const result = await resp.json()
-            customerData = result.customer || { id: customerId }
-          } else {
-            customerData = { id: customerId }
-          }
-        } catch (e) {
-          console.error('[handleGenerateContract] get-customer error:', e)
-          customerData = { id: customerId }
-        }
-        console.log('[handleGenerateContract] Fetched customer for ID:', customerId, customerData)
-      } else {
-        // No customer ID, but we might have data from booking
-        const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
-        customerData = {
-          nome: nameParts[0] || '',
-          cognome: nameParts.slice(1).join(' ') || '',
-          email: booking.customer_email || '',
-          telefono: booking.customer_phone || ''
-        }
-      }
-
-      setMissingFields(missing)
-      setTempCustomerData(customerData)
-      setCurrentValidationBooking(booking)
-      setValidationContext('contract')
-      setShowMissingDataModal(true)
-      return
+      // Don't block — generate-contract backend has extensive fallbacks
+      // Just log it, contract will be generated with available data
+      console.log('[handleGenerateContract] Proceeding despite missing fields — backend handles fallbacks')
     }
 
     setGeneratingContract(true)

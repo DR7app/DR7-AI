@@ -27,16 +27,25 @@ export const handler: Handler = async (event) => {
     try {
         const { contractId, bookingId } = JSON.parse(event.body || '{}')
 
-        if (!contractId) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Contract ID is required' }) }
+        if (!contractId && !bookingId) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Contract ID or Booking ID is required' }) }
         }
 
-        // Fetch contract
-        const { data: contract, error: contractError } = await supabase
-            .from('contracts')
-            .select('*')
-            .eq('id', contractId)
-            .single()
+        // Fetch contract by ID or by booking_id
+        let contract: any = null
+        let contractError: any = null
+
+        if (contractId) {
+            const result = await supabase.from('contracts').select('*').eq('id', contractId).single()
+            contract = result.data
+            contractError = result.error
+        }
+
+        if (!contract && bookingId) {
+            const result = await supabase.from('contracts').select('*').eq('booking_id', bookingId).single()
+            contract = result.data
+            contractError = result.error
+        }
 
         if (contractError || !contract) {
             return { statusCode: 404, body: JSON.stringify({ error: 'Contratto non trovato' }) }
