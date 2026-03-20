@@ -73,7 +73,8 @@ export const handler: Handler = async (event) => {
 
         // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
         const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
-        const isTestVehicle = vehicleName === 'test'
+        const vehiclePlate = (booking.vehicle_plate || booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '').toUpperCase()
+        const isTestVehicle = vehicleName === 'test' || vehiclePlate.startsWith('TEST')
 
         // Fetch customer data
         const bookingDetails = booking.booking_details || {}
