@@ -183,7 +183,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     appointment_date: todayStr,
     appointment_time: '',
     price_total: 0,
-    payment_status: 'pending',
+    payment_status: 'nexi_pay_by_link',
     amount_paid: '0',
     notes: ''
   })
@@ -299,7 +299,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       appointment_date: todayStr,
       appointment_time: '',
       price_total: 0,
-      payment_status: 'paid',
+      payment_status: 'nexi_pay_by_link',
       amount_paid: '0',
       notes: ''
     })
@@ -325,7 +325,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     'supercar experience': 21, 'icon experience': 22, 'brake service': 23,
     'battery swap': 24, 'wiper service': 25, 'headlight restore': 26,
   }
-  const getServiceNum = (name: string) => SERVICE_NUMBER[name.toLowerCase()] || ''
+  const getServiceNum = (name: string) => {
+    const lower = name.toLowerCase()
+    // Try exact match first, then strip "prime " prefix
+    return SERVICE_NUMBER[lower] || SERVICE_NUMBER[lower.replace('prime ', '')] || ''
+  }
 
   // Test vehicles that skip API targa lookup (no credits needed)
   const TEST_VEHICLES: Record<string, { brand: string; model: string; year: string; fuel: string; powerCV: string; makeModel: string; category: VehicleCategory }> = {
