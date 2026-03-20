@@ -1418,15 +1418,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                 >
                   <option value="">Seleziona servizio...</option>
-                  {Object.entries(servicesByCategory).map(([category, services]) => (
-                    <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
-                      {services.map(service => (
-                        <option key={service.id} value={service.id}>
-                          {service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
+                  {(() => {
+                    let num = 0
+                    return Object.entries(servicesByCategory).map(([category, services]) => (
+                      <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                        {services.map(service => {
+                          num++
+                          return (
+                            <option key={service.id} value={service.id}>
+                              {num}. {service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
+                            </option>
+                          )
+                        })}
+                      </optgroup>
+                    ))
+                  })()}
                 </select>
               </div>
 
@@ -2141,23 +2147,29 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="">Seleziona servizio...</option>
-                    {Object.entries(
-                      carWashServices
-                        .filter(s => s.category !== 'extra' && s.category !== 'experience')
-                        .reduce<Record<string, CarWashService[]>>((acc, s) => {
-                          if (!acc[s.category]) acc[s.category] = []
-                          acc[s.category].push(s)
-                          return acc
-                        }, {})
-                    ).map(([category, services]) => (
-                      <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
-                        {services.map(service => (
-                          <option key={service.id} value={service.id}>
-                            {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
+                    {(() => {
+                      let num = 0
+                      return Object.entries(
+                        carWashServices
+                          .filter(s => s.category !== 'extra' && s.category !== 'experience')
+                          .reduce<Record<string, CarWashService[]>>((acc, s) => {
+                            if (!acc[s.category]) acc[s.category] = []
+                            acc[s.category].push(s)
+                            return acc
+                          }, {})
+                      ).map(([category, services]) => (
+                        <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                          {services.map(service => {
+                            num++
+                            return (
+                              <option key={service.id} value={service.id}>
+                                {num}. {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
+                              </option>
+                            )
+                          })}
+                        </optgroup>
+                      ))
+                    })()}
                   </select>
                 </div>
 
