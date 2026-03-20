@@ -315,6 +315,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     tech: 'PRIME TECH SERVICE'
   }
 
+  // Fixed service numbers matching the flyer/marketing material
+  const SERVICE_NUMBER: Record<string, number> = {
+    'interior clean': 1, 'exterior clean': 2, 'full clean': 3, 'full clean n2': 4,
+    'top shine': 5, 'vip experience': 6, 'luxury detail': 7, 'absolute detail': 8,
+    'child care': 9, 'engine clean': 10, 'glass care': 11, 'odor control': 12,
+    'pet clean': 13, 'plastic refresh': 14, 'quick shine': 15, 'rim care': 16,
+    'seat clean': 17, 'seat protect': 18, 'moto essential': 19, 'courtesy drive': 20,
+    'supercar experience': 21, 'icon experience': 22, 'brake service': 23,
+    'battery swap': 24, 'wiper service': 25, 'headlight restore': 26,
+  }
+  const getServiceNum = (name: string) => SERVICE_NUMBER[name.toLowerCase()] || ''
+
   // Test vehicles that skip API targa lookup (no credits needed)
   const TEST_VEHICLES: Record<string, { brand: string; model: string; year: string; fuel: string; powerCV: string; makeModel: string; category: VehicleCategory }> = {
     'TEST000': { brand: 'Fiat', model: 'Panda', year: '2023', fuel: 'Benzina', powerCV: '70', makeModel: 'Fiat Panda', category: 'urban' as VehicleCategory },
@@ -1437,21 +1449,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                 >
                   <option value="">Seleziona servizio...</option>
-                  {(() => {
-                    let num = 0
-                    return Object.entries(servicesByCategory).map(([category, services]) => (
-                      <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
-                        {services.map(service => {
-                          num++
-                          return (
-                            <option key={service.id} value={service.id}>
-                              {num}. {service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
-                            </option>
-                          )
-                        })}
-                      </optgroup>
-                    ))
-                  })()}
+                  {Object.entries(servicesByCategory).map(([category, services]) => (
+                    <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                      {services.map(service => {
+                        const sn = getServiceNum(service.name)
+                        return (
+                          <option key={service.id} value={service.id}>
+                            {sn ? `${sn}. ` : ''}{service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
+                          </option>
+                        )
+                      })}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
 
@@ -2166,29 +2175,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="">Seleziona servizio...</option>
-                    {(() => {
-                      let num = 0
-                      return Object.entries(
-                        carWashServices
-                          .filter(s => s.category !== 'extra' && s.category !== 'experience')
-                          .reduce<Record<string, CarWashService[]>>((acc, s) => {
-                            if (!acc[s.category]) acc[s.category] = []
-                            acc[s.category].push(s)
-                            return acc
-                          }, {})
-                      ).map(([category, services]) => (
-                        <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
-                          {services.map(service => {
-                            num++
-                            return (
-                              <option key={service.id} value={service.id}>
-                                {num}. {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
-                              </option>
-                            )
-                          })}
-                        </optgroup>
-                      ))
-                    })()}
+                    {Object.entries(
+                      carWashServices
+                        .filter(s => s.category !== 'extra' && s.category !== 'experience')
+                        .reduce<Record<string, CarWashService[]>>((acc, s) => {
+                          if (!acc[s.category]) acc[s.category] = []
+                          acc[s.category].push(s)
+                          return acc
+                        }, {})
+                    ).map(([category, services]) => (
+                      <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                        {services.map(service => {
+                          const sn = getServiceNum(service.name)
+                          return (
+                            <option key={service.id} value={service.id}>
+                              {sn ? `${sn}. ` : ''}{service.name} - EUR {service.price.toFixed(2)} ({service.duration})
+                            </option>
+                          )
+                        })}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
 
