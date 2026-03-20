@@ -315,11 +315,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     tech: 'PRIME TECH SERVICE'
   }
 
+  // Test vehicles that skip API targa lookup (no credits needed)
+  const TEST_VEHICLES: Record<string, { brand: string; model: string; year: string; fuel: string; powerCV: string; makeModel: string; category: string }> = {
+    'TEST000': { brand: 'Fiat', model: 'Panda', year: '2023', fuel: 'Benzina', powerCV: '70', makeModel: 'Fiat Panda', category: 'urban' },
+    'TEST002': { brand: 'BMW', model: 'X5', year: '2024', fuel: 'Diesel', powerCV: '286', makeModel: 'BMW X5', category: 'maxi' },
+  }
+
   // Targa lookup handler
   async function handleTargaLookup() {
     if (vehiclePlate.length < 5 || lookingUpTarga) return
     setLookingUpTarga(true)
     setTargaVehicleInfo(null)
+
+    // Check test vehicles first (no API call)
+    const upperPlate = vehiclePlate.toUpperCase().trim()
+    const testVehicle = TEST_VEHICLES[upperPlate]
+    if (testVehicle) {
+      setTargaVehicleInfo({ brand: testVehicle.brand, model: testVehicle.model, year: testVehicle.year, fuel: testVehicle.fuel, powerCV: testVehicle.powerCV })
+      setVehicleMakeModel(testVehicle.makeModel)
+      setVehicleCategory(testVehicle.category)
+      setClassificationSource('local')
+      setLookingUpTarga(false)
+      return
+    }
+
     try {
       const response = await fetch('/.netlify/functions/lookup-targa', {
         method: 'POST',
