@@ -730,6 +730,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const [year, month, day] = formData.appointment_date.split('-').map(Number)
     const [hours, minutes] = formData.appointment_time.split(':').map(Number)
     const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0)
+
+    // Validate appointment is not in the past
+    if (appointmentDate < new Date()) {
+      toast.error('La data e ora dell\'appuntamento non può essere nel passato.')
+      return
+    }
     const appointmentDateTime = appointmentDate.toISOString()
 
     // Total price: manual override or wizard selections
@@ -1802,6 +1808,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data *</label>
                   <input
                     type="date"
+                    min={todayStr}
                     value={formData.appointment_date}
                     onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"

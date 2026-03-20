@@ -2475,6 +2475,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
+      // ===== VALIDATION: Check pickup is not in the past =====
+      const nowRome = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
+      const pickupCheck = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
+      if (pickupCheck < nowRome) {
+        alert('DATA RITIRO NEL PASSATO\n\nLa data e ora di ritiro non può essere nel passato.')
+        setIsSubmitting(false)
+        return
+      }
+
       // ===== VALIDATION: Check dates are valid before parsing =====
       // Test parse the dates first to ensure they're valid
       const testPickupDate = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
@@ -3965,6 +3974,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     label="Data Ritiro"
                     type="date"
                     required
+                    min={new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })}
                     value={formData.pickup_date}
                     onChange={(e) => {
                       setFormData({ ...formData, pickup_date: e.target.value })
