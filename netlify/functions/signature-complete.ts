@@ -444,22 +444,15 @@ export const handler: Handler = async (event) => {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
             }
 
-            // Always send signed contract to admin (independent try/catch)
+            // Send signed contract notification to admin via CallMeBot
+            // (Green API can't send to its own number, so we use CallMeBot for text notification)
             try {
                 const ADMIN_PHONE = '393457905205'
-                const adminGreenUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
-                const adminRes = await fetch(adminGreenUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chatId: `${ADMIN_PHONE}@c.us`,
-                        urlFile: signedPdfUrl,
-                        fileName: `${docIdentifier}_firmato.pdf`,
-                        caption: `✅ Contratto ${docIdentifier} firmato da ${sigRequest.signer_name || 'cliente'}`
-                    })
-                })
-                const adminResult = await adminRes.json()
-                console.log('[signature-complete] Admin notification result:', JSON.stringify(adminResult))
+                const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || '6526748'
+                const adminMsg = `✅ CONTRATTO FIRMATO\n\n${docIdentifier} firmato da ${sigRequest.signer_name || 'cliente'}\n\nScarica PDF:\n${signedPdfUrl}`
+                const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${ADMIN_PHONE}&text=${encodeURIComponent(adminMsg)}&apikey=${CALLMEBOT_API_KEY}`
+                const adminRes = await fetch(callmebotUrl)
+                console.log('[signature-complete] Admin CallMeBot notification status:', adminRes.status)
             } catch (adminErr: any) {
                 console.error('[signature-complete] Failed to send to admin:', adminErr.message)
             }
