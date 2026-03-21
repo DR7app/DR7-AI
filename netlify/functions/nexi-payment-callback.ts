@@ -104,6 +104,18 @@ const handler: Handler = async (event) => {
 
                 console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid`);
 
+                // Store contractId on customer for future MIT charges
+                if (contractId) {
+                    const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
+                    if (custId) {
+                        await supabase.from('customers_extended').update({
+                            nexi_contract_id: contractId,
+                            updated_at: new Date().toISOString()
+                        }).eq('id', custId);
+                        console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${custId}`);
+                    }
+                }
+
                 // Send WhatsApp confirmation to customer (through send-whatsapp-notification for Rentora wrapper)
                 const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
                 if (custPhone) {
