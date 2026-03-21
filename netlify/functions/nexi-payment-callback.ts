@@ -41,8 +41,10 @@ const handler: Handler = async (event) => {
         const resultCode = callbackData.resultCode;
         const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
         const contractId = callbackData.contractId;
+        const paymentCircuit = callbackData.paymentCircuit || op.paymentCircuit || op.additionalData?.paymentCircuit || '';
+        const paymentInstrument = callbackData.paymentInstrument || op.paymentInstrument || '';
 
-        console.log('[nexi-payment-callback] Parsed:', { orderId, result, resultCode, authorizationCode, operationId, raw_keys: Object.keys(callbackData) });
+        console.log('[nexi-payment-callback] Parsed:', { orderId, result, resultCode, authorizationCode, operationId, paymentCircuit, paymentInstrument, raw_keys: Object.keys(callbackData), raw_op_keys: Object.keys(op) });
 
         if (!orderId) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing orderId' }) };
@@ -72,7 +74,9 @@ const handler: Handler = async (event) => {
                 result_code: resultCode,
                 authorization_code: authorizationCode,
                 operation_id: operationId,
-                contract_id: contractId
+                contract_id: contractId,
+                payment_circuit: paymentCircuit,
+                payment_instrument: paymentInstrument
             },
             updated_at: new Date().toISOString()
         }).eq('id', transaction.id);
