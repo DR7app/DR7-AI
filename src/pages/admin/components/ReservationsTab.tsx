@@ -4102,7 +4102,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <CustomerAutocomplete
                       customers={customers}
                       selectedCustomerId={formData.customer_id}
-                      onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, customer_id: customerId }))}
+                      onSelectCustomer={async (customerId) => {
+                        setFormData(prev => ({ ...prev, customer_id: customerId }))
+                        // Check patente age
+                        if (customerId) {
+                          try {
+                            const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+                            if (resp.ok) {
+                              const { customer: cust } = await resp.json()
+                              const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
+                              if (patenteDate) {
+                                const issueDate = new Date(patenteDate)
+                                const twoYearsAgo = new Date()
+                                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+                                if (issueDate > twoYearsAgo) {
+                                  alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 2 anni.\n\nNon è possibile procedere con il noleggio.')
+                                  setFormData(prev => ({ ...prev, customer_id: '' }))
+                                  return
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            console.warn('Patente check failed:', e)
+                          }
+                        }
+                      }}
                       placeholder="Inizia a scrivere nome, email o telefono..."
                       required={true}
                     />
