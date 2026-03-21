@@ -726,6 +726,37 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const customer = customers.find(c => c.id === formData.customer_id)
     if (!customer) throw new Error('Cliente non trovato')
 
+    // Validate customer has all required fields for fattura
+    try {
+      const custResp = await fetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
+      if (custResp.ok) {
+        const { customer: custData } = await custResp.json()
+        if (custData) {
+          const missing: string[] = []
+          const isAzienda = custData.tipo_cliente === 'azienda'
+
+          if (!custData.indirizzo) missing.push('Indirizzo')
+          if (!custData.citta_residenza && !custData.citta) missing.push('Città')
+          if (!custData.codice_postale) missing.push('CAP')
+
+          if (isAzienda) {
+            if (!custData.partita_iva && !custData.codice_fiscale) missing.push('Partita IVA')
+          } else {
+            if (!custData.nome) missing.push('Nome')
+            if (!custData.cognome) missing.push('Cognome')
+            if (!custData.codice_fiscale) missing.push('Codice Fiscale')
+          }
+
+          if (missing.length > 0) {
+            toast.error(`Dati cliente incompleti per la fatturazione:\n${missing.join(', ')}\n\nCompletare il profilo cliente prima di prenotare.`)
+            return
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Customer validation failed:', e)
+    }
+
     const customerName = customer.full_name
     const customerEmail = customer.email || ''
     const customerPhone = customer.phone || ''
