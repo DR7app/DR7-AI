@@ -329,6 +329,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const isInitialEditLoad = useRef(false)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [newSecondDriverMode, setNewSecondDriverMode] = useState(false)
+  const [newGaranteMode, setNewGaranteMode] = useState(false)
+  const [targaLoading, setTargaLoading] = useState(false)
 
   // Extend Booking Modal State
   const [showExtendModal, setShowExtendModal] = useState(false)
@@ -337,7 +339,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     new_return_date: '',
     new_return_time: '10:00',
     additional_amount: '0',
-    extension_payment_status: 'pending' as 'paid' | 'pending',
+    extension_payment_status: 'pending' as 'paid' | 'pending' | 'nexi_pay_by_link',
     extension_payment_method: '',
     notes: '',
     change_vehicle: false,
@@ -427,6 +429,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     pickup_notes: '',
     pickup_fee: '0',
     notes: '',
+    // Cauzione Auto (Vehicle as Security Deposit)
+    cauzione_auto: false,
+    cauzione_targa: '',
+    cauzione_targa_year: '',
+    cauzione_targa_brand: '',
+    cauzione_targa_model: '',
+    cauzione_proprietario_tipo: 'guidatore' as 'guidatore' | 'diverso',
+    garante_customer_id: '',
+    garante_nome: '',
+    garante_cognome: '',
+    garante_codice_fiscale: '',
+    garante_sesso: '',
+    garante_indirizzo: '',
+    garante_cap: '',
+    garante_citta: '',
+    garante_provincia: '',
+    garante_birth_date: '',
+    garante_birth_place: '',
+    garante_birth_provincia: '',
+    garante_phone: '',
+    garante_email: '',
   })
 
   // Auto-populate second driver fields when customer is selected
@@ -487,6 +510,79 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
     }
   }, [formData.second_driver_id, newSecondDriverMode, customers])
+
+  // Auto-populate garante fields when customer is selected
+  useEffect(() => {
+    if (formData.garante_customer_id && !newGaranteMode) {
+      const fetchGaranteData = async () => {
+        const { data: fullCustomer, error } = await supabase
+          .from('customers_extended')
+          .select('*')
+          .eq('id', formData.garante_customer_id)
+          .single()
+
+        if (error || !fullCustomer) {
+          console.error('Error fetching garante customer data:', error)
+          return
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          garante_nome: fullCustomer.nome || '',
+          garante_cognome: fullCustomer.cognome || '',
+          garante_codice_fiscale: fullCustomer.codice_fiscale || '',
+          garante_sesso: fullCustomer.sesso || '',
+          garante_indirizzo: fullCustomer.indirizzo || '',
+          garante_cap: fullCustomer.codice_postale || fullCustomer.cap || '',
+          garante_citta: fullCustomer.citta_residenza || fullCustomer.citta || '',
+          garante_provincia: fullCustomer.provincia_residenza || fullCustomer.provincia || '',
+          garante_birth_date: fullCustomer.data_nascita || '',
+          garante_birth_place: fullCustomer.luogo_nascita || '',
+          garante_birth_provincia: fullCustomer.provincia_nascita || '',
+          garante_phone: fullCustomer.telefono || '',
+          garante_email: fullCustomer.email || '',
+        }))
+      }
+      fetchGaranteData()
+    }
+  }, [formData.garante_customer_id, newGaranteMode])
+
+  async function handleLookupCauzioneTarga() {
+    if (!formData.cauzione_targa || formData.cauzione_targa.length < 5) {
+      toast.error('Inserisci una targa valida')
+      return
+    }
+    setTargaLoading(true)
+    try {
+      const resp = await fetch('/.netlify/functions/lookup-targa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targa: formData.cauzione_targa }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        toast.error(data.error || 'Errore nella ricerca della targa')
+        return
+      }
+      const year = parseInt(data.year)
+      if (isNaN(year) || year < 2020) {
+        toast.error('Veicolo deve essere immatricolato dal 2020 in poi')
+        setFormData(prev => ({ ...prev, cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '' }))
+        return
+      }
+      setFormData(prev => ({
+        ...prev,
+        cauzione_targa_brand: data.brand || '',
+        cauzione_targa_model: data.model || '',
+        cauzione_targa_year: data.year || '',
+      }))
+      toast.success(`${data.brand} ${data.model} (${data.year}) trovato`)
+    } catch (err: any) {
+      toast.error('Errore: ' + err.message)
+    } finally {
+      setTargaLoading(false)
+    }
+  }
 
   // Handle initial data from Calendar click
   useEffect(() => {
@@ -1875,6 +1971,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
       deposit: booking.booking_details?.deposit || '0',
       deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
+      // Cauzione Auto
+      cauzione_auto: !!booking.booking_details?.cauzione_auto,
+      cauzione_targa: booking.booking_details?.cauzione_targa || '',
+      cauzione_targa_year: booking.booking_details?.cauzione_veicolo?.year || '',
+      cauzione_targa_brand: booking.booking_details?.cauzione_veicolo?.brand || '',
+      cauzione_targa_model: booking.booking_details?.cauzione_veicolo?.model || '',
+      cauzione_proprietario_tipo: booking.booking_details?.garante_veicolo?.tipo || 'guidatore',
+      garante_customer_id: booking.booking_details?.garante_veicolo?.customer_id || '',
+      garante_nome: booking.booking_details?.garante_veicolo?.nome || '',
+      garante_cognome: booking.booking_details?.garante_veicolo?.cognome || '',
+      garante_codice_fiscale: booking.booking_details?.garante_veicolo?.codice_fiscale || '',
+      garante_sesso: booking.booking_details?.garante_veicolo?.sesso || '',
+      garante_indirizzo: booking.booking_details?.garante_veicolo?.indirizzo || '',
+      garante_cap: booking.booking_details?.garante_veicolo?.cap || '',
+      garante_citta: booking.booking_details?.garante_veicolo?.citta || '',
+      garante_provincia: booking.booking_details?.garante_veicolo?.provincia || '',
+      garante_birth_date: booking.booking_details?.garante_veicolo?.birth_date || '',
+      garante_birth_place: booking.booking_details?.garante_veicolo?.birth_place || '',
+      garante_birth_provincia: booking.booking_details?.garante_veicolo?.birth_provincia || '',
+      garante_phone: booking.booking_details?.garante_veicolo?.phone || '',
+      garante_email: booking.booking_details?.garante_veicolo?.email || '',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '1.80',
       unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
       km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '50/giorno'),
@@ -2033,6 +2150,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         const adminExtPayLabel = extendData.extension_payment_status === 'paid'
           ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
+          : extendData.extension_payment_status === 'nexi_pay_by_link'
+          ? 'Nexi Pay by Link'
           : 'Da saldare'
 
         let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
@@ -2082,6 +2201,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           const custExtPayLabel = extendData.extension_payment_status === 'paid'
             ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
+            : extendData.extension_payment_status === 'nexi_pay_by_link'
+            ? 'Nexi Pay by Link'
             : 'Da saldare'
 
           let customerMsg = `Salve ${customerFirstName},\n\n`
@@ -3116,6 +3237,44 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
+          // Cauzione Auto
+          cauzione_auto: formData.cauzione_auto,
+          cauzione_targa: formData.cauzione_auto ? formData.cauzione_targa : null,
+          cauzione_veicolo: formData.cauzione_auto ? {
+            targa: formData.cauzione_targa,
+            brand: formData.cauzione_targa_brand,
+            model: formData.cauzione_targa_model,
+            year: formData.cauzione_targa_year,
+          } : null,
+          garante_veicolo: formData.cauzione_auto ? (() => {
+            if (formData.cauzione_proprietario_tipo === 'guidatore') {
+              // Duplicate from booking customer
+              const cust = customers.find(c => c.id === formData.customer_id)
+              return {
+                tipo: 'guidatore',
+                customer_id: formData.customer_id || null,
+                nome: cust?.full_name?.split(' ').slice(0, -1).join(' ') || '',
+                cognome: cust?.full_name?.split(' ').pop() || '',
+              }
+            }
+            return {
+              tipo: 'diverso',
+              customer_id: formData.garante_customer_id || null,
+              nome: formData.garante_nome,
+              cognome: formData.garante_cognome,
+              codice_fiscale: formData.garante_codice_fiscale,
+              sesso: formData.garante_sesso,
+              indirizzo: formData.garante_indirizzo,
+              cap: formData.garante_cap,
+              citta: formData.garante_citta,
+              provincia: formData.garante_provincia,
+              birth_date: formData.garante_birth_date,
+              birth_place: formData.garante_birth_place,
+              birth_provincia: formData.garante_birth_provincia,
+              phone: formData.garante_phone,
+              email: formData.garante_email,
+            }
+          })() : null,
           second_driver: formData.has_second_driver ? {
             customer_id: secondDriverId || null,
             name: formData.second_driver_name,
@@ -3648,6 +3807,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_notes: '',
       pickup_fee: '0',
       notes: '',
+      // Cauzione Auto (Vehicle as Security Deposit)
+      cauzione_auto: false,
+      cauzione_targa: '',
+      cauzione_targa_year: '',
+      cauzione_targa_brand: '',
+      cauzione_targa_model: '',
+      cauzione_proprietario_tipo: 'guidatore' as 'guidatore' | 'diverso',
+      garante_customer_id: '',
+      garante_nome: '',
+      garante_cognome: '',
+      garante_codice_fiscale: '',
+      garante_sesso: '',
+      garante_indirizzo: '',
+      garante_cap: '',
+      garante_citta: '',
+      garante_provincia: '',
+      garante_birth_date: '',
+      garante_birth_place: '',
+      garante_birth_provincia: '',
+      garante_phone: '',
+      garante_email: '',
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
@@ -4271,21 +4451,167 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     Kasko (inclusa)
                   </div>
                 </div>
-                <Input
-                  label="Cauzione (€)"
-                  type="number"
-                  value={formData.deposit}
-                  onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
-                />
-                <Select
-                  label="Stato Cauzione"
-                  value={formData.deposit_status}
-                  onChange={(e) => setFormData({ ...formData, deposit_status: e.target.value as 'da_incassare' | 'incassata' })}
-                  options={[
-                    { value: 'da_incassare', label: 'Da incassare' },
-                    { value: 'incassata', label: 'Incassata' },
-                  ]}
-                />
+                {!formData.cauzione_auto && (
+                  <>
+                    <Input
+                      label="Cauzione (€)"
+                      type="number"
+                      value={formData.deposit}
+                      onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
+                    />
+                    <Select
+                      label="Stato Cauzione"
+                      value={formData.deposit_status}
+                      onChange={(e) => setFormData({ ...formData, deposit_status: e.target.value as 'da_incassare' | 'incassata' })}
+                      options={[
+                        { value: 'da_incassare', label: 'Da incassare' },
+                        { value: 'incassata', label: 'Incassata' },
+                      ]}
+                    />
+                  </>
+                )}
+              </div>
+
+              {/* Cauzione Auto Toggle */}
+              <div className="mt-4">
+                <div className="flex items-center mb-3">
+                  <input
+                    type="checkbox"
+                    id="cauzione_auto"
+                    checked={formData.cauzione_auto}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setFormData(prev => ({
+                        ...prev,
+                        cauzione_auto: checked,
+                        ...(!checked && {
+                          cauzione_targa: '', cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '',
+                          cauzione_proprietario_tipo: 'guidatore' as const,
+                          garante_customer_id: '', garante_nome: '', garante_cognome: '', garante_codice_fiscale: '',
+                          garante_sesso: '', garante_indirizzo: '', garante_cap: '', garante_citta: '', garante_provincia: '',
+                          garante_birth_date: '', garante_birth_place: '', garante_birth_provincia: '', garante_phone: '', garante_email: '',
+                        })
+                      }))
+                    }}
+                    className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                  />
+                  <label htmlFor="cauzione_auto" className="ml-2 text-sm font-medium text-theme-text-secondary">
+                    Auto come Cauzione
+                  </label>
+                </div>
+
+                {formData.cauzione_auto && (
+                  <div className="space-y-4 animate-fadeIn">
+                    {/* Targa Lookup */}
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Input
+                          label="Targa Veicolo Cauzione *"
+                          value={formData.cauzione_targa}
+                          onChange={(e) => setFormData({ ...formData, cauzione_targa: e.target.value.toUpperCase() })}
+                          placeholder="es. AB123CD"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLookupCauzioneTarga}
+                        disabled={targaLoading}
+                        className="px-4 py-2 bg-dr7-gold text-white rounded-lg hover:bg-dr7-gold/80 disabled:opacity-50 mb-[2px]"
+                      >
+                        {targaLoading ? 'Cerca...' : 'Cerca'}
+                      </button>
+                    </div>
+
+                    {/* Vehicle Info Display */}
+                    {formData.cauzione_targa_brand && (
+                      <div className="p-3 bg-green-900/20 border border-green-700 rounded-lg text-sm text-theme-text-primary">
+                        <strong>{formData.cauzione_targa_brand} {formData.cauzione_targa_model}</strong> — Anno: {formData.cauzione_targa_year}
+                      </div>
+                    )}
+
+                    {/* Proprietario Tipo */}
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Proprietario del veicolo</label>
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="cauzione_proprietario_tipo"
+                            value="guidatore"
+                            checked={formData.cauzione_proprietario_tipo === 'guidatore'}
+                            onChange={() => setFormData(prev => ({ ...prev, cauzione_proprietario_tipo: 'guidatore' }))}
+                            className="text-dr7-gold focus:ring-dr7-gold"
+                          />
+                          <span className="text-sm text-theme-text-primary">Proprietario = 1° Guidatore</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="cauzione_proprietario_tipo"
+                            value="diverso"
+                            checked={formData.cauzione_proprietario_tipo === 'diverso'}
+                            onChange={() => setFormData(prev => ({ ...prev, cauzione_proprietario_tipo: 'diverso' }))}
+                            className="text-dr7-gold focus:ring-dr7-gold"
+                          />
+                          <span className="text-sm text-theme-text-primary">Proprietario Diverso</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Garante Form (only when diverso) */}
+                    {formData.cauzione_proprietario_tipo === 'diverso' && (
+                      <div className="space-y-4 p-4 border border-theme-border rounded-lg">
+                        <h5 className="text-theme-text-primary font-semibold">Dati Proprietario / Garante</h5>
+                        {/* Toggle between Select Customer and New */}
+                        <div className="flex items-center gap-4 mb-4">
+                          <button
+                            type="button"
+                            onClick={() => setNewGaranteMode(false)}
+                            className={`px-4 py-2 rounded-full ${!newGaranteMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                          >
+                            Seleziona Cliente
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewGaranteMode(true)}
+                            className={`px-4 py-2 rounded-full ${newGaranteMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                          >
+                            Nuovo
+                          </button>
+                        </div>
+
+                        {newGaranteMode ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData({ ...formData, garante_nome: e.target.value })} />
+                            <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData({ ...formData, garante_cognome: e.target.value })} />
+                            <Input label="Codice Fiscale *" required value={formData.garante_codice_fiscale} onChange={(e) => setFormData({ ...formData, garante_codice_fiscale: e.target.value.toUpperCase() })} />
+                            <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData({ ...formData, garante_sesso: e.target.value })} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
+                            <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData({ ...formData, garante_indirizzo: e.target.value })} />
+                            <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData({ ...formData, garante_cap: e.target.value })} maxLength={5} />
+                            <Input label="Città" value={formData.garante_citta} onChange={(e) => setFormData({ ...formData, garante_citta: e.target.value })} />
+                            <Input label="Provincia" value={formData.garante_provincia} onChange={(e) => setFormData({ ...formData, garante_provincia: e.target.value.toUpperCase() })} maxLength={2} />
+                            <Input label="Data di Nascita" type="date" value={formData.garante_birth_date} onChange={(e) => setFormData({ ...formData, garante_birth_date: e.target.value })} />
+                            <Input label="Luogo di Nascita" value={formData.garante_birth_place} onChange={(e) => setFormData({ ...formData, garante_birth_place: e.target.value })} />
+                            <Input label="Provincia di Nascita" value={formData.garante_birth_provincia} onChange={(e) => setFormData({ ...formData, garante_birth_provincia: e.target.value.toUpperCase() })} maxLength={2} />
+                            <Input label="Telefono" value={formData.garante_phone} onChange={(e) => setFormData({ ...formData, garante_phone: e.target.value })} />
+                            <Input label="Email" type="email" value={formData.garante_email} onChange={(e) => setFormData({ ...formData, garante_email: e.target.value })} />
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente per Garante</label>
+                            <CustomerAutocomplete
+                              customers={customers}
+                              selectedCustomerId={formData.garante_customer_id}
+                              onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, garante_customer_id: customerId }))}
+                              placeholder="Inizia a scrivere nome, email o telefono..."
+                              required={false}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -5368,10 +5694,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Pagamento Estensione</label>
                   <select
                     value={extendData.extension_payment_status}
-                    onChange={(e) => setExtendData({ ...extendData, extension_payment_status: e.target.value as 'paid' | 'pending' })}
+                    onChange={(e) => setExtendData({ ...extendData, extension_payment_status: e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link' })}
                     className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                   >
                     <option value="pending">Da Saldare</option>
+                    <option value="nexi_pay_by_link">Nexi Pay by Link</option>
                     <option value="paid">Pagato</option>
                   </select>
                 </div>

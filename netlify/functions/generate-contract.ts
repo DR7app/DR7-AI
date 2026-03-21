@@ -771,8 +771,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Insurance and Financial
             'Insurance': insuranceLabel,
             'Assicurazione': insuranceLabel,
-            'Deposit': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
-            'Cauzione': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
+            'Deposit': booking.booking_details?.cauzione_auto ? `Veicolo: ${booking.booking_details?.cauzione_targa || ''}` : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
+            'Cauzione': booking.booking_details?.cauzione_auto ? `Veicolo: ${booking.booking_details?.cauzione_targa || ''}` : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
             'TotalKM': kmLimitValue,
             'KMTotaliNoleggio': kmLimitValue,
 
@@ -869,6 +869,82 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'DocumentoRappresentante': `${customer?.metadata?.rappresentante?.documento?.tipo || customer?.metadata?.rappresentante?.tipo_documento || ''} ${customer?.metadata?.rappresentante?.documento?.numero || customer?.metadata?.rappresentante?.numero_documento || ''}`.trim(),
             'CompanyRepresentativeIssueCombined': `${customer?.metadata?.rappresentante?.documento?.rilascio || customer?.metadata?.rappresentante?.data_rilascio || ''} ${(customer?.metadata?.rappresentante?.documento?.luogo || customer?.metadata?.rappresentante?.luogo_rilascio) ? '- ' + (customer.metadata.rappresentante.documento?.luogo || customer.metadata.rappresentante.luogo_rilascio) : ''}`.trim(),
             'RilascioDocumentoRappresentante': `${customer?.metadata?.rappresentante?.documento?.rilascio || customer?.metadata?.rappresentante?.data_rilascio || ''} ${(customer?.metadata?.rappresentante?.documento?.luogo || customer?.metadata?.rappresentante?.luogo_rilascio) ? '- ' + (customer.metadata.rappresentante.documento?.luogo || customer.metadata.rappresentante.luogo_rilascio) : ''}`.trim(),
+
+            // Garante / Proprietario Veicolo Cauzione
+            'GaranteNomeCognome': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return `${customer?.nome || ''} ${customer?.cognome || ''}`.trim()
+              return `${g.nome || ''} ${g.cognome || ''}`.trim()
+            })(),
+            'GaranteCodiceFiscale': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.codice_fiscale || ''
+              return g.codice_fiscale || ''
+            })(),
+            'GaranteSesso': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.sesso || ''
+              return g.sesso || ''
+            })(),
+            'GaranteIndirizzo': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return `${customer?.indirizzo || ''} ${customer?.codice_postale || ''}`.trim()
+              return `${g.indirizzo || ''} ${g.cap || ''}`.trim()
+            })(),
+            'GaranteCitta': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.citta_residenza || ''
+              return g.citta || ''
+            })(),
+            'GaranteProvincia': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.provincia_residenza || ''
+              return g.provincia || ''
+            })(),
+            'GaranteDataNascita': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''
+              return g.birth_date ? new Date(g.birth_date).toLocaleDateString('it-IT') : ''
+            })(),
+            'GaranteLuogoNascita': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.luogo_nascita || ''
+              return g.birth_place || ''
+            })(),
+            'GaranteProvinciaNascita': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.provincia_nascita || ''
+              return g.birth_provincia || ''
+            })(),
+            'GaranteTelefono': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.telefono || ''
+              return g.phone || ''
+            })(),
+            'GaranteEmail': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.email || ''
+              return g.email || ''
+            })(),
+            'GaranteCAP': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.codice_postale || ''
+              return g.cap || ''
+            })(),
+            'CauzioneVeicolo': booking.booking_details?.cauzione_auto ? `${booking.booking_details?.cauzione_veicolo?.brand || ''} ${booking.booking_details?.cauzione_veicolo?.model || ''} (${booking.booking_details?.cauzione_veicolo?.year || ''}) - ${booking.booking_details?.cauzione_targa || ''}` : '',
+            'TargaCauzione': booking.booking_details?.cauzione_targa || '',
 
             // Penalty Clause (Dynamic based on vehicle category)
             'PenaltyClause': insuranceResponsibilityText,
@@ -976,7 +1052,35 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             }
         }
 
-        // 5b. Add client name footer on every page
+        // 5b. Replace "Clausole Cauzioni" → "Clausole" on pages 3 and 4
+        const overlayFontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+        const overlayPages = pdfDoc.getPages()
+        for (const pageIdx of [2, 3]) { // 0-indexed: page 3 = index 2, page 4 = index 3
+            if (pageIdx < overlayPages.length) {
+                const pg = overlayPages[pageIdx]
+                const { width: pgW } = pg.getSize()
+                // Cover "Clausole Cauzioni" title area with white rectangle then redraw "Clausole"
+                // Title is typically left-aligned, bold, ~12pt, near top area of each section
+                // We scan a few common Y positions where section headers appear
+                const titlePositions = [
+                    { x: 30, y: 780, w: 250, h: 18 },  // near top
+                    { x: 30, y: 720, w: 250, h: 18 },
+                    { x: 30, y: 660, w: 250, h: 18 },
+                    { x: 30, y: 600, w: 250, h: 18 },
+                    { x: 30, y: 540, w: 250, h: 18 },
+                    { x: 30, y: 480, w: 250, h: 18 },
+                    { x: 30, y: 420, w: 250, h: 18 },
+                    { x: 30, y: 360, w: 250, h: 18 },
+                ]
+                // Instead of guessing positions, just cover top-left area broadly where title would be
+                // Actually, let's just do a single broad cover for the title line
+                // Title "Clausole Cauzioni" at ~y=785 (near page top, typical for section headers)
+                pg.drawRectangle({ x: 25, y: 795, width: 200, height: 20, color: rgb(1, 1, 1) })
+                pg.drawText('Clausole', { x: 30, y: 800, size: 12, font: overlayFontBold, color: rgb(0, 0, 0) })
+            }
+        }
+
+        // 5c. Add client name footer on every page
         const footerFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
         const footerSize = 8
         const footerText = sanitizeForPDF(clientName)
