@@ -209,6 +209,121 @@ const handler: Handler = async (event) => {
                 } catch (invErr) {
                     console.error('[nexi-payment-callback] Fattura generation failed:', invErr);
                 }
+
+                // ── Card type bonus/surcharge ──────────────────────────────
+                // Detect card type from Nexi callback data
+                const cardType = (paymentCircuit || '').toLowerCase()
+                const rawCardType = JSON.stringify(callbackData).toLowerCase()
+                const isPrepagata = rawCardType.includes('prepagat') || rawCardType.includes('prepaid')
+                const isCredito = rawCardType.includes('credito') || rawCardType.includes('credit')
+                const isDebito = rawCardType.includes('debito') || rawCardType.includes('debit')
+
+                console.log(`[nexi-payment-callback] Card type detection: circuit=${paymentCircuit}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}`)
+
+                const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id || booking.user_id;
+                const paidCents = transaction.amount_cents;
+
+                if (isPrepagata && contractId && paidCents > 0) {
+                    // PREPAGATA: charge 10% surcharge via MIT
+                    const surchargeCents = Math.round(paidCents * 0.10);
+                    const surchargeEur = (surchargeCents / 100).toFixed(2);
+                    console.log(`[nexi-payment-callback] Prepagata surcharge: €${surchargeEur} (10% of €${amountEur})`);
+
+                    try {
+                        const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
+                        const mitRes = await fetch(`${baseUrl}/.netlify/functions/nexi-charge-mit`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contractId: contractId,
+                                amount: surchargeCents / 100,
+                                description: `Supplemento carta prepagata 10% - Prenotazione #${booking.id.substring(0, 8).toUpperCase()}`,
+                                bookingId: booking.id,
+                                customerEmail: booking.customer_email || '',
+                                customerName: booking.customer_name || ''
+                            })
+                        });
+                        const mitData = await mitRes.json();
+                        if (mitRes.ok && mitData.success) {
+                            console.log(`[nexi-payment-callback] ✅ Prepagata surcharge €${surchargeEur} charged`);
+                        } else {
+                            console.error(`[nexi-payment-callback] ❌ Prepagata surcharge failed:`, mitData.error);
+                        }
+                    } catch (mitErr) {
+                        console.error('[nexi-payment-callback] Prepagata surcharge error:', mitErr);
+                    }
+
+                } else if ((isCredito || isDebito) && custId && paidCents > 0) {
+                    // CREDITO: 10% wallet credit, DEBITO: 5% wallet credit
+                    const percentage = isCredito ? 0.10 : 0.05;
+                    const bonusCents = Math.round(paidCents * percentage);
+                    const bonusEur = (bonusCents / 100).toFixed(2);
+                    const percentLabel = isCredito ? '10%' : '5%';
+                    const cardLabel = isCredito ? 'carta di credito' : 'carta di debito';
+
+                    console.log(`[nexi-payment-callback] ${cardLabel} bonus: €${bonusEur} (${percentLabel} of €${amountEur})`);
+
+                    try {
+                        // Find or create wallet
+                        let { data: wallet } = await supabase
+                            .from('customer_wallets')
+                            .select('id, balance_cents, total_earned_cents')
+                            .eq('customer_id', custId)
+                            .maybeSingle();
+
+                        if (!wallet) {
+                            const { data: newWallet } = await supabase
+                                .from('customer_wallets')
+                                .insert({
+                                    customer_id: custId,
+                                    balance_cents: 0,
+                                    total_earned_cents: 0,
+                                    total_spent_cents: 0,
+                                    total_topped_up_cents: 0
+                                })
+                                .select()
+                                .single();
+                            wallet = newWallet;
+                        }
+
+                        if (wallet) {
+                            const newBalance = wallet.balance_cents + bonusCents;
+
+                            // Add wallet transaction
+                            await supabase.from('wallet_transactions').insert({
+                                wallet_id: wallet.id,
+                                type: 'nexi_card_bonus',
+                                amount_cents: bonusCents,
+                                balance_after_cents: newBalance,
+                                description: `Bonus ${percentLabel} pagamento ${cardLabel} - Prenotazione #${booking.id.substring(0, 8).toUpperCase()}`
+                            });
+
+                            // Update wallet balance
+                            await supabase.from('customer_wallets').update({
+                                balance_cents: newBalance,
+                                total_earned_cents: wallet.total_earned_cents + bonusCents,
+                                updated_at: new Date().toISOString()
+                            }).eq('id', wallet.id);
+
+                            console.log(`[nexi-payment-callback] ✅ Wallet credited €${bonusEur} for ${cardLabel}`);
+
+                            // Notify customer about bonus
+                            if (custPhone) {
+                                const custName = booking.customer_name || 'Cliente';
+                                await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        customPhone: custPhone,
+                                        customMessage: `🎁 *Bonus pagamento!*\n\nGentile ${custName},\n\nHai ricevuto *€${bonusEur}* di credito sul tuo wallet DR7 grazie al pagamento con ${cardLabel}.\n\nSaldo attuale: *€${(newBalance / 100).toFixed(2)}*\n\nGrazie,\nDR7`
+                                    })
+                                });
+                            }
+                        }
+                    } catch (walletErr) {
+                        console.error('[nexi-payment-callback] Wallet bonus error:', walletErr);
+                    }
+                }
             }
         }
 
