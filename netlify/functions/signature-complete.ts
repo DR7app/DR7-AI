@@ -440,6 +440,25 @@ export const handler: Handler = async (event) => {
                 } else {
                     console.log('[signature-complete] No customer phone — skipping WhatsApp send')
                 }
+
+                // Also send signed contract to admin
+                const ADMIN_PHONE = '393457905205'
+                try {
+                    const adminGreenUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    await fetch(adminGreenUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${ADMIN_PHONE}@c.us`,
+                            urlFile: signedPdfUrl,
+                            fileName: `${docIdentifier}_firmato.pdf`,
+                            caption: `✅ Contratto ${docIdentifier} firmato da ${sigRequest.signer_name || 'cliente'}`
+                        })
+                    })
+                    console.log('[signature-complete] Signed contract also sent to admin')
+                } catch (adminErr: any) {
+                    console.error('[signature-complete] Failed to send to admin:', adminErr.message)
+                }
             } catch (waErr: any) {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
             }
