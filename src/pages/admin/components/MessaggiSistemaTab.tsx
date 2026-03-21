@@ -54,15 +54,8 @@ const CATEGORY_LABELS: Record<string, string> = {
     'furgone': 'Furgoni',
 }
 
-function formatOffset(hours: number): string {
-    if (hours === 0) return 'Al momento'
-    const abs = Math.abs(hours)
-    if (abs >= 24) {
-        const days = Math.floor(abs / 24)
-        return `${days} ${days === 1 ? 'giorno' : 'giorni'}`
-    }
-    return `${abs} ${abs === 1 ? 'ora' : 'ore'}`
-}
+const SYSTEM_KEYS = ['booking_confirmation', 'booking_reminder', 'return_reminder', 'deposit_reminder']
+
 
 export default function MessaggiSistemaTab() {
     // Template state
@@ -529,7 +522,7 @@ export default function MessaggiSistemaTab() {
                                 placeholder="Buongiorno {nome},&#10;&#10;..."
                                 className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                             />
-                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{'{nome}'}</code> = nome del cliente</p>
+                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
                         </div>
 
                         {/* Automation toggle */}
@@ -730,7 +723,7 @@ export default function MessaggiSistemaTab() {
                                         rows={6}
                                         className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                                     />
-                                    <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{'{nome}'}</code> = nome del cliente</p>
+                                    <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
                                 </div>
                             ) : (
                                 <pre className="mt-2 px-4 py-3 rounded-lg bg-theme-bg-tertiary text-theme-text-secondary text-sm whitespace-pre-wrap font-sans">
@@ -738,8 +731,7 @@ export default function MessaggiSistemaTab() {
                                 </pre>
                             )}
                         </div>
-                        )
-                    })}
+                    ))}
 
                     {templates.length === 0 && (
                         <div className="text-center py-8 text-theme-text-muted">
@@ -805,7 +797,7 @@ export default function MessaggiSistemaTab() {
                             placeholder="Buongiorno {nome},&#10;&#10;..."
                             className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                         />
-                        <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{'{nome}'}</code> = nome del cliente</p>
+                        <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
                     </div>
                 )}
 
