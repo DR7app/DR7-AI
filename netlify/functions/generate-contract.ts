@@ -771,8 +771,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Insurance and Financial
             'Insurance': insuranceLabel,
             'Assicurazione': insuranceLabel,
-            'Deposit': booking.booking_details?.cauzione_auto ? `Veicolo: ${booking.booking_details?.cauzione_targa || ''}` : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
-            'Cauzione': booking.booking_details?.cauzione_auto ? `Veicolo: ${booking.booking_details?.cauzione_targa || ''}` : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
+            'Deposit': booking.booking_details?.cauzione_auto ? (booking.booking_details?.cauzione_targa || '') : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
+            'Cauzione': booking.booking_details?.cauzione_auto ? (booking.booking_details?.cauzione_targa || '') : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
             'TotalKM': kmLimitValue,
             'KMTotaliNoleggio': kmLimitValue,
 
