@@ -85,7 +85,7 @@ const handler: Handler = async (event) => {
         if (isSuccess && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, payment_method, booking_details, price_total')
+                .select('id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee')
                 .eq('id', transaction.booking_id)
                 .single();
 
@@ -120,21 +120,64 @@ const handler: Handler = async (event) => {
                     }
                 }
 
-                // Send WhatsApp confirmation to customer (through send-whatsapp-notification for Rentora wrapper)
+                // Send full booking confirmation to customer via WhatsApp
                 const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
                 if (custPhone) {
                     const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
+                    const custFirstName = custName.split(' ')[0] || 'Cliente';
                     const bookingRef = booking.id.substring(0, 8).toUpperCase();
+
+                    // Format dates in Rome timezone
+                    const fmtDate = (d: string) => new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' });
+                    const fmtTime = (d: string) => new Date(d).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
+
+                    const pickupLabel = booking.pickup_location === 'dr7_office' ? 'DR7 Office' : (booking.booking_details?.delivery_address ? `${booking.booking_details.delivery_address.street}, ${booking.booking_details.delivery_address.city}` : booking.pickup_location || 'DR7 Office');
+
+                    // KM info
+                    const unlimitedKm = booking.booking_details?.unlimited_km;
+                    const kmLimit = booking.booking_details?.km_limit;
+                    let kmLabel = '-';
+                    if (unlimitedKm || kmLimit === 'Illimitati') {
+                        kmLabel = 'Illimitati';
+                    } else if (kmLimit) {
+                        kmLabel = `${kmLimit} km`;
+                    }
+
+                    // Deposit
+                    const depositEur = booking.deposit_amount ? (booking.deposit_amount / 100).toFixed(2) : (booking.booking_details?.deposit || '0');
+                    const depositStatus = booking.booking_details?.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare';
+                    const depositLabel = parseFloat(String(depositEur)) > 0 ? `€${depositEur} (${depositStatus})` : '€0';
+
+                    // Insurance
+                    const insMap: Record<string, string> = { 'KASKO': 'Kasko', 'KASKO_BASE': 'Kasko Base', 'KASKO_BLACK': 'Kasko Black', 'KASKO_SIGNATURE': 'Kasko Signature', 'DR7': 'Kasko DR7' };
+                    const insuranceLabel = insMap[booking.booking_details?.insuranceOption || ''] || 'Kasko Base';
+
+                    const totalEur = booking.price_total ? (booking.price_total / 100).toFixed(2) : amountEur;
+
+                    let custMsg = `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`;
+                    custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
+                    custMsg += `*ID:* DR7-${bookingRef}\n`;
+                    custMsg += `*Veicolo:* ${booking.vehicle_name || 'N/A'}\n`;
+                    custMsg += `*Ritiro:* ${fmtDate(booking.pickup_date)} alle ${fmtTime(booking.pickup_date)}\n`;
+                    custMsg += `*Riconsegna:* ${fmtDate(booking.dropoff_date)} alle ${fmtTime(booking.dropoff_date)}\n`;
+                    custMsg += `*Luogo ritiro:* ${pickupLabel}\n`;
+                    custMsg += `*Assicurazione:* ${insuranceLabel}\n`;
+                    custMsg += `*Totale:* €${totalEur}\n`;
+                    custMsg += `*Cauzione:* ${depositLabel}\n`;
+                    custMsg += `*KM:* ${kmLabel}\n`;
+                    custMsg += `*Pagamento:* Pagato (Nexi Pay by Link)\n`;
+                    if (booking.booking_details?.notes) custMsg += `*Note:* ${booking.booking_details.notes}\n`;
+                    custMsg += `\nCordiali Saluti,\nDR7`;
 
                     await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: custPhone,
-                            customMessage: `✅ *Pagamento ricevuto!*\n\nGentile ${custName},\n\nIl pagamento di *€${amountEur}* per la prenotazione #${bookingRef} è stato confermato.\n\nLa sua prenotazione è ora *CONFERMATA*.\n\nGrazie,\nDR7`
+                            customMessage: custMsg
                         })
                     });
-                    console.log('[nexi-payment-callback] WhatsApp confirmation sent to customer');
+                    console.log('[nexi-payment-callback] WhatsApp booking confirmation sent to customer');
                 }
 
                 // Send admin notification
