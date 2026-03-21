@@ -1052,34 +1052,6 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             }
         }
 
-        // 5b. Replace "Clausole Cauzioni" → "Clausole" on pages 3 and 4
-        const overlayFontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-        const overlayPages = pdfDoc.getPages()
-        for (const pageIdx of [2, 3]) { // 0-indexed: page 3 = index 2, page 4 = index 3
-            if (pageIdx < overlayPages.length) {
-                const pg = overlayPages[pageIdx]
-                const { width: pgW } = pg.getSize()
-                // Cover "Clausole Cauzioni" title area with white rectangle then redraw "Clausole"
-                // Title is typically left-aligned, bold, ~12pt, near top area of each section
-                // We scan a few common Y positions where section headers appear
-                const titlePositions = [
-                    { x: 30, y: 780, w: 250, h: 18 },  // near top
-                    { x: 30, y: 720, w: 250, h: 18 },
-                    { x: 30, y: 660, w: 250, h: 18 },
-                    { x: 30, y: 600, w: 250, h: 18 },
-                    { x: 30, y: 540, w: 250, h: 18 },
-                    { x: 30, y: 480, w: 250, h: 18 },
-                    { x: 30, y: 420, w: 250, h: 18 },
-                    { x: 30, y: 360, w: 250, h: 18 },
-                ]
-                // Instead of guessing positions, just cover top-left area broadly where title would be
-                // Actually, let's just do a single broad cover for the title line
-                // Title "Clausole Cauzioni" at ~y=785 (near page top, typical for section headers)
-                pg.drawRectangle({ x: 25, y: 795, width: 200, height: 20, color: rgb(1, 1, 1) })
-                pg.drawText('Clausole', { x: 30, y: 800, size: 12, font: overlayFontBold, color: rgb(0, 0, 0) })
-            }
-        }
-
         // 6. Save and Upload
         const pdfBytes = await pdfDoc.save()
         // Save to 'filled' folder to keep things organized
