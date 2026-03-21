@@ -1391,6 +1391,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
       if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
       if (!customer.scadenza_patente && !customer.metadata?.patente?.scadenza) missing.push('scadenza_patente')
+      // Check patente is at least 2 years old
+      const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
+      if (patenteDate) {
+        const issueDate = new Date(patenteDate)
+        const twoYearsAgo = new Date()
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+        if (issueDate > twoYearsAgo) {
+          throw new Error('Patente rilasciata da meno di 2 anni. Il cliente non può noleggiare.')
+        }
+      }
+
       if (!customer.documento_numero) missing.push('documento_numero')
       if (!customer.documento_tipo) missing.push('documento_tipo')
     }
