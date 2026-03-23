@@ -10,6 +10,7 @@ interface PendingAddebito {
     customer_email: string
     contract_number: string
     amount_cents: number
+    charged_amount_cents: number | null
     causale: string
     status: string
     recurring: boolean
@@ -254,6 +255,16 @@ export default function NexiTab() {
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${statusColors[a.status] || 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'}`}>
                                                 {statusLabels[a.status] || a.status}
                                             </span>
+                                            {a.status === 'charged' && a.charged_amount_cents != null && a.charged_amount_cents < a.amount_cents && (
+                                                <>
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-900/30 text-green-300 border border-green-700/50">
+                                                        Incassato: {formatEUR(a.charged_amount_cents)}
+                                                    </span>
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/30 text-red-300 border border-red-700/50 font-bold">
+                                                        Rimanente: {formatEUR(a.amount_cents - a.charged_amount_cents)}
+                                                    </span>
+                                                </>
+                                            )}
                                             {a.recurring && !['charged', 'stopped'].includes(a.status) && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-900/30 text-orange-300 border border-orange-700/50">ricorrente</span>
                                             )}
