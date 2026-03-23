@@ -64,14 +64,36 @@ La presente costituisce comunicazione formale dell'addebito in corso.
 Cordiali saluti,
 Dubai Rent 7.0 S.p.A.`
 
+            // Build attachments from photo_urls if present
+            const attachments: { filename: string; path: string }[] = []
+            if (addebito.photo_urls && Array.isArray(addebito.photo_urls)) {
+                for (let i = 0; i < addebito.photo_urls.length; i++) {
+                    attachments.push({
+                        filename: `danno_${i + 1}.jpg`,
+                        path: addebito.photo_urls[i],
+                    })
+                }
+            }
+
+            let emailHtml = ''
+            if (attachments.length > 0) {
+                emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
+                emailHtml += `<br/><p style="font-family: Arial, sans-serif;"><strong>Documentazione fotografica danni allegata:</strong></p>`
+                for (let i = 0; i < addebito.photo_urls.length; i++) {
+                    emailHtml += `<p><img src="${addebito.photo_urls[i]}" alt="Danno ${i + 1}" style="max-width: 600px; border: 1px solid #ccc; margin: 8px 0;" /></p>`
+                }
+            }
+
             await transporter.sendMail({
                 from: `"DR7 Empire" <${process.env.SMTP_USER || 'info@dr7.app'}>`,
                 to: addebito.customer_email,
                 subject: `Comunicazione formale addebito in corso - Contratto ${addebito.contract_number}`,
                 text: emailBody,
+                ...(emailHtml ? { html: emailHtml } : {}),
+                attachments,
             })
 
-            console.log(`[process-pending-addebiti] Second email sent to ${addebito.customer_email}`)
+            console.log(`[process-pending-addebiti] Second email sent to ${addebito.customer_email} (${attachments.length} photos attached)`)
 
             // Update status and schedule MIT charge for 2 min later
             await supabase.from('pending_addebiti').update({
@@ -125,23 +147,48 @@ Dubai Rent 7.0 S.p.A.`
 
             if (chargeRes.ok && chargeData.success) {
                 console.log(`[process-pending-addebiti] ✅ MIT charge successful for addebito ${addebito.id}`)
+
+                // Charge succeeded — mark as done (recurring stops once money is taken)
                 await supabase.from('pending_addebiti').update({
                     status: 'charged',
                     charged_at: new Date().toISOString(),
+                    charge_count: (addebito.charge_count || 0) + 1,
                 }).eq('id', addebito.id)
             } else {
                 console.error(`[process-pending-addebiti] ❌ MIT charge failed:`, chargeData.error)
-                await supabase.from('pending_addebiti').update({
-                    status: 'charge_failed',
-                    error_message: chargeData.error || 'Addebito MIT fallito',
-                }).eq('id', addebito.id)
+
+                if (addebito.recurring && addebito.interval_hours) {
+                    // Recurring: retry after interval even on failure
+                    const nextRetry = new Date(Date.now() + addebito.interval_hours * 60 * 60 * 1000).toISOString()
+                    console.log(`[process-pending-addebiti] Recurring — retry at ${nextRetry}`)
+                    await supabase.from('pending_addebiti').update({
+                        status: 'second_email_sent', // keep in charge-ready state for retry
+                        error_message: chargeData.error || 'Addebito MIT fallito - ritenterà',
+                        mit_charge_after: nextRetry,
+                    }).eq('id', addebito.id)
+                } else {
+                    await supabase.from('pending_addebiti').update({
+                        status: 'charge_failed',
+                        error_message: chargeData.error || 'Addebito MIT fallito',
+                    }).eq('id', addebito.id)
+                }
             }
         } catch (err: any) {
             console.error(`[process-pending-addebiti] Error charging addebito ${addebito.id}:`, err.message)
-            await supabase.from('pending_addebiti').update({
-                status: 'charge_failed',
-                error_message: err.message,
-            }).eq('id', addebito.id)
+
+            if (addebito.recurring && addebito.interval_hours) {
+                const nextRetry = new Date(Date.now() + addebito.interval_hours * 60 * 60 * 1000).toISOString()
+                await supabase.from('pending_addebiti').update({
+                    status: 'second_email_sent',
+                    error_message: err.message + ' - ritenterà',
+                    mit_charge_after: nextRetry,
+                }).eq('id', addebito.id)
+            } else {
+                await supabase.from('pending_addebiti').update({
+                    status: 'charge_failed',
+                    error_message: err.message,
+                }).eq('id', addebito.id)
+            }
         }
     }
 

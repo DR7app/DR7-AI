@@ -41,6 +41,9 @@ export const handler: Handler = async (event) => {
             amount,
             causale,
             contractId, // Nexi contractId for MIT charge
+            recurring,
+            intervalHours,
+            photoUrls,
         } = JSON.parse(event.body || '{}')
 
         if (!customerEmail || !amount || !causale) {
@@ -101,6 +104,9 @@ Dubai Rent 7.0 S.p.A.`
             status: 'email_sent',
             email_sent_at: new Date().toISOString(),
             charge_after: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24h from now
+            recurring: !!recurring,
+            interval_hours: recurring ? (parseInt(intervalHours) || 24) : null,
+            photo_urls: photoUrls && photoUrls.length > 0 ? photoUrls : null,
         })
 
         console.log(`[nexi-nuovo-addebito] Pending addebito created, charge scheduled for 24h`)

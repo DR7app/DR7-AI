@@ -3771,12 +3771,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       resetForm()
       await loadData()
 
-      // Show success message AFTER reload to ensure it's visible
-      const successMessage = editingId
-        ? 'Prenotazione aggiornata con successo!\n\nLa prenotazione è stata modificata e salvata nel database.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
-        : 'Prenotazione creata con successo!\n\nLa nuova prenotazione è stata salvata nel database.\n\nIl cliente riceverà una conferma via email.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
-
-      alert(successMessage)
+      toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
     } catch (error) {
       console.error('Failed to save reservation:', error)
       alert('Failed to save reservation: ' + (error as Error).message)

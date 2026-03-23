@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -92,6 +92,20 @@ export default function UnpaidBookingsTab() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [processingKey, setProcessingKey] = useState<string | null>(null)
 
+  // Addebito Nexi state
+  const [showAddebitoModal, setShowAddebitoModal] = useState(false)
+  const [addebitoGroup, setAddebitoGroup] = useState<CustomerGroup | null>(null)
+  const [addebitoContractId, setAddebitoContractId] = useState<string | null>(null)
+  const [addebitoCausale, setAddebitoCausale] = useState('')
+  const [directCharging, setDirectCharging] = useState(false)
+  const [directChargeLogs, setDirectChargeLogs] = useState<{ amount: number; status: 'trying' | 'failed' | 'success'; message: string }[]>([])
+  const stopRetryRef = useRef(false)
+  const logsEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [directChargeLogs])
+
   useEffect(() => {
     loadUnpaidBookings()
 
@@ -105,6 +119,107 @@ export default function UnpaidBookingsTab() {
 
     return () => { subscription.unsubscribe() }
   }, [])
+
+  // ── Addebito Nexi ──────────────────────────────────────────────────────────
+
+  async function openAddebitoNexi(group: CustomerGroup) {
+    setAddebitoGroup(group)
+    setAddebitoCausale('')
+    setDirectChargeLogs([])
+    setDirectCharging(false)
+    stopRetryRef.current = false
+    setAddebitoContractId(null)
+    setShowAddebitoModal(true)
+
+    // Lookup contract_id from nexi_transactions by customer email
+    const { data: txs } = await supabase
+      .from('nexi_transactions')
+      .select('metadata')
+      .eq('customer_email', group.customerEmail)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    const contractId = txs?.find(t => t.metadata?.contract_id)?.metadata?.contract_id || null
+    setAddebitoContractId(contractId)
+    if (!contractId) {
+      toast.error('Nessun Contract ID Nexi trovato per questo cliente')
+    }
+  }
+
+  async function handleDirectChargeUnpaid() {
+    if (!addebitoGroup || !addebitoContractId) return
+    const startAmount = addebitoGroup.totalRemaining / 100
+    if (startAmount <= 0) return
+    if (!addebitoCausale.trim()) {
+      toast.error('Inserisci la causale')
+      return
+    }
+
+    setDirectCharging(true)
+    setDirectChargeLogs([])
+    stopRetryRef.current = false
+
+    let currentAmount = startAmount
+    const minAmount = 0.50
+
+    while (currentAmount >= minAmount && !stopRetryRef.current) {
+      const roundedAmount = Math.round(currentAmount * 100) / 100
+
+      setDirectChargeLogs(prev => [...prev, { amount: roundedAmount, status: 'trying', message: `Tentativo €${roundedAmount.toFixed(2)}...` }])
+
+      try {
+        const res = await fetch('/.netlify/functions/nexi-charge-mit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractId: addebitoContractId,
+            amount: roundedAmount,
+            description: `Addebito: ${addebitoCausale} - ${addebitoGroup.customerName}`,
+            customerEmail: addebitoGroup.customerEmail,
+            customerName: addebitoGroup.customerName,
+          }),
+        })
+        const data = await res.json()
+
+        if (res.ok && data.success) {
+          setDirectChargeLogs(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = { amount: roundedAmount, status: 'success', message: `€${roundedAmount.toFixed(2)} — ADDEBITATO!` }
+            return updated
+          })
+          toast.success(`Addebito di €${roundedAmount.toFixed(2)} riuscito!`)
+          break
+        } else {
+          setDirectChargeLogs(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = { amount: roundedAmount, status: 'failed', message: `€${roundedAmount.toFixed(2)} — Rifiutato: ${data.error || 'DECLINED'}` }
+            return updated
+          })
+          currentAmount = currentAmount * 0.9
+          if (currentAmount >= minAmount && !stopRetryRef.current) {
+            await new Promise(r => setTimeout(r, 1000))
+          }
+        }
+      } catch (err: any) {
+        setDirectChargeLogs(prev => {
+          const updated = [...prev]
+          updated[updated.length - 1] = { amount: roundedAmount, status: 'failed', message: `€${roundedAmount.toFixed(2)} — Errore: ${err.message}` }
+          return updated
+        })
+        currentAmount = currentAmount * 0.9
+        if (currentAmount >= minAmount && !stopRetryRef.current) {
+          await new Promise(r => setTimeout(r, 1000))
+        }
+      }
+    }
+
+    if (!stopRetryRef.current && currentAmount < minAmount) {
+      setDirectChargeLogs(prev => [...prev, { amount: 0, status: 'failed', message: 'Importo minimo raggiunto — tutti i tentativi falliti' }])
+    }
+
+    setDirectCharging(false)
+  }
 
   // ── Data Layer (preserved from original) ──────────────────────────────────
 
@@ -161,7 +276,7 @@ export default function UnpaidBookingsTab() {
         if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
 
         const extensions = booking.booking_details?.extension_history || []
-        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')) return true
+        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link' || ext.payment_status === 'nexi_pay_by_link')) return true
 
         const penalties = booking.booking_details?.penalties || []
         if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')) return true
@@ -717,7 +832,7 @@ export default function UnpaidBookingsTab() {
       // 2. Mark pending extensions as paid and collect their amounts
       const extensions = [...(booking.booking_details?.extension_history || [])]
       for (let i = 0; i < extensions.length; i++) {
-        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial' || extensions[i].payment_status === 'nexi_pay_by_link') {
           const extTotal = extensions[i].additional_amount || 0
           const extPaid = extensions[i].amount_paid || 0
           const extRemaining = Math.max(0, extTotal - extPaid)
@@ -813,7 +928,7 @@ export default function UnpaidBookingsTab() {
 
         const extensions = [...(booking.booking_details?.extension_history || [])]
         for (let i = 0; i < extensions.length; i++) {
-          if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+          if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial' || extensions[i].payment_status === 'nexi_pay_by_link') {
             const extTotal = extensions[i].additional_amount || 0
             const extPaid = extensions[i].amount_paid || 0
             const extRemaining = Math.max(0, extTotal - extPaid)
@@ -1052,7 +1167,7 @@ export default function UnpaidBookingsTab() {
     } else {
       const extensions = booking.booking_details?.extension_history || []
       extensions.forEach((ext: any) => {
-        if ((ext.payment_status === 'pending' || ext.payment_status === 'partial') && ext.additional_amount) {
+        if ((ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link') && ext.additional_amount) {
           const extTotal = ext.additional_amount * 100
           const extPaid = (ext.amount_paid || 0) * 100
           remaining += Math.max(0, extTotal - extPaid)
@@ -1090,7 +1205,7 @@ export default function UnpaidBookingsTab() {
     const extensions = booking.booking_details?.extension_history || []
     return extensions
       .map((ext: any, idx: number) => ({ ext, idx }))
-      .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+      .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
   }
 
   const getPendingWithIndex = (booking: UnpaidBooking, arrayKey: 'penalties' | 'danni') => {
@@ -1138,7 +1253,7 @@ export default function UnpaidBookingsTab() {
       // (or has unpaid extensions). If the booking is paid but has only unpaid
       // danni/penali, it belongs ONLY in those columns.
       const mainIsUnpaid = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
-      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
 
       if (mainIsUnpaid || hasUnpaidExtensions) {
         if (effectiveType === 'rental') {
@@ -1253,7 +1368,7 @@ export default function UnpaidBookingsTab() {
       if (!gMap.has(key)) gMap.set(key, { rental: false, pw: false, penali: false, danni: false })
       const g = gMap.get(key)!
       const mainUnpaid = b.payment_status === 'pending' || b.payment_status === 'unpaid'
-      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
       if (mainUnpaid || hasUnpaidExt) {
         if (getEffectiveType(b) === 'rental') g.rental = true
         else g.pw = true
@@ -1891,6 +2006,12 @@ export default function UnpaidBookingsTab() {
                     >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
                   )}
 
+                  {/* Addebito Nexi button */}
+                  <button
+                    onClick={() => openAddebitoNexi(group)}
+                    className="w-full px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                  >Addebito Nexi (auto-retry -10%)</button>
+
                   {/* Noleggio section */}
                   {hasNoleggio && (
                     <div>
@@ -1975,6 +2096,10 @@ export default function UnpaidBookingsTab() {
                         className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
                     )}
+                    <button
+                      onClick={() => openAddebitoNexi(group)}
+                      className="w-full mt-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >Addebito Nexi</button>
                   </td>
 
                   {/* Noleggio column */}
@@ -2009,6 +2134,78 @@ export default function UnpaidBookingsTab() {
           </table>
         </div>
       </div>
+
+      {/* Addebito Nexi Modal */}
+      {showAddebitoModal && addebitoGroup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-lg space-y-4">
+            <h3 className="text-lg font-bold text-theme-text-primary">Addebito Nexi — {addebitoGroup.customerName}</h3>
+            <div className="text-sm text-theme-text-secondary space-y-1">
+              <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
+              <p><strong>Importo da saldare:</strong> <span className="text-red-400 font-bold">€{(addebitoGroup.totalRemaining / 100).toFixed(2)}</span></p>
+              <p><strong>Contract ID:</strong> {addebitoContractId ? <span className="font-mono text-xs text-green-400">{addebitoContractId}</span> : <span className="text-red-400">Non trovato</span>}</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Causale *</label>
+              <input
+                type="text"
+                value={addebitoCausale}
+                onChange={(e) => setAddebitoCausale(e.target.value)}
+                placeholder="es. Saldo noleggio / Estensione / Danni..."
+                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
+              />
+            </div>
+
+            <div className="p-3 bg-orange-900/20 border border-orange-700/50 rounded-lg text-xs text-orange-300">
+              <strong>Auto-retry:</strong> Prova l'importo pieno, se rifiutato ritenta con -10% ogni secondo fino a quando va a buon fine.
+            </div>
+
+            {/* Live log */}
+            {directChargeLogs.length > 0 && (
+              <div className="bg-black/40 rounded-lg border border-theme-border p-3 max-h-48 overflow-y-auto font-mono text-xs space-y-1">
+                {directChargeLogs.map((log, i) => (
+                  <div key={i} className={`flex items-center gap-2 ${
+                    log.status === 'success' ? 'text-green-400' :
+                    log.status === 'trying' ? 'text-yellow-300' :
+                    'text-red-400'
+                  }`}>
+                    <span>{log.status === 'trying' ? '...' : log.status === 'success' ? '>>>' : 'X'}</span>
+                    <span>{log.message}</span>
+                  </div>
+                ))}
+                <div ref={logsEndRef} />
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { stopRetryRef.current = true; setShowAddebitoModal(false) }}
+                disabled={directCharging}
+                className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+              >
+                Chiudi
+              </button>
+              {directCharging ? (
+                <button
+                  onClick={() => { stopRetryRef.current = true; setDirectChargeLogs(prev => [...prev, { amount: 0, status: 'failed', message: 'Interrotto manualmente' }]) }}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-yellow-600 text-white hover:bg-yellow-700 transition-colors"
+                >
+                  Stop
+                </button>
+              ) : (
+                <button
+                  onClick={handleDirectChargeUnpaid}
+                  disabled={!addebitoContractId}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-600 text-white hover:bg-orange-700 transition-colors disabled:opacity-50"
+                >
+                  Addebita €{(addebitoGroup.totalRemaining / 100).toFixed(2)}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
