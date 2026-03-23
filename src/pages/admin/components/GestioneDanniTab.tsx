@@ -87,6 +87,9 @@ export default function GestioneDanniTab() {
   // Photo viewer modal
   const [photoModal, setPhotoModal] = useState<{ customerName: string; photos: string[] } | null>(null)
 
+  // Pay by link
+  const [payByLinkLoading, setPayByLinkLoading] = useState<string | null>(null)
+
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => { loadData() }, [])
 
@@ -266,6 +269,44 @@ export default function GestioneDanniTab() {
       setError(err.message || 'Errore nel caricamento dei dati.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ── Pay by Link for danni ─────────────────────────────────────────────────
+  async function handlePayByLink(customer: CustomerGroup) {
+    const unpaidDanni = customer.danniItems.filter(d => d.paymentStatus !== 'paid')
+    const totalEur = unpaidDanni.reduce((s, d) => s + (d.total - d.amountPaid), 0)
+    if (totalEur <= 0) {
+      toast.error('Nessun danno da pagare')
+      return
+    }
+
+    setPayByLinkLoading(customer.key)
+    try {
+      const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: customer.mostRecentBookingId || null,
+          amount: totalEur,
+          customerEmail: customer.customerEmail,
+          customerName: customer.customerName,
+          description: `Danni — ${customer.customerName}`,
+          expirationDays: 7,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.paymentUrl) {
+        // Copy to clipboard
+        await navigator.clipboard.writeText(data.paymentUrl)
+        toast.success(`Link copiato! €${totalEur.toFixed(2)} — invia al cliente`)
+      } else {
+        toast.error(data.error || 'Errore creazione link')
+      }
+    } catch (err: any) {
+      toast.error('Errore: ' + err.message)
+    } finally {
+      setPayByLinkLoading(null)
     }
   }
 
@@ -747,6 +788,15 @@ export default function GestioneDanniTab() {
                               Documenti Integrativi
                             </button>
                           )}
+                          {c.danniItems.some(d => d.paymentStatus !== 'paid') && (
+                            <button
+                              onClick={() => handlePayByLink(c)}
+                              disabled={payByLinkLoading === c.key}
+                              className="px-3 py-1 text-xs bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 rounded-full transition-colors disabled:opacity-50"
+                            >
+                              {payByLinkLoading === c.key ? 'Creazione...' : 'Pay by Link'}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -806,6 +856,15 @@ export default function GestioneDanniTab() {
                             className="px-3 py-1 text-xs bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 rounded-full transition-colors mt-1"
                           >
                             Documenti
+                          </button>
+                        )}
+                        {c.danniItems.some(d => d.paymentStatus !== 'paid') && (
+                          <button
+                            onClick={() => handlePayByLink(c)}
+                            disabled={payByLinkLoading === c.key}
+                            className="px-3 py-1 text-xs bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 rounded-full transition-colors mt-1 disabled:opacity-50"
+                          >
+                            {payByLinkLoading === c.key ? '...' : 'Pay by Link'}
                           </button>
                         )}
                       </div>
