@@ -1732,7 +1732,7 @@ export default function UnpaidBookingsTab() {
 
   // ── Render: Penali/Danni cell content (shared) ─────────────────────────────
 
-  function PendingItemsCell({ items, type, onMarkAllPaid }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void }) {
+  function PendingItemsCell({ items, type, onMarkAllPaid, onAddebito, chargedViaMit }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void; onAddebito?: () => void; chargedViaMit?: number }) {
     if (items.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     const colorClasses = type === 'penalties'
@@ -1747,6 +1747,17 @@ export default function UnpaidBookingsTab() {
             disabled={!!processingKey}
             className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >{processingKey ? 'Elaborazione...' : `Segna Tutti Pagato (${items.length})`}</button>
+        )}
+        {onAddebito && (
+          <button
+            onClick={onAddebito}
+            className="w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
+          >Addebito</button>
+        )}
+        {chargedViaMit != null && chargedViaMit > 0 && (
+          <div className="text-xs text-green-400 bg-green-900/20 border border-green-700/30 rounded-lg px-3 py-1.5 font-medium">
+            Incassato via addebito: €{(chargedViaMit / 100).toFixed(2)}
+          </div>
         )}
         {items.map((item, idx) => {
           const itemKey = `${type}:${item.bookingId}:${item.source}:${item.originalIndex}`
@@ -2036,7 +2047,7 @@ export default function UnpaidBookingsTab() {
                   {hasPenali && (
                     <div>
                       <div className="text-xs font-bold text-yellow-400 uppercase mb-1.5">Penali</div>
-                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
+                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
                     </div>
                   )}
 
@@ -2044,7 +2055,7 @@ export default function UnpaidBookingsTab() {
                   {hasDanni && (
                     <div>
                       <div className="text-xs font-bold text-red-400 uppercase mb-1.5">Danni</div>
-                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
+                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
                     </div>
                   )}
                 </div>
@@ -2121,12 +2132,12 @@ export default function UnpaidBookingsTab() {
 
                   {/* Penali column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
+                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
                   </td>
 
                   {/* Danni column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
+                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
                   </td>
                 </tr>
               ))}
