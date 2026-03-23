@@ -76,6 +76,13 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error }) }
         }
 
+        // Block contract generation for non-rental bookings (car wash, mechanical, etc.)
+        const svcType = booking.service_type || booking.booking_details?.service_type || ''
+        if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
+            console.log(`[generate-contract] Skipping — service_type=${svcType} is not a car rental`)
+            return { statusCode: 200, body: JSON.stringify({ success: false, skipped: true, reason: `Contratto non necessario per ${svcType}` }) }
+        }
+
         // 2. Fetch Customer Data
         // Priority order:
         // 1. booking.booking_details.customer.customerId (admin-created bookings)

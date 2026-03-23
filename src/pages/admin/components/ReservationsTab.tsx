@@ -1459,6 +1459,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return
     }
 
+    // Skip contract for non-rental bookings
+    const svcType = booking.service_type || (booking as any).booking_details?.service_type || ''
+    if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
+      console.log(`[handleGenerateContract] Skipping — service_type=${svcType} is not a rental`)
+      return
+    }
+
     // 1. Validate Data
     let missing: string[]
     try {
