@@ -100,6 +100,8 @@ export default function UnpaidBookingsTab() {
   const [addebitoContractId, setAddebitoContractId] = useState<string | null>(null)
   const [addebitoDanniPhotos, setAddebitoDanniPhotos] = useState<string[]>([])
   const [addebitoSending, setAddebitoSending] = useState(false)
+  const [addebitoItemAmount, setAddebitoItemAmount] = useState<number | null>(null) // cents, null = full group
+  const [addebitoItemLabel, setAddebitoItemLabel] = useState<string | null>(null)
 
   useEffect(() => {
     loadUnpaidBookings()
@@ -117,11 +119,13 @@ export default function UnpaidBookingsTab() {
 
   // ── Addebito ──────────────────────────────────────────────────────────
 
-  async function openAddebitoNexi(group: CustomerGroup) {
+  async function openAddebitoNexi(group: CustomerGroup, itemAmountCents?: number, itemLabel?: string) {
     setAddebitoGroup(group)
     setAddebitoSending(false)
     setAddebitoContractId(null)
     setAddebitoDanniPhotos([])
+    setAddebitoItemAmount(itemAmountCents ?? null)
+    setAddebitoItemLabel(itemLabel ?? null)
     setShowAddebitoModal(true)
 
     // Collect danni photos from all bookings in the group
@@ -155,7 +159,8 @@ export default function UnpaidBookingsTab() {
 
   async function handleAddebitoUnpaid() {
     if (!addebitoGroup) return
-    const amount = addebitoGroup.totalRemaining / 100
+    const amountCents = addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining
+    const amount = amountCents / 100
     if (amount <= 0) return
     setAddebitoSending(true)
     try {
@@ -169,7 +174,7 @@ export default function UnpaidBookingsTab() {
           customerEmail: addebitoGroup.customerEmail,
           contractNumber: addebitoGroup.noleggioBookings[0]?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
           amount: amount.toFixed(2),
-          causale: `Saldo dovuto - ${addebitoGroup.customerName}`,
+          causale: addebitoItemLabel ? `${addebitoItemLabel} - ${addebitoGroup.customerName}` : `Saldo dovuto - ${addebitoGroup.customerName}`,
           contractId: addebitoContractId || null,
           recurring: false,
           intervalHours: null,
@@ -327,7 +332,15 @@ export default function UnpaidBookingsTab() {
 
   async function removeSinglePenaltyDanno(booking: UnpaidBooking, type: 'penalties' | 'danni', originalIndex: number) {
     try {
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details to avoid overwriting concurrent changes
+      const { data: fresh, error: fetchErr } = await supabase
+        .from('bookings')
+        .select('booking_details')
+        .eq('id', booking.id)
+        .single()
+      if (fetchErr) throw fetchErr
+
+      const details = fresh?.booking_details || {}
       const arr: any[] = [...(details[type] || [])]
       arr.splice(originalIndex, 1)
 
@@ -348,7 +361,15 @@ export default function UnpaidBookingsTab() {
 
   async function updateSinglePenaltyDannoAmount(booking: UnpaidBooking, type: 'penalties' | 'danni', originalIndex: number, newAmount: number) {
     try {
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details to avoid overwriting concurrent changes
+      const { data: fresh, error: fetchErr } = await supabase
+        .from('bookings')
+        .select('booking_details')
+        .eq('id', booking.id)
+        .single()
+      if (fetchErr) throw fetchErr
+
+      const details = fresh?.booking_details || {}
       const arr: any[] = [...(details[type] || [])]
       if (arr[originalIndex]) {
         arr[originalIndex] = { ...arr[originalIndex], total: newAmount, amount: newAmount, quantity: 1 }
@@ -598,7 +619,9 @@ export default function UnpaidBookingsTab() {
     if (processingKey) return
     setProcessingKey(key)
     try {
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details
+      const { data: fresh } = await supabase.from('bookings').select('booking_details').eq('id', booking.id).single()
+      const details = fresh?.booking_details || booking.booking_details || {}
       const arr: any[] = details[type] || []
       const pending = arr.filter((item: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
 
@@ -655,7 +678,9 @@ export default function UnpaidBookingsTab() {
   async function handleTypePartialPayment(booking: UnpaidBooking, type: 'penalties' | 'danni', paymentAmount: number) {
     try {
       let remaining = paymentAmount
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details
+      const { data: fresh } = await supabase.from('bookings').select('booking_details').eq('id', booking.id).single()
+      const details = fresh?.booking_details || booking.booking_details || {}
       const arr: any[] = [...(details[type] || [])]
       let changed = false
       for (let i = 0; i < arr.length; i++) {
@@ -1732,7 +1757,7 @@ export default function UnpaidBookingsTab() {
 
   // ── Render: Penali/Danni cell content (shared) ─────────────────────────────
 
-  function PendingItemsCell({ items, type, onMarkAllPaid, onAddebito, chargedViaMit }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void; onAddebito?: () => void; chargedViaMit?: number }) {
+  function PendingItemsCell({ items, type, onMarkAllPaid, onAddebito, onAddebitoItem, chargedViaMit }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void; onAddebito?: () => void; onAddebitoItem?: (amountCents: number, label: string) => void; chargedViaMit?: number }) {
     if (items.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     const colorClasses = type === 'penalties'
@@ -1788,6 +1813,12 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
                     )}
+                    {onAddebitoItem && (
+                      <button
+                        onClick={() => onAddebitoItem(Math.round(item.remaining * 100), item.label)}
+                        className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
+                      >Addebito</button>
+                    )}
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
@@ -1813,6 +1844,12 @@ export default function UnpaidBookingsTab() {
                         onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
+                    )}
+                    {onAddebitoItem && (
+                      <button
+                        onClick={() => onAddebitoItem(Math.round(item.remaining * 100), item.label)}
+                        className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
+                      >Addebito</button>
                     )}
                     {editAmountKey !== editKey && (
                       <button
@@ -2047,7 +2084,7 @@ export default function UnpaidBookingsTab() {
                   {hasPenali && (
                     <div>
                       <div className="text-xs font-bold text-yellow-400 uppercase mb-1.5">Penali</div>
-                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
+                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                     </div>
                   )}
 
@@ -2055,7 +2092,7 @@ export default function UnpaidBookingsTab() {
                   {hasDanni && (
                     <div>
                       <div className="text-xs font-bold text-red-400 uppercase mb-1.5">Danni</div>
-                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
+                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                     </div>
                   )}
                 </div>
@@ -2132,12 +2169,12 @@ export default function UnpaidBookingsTab() {
 
                   {/* Penali column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
+                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                   </td>
 
                   {/* Danni column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} chargedViaMit={group.chargedViaMit} />
+                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                   </td>
                 </tr>
               ))}
@@ -2157,10 +2194,15 @@ export default function UnpaidBookingsTab() {
       {showAddebitoModal && addebitoGroup && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-theme-text-primary">Addebito — {addebitoGroup.customerName}</h3>
+            <h3 className="text-lg font-bold text-theme-text-primary">
+              Addebito{addebitoItemLabel ? ` — ${addebitoItemLabel}` : ''} — {addebitoGroup.customerName}
+            </h3>
             <div className="text-sm text-theme-text-secondary space-y-1">
               <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
-              <p><strong>Importo:</strong> <span className="text-red-400 font-bold">€{(addebitoGroup.totalRemaining / 100).toFixed(2)}</span></p>
+              <p><strong>Importo:</strong> <span className="text-red-400 font-bold">€{((addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining) / 100).toFixed(2)}</span></p>
+              {addebitoItemAmount != null && (
+                <p className="text-xs text-theme-text-muted">Totale cliente: €{(addebitoGroup.totalRemaining / 100).toFixed(2)}</p>
+              )}
               <p><strong>Contract ID:</strong> {addebitoContractId ? <span className="font-mono text-xs text-green-400">{addebitoContractId}</span> : <span className="text-red-400">Non trovato</span>}</p>
             </div>
 
@@ -2194,7 +2236,7 @@ export default function UnpaidBookingsTab() {
                 disabled={addebitoSending || !addebitoContractId}
                 className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                {addebitoSending ? 'Invio...' : `Invia Email e Programma Addebito €${(addebitoGroup.totalRemaining / 100).toFixed(2)}`}
+                {addebitoSending ? 'Invio...' : `Invia Email e Programma Addebito €${((addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining) / 100).toFixed(2)}`}
               </button>
             </div>
           </div>
