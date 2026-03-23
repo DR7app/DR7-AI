@@ -141,16 +141,44 @@ export default function UnpaidBookingsTab() {
     }
     setAddebitoDanniPhotos(allPhotos)
 
-    // Lookup contract_id from nexi_transactions by customer email
-    const { data: txs } = await supabase
-      .from('nexi_transactions')
-      .select('metadata')
-      .eq('customer_email', group.customerEmail)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(10)
+    // Lookup contract_id: 1) customer metadata, 2) nexi_transactions by email
+    let contractId: string | null = null
 
-    const contractId = txs?.find(t => t.metadata?.contract_id)?.metadata?.contract_id || null
+    // Try customer metadata first (most reliable — saved on every payment)
+    if (group.customerEmail) {
+      const { data: cust } = await supabase
+        .from('customers_extended')
+        .select('metadata')
+        .eq('email', group.customerEmail.toLowerCase().trim())
+        .maybeSingle()
+      if (cust?.metadata?.nexi_contract_id) {
+        contractId = cust.metadata.nexi_contract_id
+      }
+    }
+
+    // Fallback: search nexi_transactions
+    if (!contractId) {
+      const { data: txs } = await supabase
+        .from('nexi_transactions')
+        .select('metadata')
+        .eq('customer_email', group.customerEmail)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      contractId = txs?.find(t => t.metadata?.contract_id)?.metadata?.contract_id || null
+    }
+
+    // Fallback: check booking_details.nexi_contract_id
+    if (!contractId) {
+      const allBookings = [...group.noleggioBookings, ...group.primeWashBookings]
+      for (const b of allBookings) {
+        if (b.booking_details?.nexi_contract_id) {
+          contractId = b.booking_details.nexi_contract_id
+          break
+        }
+      }
+    }
+
     setAddebitoContractId(contractId)
     if (!contractId) {
       toast.error('Nessun Contract ID Nexi trovato per questo cliente')

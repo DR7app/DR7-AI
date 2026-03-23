@@ -110,13 +110,39 @@ const handler: Handler = async (event) => {
 
                 // Store contractId on customer for future MIT charges
                 if (contractId) {
+                    // Try by customer ID first
                     const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
+                    const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || transaction.customer_email || '').toLowerCase().trim();
+
+                    let savedOnCustomer = false;
+
                     if (custId) {
-                        await supabase.from('customers_extended').update({
-                            nexi_contract_id: contractId,
-                            updated_at: new Date().toISOString()
-                        }).eq('id', custId);
-                        console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${custId}`);
+                        const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
+                        if (cust) {
+                            await supabase.from('customers_extended').update({
+                                metadata: { ...(cust.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                updated_at: new Date().toISOString()
+                            }).eq('id', cust.id);
+                            savedOnCustomer = true;
+                            console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${cust.id} (by ID)`);
+                        }
+                    }
+
+                    // Fallback: lookup by email
+                    if (!savedOnCustomer && custEmail) {
+                        const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
+                        if (custByEmail) {
+                            await supabase.from('customers_extended').update({
+                                metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                updated_at: new Date().toISOString()
+                            }).eq('id', custByEmail.id);
+                            savedOnCustomer = true;
+                            console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${custByEmail.id} (by email: ${custEmail})`);
+                        }
+                    }
+
+                    if (!savedOnCustomer) {
+                        console.warn(`[nexi-payment-callback] Could not find customer to save contractId. custId=${custId}, email=${custEmail}`);
                     }
                 }
 

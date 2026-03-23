@@ -103,6 +103,56 @@ const handler: Handler = async (event) => {
 
         console.log('Cauzione updated successfully:', cauzione.id);
 
+        // Save contractId to customer for future MIT charges
+        if (isSuccess && contractId) {
+            try {
+                // Get booking from cauzione to find customer
+                const { data: cauzioneFull } = await supabase
+                    .from('cauzioni')
+                    .select('booking_id')
+                    .eq('id', cauzione.id)
+                    .single();
+
+                if (cauzioneFull?.booking_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_email, booking_details')
+                        .eq('id', cauzioneFull.booking_id)
+                        .single();
+
+                    if (booking) {
+                        const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
+                        const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase().trim();
+
+                        let saved = false;
+                        if (custId) {
+                            const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
+                            if (cust) {
+                                await supabase.from('customers_extended').update({
+                                    metadata: { ...(cust.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                    updated_at: new Date().toISOString()
+                                }).eq('id', cust.id);
+                                saved = true;
+                                console.log(`[nexi-preauth-callback] Saved contractId ${contractId} on customer ${cust.id}`);
+                            }
+                        }
+                        if (!saved && custEmail) {
+                            const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
+                            if (custByEmail) {
+                                await supabase.from('customers_extended').update({
+                                    metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                    updated_at: new Date().toISOString()
+                                }).eq('id', custByEmail.id);
+                                console.log(`[nexi-preauth-callback] Saved contractId ${contractId} on customer ${custByEmail.id} (by email)`);
+                            }
+                        }
+                    }
+                }
+            } catch (custErr) {
+                console.error('[nexi-preauth-callback] Error saving contractId to customer:', custErr);
+            }
+        }
+
         return {
             statusCode: 200,
             headers,
