@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -33,8 +33,38 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     const [amountPaid, setAmountPaid] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
+    const [photos, setPhotos] = useState<File[]>([])
+    const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([])
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     if (!isOpen) return null
+
+    function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = Array.from(e.target.files || [])
+        setPhotos(prev => [...prev, ...files])
+        setPhotoPreviewUrls(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    function removePhoto(index: number) {
+        URL.revokeObjectURL(photoPreviewUrls[index])
+        setPhotos(prev => prev.filter((_, i) => i !== index))
+        setPhotoPreviewUrls(prev => prev.filter((_, i) => i !== index))
+    }
+
+    async function uploadDanniPhotos(): Promise<string[]> {
+        const urls: string[] = []
+        for (const file of photos) {
+            const ext = file.name.split('.').pop() || 'jpg'
+            const path = `danni/${booking.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+            const { error } = await supabase.storage.from('contracts').upload(path, file)
+            if (!error) {
+                const { data: publicUrl } = supabase.storage.from('contracts').getPublicUrl(path)
+                urls.push(publicUrl.publicUrl)
+            }
+        }
+        return urls
+    }
 
     function addToCart() {
         const amt = parseFloat(customAmount)
@@ -72,6 +102,12 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
         setIsGenerating(true)
         try {
+            // Upload photos if any
+            let photoUrls: string[] = []
+            if (photos.length > 0) {
+                photoUrls = await uploadDanniPhotos()
+            }
+
             // Always save danni to booking_details first (prevents data loss if fattura fails)
             const { data: currentBooking, error: fetchErr } = await supabase
                 .from('bookings')
@@ -108,7 +144,8 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     note: note || '',
                     date: italyDate,
                     paymentStatus: isPartial ? 'partial' : paymentStatus,
-                    amountPaid: itemPaid
+                    amountPaid: itemPaid,
+                    photos: photoUrls,
                 }
             })
 
@@ -175,7 +212,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
             }
 
-            setCart([]); setNote(''); onSuccess(); onClose()
+            setCart([]); setNote(''); setPhotos([]); setPhotoPreviewUrls([]); onSuccess(); onClose()
         } catch (err: any) {
             console.error('Error generating danni:', err)
             setError(err.message || 'Errore nella generazione.')
@@ -186,7 +223,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
     const handleClose = () => {
         if (isGenerating) return
-        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setAmountPaid(''); setError(''); onClose()
+        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setAmountPaid(''); setError(''); setPhotos([]); setPhotoPreviewUrls([]); onClose()
     }
 
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
@@ -328,6 +365,40 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                             })}
                         </div>
                     )}
+
+                    {/* Foto Danni */}
+                    <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+                        <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-2">Foto Danni</p>
+                        <label className="flex items-center justify-center w-full px-3 py-3 rounded-xl bg-white/[0.06] border border-dashed border-white/[0.12] text-theme-text-muted hover:border-red-500/50 hover:text-red-400 cursor-pointer transition-colors">
+                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-[13px]">{photos.length > 0 ? `${photos.length} foto` : 'Aggiungi foto...'}</span>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handlePhotoSelect}
+                                className="hidden"
+                                disabled={isGenerating}
+                            />
+                        </label>
+                        {photoPreviewUrls.length > 0 && (
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                                {photoPreviewUrls.map((url, i) => (
+                                    <div key={i} className="relative group">
+                                        <img src={url} alt={`Foto ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-white/10" />
+                                        <button
+                                            type="button"
+                                            onClick={() => removePhoto(i)}
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >X</button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Note */}
                     <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">

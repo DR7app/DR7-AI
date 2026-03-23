@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -97,14 +97,8 @@ export default function UnpaidBookingsTab() {
   const [addebitoGroup, setAddebitoGroup] = useState<CustomerGroup | null>(null)
   const [addebitoContractId, setAddebitoContractId] = useState<string | null>(null)
   const [addebitoCausale, setAddebitoCausale] = useState('')
-  const [directCharging, setDirectCharging] = useState(false)
-  const [directChargeLogs, setDirectChargeLogs] = useState<{ amount: number; status: 'trying' | 'failed' | 'success'; message: string }[]>([])
-  const stopRetryRef = useRef(false)
-  const logsEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [directChargeLogs])
+  const [addebitoDanniPhotos, setAddebitoDanniPhotos] = useState<string[]>([])
+  const [addebitoSending, setAddebitoSending] = useState(false)
 
   useEffect(() => {
     loadUnpaidBookings()
@@ -125,11 +119,23 @@ export default function UnpaidBookingsTab() {
   async function openAddebitoNexi(group: CustomerGroup) {
     setAddebitoGroup(group)
     setAddebitoCausale('')
-    setDirectChargeLogs([])
-    setDirectCharging(false)
-    stopRetryRef.current = false
+    setAddebitoSending(false)
     setAddebitoContractId(null)
+    setAddebitoDanniPhotos([])
     setShowAddebitoModal(true)
+
+    // Collect danni photos from all bookings in the group
+    const allPhotos: string[] = []
+    const allBookings = [...group.noleggioBookings, ...group.primeWashBookings]
+    for (const b of allBookings) {
+      const danni = b.booking_details?.danni || []
+      for (const d of danni) {
+        if (d.photos && Array.isArray(d.photos)) {
+          allPhotos.push(...d.photos)
+        }
+      }
+    }
+    setAddebitoDanniPhotos(allPhotos)
 
     // Lookup contract_id from nexi_transactions by customer email
     const { data: txs } = await supabase
@@ -147,78 +153,46 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function handleDirectChargeUnpaid() {
-    if (!addebitoGroup || !addebitoContractId) return
-    const startAmount = addebitoGroup.totalRemaining / 100
-    if (startAmount <= 0) return
+  async function handleAddebitoUnpaid() {
+    if (!addebitoGroup) return
+    const amount = addebitoGroup.totalRemaining / 100
+    if (amount <= 0) return
     if (!addebitoCausale.trim()) {
       toast.error('Inserisci la causale')
       return
     }
 
-    setDirectCharging(true)
-    setDirectChargeLogs([])
-    stopRetryRef.current = false
-
-    let currentAmount = startAmount
-    const minAmount = 0.50
-
-    while (currentAmount >= minAmount && !stopRetryRef.current) {
-      const roundedAmount = Math.round(currentAmount * 100) / 100
-
-      setDirectChargeLogs(prev => [...prev, { amount: roundedAmount, status: 'trying', message: `Tentativo €${roundedAmount.toFixed(2)}...` }])
-
-      try {
-        const res = await fetch('/.netlify/functions/nexi-charge-mit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contractId: addebitoContractId,
-            amount: roundedAmount,
-            description: `Addebito: ${addebitoCausale} - ${addebitoGroup.customerName}`,
-            customerEmail: addebitoGroup.customerEmail,
-            customerName: addebitoGroup.customerName,
-          }),
-        })
-        const data = await res.json()
-
-        if (res.ok && data.success) {
-          setDirectChargeLogs(prev => {
-            const updated = [...prev]
-            updated[updated.length - 1] = { amount: roundedAmount, status: 'success', message: `€${roundedAmount.toFixed(2)} — ADDEBITATO!` }
-            return updated
-          })
-          toast.success(`Addebito di €${roundedAmount.toFixed(2)} riuscito!`)
-          break
-        } else {
-          setDirectChargeLogs(prev => {
-            const updated = [...prev]
-            updated[updated.length - 1] = { amount: roundedAmount, status: 'failed', message: `€${roundedAmount.toFixed(2)} — Rifiutato: ${data.error || 'DECLINED'}` }
-            return updated
-          })
-          currentAmount = currentAmount * 0.9
-          if (currentAmount >= minAmount && !stopRetryRef.current) {
-            await new Promise(r => setTimeout(r, 1000))
-          }
-        }
-      } catch (err: any) {
-        setDirectChargeLogs(prev => {
-          const updated = [...prev]
-          updated[updated.length - 1] = { amount: roundedAmount, status: 'failed', message: `€${roundedAmount.toFixed(2)} — Errore: ${err.message}` }
-          return updated
-        })
-        currentAmount = currentAmount * 0.9
-        if (currentAmount >= minAmount && !stopRetryRef.current) {
-          await new Promise(r => setTimeout(r, 1000))
-        }
+    setAddebitoSending(true)
+    try {
+      const res = await fetch('/.netlify/functions/nexi-nuovo-addebito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: null,
+          bookingId: addebitoGroup.noleggioBookings[0]?.id || addebitoGroup.primeWashBookings[0]?.id || null,
+          customerName: addebitoGroup.customerName,
+          customerEmail: addebitoGroup.customerEmail,
+          contractNumber: addebitoGroup.noleggioBookings[0]?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
+          amount: amount.toFixed(2),
+          causale: addebitoCausale,
+          contractId: addebitoContractId || null,
+          recurring: false,
+          intervalHours: null,
+          photoUrls: addebitoDanniPhotos,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Addebito programmato')
+        setShowAddebitoModal(false)
+      } else {
+        toast.error(data.error || 'Errore')
       }
+    } catch (err: any) {
+      toast.error('Errore: ' + err.message)
+    } finally {
+      setAddebitoSending(false)
     }
-
-    if (!stopRetryRef.current && currentAmount < minAmount) {
-      setDirectChargeLogs(prev => [...prev, { amount: 0, status: 'failed', message: 'Importo minimo raggiunto — tutti i tentativi falliti' }])
-    }
-
-    setDirectCharging(false)
   }
 
   // ── Data Layer (preserved from original) ──────────────────────────────────
@@ -2138,11 +2112,11 @@ export default function UnpaidBookingsTab() {
       {/* Addebito Modal */}
       {showAddebitoModal && addebitoGroup && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-lg space-y-4">
+          <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-theme-text-primary">Addebito — {addebitoGroup.customerName}</h3>
             <div className="text-sm text-theme-text-secondary space-y-1">
               <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
-              <p><strong>Importo da saldare:</strong> <span className="text-red-400 font-bold">€{(addebitoGroup.totalRemaining / 100).toFixed(2)}</span></p>
+              <p><strong>Importo:</strong> <span className="text-red-400 font-bold">€{(addebitoGroup.totalRemaining / 100).toFixed(2)}</span></p>
               <p><strong>Contract ID:</strong> {addebitoContractId ? <span className="font-mono text-xs text-green-400">{addebitoContractId}</span> : <span className="text-red-400">Non trovato</span>}</p>
             </div>
 
@@ -2157,51 +2131,38 @@ export default function UnpaidBookingsTab() {
               />
             </div>
 
-            <div className="p-3 bg-orange-900/20 border border-orange-700/50 rounded-lg text-xs text-orange-300">
-              <strong>Auto-retry:</strong> Prova l'importo pieno, se rifiutato ritenta con -10% ogni secondo fino a quando va a buon fine.
-            </div>
-
-            {/* Live log */}
-            {directChargeLogs.length > 0 && (
-              <div className="bg-black/40 rounded-lg border border-theme-border p-3 max-h-48 overflow-y-auto font-mono text-xs space-y-1">
-                {directChargeLogs.map((log, i) => (
-                  <div key={i} className={`flex items-center gap-2 ${
-                    log.status === 'success' ? 'text-green-400' :
-                    log.status === 'trying' ? 'text-yellow-300' :
-                    'text-red-400'
-                  }`}>
-                    <span>{log.status === 'trying' ? '...' : log.status === 'success' ? '>>>' : 'X'}</span>
-                    <span>{log.message}</span>
-                  </div>
-                ))}
-                <div ref={logsEndRef} />
+            {/* Danni photos from booking */}
+            {addebitoDanniPhotos.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Foto Danni ({addebitoDanniPhotos.length})</label>
+                <div className="flex gap-2 flex-wrap">
+                  {addebitoDanniPhotos.map((url, i) => (
+                    <img key={i} src={url} alt={`Danno ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-theme-border" />
+                  ))}
+                </div>
+                <p className="text-xs text-theme-text-muted mt-1">Allegate automaticamente dalla scheda danni</p>
               </div>
             )}
 
+            <div className="p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg text-xs text-yellow-300">
+              <strong>Flusso:</strong> Email formale inviata subito → seconda email con foto danni → addebito MIT con auto-retry -10%.
+            </div>
+
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => { stopRetryRef.current = true; setShowAddebitoModal(false) }}
-                disabled={directCharging}
+                onClick={() => setShowAddebitoModal(false)}
+                disabled={addebitoSending}
                 className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
               >
-                Chiudi
+                Annulla
               </button>
-              {directCharging ? (
-                <button
-                  onClick={() => { stopRetryRef.current = true; setDirectChargeLogs(prev => [...prev, { amount: 0, status: 'failed', message: 'Interrotto manualmente' }]) }}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-yellow-600 text-white hover:bg-yellow-700 transition-colors"
-                >
-                  Stop
-                </button>
-              ) : (
-                <button
-                  onClick={handleDirectChargeUnpaid}
-                  disabled={!addebitoContractId}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-600 text-white hover:bg-orange-700 transition-colors disabled:opacity-50"
-                >
-                  Addebita €{(addebitoGroup.totalRemaining / 100).toFixed(2)}
-                </button>
-              )}
+              <button
+                onClick={handleAddebitoUnpaid}
+                disabled={addebitoSending || !addebitoContractId}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {addebitoSending ? 'Invio...' : `Invia Email e Programma Addebito €${(addebitoGroup.totalRemaining / 100).toFixed(2)}`}
+              </button>
             </div>
           </div>
         </div>
