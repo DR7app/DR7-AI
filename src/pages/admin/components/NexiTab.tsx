@@ -327,20 +327,12 @@ export default function NexiTab() {
                                                 {a.status === 'email_sent' ? 'Invia 2a Email' : 'Rinvia Email'}
                                             </button>
                                         )}
-                                        {a.recurring && !['charged', 'stopped'].includes(a.status) && (
-                                            <button
-                                                onClick={() => stopRecurring(a.id)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-muted hover:bg-red-600/20 hover:text-red-400 border border-theme-border transition-colors"
-                                            >
-                                                Stop
-                                            </button>
-                                        )}
-                                        {!['charged', 'stopped'].includes(a.status) && !a.recurring && (
+                                        {a.status !== 'stopped' && (
                                             <button
                                                 onClick={() => cancelAddebito(a.id)}
                                                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors"
                                             >
-                                                Annulla
+                                                {a.status === 'charged' ? 'Chiudi' : 'Annulla'}
                                             </button>
                                         )}
                                     </div>
