@@ -222,6 +222,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                             customerName: booking.customer_name || 'Cliente',
                             description: `Danni — ${booking.customer_name}`,
                             expirationHours: 1,
+                            paymentPurpose: 'danni',
                         }),
                     })
                     const linkData = await linkRes.json()

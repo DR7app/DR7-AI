@@ -36,6 +36,7 @@ import NewClientModal from './NewClientModal'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
+import DanniPenaliModal from './DanniPenaliModal'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -676,6 +677,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Danni Modal State
   const [danniModalOpen, setDanniModalOpen] = useState(false)
   const [selectedBookingForDanni, setSelectedBookingForDanni] = useState<Booking | null>(null)
+
+  // Combined Danni & Penali Modal State
+  const [danniPenaliModalOpen, setDanniPenaliModalOpen] = useState(false)
+  const [selectedBookingForDanniPenali, setSelectedBookingForDanniPenali] = useState<Booking | null>(null)
+  const [danniPenaliInitialTab, setDanniPenaliInitialTab] = useState<'danni' | 'penali'>('danni')
 
   // Confirmation Modal State (commented out - unused, causing build errors)
   // const [confirmationModalOpen, setConfirmationModalOpen] = useState(false)
@@ -1412,6 +1418,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
 
     return missing
+  }
+
+  async function handleResendPaymentLink(booking: Booking) {
+    const paymentLink = booking.booking_details?.nexi_payment_link
+    if (!paymentLink) {
+      toast.error('Nessun link di pagamento trovato per questa prenotazione')
+      return
+    }
+    const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+    if (!custPhone) {
+      // Fallback: copy to clipboard
+      navigator.clipboard.writeText(paymentLink)
+      toast.success('Link copiato! Nessun telefono trovato per inviare WhatsApp.')
+      return
+    }
+    const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
+    const bookingRef = booking.id.substring(0, 8).toUpperCase()
+    const totalEur = (booking.price_total / 100).toFixed(2)
+    try {
+      await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: custPhone,
+          customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\n•⁠ Carta prepagata → autorizzo accredito +20% sulla tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${paymentLink}\n\n⚠️ Il link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe il messaggio non è destinato a lei o ha già provveduto, può ignorarlo.`
+        })
+      })
+      toast.success('Link di pagamento rinviato via WhatsApp!')
+    } catch (err: any) {
+      console.error('Error resending payment link:', err)
+      toast.error('Errore invio WhatsApp: ' + err.message)
+    }
   }
 
   async function handleGenerateContract(booking: Booking, _silent?: boolean) {
@@ -2970,7 +3008,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const { data } = await supabase
               .from('customers_extended')
               .select('id')
-              .eq('email', newCustomerData.email.trim().toLowerCase())
+              .ilike('email', newCustomerData.email.trim())
               .maybeSingle()
             existingCustomer = data
           }
@@ -2983,6 +3021,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               .from('customers_extended')
               .select('id')
               .eq('telefono', normNewPhone)
+              .maybeSingle()
+            existingCustomer = data
+          }
+          // Last resort: check by nome + cognome (persona fisica only)
+          if (!existingCustomer && newCustomerData.tipo_cliente === 'persona_fisica' && newCustomerData.nome?.trim() && newCustomerData.cognome?.trim()) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('id')
+              .ilike('nome', newCustomerData.nome.trim())
+              .ilike('cognome', newCustomerData.cognome.trim())
               .maybeSingle()
             existingCustomer = data
           }
@@ -4019,6 +4067,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             onEditCustomer={(customerId) => {
               openEditCustomer(customerId)
               setDanniModalOpen(false)
+            }}
+          />
+        )}
+
+        {/* Combined Danni & Penali Modal */}
+        {selectedBookingForDanniPenali && (
+          <DanniPenaliModal
+            isOpen={danniPenaliModalOpen}
+            initialTab={danniPenaliInitialTab}
+            booking={{
+              id: selectedBookingForDanniPenali.id,
+              customer_name: selectedBookingForDanniPenali.customer_name || 'Cliente',
+              customer_id: selectedBookingForDanniPenali.booking_details?.customer?.customerId || selectedBookingForDanniPenali.booking_details?.customer_id || undefined,
+              user_id: selectedBookingForDanniPenali.user_id || undefined,
+              customer_email: selectedBookingForDanniPenali.customer_email || selectedBookingForDanniPenali.booking_details?.customer?.email || undefined,
+              customer_phone: selectedBookingForDanniPenali.customer_phone || selectedBookingForDanniPenali.booking_details?.customer?.phone || undefined,
+              vehicle_name: selectedBookingForDanniPenali.vehicle_name || undefined,
+              booking_details: selectedBookingForDanniPenali.booking_details || undefined,
+            }}
+            onClose={() => {
+              setDanniPenaliModalOpen(false)
+              setSelectedBookingForDanniPenali(null)
+            }}
+            onSuccess={() => {
+              loadData()
+            }}
+            onEditCustomer={(customerId) => {
+              openEditCustomer(customerId)
+              setDanniPenaliModalOpen(false)
             }}
           />
         )}
@@ -5204,20 +5281,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     )}
 
 
-                    <div className="flex gap-2">
+                    {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); setSelectedBookingForPenalty(booking); setPenaltyModalOpen(true) }}
-                        className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                        onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
+                        className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
                       >
-                        Penali
+                        Rinvia Link
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanni(booking); setDanniModalOpen(true) }}
-                        className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                      >
-                        Danni
-                      </button>
-                    </div>
+                    )}
+
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
+                      className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-yellow-600/30 hover:from-red-600/50 hover:to-yellow-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                    >
+                      Danni & Penali
+                    </button>
 
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
@@ -5356,19 +5434,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               >
                                 Cancella
                               </button>
+                              {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
+                                  className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
+                                >
+                                  Rinvia Link
+                                </button>
+                              )}
                             </>
                           )}
                           <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForPenalty(booking); setPenaltyModalOpen(true) }}
-                            className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
+                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
+                            className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-yellow-600/30 hover:from-red-600/50 hover:to-yellow-600/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
                           >
-                            Penali
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanni(booking); setDanniModalOpen(true) }}
-                            className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
-                          >
-                            Danni
+                            Danni & Penali
                           </button>
                         </div>
                       </td>

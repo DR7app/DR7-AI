@@ -250,6 +250,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             customerName: custName || 'Cliente',
                             description: `Penali — ${custName}`,
                             expirationHours: 1,
+                            paymentPurpose: 'penali',
                         }),
                     })
                     const linkData = await linkRes.json()

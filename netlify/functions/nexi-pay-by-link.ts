@@ -33,6 +33,7 @@ const handler: Handler = async (event) => {
             description,
             expirationDays = 7, // Link valid for 7 days by default
             expirationHours, // Optional: override with hours (e.g. 1 = 1 hour)
+            paymentPurpose, // 'booking' | 'danni' | 'penali' | 'danni_penali' — used by callback
         } = JSON.parse(event.body || '{}');
 
         if (!NEXI_API_KEY) {
@@ -167,6 +168,7 @@ const handler: Handler = async (event) => {
                 contract_id: orderId.slice(0, 18),
                 metadata: {
                     type: 'pay_by_link',
+                    payment_purpose: paymentPurpose || 'booking',
                     customer_name: customerName,
                     expiration_date: expirationDate.toISOString(),
                     nexi_response: responseData

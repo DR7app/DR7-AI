@@ -55,7 +55,7 @@ const handler: Handler = async (event) => {
         // Find the nexi_transaction by order_id
         const { data: transaction } = await supabase
             .from('nexi_transactions')
-            .select('id, booking_id, amount_cents, customer_email, contract_id')
+            .select('id, booking_id, amount_cents, customer_email, contract_id, metadata, description')
             .eq('order_id', orderId)
             .single();
 
@@ -64,12 +64,22 @@ const handler: Handler = async (event) => {
             return { statusCode: 404, headers, body: JSON.stringify({ error: 'Transaction not found' }) };
         }
 
-        // Update transaction status
+        // Detect payment purpose from metadata or description
+        const paymentPurpose = transaction.metadata?.payment_purpose
+            || (transaction.description?.toLowerCase().startsWith('danni') ? 'danni' : null)
+            || (transaction.description?.toLowerCase().startsWith('penali') ? 'penali' : null)
+            || 'booking';
+        const isDanniPenali = paymentPurpose === 'danni' || paymentPurpose === 'penali' || paymentPurpose === 'danni_penali';
+
+        console.log(`[nexi-payment-callback] Payment purpose: ${paymentPurpose}, isDanniPenali: ${isDanniPenali}`);
+
+        // Update transaction status (preserve original metadata)
         await supabase.from('nexi_transactions').update({
             status: isSuccess ? 'completed' : 'failed',
             transaction_id: transactionId || operationId || null,
             contract_id: contractId || transaction.contract_id,
             metadata: {
+                ...(transaction.metadata || {}),
                 callback_result: result,
                 result_code: resultCode,
                 authorization_code: authorizationCode,
@@ -81,7 +91,132 @@ const handler: Handler = async (event) => {
             updated_at: new Date().toISOString()
         }).eq('id', transaction.id);
 
-        // If payment succeeded and linked to a booking, CONFIRM the booking
+        // ── DANNI/PENALI PAYMENT ──────────────────────────────────────────
+        if (isSuccess && isDanniPenali && transaction.booking_id) {
+            console.log(`[nexi-payment-callback] Processing ${paymentPurpose} payment for booking ${transaction.booking_id}`);
+
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('id, customer_name, customer_phone, customer_email, booking_details')
+                .eq('id', transaction.booking_id)
+                .single();
+
+            if (booking) {
+                const amountEur = (transaction.amount_cents / 100).toFixed(2);
+                const details = booking.booking_details || {};
+
+                // Mark matching danni/penali entries as paid
+                let updated = false;
+                const arrayKeys = paymentPurpose === 'danni' ? ['danni'] : paymentPurpose === 'penali' ? ['penalties'] : ['danni', 'penalties'];
+                for (const key of arrayKeys) {
+                    const items = details[key] || [];
+                    for (const item of items) {
+                        if (item.paymentStatus === 'nexi_pay_by_link' || item.paymentStatus === 'pending' || !item.paymentStatus) {
+                            item.paymentStatus = 'paid';
+                            item.paymentMethod = 'Nexi Pay by Link';
+                            item.amountPaid = item.total || (item.amount || 0) * (item.quantity || 1);
+                            item.paidAt = new Date().toISOString();
+                            updated = true;
+                        }
+                    }
+                }
+
+                if (updated) {
+                    await supabase.from('bookings').update({
+                        booking_details: {
+                            ...details,
+                            nexi_transaction_id: transactionId || operationId,
+                            nexi_contract_id: contractId,
+                        }
+                    }).eq('id', booking.id);
+                    console.log(`[nexi-payment-callback] Marked ${paymentPurpose} as paid in booking_details`);
+                }
+
+                // Generate penalty/danni fattura
+                try {
+                    const custId = details.customer?.customerId || details.customer?.id || details.customer_id;
+                    const allItems: { label: string; amount: number; quantity: number }[] = [];
+                    for (const key of arrayKeys) {
+                        for (const item of (details[key] || [])) {
+                            if (item.paidAt === new Date().toISOString().split('T')[0] || item.paymentMethod === 'Nexi Pay by Link') {
+                                allItems.push({ label: item.label || (key === 'danni' ? 'Danno' : 'Penale'), amount: item.amount || item.total || 0, quantity: item.quantity || 1 });
+                            }
+                        }
+                    }
+                    // Use all items that were just marked paid
+                    if (allItems.length === 0) {
+                        // Fallback: create a single item from the transaction amount
+                        allItems.push({ label: paymentPurpose === 'danni' ? 'Danni' : 'Penali', amount: transaction.amount_cents / 100, quantity: 1 });
+                    }
+
+                    const invoiceRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-penalty-invoice`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bookingId: booking.id,
+                            customerId: custId,
+                            items: allItems,
+                            type: paymentPurpose,
+                            paymentStatus: 'paid'
+                        })
+                    });
+                    const invoiceData = await invoiceRes.json();
+                    if (invoiceRes.ok) {
+                        console.log(`[nexi-payment-callback] ✅ Fattura ${paymentPurpose} generata: ${invoiceData.invoice?.numero_fattura || 'N/A'}`);
+                    } else {
+                        console.error(`[nexi-payment-callback] ❌ Fattura ${paymentPurpose} failed:`, invoiceData.error || invoiceData.message);
+                    }
+                } catch (invErr) {
+                    console.error(`[nexi-payment-callback] Fattura ${paymentPurpose} error:`, invErr);
+                }
+
+                // Save contractId on customer
+                if (contractId) {
+                    const custEmail = (booking.customer_email || transaction.customer_email || '').toLowerCase().trim();
+                    if (custEmail) {
+                        const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
+                        if (custByEmail) {
+                            await supabase.from('customers_extended').update({
+                                metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                updated_at: new Date().toISOString()
+                            }).eq('id', custByEmail.id);
+                        }
+                    }
+                }
+
+                // Send WhatsApp confirmation (NOT a rental confirmation)
+                const custPhone = booking.customer_phone || details.customer?.phone;
+                if (custPhone) {
+                    const custName = booking.customer_name || details.customer?.fullName || 'Cliente';
+                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: custPhone,
+                            customMessage: `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per ${paymentPurpose === 'danni' ? 'danni' : paymentPurpose === 'penali' ? 'penali' : 'danni/penali'}.\n\nGrazie,\nDR7`
+                        })
+                    });
+                }
+
+                // Admin notification
+                const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+                if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${NOTIFICATION_PHONE}@c.us`,
+                            message: `💰 *PAGAMENTO ${paymentPurpose.toUpperCase()} RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Tipo:* ${paymentPurpose}\n\nFattura generata automaticamente.`
+                        })
+                    });
+                }
+            }
+
+            // NO contract, NO booking confirmation — just danni/penali
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'danni_penali_paid' }) };
+        }
+
+        // ── REGULAR BOOKING PAYMENT ───────────────────────────────────────
         if (isSuccess && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
