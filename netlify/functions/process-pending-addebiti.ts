@@ -270,13 +270,42 @@ Dubai Rent 7.0 S.p.A.`
 
                     if (result.success) {
                         console.log(`[process-pending-addebiti] ✅ Charged €${amountEur.toFixed(2)} (attempt #${attempts}) for addebito ${addebito.id}`)
+                        const remainingCents = addebito.amount_cents - currentAmountCents
                         await supabase.from('pending_addebiti').update({
                             status: 'charged',
                             charged_at: new Date().toISOString(),
                             charge_count: (addebito.charge_count || 0) + attempts,
                             charged_amount_cents: currentAmountCents,
-                            error_message: attempts > 1 ? `Addebitato €${amountEur.toFixed(2)} dopo ${attempts} tentativi (importo originale: €${(addebito.amount_cents / 100).toFixed(2)})` : null,
+                            error_message: remainingCents > 0
+                                ? `Addebitato €${amountEur.toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} — rimanente €${(remainingCents / 100).toFixed(2)} riprogrammato`
+                                : (attempts > 1 ? `Addebitato €${amountEur.toFixed(2)} dopo ${attempts} tentativi` : null),
                         }).eq('id', addebito.id)
+
+                        // If partial charge, create new addebito for the remaining amount (skip emails, go straight to charge)
+                        if (remainingCents >= 50) {
+                            const nextChargeAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // retry in 24h
+                            await supabase.from('pending_addebiti').insert({
+                                transaction_id: null,
+                                booking_id: addebito.booking_id,
+                                customer_name: addebito.customer_name,
+                                customer_email: addebito.customer_email,
+                                contract_number: addebito.contract_number,
+                                contract_id: addebito.contract_id,
+                                amount_cents: remainingCents,
+                                causale: `Rimanente da addebito parziale — €${(remainingCents / 100).toFixed(2)}`,
+                                status: 'second_email_sent', // skip emails, go straight to charge phase
+                                email_sent_at: addebito.email_sent_at,
+                                second_email_sent_at: new Date().toISOString(),
+                                charge_after: addebito.charge_after,
+                                mit_charge_after: nextChargeAt,
+                                recurring: true,
+                                interval_hours: 24,
+                                photo_urls: addebito.photo_urls,
+                                charge_count: 0,
+                            })
+                            console.log(`[process-pending-addebiti] Created follow-up addebito for remaining €${(remainingCents / 100).toFixed(2)}`)
+                        }
+
                         charged = true
                         break
                     } else {
@@ -288,10 +317,10 @@ Dubai Rent 7.0 S.p.A.`
                     console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} errore: ${lastError}`)
                 }
 
-                // Reduce by 10% and wait 1 second
+                // Reduce by 10% and retry quickly
                 currentAmountCents = Math.round(currentAmountCents * 0.9)
                 if (currentAmountCents >= minAmountCents) {
-                    await new Promise(r => setTimeout(r, 1000))
+                    await new Promise(r => setTimeout(r, 200))
                 }
             }
 

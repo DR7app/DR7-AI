@@ -72,6 +72,7 @@ interface CustomerGroup {
   penaliItems: PendingItem[]
   danniItems: PendingItem[]
   totalRemaining: number  // in cents
+  chargedViaMit: number   // cents already collected via addebito MIT
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ interface CustomerGroup {
 export default function UnpaidBookingsTab() {
   const [bookings, setBookings] = useState<UnpaidBooking[]>([])
   const [fatturaItemsMap, setFatturaItemsMap] = useState<Record<string, FatturaItem[]>>({})
+  const [mitChargedMap, setMitChargedMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [filterService, setFilterService] = useState<'all' | 'rental' | 'prime_wash'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -238,6 +240,21 @@ export default function UnpaidBookingsTab() {
       }
 
       setFatturaItemsMap(fItemsMap)
+
+      // Fetch charged amounts from pending_addebiti
+      const { data: addebiti } = await supabase
+        .from('pending_addebiti')
+        .select('customer_email, charged_amount_cents, status')
+        .eq('status', 'charged')
+
+      const mitMap: Record<string, number> = {}
+      for (const a of (addebiti || [])) {
+        if (a.customer_email && a.charged_amount_cents) {
+          const key = a.customer_email.toLowerCase().trim()
+          mitMap[key] = (mitMap[key] || 0) + a.charged_amount_cents
+        }
+      }
+      setMitChargedMap(mitMap)
 
       const unpaidBookings = (data || []).filter(booking => {
         if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
@@ -1202,6 +1219,7 @@ export default function UnpaidBookingsTab() {
           penaliItems: [],
           danniItems: [],
           totalRemaining: 0,
+          chargedViaMit: 0,
         })
       }
 
@@ -1292,6 +1310,16 @@ export default function UnpaidBookingsTab() {
       group.totalRemaining += getRemainingAmount(booking)
     }
 
+    // Subtract MIT charged amounts from totalRemaining
+    for (const group of groupMap.values()) {
+      const emailKey = (group.customerEmail || '').toLowerCase().trim()
+      const charged = mitChargedMap[emailKey] || 0
+      if (charged > 0) {
+        group.chargedViaMit = charged
+        group.totalRemaining = Math.max(0, group.totalRemaining - charged)
+      }
+    }
+
     let groups = Array.from(groupMap.values())
 
     // Apply filter
@@ -1322,7 +1350,7 @@ export default function UnpaidBookingsTab() {
     })
 
     return groups
-  }, [bookings, fatturaItemsMap, filterService, searchQuery, sortBy, sortDir])
+  }, [bookings, fatturaItemsMap, mitChargedMap, filterService, searchQuery, sortBy, sortDir])
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
@@ -1948,7 +1976,12 @@ export default function UnpaidBookingsTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-red-400 font-bold">€{(group.totalRemaining / 100).toFixed(2)}</span>
+                  <div className="text-right">
+                    <span className="text-red-400 font-bold">€{(group.totalRemaining / 100).toFixed(2)}</span>
+                    {group.chargedViaMit > 0 && (
+                      <div className="text-[10px] text-green-400">Incassato: €{(group.chargedViaMit / 100).toFixed(2)}</div>
+                    )}
+                  </div>
                   <svg className={`w-5 h-5 text-theme-text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -2056,6 +2089,9 @@ export default function UnpaidBookingsTab() {
                     <div className="text-red-400 font-bold text-lg mt-2">
                       €{(group.totalRemaining / 100).toFixed(2)}
                     </div>
+                    {group.chargedViaMit > 0 && (
+                      <div className="text-xs text-green-400 mt-0.5">Incassato via addebito: €{(group.chargedViaMit / 100).toFixed(2)}</div>
+                    )}
                     {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
                       <button
                         onClick={() => markAllCustomerPaid(group)}
