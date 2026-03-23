@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR } from '../../../utils/moneyUtils'
@@ -53,28 +53,21 @@ export default function NexiTab() {
     const [addebitoPhotos, setAddebitoPhotos] = useState<File[]>([])
     const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([])
 
-    // Direct charge auto-retry state
-    const [directCharging, setDirectCharging] = useState(false)
-    const [directChargeLogs, setDirectChargeLogs] = useState<{ amount: number; status: 'trying' | 'failed' | 'success'; message: string }[]>([])
-    const stopRetryRef = useRef(false)
-    const logsEndRef = useRef<HTMLDivElement>(null)
-
-    // Active recurring addebiti
-    const [recurringAddebiti, setRecurringAddebiti] = useState<PendingAddebito[]>([])
+    // All pending addebiti
+    const [allAddebiti, setAllAddebiti] = useState<PendingAddebito[]>([])
 
     useEffect(() => {
         fetchTransactions()
-        fetchRecurringAddebiti()
+        fetchAllAddebiti()
     }, [])
 
-    async function fetchRecurringAddebiti() {
+    async function fetchAllAddebiti() {
         const { data } = await supabase
             .from('pending_addebiti')
             .select('*')
-            .eq('recurring', true)
-            .not('status', 'in', '(charged,stopped)')
             .order('created_at', { ascending: false })
-        setRecurringAddebiti(data || [])
+            .limit(50)
+        setAllAddebiti(data || [])
     }
 
     async function stopRecurring(id: string) {
@@ -86,7 +79,7 @@ export default function NexiTab() {
             toast.error('Errore: ' + error.message)
         } else {
             toast.success('Addebito ricorrente fermato')
-            fetchRecurringAddebiti()
+            fetchAllAddebiti()
         }
     }
 
@@ -130,9 +123,6 @@ export default function NexiTab() {
         setAddebitoIntervalHours('24')
         setAddebitoPhotos([])
         setPhotoPreviewUrls([])
-        setDirectChargeLogs([])
-        setDirectCharging(false)
-        stopRetryRef.current = false
         setShowAddebitoModal(true)
     }
 
@@ -162,102 +152,6 @@ export default function NexiTab() {
         }
         return urls
     }
-
-    async function handleDirectCharge() {
-        if (!addebitoTx) return
-        const startAmount = parseFloat(addebitoAmount)
-        if (!startAmount || startAmount <= 0) {
-            toast.error('Inserisci un importo valido')
-            return
-        }
-        if (!addebitoTx.contract_id) {
-            toast.error('Nessun Contract ID Nexi — impossibile addebitare direttamente')
-            return
-        }
-        if (!addebitoCausale.trim()) {
-            toast.error('Inserisci la causale')
-            return
-        }
-
-        setDirectCharging(true)
-        setDirectChargeLogs([])
-        stopRetryRef.current = false
-
-        let currentAmount = startAmount
-        const minAmount = 0.50 // minimum €0.50
-
-        while (currentAmount >= minAmount && !stopRetryRef.current) {
-            const roundedAmount = Math.round(currentAmount * 100) / 100
-
-            setDirectChargeLogs(prev => [...prev, { amount: roundedAmount, status: 'trying', message: `Tentativo €${roundedAmount.toFixed(2)}...` }])
-
-            try {
-                const res = await fetch('/.netlify/functions/nexi-charge-mit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contractId: addebitoTx.contract_id,
-                        amount: roundedAmount,
-                        description: `Addebito: ${addebitoCausale} - ${addebitoTx.order_id}`,
-                        bookingId: addebitoTx.booking_id || null,
-                        customerEmail: addebitoTx.customer_email,
-                        customerName: addebitoTx.booking?.customer_name || '',
-                    }),
-                })
-                const data = await res.json()
-
-                if (res.ok && data.success) {
-                    setDirectChargeLogs(prev => {
-                        const updated = [...prev]
-                        updated[updated.length - 1] = { amount: roundedAmount, status: 'success', message: `€${roundedAmount.toFixed(2)} — ADDEBITATO!` }
-                        return updated
-                    })
-                    toast.success(`Addebito di €${roundedAmount.toFixed(2)} riuscito!`)
-                    fetchTransactions()
-                    break
-                } else {
-                    setDirectChargeLogs(prev => {
-                        const updated = [...prev]
-                        updated[updated.length - 1] = { amount: roundedAmount, status: 'failed', message: `€${roundedAmount.toFixed(2)} — Rifiutato: ${data.error || 'DECLINED'}` }
-                        return updated
-                    })
-                    // Reduce by 10%
-                    currentAmount = currentAmount * 0.9
-                    // Wait 1 second before retry
-                    if (currentAmount >= minAmount && !stopRetryRef.current) {
-                        await new Promise(r => setTimeout(r, 1000))
-                    }
-                }
-            } catch (err: any) {
-                setDirectChargeLogs(prev => {
-                    const updated = [...prev]
-                    updated[updated.length - 1] = { amount: roundedAmount, status: 'failed', message: `€${roundedAmount.toFixed(2)} — Errore: ${err.message}` }
-                    return updated
-                })
-                currentAmount = currentAmount * 0.9
-                if (currentAmount >= minAmount && !stopRetryRef.current) {
-                    await new Promise(r => setTimeout(r, 1000))
-                }
-            }
-        }
-
-        if (!stopRetryRef.current && currentAmount < minAmount) {
-            const lastLog = { amount: 0, status: 'failed' as const, message: 'Importo minimo raggiunto — tutti i tentativi falliti' }
-            setDirectChargeLogs(prev => [...prev, lastLog])
-        }
-
-        setDirectCharging(false)
-    }
-
-    function stopDirectCharge() {
-        stopRetryRef.current = true
-        setDirectChargeLogs(prev => [...prev, { amount: 0, status: 'failed', message: 'Interrotto manualmente' }])
-    }
-
-    // Auto-scroll logs
-    useEffect(() => {
-        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [directChargeLogs])
 
     async function handleNuovoAddebito() {
         if (!addebitoTx) return
@@ -304,7 +198,7 @@ export default function NexiTab() {
             if (res.ok && data.success) {
                 toast.success(data.message || 'Addebito programmato')
                 setShowAddebitoModal(false)
-                fetchRecurringAddebiti()
+                fetchAllAddebiti()
             } else {
                 toast.error(data.error || 'Errore nell\'invio')
             }
@@ -330,42 +224,65 @@ export default function NexiTab() {
                 </button>
             </div>
 
-            {/* Active Recurring Addebiti */}
-            {recurringAddebiti.length > 0 && (
-                <div className="bg-red-900/10 rounded-xl border border-red-700/30 overflow-hidden">
-                    <div className="px-6 py-3 bg-red-900/20 border-b border-red-700/30">
-                        <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider">Addebiti Ricorrenti Attivi</h3>
+            {/* Stato Addebiti */}
+            {allAddebiti.length > 0 && (
+                <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
+                    <div className="px-6 py-3 bg-theme-bg-primary/20 border-b border-theme-border/50 flex justify-between items-center">
+                        <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Stato Addebiti</h3>
+                        <button onClick={fetchAllAddebiti} className="text-xs text-theme-text-muted hover:text-dr7-gold">Aggiorna</button>
                     </div>
-                    <div className="divide-y divide-red-700/20">
-                        {recurringAddebiti.map((a) => (
-                            <div key={a.id} className="px-6 py-3 flex items-center justify-between">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-theme-text-primary font-semibold">{a.customer_name || a.customer_email}</span>
-                                        <span className="font-mono text-red-400 font-bold">{formatEUR(a.amount_cents)}</span>
-                                        <span className="text-xs text-theme-text-muted">ogni {a.interval_hours}h</span>
-                                        {a.charge_count > 0 && (
-                                            <span className="text-xs bg-yellow-900/30 text-yellow-300 px-2 py-0.5 rounded border border-yellow-700/50">
-                                                {a.charge_count} tentativi
+                    <div className="divide-y divide-white/5">
+                        {allAddebiti.map((a) => {
+                            const statusColors: Record<string, string> = {
+                                email_sent: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
+                                second_email_sent: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
+                                charged: 'bg-green-900/50 text-green-300 border-green-700/50',
+                                charge_failed: 'bg-red-900/50 text-red-300 border-red-700/50',
+                                error: 'bg-red-900/50 text-red-300 border-red-700/50',
+                                stopped: 'bg-theme-bg-tertiary/50 text-theme-text-secondary border-theme-border/50',
+                                no_contract_id: 'bg-red-900/50 text-red-300 border-red-700/50',
+                            }
+                            const statusLabels: Record<string, string> = {
+                                email_sent: '1a Email inviata',
+                                second_email_sent: '2a Email inviata — In attesa addebito',
+                                charged: 'Addebitato',
+                                charge_failed: 'Addebito fallito',
+                                error: 'Errore',
+                                stopped: 'Fermato',
+                                no_contract_id: 'No Contract ID',
+                            }
+                            return (
+                                <div key={a.id} className="px-6 py-3 flex items-center justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-theme-text-primary font-semibold text-sm">{a.customer_name || a.customer_email}</span>
+                                            <span className="font-mono text-dr7-gold font-bold text-sm">{formatEUR(a.amount_cents)}</span>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${statusColors[a.status] || 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'}`}>
+                                                {statusLabels[a.status] || a.status}
                                             </span>
-                                        )}
+                                            {a.recurring && !['charged', 'stopped'].includes(a.status) && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-900/30 text-orange-300 border border-orange-700/50">ricorrente</span>
+                                            )}
+                                            {a.charge_count > 0 && (
+                                                <span className="text-[10px] text-theme-text-muted">{a.charge_count} tentativi</span>
+                                            )}
+                                        </div>
+                                        <div className="text-xs text-theme-text-muted mt-0.5 truncate">
+                                            {a.causale}
+                                            {a.error_message && <span className="text-red-400 ml-2">— {a.error_message}</span>}
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-theme-text-muted mt-1">
-                                        {a.causale} — {a.contract_number}
-                                        {a.error_message && <span className="text-red-400 ml-2">({a.error_message})</span>}
-                                        {a.mit_charge_after && (
-                                            <span className="ml-2">Prossimo tentativo: {formatRomeDate(new Date(a.mit_charge_after), { dateStyle: 'short', timeStyle: 'short' })}</span>
-                                        )}
-                                    </div>
+                                    {a.recurring && !['charged', 'stopped'].includes(a.status) && (
+                                        <button
+                                            onClick={() => stopRecurring(a.id)}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-muted hover:bg-red-600/20 hover:text-red-400 border border-theme-border transition-colors flex-shrink-0"
+                                        >
+                                            Stop
+                                        </button>
+                                    )}
                                 </div>
-                                <button
-                                    onClick={() => stopRecurring(a.id)}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-muted hover:bg-red-600/20 hover:text-red-400 border border-theme-border transition-colors"
-                                >
-                                    Stop
-                                </button>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
             )}
@@ -547,61 +464,24 @@ export default function NexiTab() {
                             {addebitoRecurring ? (
                                 <><strong>Flusso ricorrente:</strong> Email formale → dopo 24h seconda email + addebito MIT → ripetuto ogni {addebitoIntervalHours}h fino a stop manuale.</>
                             ) : (
-                                <><strong>Flusso:</strong> Email formale inviata subito al cliente → dopo 24h seconda email con avviso addebito → dopo 2 minuti addebito MIT sulla carta.</>
+                                <><strong>Flusso:</strong> Email formale inviata subito → dopo 24h seconda email con foto danni + avviso → dopo 2 min addebito MIT (se rifiutato, ritenta con -10% ogni secondo).</>
                             )}
                         </div>
 
-                        {/* Direct charge live log */}
-                        {directChargeLogs.length > 0 && (
-                            <div className="bg-black/40 rounded-lg border border-theme-border p-3 max-h-48 overflow-y-auto font-mono text-xs space-y-1">
-                                {directChargeLogs.map((log, i) => (
-                                    <div key={i} className={`flex items-center gap-2 ${
-                                        log.status === 'success' ? 'text-green-400' :
-                                        log.status === 'trying' ? 'text-yellow-300' :
-                                        'text-red-400'
-                                    }`}>
-                                        <span>{log.status === 'trying' ? '...' : log.status === 'success' ? '>>>' : 'X'}</span>
-                                        <span>{log.message}</span>
-                                    </div>
-                                ))}
-                                <div ref={logsEndRef} />
-                            </div>
-                        )}
-
-                        <div className="flex gap-3 justify-end flex-wrap">
+                        <div className="flex gap-3 justify-end">
                             <button
-                                onClick={() => { stopRetryRef.current = true; setShowAddebitoModal(false) }}
-                                disabled={directCharging}
-                                className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                                onClick={() => setShowAddebitoModal(false)}
+                                className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors"
                             >
                                 Annulla
                             </button>
-                            {directCharging ? (
-                                <button
-                                    onClick={stopDirectCharge}
-                                    className="px-4 py-2 rounded-lg text-sm font-semibold bg-yellow-600 text-white hover:bg-yellow-700 transition-colors"
-                                >
-                                    Stop Tentativi
-                                </button>
-                            ) : (
-                                <>
-                                    <button
-                                        onClick={handleNuovoAddebito}
-                                        disabled={addebitoSending}
-                                        className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
-                                    >
-                                        {addebitoSending ? 'Invio...' : 'Email + Addebito 24h'}
-                                    </button>
-                                    {addebitoTx?.contract_id && (
-                                        <button
-                                            onClick={handleDirectCharge}
-                                            className="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-600 text-white hover:bg-orange-700 transition-colors"
-                                        >
-                                            Addebito Diretto (auto-retry -10%)
-                                        </button>
-                                    )}
-                                </>
-                            )}
+                            <button
+                                onClick={handleNuovoAddebito}
+                                disabled={addebitoSending}
+                                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+                            >
+                                {addebitoSending ? 'Invio...' : 'Invia Email e Programma Addebito'}
+                            </button>
                         </div>
                     </div>
                 </div>

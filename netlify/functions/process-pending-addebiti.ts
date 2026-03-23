@@ -130,65 +130,86 @@ Dubai Rent 7.0 S.p.A.`
 
         try {
             const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
-            const chargeRes = await fetch(`${baseUrl}/.netlify/functions/nexi-charge-mit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contractId: addebito.contract_id,
-                    amount: addebito.amount_cents / 100,
-                    description: `Addebito: ${addebito.causale} - Contratto ${addebito.contract_number}`,
-                    bookingId: addebito.booking_id || null,
-                    customerEmail: addebito.customer_email,
-                    customerName: addebito.customer_name,
-                }),
-            })
+            let currentAmountCents = addebito.amount_cents
+            const minAmountCents = 50 // €0.50 minimum
+            let charged = false
+            let lastError = ''
+            let attempts = 0
 
-            const chargeData = await chargeRes.json()
+            // Auto-retry with -10% each attempt, 1 second delay between
+            while (currentAmountCents >= minAmountCents) {
+                const amountEur = currentAmountCents / 100
+                attempts++
+                console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} for addebito ${addebito.id}`)
 
-            if (chargeRes.ok && chargeData.success) {
-                console.log(`[process-pending-addebiti] ✅ MIT charge successful for addebito ${addebito.id}`)
+                try {
+                    const chargeRes = await fetch(`${baseUrl}/.netlify/functions/nexi-charge-mit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contractId: addebito.contract_id,
+                            amount: amountEur,
+                            description: `Addebito: ${addebito.causale} - Contratto ${addebito.contract_number}`,
+                            bookingId: addebito.booking_id || null,
+                            customerEmail: addebito.customer_email,
+                            customerName: addebito.customer_name,
+                        }),
+                    })
 
-                // Charge succeeded — mark as done (recurring stops once money is taken)
-                await supabase.from('pending_addebiti').update({
-                    status: 'charged',
-                    charged_at: new Date().toISOString(),
-                    charge_count: (addebito.charge_count || 0) + 1,
-                }).eq('id', addebito.id)
-            } else {
-                console.error(`[process-pending-addebiti] ❌ MIT charge failed:`, chargeData.error)
+                    const chargeData = await chargeRes.json()
+
+                    if (chargeRes.ok && chargeData.success) {
+                        console.log(`[process-pending-addebiti] ✅ Charged €${amountEur.toFixed(2)} (attempt #${attempts}) for addebito ${addebito.id}`)
+                        await supabase.from('pending_addebiti').update({
+                            status: 'charged',
+                            charged_at: new Date().toISOString(),
+                            charge_count: (addebito.charge_count || 0) + attempts,
+                            charged_amount_cents: currentAmountCents,
+                            error_message: attempts > 1 ? `Addebitato €${amountEur.toFixed(2)} dopo ${attempts} tentativi (importo originale: €${(addebito.amount_cents / 100).toFixed(2)})` : null,
+                        }).eq('id', addebito.id)
+                        charged = true
+                        break
+                    } else {
+                        lastError = chargeData.error || 'DECLINED'
+                        console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} rifiutato: ${lastError}`)
+                    }
+                } catch (fetchErr: any) {
+                    lastError = fetchErr.message
+                    console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} errore: ${lastError}`)
+                }
+
+                // Reduce by 10% and wait 1 second
+                currentAmountCents = Math.round(currentAmountCents * 0.9)
+                if (currentAmountCents >= minAmountCents) {
+                    await new Promise(r => setTimeout(r, 1000))
+                }
+            }
+
+            if (!charged) {
+                console.error(`[process-pending-addebiti] All ${attempts} attempts failed for addebito ${addebito.id}`)
 
                 if (addebito.recurring && addebito.interval_hours) {
-                    // Recurring: retry after interval even on failure
                     const nextRetry = new Date(Date.now() + addebito.interval_hours * 60 * 60 * 1000).toISOString()
-                    console.log(`[process-pending-addebiti] Recurring — retry at ${nextRetry}`)
                     await supabase.from('pending_addebiti').update({
-                        status: 'second_email_sent', // keep in charge-ready state for retry
-                        error_message: chargeData.error || 'Addebito MIT fallito - ritenterà',
+                        status: 'second_email_sent',
+                        error_message: `${attempts} tentativi falliti (min €${(minAmountCents / 100).toFixed(2)}) — ${lastError}. Prossimo ciclo: ${nextRetry}`,
                         mit_charge_after: nextRetry,
+                        charge_count: (addebito.charge_count || 0) + attempts,
                     }).eq('id', addebito.id)
                 } else {
                     await supabase.from('pending_addebiti').update({
                         status: 'charge_failed',
-                        error_message: chargeData.error || 'Addebito MIT fallito',
+                        error_message: `${attempts} tentativi falliti (da €${(addebito.amount_cents / 100).toFixed(2)} a €${(minAmountCents / 100).toFixed(2)}) — ${lastError}`,
+                        charge_count: (addebito.charge_count || 0) + attempts,
                     }).eq('id', addebito.id)
                 }
             }
         } catch (err: any) {
             console.error(`[process-pending-addebiti] Error charging addebito ${addebito.id}:`, err.message)
-
-            if (addebito.recurring && addebito.interval_hours) {
-                const nextRetry = new Date(Date.now() + addebito.interval_hours * 60 * 60 * 1000).toISOString()
-                await supabase.from('pending_addebiti').update({
-                    status: 'second_email_sent',
-                    error_message: err.message + ' - ritenterà',
-                    mit_charge_after: nextRetry,
-                }).eq('id', addebito.id)
-            } else {
-                await supabase.from('pending_addebiti').update({
-                    status: 'charge_failed',
-                    error_message: err.message,
-                }).eq('id', addebito.id)
-            }
+            await supabase.from('pending_addebiti').update({
+                status: 'charge_failed',
+                error_message: err.message,
+            }).eq('id', addebito.id)
         }
     }
 
