@@ -70,6 +70,28 @@ export default function NexiTab() {
         setAllAddebiti(data || [])
     }
 
+    async function triggerSecondEmail(id: string) {
+        try {
+            toast.loading('Invio 2a email...', { id: 'trigger-email' })
+            const res = await fetch('/.netlify/functions/trigger-second-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ addebitoId: id }),
+            })
+            const data = await res.json()
+            toast.dismiss('trigger-email')
+            if (res.ok && data.success) {
+                toast.success(`${data.message} (PDF: ${data.pdfAttached ? 'allegato' : 'no foto'})`)
+                fetchAllAddebiti()
+            } else {
+                toast.error(data.error || 'Errore invio email')
+            }
+        } catch (err: any) {
+            toast.dismiss('trigger-email')
+            toast.error('Errore: ' + err.message)
+        }
+    }
+
     async function stopRecurring(id: string) {
         const { error } = await supabase
             .from('pending_addebiti')
@@ -281,14 +303,24 @@ export default function NexiTab() {
                                             {a.error_message && <span className="text-red-400 ml-2">— {a.error_message}</span>}
                                         </div>
                                     </div>
-                                    {a.recurring && !['charged', 'stopped'].includes(a.status) && (
-                                        <button
-                                            onClick={() => stopRecurring(a.id)}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-muted hover:bg-red-600/20 hover:text-red-400 border border-theme-border transition-colors flex-shrink-0"
-                                        >
-                                            Stop
-                                        </button>
-                                    )}
+                                    <div className="flex gap-1.5 flex-shrink-0">
+                                        {(a.status === 'email_sent' || a.status === 'second_email_sent' || a.status === 'error' || a.status === 'charge_failed') && (
+                                            <button
+                                                onClick={() => triggerSecondEmail(a.id)}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-700/50 transition-colors"
+                                            >
+                                                {a.status === 'email_sent' ? 'Invia 2a Email' : 'Rinvia Email'}
+                                            </button>
+                                        )}
+                                        {a.recurring && !['charged', 'stopped'].includes(a.status) && (
+                                            <button
+                                                onClick={() => stopRecurring(a.id)}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-muted hover:bg-red-600/20 hover:text-red-400 border border-theme-border transition-colors"
+                                            >
+                                                Stop
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )
                         })}
