@@ -216,7 +216,7 @@ Dubai Rent 7.0 S.p.A.`
             await supabase.from('pending_addebiti').update({
                 status: 'second_email_sent',
                 second_email_sent_at: new Date().toISOString(),
-                mit_charge_after: new Date(Date.now() + 1 * 60 * 1000).toISOString(), // TEST: 1 min (prod: 2 min)
+                mit_charge_after: new Date(Date.now() + 2 * 60 * 1000).toISOString(), // 2 min after second email
             }).eq('id', addebito.id)
 
         } catch (err: any) {
@@ -358,5 +358,5 @@ Dubai Rent 7.0 S.p.A.`
     return { statusCode: 200, body: JSON.stringify({ processed }) }
 }
 
-// TEST: Run every minute (prod: '0 * * * *' = every hour)
-export const handler = schedule('* * * * *', processHandler)
+// Run every hour
+export const handler = schedule('0 * * * *', processHandler)

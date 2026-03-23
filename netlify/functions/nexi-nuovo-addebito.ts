@@ -95,7 +95,7 @@ Dubai Rent 7.0 S.p.A.`
             causale: causale,
             status: 'email_sent',
             email_sent_at: new Date().toISOString(),
-            charge_after: new Date(Date.now() + 1 * 60 * 1000).toISOString(), // TEST: 1 min (prod: 24h)
+            charge_after: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24h after first email
             recurring: !!recurring,
             interval_hours: recurring ? (parseInt(intervalHours) || 24) : null,
             photo_urls: photoUrls && photoUrls.length > 0 ? photoUrls : null,

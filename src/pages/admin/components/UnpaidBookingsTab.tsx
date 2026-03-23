@@ -244,14 +244,18 @@ export default function UnpaidBookingsTab() {
       // Fetch charged amounts from pending_addebiti
       const { data: addebiti } = await supabase
         .from('pending_addebiti')
-        .select('customer_email, charged_amount_cents, status')
+        .select('customer_email, charged_amount_cents, amount_cents, status')
         .eq('status', 'charged')
 
       const mitMap: Record<string, number> = {}
       for (const a of (addebiti || [])) {
-        if (a.customer_email && a.charged_amount_cents) {
-          const key = a.customer_email.toLowerCase().trim()
-          mitMap[key] = (mitMap[key] || 0) + a.charged_amount_cents
+        if (a.customer_email) {
+          // Use charged_amount_cents if available, otherwise fall back to amount_cents (full charge)
+          const charged = a.charged_amount_cents || a.amount_cents || 0
+          if (charged > 0) {
+            const key = a.customer_email.toLowerCase().trim()
+            mitMap[key] = (mitMap[key] || 0) + charged
+          }
         }
       }
       setMitChargedMap(mitMap)
