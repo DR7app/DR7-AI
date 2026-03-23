@@ -292,19 +292,19 @@ export default function GestioneDanniTab() {
           customerEmail: customer.customerEmail,
           customerName: customer.customerName,
           description: `Danni — ${customer.customerName}`,
-          expirationDays: 7,
+          expirationHours: 1,
         }),
       })
       const data = await res.json()
       if (res.ok && data.paymentUrl) {
-        // Copy to clipboard
-        await navigator.clipboard.writeText(data.paymentUrl)
-        toast.success(`Link copiato! €${totalEur.toFixed(2)} — invia al cliente`)
+        // Try clipboard, but don't fail if blocked
+        try { await navigator.clipboard.writeText(data.paymentUrl) } catch {}
+        toast.success(`Pay by Link creato! €${totalEur.toFixed(2)}\n${data.paymentUrl}`, { duration: 8000 })
       } else {
         toast.error(data.error || 'Errore creazione link')
       }
     } catch (err: any) {
-      toast.error('Errore: ' + err.message)
+      toast.error('Errore Pay by Link: ' + err.message)
     } finally {
       setPayByLinkLoading(null)
     }
