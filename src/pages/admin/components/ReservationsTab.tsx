@@ -3389,8 +3389,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: customerInfo?.full_name })
       }
 
-      // Generate Nexi Pay by Link if payment method is Nexi
-      if (!editingId && formData.payment_method === 'Nexi Pay by Link' && insertedBooking) {
+      // Generate Nexi Pay by Link if payment method is Nexi AND not already paid
+      if (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid' && insertedBooking) {
         try {
           const totalEur = parseFloat(formData.total_amount || '0')
             + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
@@ -3582,9 +3582,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         console.log('✅ WhatsApp admin notification sent')
 
-        // Send customer confirmation message (skip for Nexi Pay by Link — link message is sent separately)
+        // Send customer confirmation message (skip for unpaid Nexi Pay by Link — link message is sent separately)
         const custPhone = customerInfo?.phone
-        if (custPhone && formData.payment_method !== 'Nexi Pay by Link') {
+        if (custPhone && !(formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')) {
           const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
           const pickupDt = new Date(pickupDateTime)
           const dropoffDt = new Date(returnDateTime)
