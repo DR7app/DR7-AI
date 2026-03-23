@@ -31,7 +31,8 @@ const handler: Handler = async (event) => {
             customerEmail,
             customerName,
             description,
-            expirationDays = 7 // Link valid for 7 days by default
+            expirationDays = 7, // Link valid for 7 days by default
+            expirationHours, // Optional: override with hours (e.g. 1 = 1 hour)
         } = JSON.parse(event.body || '{}');
 
         if (!NEXI_API_KEY) {
@@ -60,12 +61,15 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Calculate expiration date (minimum 2 days from now to avoid date boundary issues)
+        // Calculate expiration: use hours if specified, otherwise days
         const expirationDate = new Date();
-        expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 2));
-        // Nexi wants YYYY-MM-DD format
+        if (expirationHours) {
+            expirationDate.setTime(expirationDate.getTime() + expirationHours * 60 * 60 * 1000);
+        } else {
+            expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 1));
+        }
         const expirationDateStr = expirationDate.toISOString().split('T')[0];
-        console.log('[nexi-pay-by-link] Expiration date:', expirationDateStr);
+        console.log('[nexi-pay-by-link] Expiration:', expirationDate.toISOString());
 
         // Create payment link request (using /v2/orders/paybylink endpoint)
         const payload = {

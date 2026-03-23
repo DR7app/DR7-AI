@@ -267,10 +267,10 @@ export default function UnpaidBookingsTab() {
         if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link' || ext.payment_status === 'nexi_pay_by_link')) return true
 
         const penalties = booking.booking_details?.penalties || []
-        if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')) return true
+        if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link')) return true
 
         const danni = booking.booking_details?.danni || []
-        if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')) return true
+        if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link')) return true
 
         if (bookingIdsWithFatturaItems.has(booking.id)) return true
 
@@ -1165,7 +1165,7 @@ export default function UnpaidBookingsTab() {
 
     const penalties = booking.booking_details?.penalties || []
     penalties.forEach((p: any) => {
-      if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') {
+      if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link') {
         const total = p.total || (p.amount || 0) * (p.quantity || 1)
         const paid = p.amountPaid || 0
         remaining += Math.round((total - paid) * 100)
@@ -1174,7 +1174,7 @@ export default function UnpaidBookingsTab() {
 
     const danni = booking.booking_details?.danni || []
     danni.forEach((d: any) => {
-      if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial') {
+      if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link') {
         const total = d.total || (d.amount || 0) * (d.quantity || 1)
         const paid = d.amountPaid || 0
         remaining += Math.round((total - paid) * 100)
@@ -1200,7 +1200,7 @@ export default function UnpaidBookingsTab() {
     const arr = booking.booking_details?.[arrayKey] || []
     return arr
       .map((item: any, realIdx: number) => ({ item, realIdx }))
-      .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+      .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial' || item.paymentStatus === 'nexi_pay_by_link')
   }
 
   // ── Build Customer Groups ──────────────────────────────────────────────────
