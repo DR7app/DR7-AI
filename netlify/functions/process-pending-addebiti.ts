@@ -1,21 +1,11 @@
 import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 import crypto from 'crypto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-    },
-})
 
 const NEXI_API_KEY = process.env.NEXI_API_KEY!
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1'
@@ -146,36 +136,27 @@ La presente costituisce comunicazione formale dell'addebito in corso.
 Cordiali saluti,
 Dubai Rent 7.0 S.p.A.`
 
-            // Build attachments from photo_urls if present
-            const attachments: { filename: string; path: string }[] = []
-            if (addebito.photo_urls && Array.isArray(addebito.photo_urls)) {
-                for (let i = 0; i < addebito.photo_urls.length; i++) {
-                    attachments.push({
-                        filename: `danno_${i + 1}.jpg`,
-                        path: addebito.photo_urls[i],
-                    })
-                }
-            }
-
-            let emailHtml = ''
-            if (attachments.length > 0) {
-                emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
+            // Build HTML with inline photos
+            let emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
+            const hasPhotos = addebito.photo_urls && Array.isArray(addebito.photo_urls) && addebito.photo_urls.length > 0
+            if (hasPhotos) {
                 emailHtml += `<br/><p style="font-family: Arial, sans-serif;"><strong>Documentazione fotografica danni allegata:</strong></p>`
                 for (let i = 0; i < addebito.photo_urls.length; i++) {
                     emailHtml += `<p><img src="${addebito.photo_urls[i]}" alt="Danno ${i + 1}" style="max-width: 600px; border: 1px solid #ccc; margin: 8px 0;" /></p>`
                 }
             }
 
-            await transporter.sendMail({
-                from: `"DR7 Empire" <${process.env.SMTP_USER || 'info@dr7.app'}>`,
+            const resend = new Resend(process.env.RESEND_API_KEY)
+            const { error: emailError } = await resend.emails.send({
+                from: 'DR7 Empire <info@dr7.app>',
                 to: addebito.customer_email,
                 subject: `Comunicazione formale addebito in corso - Contratto ${addebito.contract_number}`,
-                text: emailBody,
-                ...(emailHtml ? { html: emailHtml } : {}),
-                attachments,
+                html: emailHtml,
             })
 
-            console.log(`[process-pending-addebiti] Second email sent to ${addebito.customer_email} (${attachments.length} photos attached)`)
+            if (emailError) throw new Error(emailError.message)
+
+            console.log(`[process-pending-addebiti] Second email sent to ${addebito.customer_email} (${hasPhotos ? addebito.photo_urls.length + ' photos' : 'no photos'})`)
 
             // Update status and schedule MIT charge for 2 min later
             await supabase.from('pending_addebiti').update({
