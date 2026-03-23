@@ -11,6 +11,7 @@ interface DanniModalProps {
         customer_id?: string
         user_id?: string
         customer_email?: string
+        customer_phone?: string
     }
     onClose: () => void
     onSuccess: () => void
@@ -29,7 +30,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     const [customAmount, setCustomAmount] = useState('')
     const [customLabel, setCustomLabel] = useState('')
     const [note, setNote] = useState('')
-    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending')
+    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
     const [amountPaid, setAmountPaid] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
@@ -206,6 +207,48 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
                 toast.success(`Fattura danni generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
                 logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+            } else if (paymentStatus === 'nexi_pay_by_link') {
+                // NEXI PAY BY LINK: generate link + send WhatsApp
+                try {
+                    const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bookingId: booking.id,
+                            amount: cartTotal,
+                            customerEmail: booking.customer_email || '',
+                            customerName: booking.customer_name || 'Cliente',
+                            description: `Danni — ${booking.customer_name}`,
+                            expirationDays: 7,
+                        }),
+                    })
+                    const linkData = await linkRes.json()
+
+                    if (linkRes.ok && linkData.paymentUrl) {
+                        // Send WhatsApp to customer
+                        const custPhone = booking.customer_phone
+                        if (custPhone) {
+                            await fetch('/.netlify/functions/send-whatsapp-notification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    customPhone: custPhone,
+                                    customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${booking.customer_name},\n\nIn riferimento al contratto di noleggio, sono stati rilevati danni per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 7 giorni.\n\nGrazie per la collaborazione.\n\nDR7`
+                                })
+                            })
+                        }
+
+                        // Copy link to clipboard
+                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+
+                        toast.success(`Pay by Link inviato al cliente! €${cartTotal.toFixed(2)}`)
+                    } else {
+                        toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
+                    }
+                } catch (linkErr: any) {
+                    toast.error('Errore Pay by Link: ' + linkErr.message)
+                }
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
             } else {
                 // DA SALDARE: already saved above, just show toast
                 toast.success(`Danno registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
@@ -223,7 +266,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
     const handleClose = () => {
         if (isGenerating) return
-        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setAmountPaid(''); setError(''); setPhotos([]); setPhotoPreviewUrls([]); onClose()
+        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setAmountPaid(''); setError(''); setPhotos([]); setPhotoPreviewUrls([]);  onClose()
     }
 
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
@@ -459,11 +502,12 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select
                             value={paymentStatus}
-                            onChange={e => { setPaymentStatus(e.target.value as 'paid' | 'pending'); if (e.target.value === 'pending') setAmountPaid('') }}
+                            onChange={e => { setPaymentStatus(e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link'); if (e.target.value !== 'paid') setAmountPaid('') }}
                             disabled={isGenerating}
                             className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
                         >
                             <option value="pending" className="bg-theme-bg-secondary text-theme-text-primary">Da Saldare</option>
+                            <option value="nexi_pay_by_link" className="bg-theme-bg-secondary text-theme-text-primary">Nexi Pay by Link</option>
                             <option value="paid" className="bg-theme-bg-secondary text-theme-text-primary">Pagato</option>
                         </select>
                     </div>
