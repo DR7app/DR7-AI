@@ -105,6 +105,20 @@ export default function NexiTab() {
         }
     }
 
+    async function cancelAddebito(id: string) {
+        if (!confirm('Annullare questo addebito?')) return
+        const { error } = await supabase
+            .from('pending_addebiti')
+            .update({ status: 'stopped', recurring: false })
+            .eq('id', id)
+        if (error) {
+            toast.error('Errore: ' + error.message)
+        } else {
+            toast.success('Addebito annullato')
+            fetchAllAddebiti()
+        }
+    }
+
     async function fetchTransactions() {
         try {
             setLoading(true)
@@ -300,6 +314,7 @@ export default function NexiTab() {
                                         </div>
                                         <div className="text-xs text-theme-text-muted mt-0.5 truncate">
                                             {a.causale}
+                                            {a.contract_id && <span className="text-theme-text-muted ml-2 font-mono">Card: ...{a.contract_id.slice(-4)}</span>}
                                             {a.error_message && <span className="text-red-400 ml-2">— {a.error_message}</span>}
                                         </div>
                                     </div>
@@ -318,6 +333,14 @@ export default function NexiTab() {
                                                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-muted hover:bg-red-600/20 hover:text-red-400 border border-theme-border transition-colors"
                                             >
                                                 Stop
+                                            </button>
+                                        )}
+                                        {!['charged', 'stopped'].includes(a.status) && !a.recurring && (
+                                            <button
+                                                onClick={() => cancelAddebito(a.id)}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors"
+                                            >
+                                                Annulla
                                             </button>
                                         )}
                                     </div>
