@@ -18,6 +18,7 @@ interface PendingAddebito {
     charge_count: number
     error_message: string | null
     mit_charge_after: string | null
+    contract_id: string | null
     created_at: string
 }
 
@@ -89,19 +90,6 @@ export default function NexiTab() {
         } catch (err: any) {
             toast.dismiss('trigger-email')
             toast.error('Errore: ' + err.message)
-        }
-    }
-
-    async function stopRecurring(id: string) {
-        const { error } = await supabase
-            .from('pending_addebiti')
-            .update({ status: 'stopped', recurring: false })
-            .eq('id', id)
-        if (error) {
-            toast.error('Errore: ' + error.message)
-        } else {
-            toast.success('Addebito ricorrente fermato')
-            fetchAllAddebiti()
         }
     }
 
