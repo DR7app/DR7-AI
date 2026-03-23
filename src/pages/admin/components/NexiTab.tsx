@@ -95,15 +95,22 @@ export default function NexiTab() {
 
     async function cancelAddebito(id: string) {
         if (!confirm('Annullare questo addebito?')) return
-        const { error } = await supabase
-            .from('pending_addebiti')
-            .update({ status: 'stopped', recurring: false })
-            .eq('id', id)
-        if (error) {
-            toast.error('Errore: ' + error.message)
-        } else {
-            toast.success('Addebito annullato')
-            fetchAllAddebiti()
+        try {
+            // Use server-side function to bypass RLS
+            const res = await fetch('/.netlify/functions/stop-addebito', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ addebitoId: id })
+            })
+            const data = await res.json()
+            if (res.ok && data.success) {
+                toast.success('Addebito annullato')
+                fetchAllAddebiti()
+            } else {
+                toast.error('Errore: ' + (data.error || 'Errore sconosciuto'))
+            }
+        } catch (err: any) {
+            toast.error('Errore: ' + err.message)
         }
     }
 
