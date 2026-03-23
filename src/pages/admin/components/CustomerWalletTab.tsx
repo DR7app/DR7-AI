@@ -141,10 +141,12 @@ export default function CustomerWalletTab() {
             : c
         ))
       } else {
-        toast.error(data.error || 'Errore')
+        console.error('Wallet error:', data)
+        toast.error(data.error || 'Errore sconosciuto')
       }
-    } catch {
-      toast.error('Errore di connessione')
+    } catch (err: any) {
+      console.error('Wallet connection error:', err)
+      toast.error('Errore di connessione: ' + (err.message || ''))
     }
     setActionLoading(false)
   }
