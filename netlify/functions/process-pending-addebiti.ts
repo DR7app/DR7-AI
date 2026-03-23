@@ -283,7 +283,7 @@ Dubai Rent 7.0 S.p.A.`
 
                         // If partial charge, create new addebito for the remaining amount (skip emails, go straight to charge)
                         if (remainingCents >= 50) {
-                            const nextChargeAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // retry in 24h
+                            const nextChargeAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // retry in 30 days
                             await supabase.from('pending_addebiti').insert({
                                 transaction_id: null,
                                 booking_id: addebito.booking_id,
@@ -299,7 +299,7 @@ Dubai Rent 7.0 S.p.A.`
                                 charge_after: addebito.charge_after,
                                 mit_charge_after: nextChargeAt,
                                 recurring: true,
-                                interval_hours: 24,
+                                interval_hours: 720, // 30 days
                                 photo_urls: addebito.photo_urls,
                                 charge_count: 0,
                             })
