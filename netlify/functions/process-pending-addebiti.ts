@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { PDFDocument } from 'pdf-lib'
 import crypto from 'crypto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -136,13 +137,63 @@ La presente costituisce comunicazione formale dell'addebito in corso.
 Cordiali saluti,
 Dubai Rent 7.0 S.p.A.`
 
-            // Build HTML with inline photos
-            let emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
+            const emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
             const hasPhotos = addebito.photo_urls && Array.isArray(addebito.photo_urls) && addebito.photo_urls.length > 0
+
+            // Build PDF with danni photos if any
+            const attachments: { filename: string; content: Buffer }[] = []
             if (hasPhotos) {
-                emailHtml += `<br/><p style="font-family: Arial, sans-serif;"><strong>Documentazione fotografica danni allegata:</strong></p>`
-                for (let i = 0; i < addebito.photo_urls.length; i++) {
-                    emailHtml += `<p><img src="${addebito.photo_urls[i]}" alt="Danno ${i + 1}" style="max-width: 600px; border: 1px solid #ccc; margin: 8px 0;" /></p>`
+                try {
+                    const pdfDoc = await PDFDocument.create()
+                    for (let i = 0; i < addebito.photo_urls.length; i++) {
+                        const url = addebito.photo_urls[i]
+                        try {
+                            const imgRes = await fetch(url)
+                            const imgBytes = new Uint8Array(await imgRes.arrayBuffer())
+                            const contentType = imgRes.headers.get('content-type') || ''
+
+                            let image
+                            if (contentType.includes('png')) {
+                                image = await pdfDoc.embedPng(imgBytes)
+                            } else {
+                                image = await pdfDoc.embedJpg(imgBytes)
+                            }
+
+                            // Fit image to A4 page with margins
+                            const pageWidth = 595
+                            const pageHeight = 842
+                            const margin = 40
+                            const maxW = pageWidth - margin * 2
+                            const maxH = pageHeight - margin * 2 - 30 // space for caption
+                            const scale = Math.min(maxW / image.width, maxH / image.height, 1)
+                            const w = image.width * scale
+                            const h = image.height * scale
+
+                            const page = pdfDoc.addPage([pageWidth, pageHeight])
+                            page.drawText(`Danno ${i + 1} di ${addebito.photo_urls.length} — Contratto ${addebito.contract_number}`, {
+                                x: margin, y: pageHeight - margin, size: 10,
+                            })
+                            page.drawImage(image, {
+                                x: (pageWidth - w) / 2,
+                                y: (pageHeight - h) / 2 - 10,
+                                width: w,
+                                height: h,
+                            })
+                        } catch (imgErr: any) {
+                            console.warn(`[process-pending-addebiti] Failed to embed photo ${i + 1}: ${imgErr.message}`)
+                            const page = pdfDoc.addPage([595, 842])
+                            page.drawText(`Foto ${i + 1}: errore nel caricamento`, { x: 40, y: 400, size: 12 })
+                        }
+                    }
+
+                    const pdfBytes = await pdfDoc.save()
+                    attachments.push({
+                        filename: `Documentazione_Danni_${addebito.contract_number}.pdf`,
+                        content: Buffer.from(pdfBytes),
+                    })
+                    console.log(`[process-pending-addebiti] PDF created with ${addebito.photo_urls.length} photos`)
+                } catch (pdfErr: any) {
+                    console.error(`[process-pending-addebiti] PDF creation failed: ${pdfErr.message}`)
                 }
             }
 
@@ -151,12 +202,15 @@ Dubai Rent 7.0 S.p.A.`
                 from: 'DR7 Empire <info@dr7.app>',
                 to: addebito.customer_email,
                 subject: `Comunicazione formale addebito in corso - Contratto ${addebito.contract_number}`,
-                html: emailHtml,
+                html: hasPhotos
+                    ? emailHtml + `<br/><p style="font-family: Arial, sans-serif;"><strong>Documentazione fotografica danni in allegato PDF.</strong></p>`
+                    : emailHtml,
+                attachments: attachments.length > 0 ? attachments : undefined,
             })
 
             if (emailError) throw new Error(emailError.message)
 
-            console.log(`[process-pending-addebiti] Second email sent to ${addebito.customer_email} (${hasPhotos ? addebito.photo_urls.length + ' photos' : 'no photos'})`)
+            console.log(`[process-pending-addebiti] Second email sent to ${addebito.customer_email} (${hasPhotos ? addebito.photo_urls.length + ' photos as PDF' : 'no photos'})`)
 
             // Update status and schedule MIT charge for 2 min later
             await supabase.from('pending_addebiti').update({
