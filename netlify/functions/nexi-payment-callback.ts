@@ -293,10 +293,10 @@ const handler: Handler = async (event) => {
                 const paidCents = transaction.amount_cents;
 
                 if (isPrepagata && contractId && paidCents > 0) {
-                    // PREPAGATA: charge 10% surcharge via MIT
-                    const surchargeCents = Math.round(paidCents * 0.10);
+                    // PREPAGATA: charge 20% surcharge via MIT
+                    const surchargeCents = Math.round(paidCents * 0.20);
                     const surchargeEur = (surchargeCents / 100).toFixed(2);
-                    console.log(`[nexi-payment-callback] Prepagata surcharge: €${surchargeEur} (10% of €${amountEur})`);
+                    console.log(`[nexi-payment-callback] Prepagata surcharge: €${surchargeEur} (20% of €${amountEur})`);
 
                     try {
                         const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
@@ -306,7 +306,7 @@ const handler: Handler = async (event) => {
                             body: JSON.stringify({
                                 contractId: contractId,
                                 amount: surchargeCents / 100,
-                                description: `Supplemento carta prepagata 10% - Prenotazione #${booking.id.substring(0, 8).toUpperCase()}`,
+                                description: `Supplemento carta prepagata 20% - Prenotazione #${booking.id.substring(0, 8).toUpperCase()}`,
                                 bookingId: booking.id,
                                 customerEmail: booking.customer_email || '',
                                 customerName: booking.customer_name || ''
@@ -323,11 +323,11 @@ const handler: Handler = async (event) => {
                     }
 
                 } else if ((isCredito || isDebito) && custId && paidCents > 0) {
-                    // CREDITO: 10% wallet credit, DEBITO: 5% wallet credit
-                    const percentage = isCredito ? 0.10 : 0.05;
+                    // CREDITO: 6% wallet credit, DEBITO: 3% wallet credit
+                    const percentage = isCredito ? 0.06 : 0.03;
                     const bonusCents = Math.round(paidCents * percentage);
                     const bonusEur = (bonusCents / 100).toFixed(2);
-                    const percentLabel = isCredito ? '10%' : '5%';
+                    const percentLabel = isCredito ? '6%' : '3%';
                     const cardLabel = isCredito ? 'carta di credito' : 'carta di debito';
 
                     console.log(`[nexi-payment-callback] ${cardLabel} bonus: €${bonusEur} (${percentLabel} of €${amountEur})`);
