@@ -74,12 +74,36 @@ Dubai Rent 7.0 S.p.A.`
 
         const emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
 
-        // Collect photo URLs
-        const photoUrls: string[] = (addebito.photo_urls && Array.isArray(addebito.photo_urls))
+        // Collect photo URLs — first from pending_addebiti, then fallback to booking_details.danni
+        let photoUrls: string[] = (addebito.photo_urls && Array.isArray(addebito.photo_urls))
             ? addebito.photo_urls.filter((u: any) => typeof u === 'string' && u.length > 0)
             : []
 
-        console.log(`[trigger-second-email] Addebito ${addebitoId}: ${photoUrls.length} photo URLs`)
+        // If no photos in addebito record, look them up from booking_details.danni
+        if (photoUrls.length === 0 && addebito.booking_id) {
+            console.log(`[trigger-second-email] No photo_urls in addebito, checking booking ${addebito.booking_id}`)
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('booking_details')
+                .eq('id', addebito.booking_id)
+                .single()
+
+            if (booking?.booking_details?.danni && Array.isArray(booking.booking_details.danni)) {
+                for (const d of booking.booking_details.danni) {
+                    if (d.photos && Array.isArray(d.photos)) {
+                        photoUrls.push(...d.photos.filter((u: any) => typeof u === 'string' && u.length > 0))
+                    }
+                }
+            }
+
+            // Also save them to the addebito record for future use
+            if (photoUrls.length > 0) {
+                await supabase.from('pending_addebiti').update({ photo_urls: photoUrls }).eq('id', addebitoId)
+                console.log(`[trigger-second-email] Found ${photoUrls.length} photos from booking_details, saved to addebito`)
+            }
+        }
+
+        console.log(`[trigger-second-email] Addebito ${addebitoId}: ${photoUrls.length} photo URLs total`)
 
         // Build PDF with danni photos
         const attachments: { filename: string; content: string }[] = []
