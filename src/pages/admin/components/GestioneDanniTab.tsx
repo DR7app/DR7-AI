@@ -44,6 +44,7 @@ interface PenaltyDannoItem {
   fatturaNumero?: string
   arrayKey: 'penalties' | 'danni'
   arrayIndex: number // index in the booking_details array (for pending items)
+  photos?: string[] // danni photo URLs
 }
 
 interface CustomerGroup {
@@ -82,6 +83,9 @@ export default function GestioneDanniTab() {
   const [newLabel, setNewLabel] = useState('')
   const [newAmount, setNewAmount] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Photo viewer modal
+  const [photoModal, setPhotoModal] = useState<{ customerName: string; photos: string[] } | null>(null)
 
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => { loadData() }, [])
@@ -159,6 +163,7 @@ export default function GestioneDanniTab() {
               status: 'pending',
               arrayKey,
               arrayIndex: idx,
+              photos: arrayKey === 'danni' && entry.photos ? entry.photos : undefined,
             }
             if (arrayKey === 'penalties') {
               g.penaliItems.push(item)
@@ -262,6 +267,21 @@ export default function GestioneDanniTab() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Open photo viewer for a customer ──────────────────────────────────────
+  function openPhotos(customer: CustomerGroup) {
+    const allPhotos: string[] = []
+    for (const item of customer.danniItems) {
+      if (item.photos && item.photos.length > 0) {
+        allPhotos.push(...item.photos)
+      }
+    }
+    if (allPhotos.length === 0) {
+      toast.error('Nessuna foto danni trovata per questo cliente')
+      return
+    }
+    setPhotoModal({ customerName: customer.customerName, photos: allPhotos })
   }
 
   // ── Filtered list ──────────────────────────────────────────────────────────
@@ -705,7 +725,7 @@ export default function GestioneDanniTab() {
                         <span className="text-xs text-theme-text-muted ml-1">({c.danniItems.length})</span>
                       </td>
                       <td className="text-center px-2 py-3">
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
                           <button
                             onClick={() => { setEditModal({ customer: c, type: 'danni' }); setNewLabel(''); setNewAmount('') }}
                             className="px-3 py-1 text-xs bg-red-500/15 text-red-400 hover:bg-red-500/25 rounded-full transition-colors"
@@ -719,6 +739,14 @@ export default function GestioneDanniTab() {
                           >
                             Elimina
                           </button>
+                          {c.danniItems.some(d => d.photos && d.photos.length > 0) && (
+                            <button
+                              onClick={() => openPhotos(c)}
+                              className="px-3 py-1 text-xs bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 rounded-full transition-colors"
+                            >
+                              Documenti Integrativi
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -758,7 +786,7 @@ export default function GestioneDanniTab() {
                     <div className="text-center">
                       <p className="text-lg font-bold text-red-400">{formatCurrency(c.danniTotal)}</p>
                       <p className="text-xs text-theme-text-muted mb-2">Danni ({c.danniItems.length})</p>
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
                         <button
                           onClick={() => { setEditModal({ customer: c, type: 'danni' }); setNewLabel(''); setNewAmount('') }}
                           className="px-3 py-1 text-xs bg-red-500/15 text-red-400 hover:bg-red-500/25 rounded-full transition-colors"
@@ -772,6 +800,14 @@ export default function GestioneDanniTab() {
                         >
                           Elimina
                         </button>
+                        {c.danniItems.some(d => d.photos && d.photos.length > 0) && (
+                          <button
+                            onClick={() => openPhotos(c)}
+                            className="px-3 py-1 text-xs bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 rounded-full transition-colors mt-1"
+                          >
+                            Documenti
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -900,6 +936,48 @@ export default function GestioneDanniTab() {
                 <span className={`text-2xl font-bold tracking-tight tabular-nums ${editModal.type === 'penali' ? 'text-orange-400' : 'text-red-400'}`}>
                   {formatCurrency(editModal.type === 'penali' ? editModal.customer.penaliTotal : editModal.customer.danniTotal)}
                 </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Photo Viewer Modal (Documenti Integrativi) ───────────────────── */}
+      {photoModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setPhotoModal(null)}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative w-full sm:max-w-2xl max-h-[92vh] flex flex-col bg-theme-bg-secondary/95 backdrop-blur-xl rounded-t-3xl sm:rounded-3xl shadow-2xl border border-white/10 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sm:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+            <div className="px-6 pt-4 sm:pt-6 pb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-theme-text-primary tracking-tight">Documenti Integrativi</h2>
+                <p className="text-[13px] text-theme-text-muted mt-0.5">{photoModal.customerName} — {photoModal.photos.length} foto</p>
+              </div>
+              <button
+                onClick={() => setPhotoModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {photoModal.photos.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                    <img
+                      src={url}
+                      alt={`Danno ${i + 1}`}
+                      className="w-full h-40 object-cover rounded-xl border border-white/10 hover:border-blue-400/50 transition-all cursor-pointer"
+                    />
+                  </a>
+                ))}
               </div>
             </div>
           </div>

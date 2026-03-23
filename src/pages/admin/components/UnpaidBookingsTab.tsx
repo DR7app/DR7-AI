@@ -96,7 +96,6 @@ export default function UnpaidBookingsTab() {
   const [showAddebitoModal, setShowAddebitoModal] = useState(false)
   const [addebitoGroup, setAddebitoGroup] = useState<CustomerGroup | null>(null)
   const [addebitoContractId, setAddebitoContractId] = useState<string | null>(null)
-  const [addebitoCausale, setAddebitoCausale] = useState('')
   const [addebitoDanniPhotos, setAddebitoDanniPhotos] = useState<string[]>([])
   const [addebitoSending, setAddebitoSending] = useState(false)
 
@@ -118,7 +117,6 @@ export default function UnpaidBookingsTab() {
 
   async function openAddebitoNexi(group: CustomerGroup) {
     setAddebitoGroup(group)
-    setAddebitoCausale('')
     setAddebitoSending(false)
     setAddebitoContractId(null)
     setAddebitoDanniPhotos([])
@@ -157,11 +155,6 @@ export default function UnpaidBookingsTab() {
     if (!addebitoGroup) return
     const amount = addebitoGroup.totalRemaining / 100
     if (amount <= 0) return
-    if (!addebitoCausale.trim()) {
-      toast.error('Inserisci la causale')
-      return
-    }
-
     setAddebitoSending(true)
     try {
       const res = await fetch('/.netlify/functions/nexi-nuovo-addebito', {
@@ -174,7 +167,7 @@ export default function UnpaidBookingsTab() {
           customerEmail: addebitoGroup.customerEmail,
           contractNumber: addebitoGroup.noleggioBookings[0]?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
           amount: amount.toFixed(2),
-          causale: addebitoCausale,
+          causale: `Saldo dovuto - ${addebitoGroup.customerName}`,
           contractId: addebitoContractId || null,
           recurring: false,
           intervalHours: null,
@@ -2118,17 +2111,6 @@ export default function UnpaidBookingsTab() {
               <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
               <p><strong>Importo:</strong> <span className="text-red-400 font-bold">€{(addebitoGroup.totalRemaining / 100).toFixed(2)}</span></p>
               <p><strong>Contract ID:</strong> {addebitoContractId ? <span className="font-mono text-xs text-green-400">{addebitoContractId}</span> : <span className="text-red-400">Non trovato</span>}</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Causale *</label>
-              <input
-                type="text"
-                value={addebitoCausale}
-                onChange={(e) => setAddebitoCausale(e.target.value)}
-                placeholder="es. Saldo noleggio / Estensione / Danni..."
-                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
-              />
             </div>
 
             {/* Danni photos from booking */}

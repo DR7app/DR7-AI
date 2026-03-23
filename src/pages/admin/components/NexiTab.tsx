@@ -46,7 +46,6 @@ export default function NexiTab() {
     const [showAddebitoModal, setShowAddebitoModal] = useState(false)
     const [addebitoTx, setAddebitoTx] = useState<NexiTransaction | null>(null)
     const [addebitoAmount, setAddebitoAmount] = useState('')
-    const [addebitoCausale, setAddebitoCausale] = useState('')
     const [addebitoSending, setAddebitoSending] = useState(false)
     const [addebitoRecurring, setAddebitoRecurring] = useState(false)
     const [addebitoIntervalHours, setAddebitoIntervalHours] = useState('24')
@@ -118,7 +117,6 @@ export default function NexiTab() {
     function openAddebitoModal(tx: NexiTransaction) {
         setAddebitoTx(tx)
         setAddebitoAmount('')
-        setAddebitoCausale('')
         setAddebitoRecurring(false)
         setAddebitoIntervalHours('24')
         setAddebitoPhotos([])
@@ -159,10 +157,6 @@ export default function NexiTab() {
             toast.error('Inserisci un importo valido')
             return
         }
-        if (!addebitoCausale.trim()) {
-            toast.error('Inserisci la causale')
-            return
-        }
         if (!addebitoTx.customer_email) {
             toast.error('Email cliente mancante')
             return
@@ -187,7 +181,7 @@ export default function NexiTab() {
                     customerEmail: addebitoTx.customer_email,
                     contractNumber: addebitoTx.booking_id?.substring(0, 8)?.toUpperCase() || addebitoTx.order_id,
                     amount: addebitoAmount,
-                    causale: addebitoCausale,
+                    causale: `Addebito - ${addebitoTx.booking?.customer_name || addebitoTx.customer_email}`,
                     contractId: addebitoTx.contract_id || null,
                     recurring: addebitoRecurring,
                     intervalHours: addebitoRecurring ? parseInt(addebitoIntervalHours) : null,
@@ -388,17 +382,6 @@ export default function NexiTab() {
                                 value={addebitoAmount}
                                 onChange={(e) => setAddebitoAmount(e.target.value)}
                                 placeholder="es. 150.00"
-                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Causale *</label>
-                            <textarea
-                                value={addebitoCausale}
-                                onChange={(e) => setAddebitoCausale(e.target.value)}
-                                rows={3}
-                                placeholder="es. Danni al veicolo / Penale contrattuale / Estensione noleggio..."
                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
                             />
                         </div>

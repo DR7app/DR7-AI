@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
+import crypto from 'crypto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -18,6 +19,87 @@ const transporter = nodemailer.createTransport({
 
 const NEXI_API_KEY = process.env.NEXI_API_KEY!
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1'
+
+// Direct MIT charge via Nexi API (avoids HTTP roundtrip to nexi-charge-mit function)
+async function chargeMit(params: {
+    contractId: string
+    amount: number
+    description: string
+    bookingId?: string | null
+    customerEmail?: string
+    customerName?: string
+}): Promise<{ success: boolean; error?: string; orderId?: string; operationResult?: string }> {
+    const orderId = `MIT-${Date.now()}-${Math.floor(Math.random() * 10000)}`.slice(0, 18)
+    const amountCents = Math.round(params.amount * 100)
+    const correlationId = crypto.randomUUID()
+    const idempotencyKey = crypto.randomUUID()
+
+    const payload: any = {
+        order: {
+            orderId,
+            amount: amountCents.toString(),
+            currency: 'EUR',
+            description: params.description || 'Addebito DR7 Empire',
+        },
+        contractId: params.contractId,
+        captureType: 'IMPLICIT',
+    }
+
+    if (params.customerEmail || params.customerName) {
+        payload.order.customerInfo = {
+            cardHolderEmail: params.customerEmail || '',
+            cardHolderName: params.customerName || '',
+        }
+    }
+
+    const response = await fetch(`${NEXI_BASE_URL}/orders/mit`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Api-Key': NEXI_API_KEY,
+            'Correlation-Id': correlationId,
+            'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify(payload),
+    })
+
+    const responseText = await response.text()
+    let responseData: any
+    try { responseData = JSON.parse(responseText) } catch { responseData = {} }
+
+    const operationResult = responseData.operation?.operationResult || responseData.operationResult
+    const isSuccess = operationResult === 'AUTHORIZED' || operationResult === 'EXECUTED'
+
+    // Store transaction in DB
+    await supabase.from('nexi_transactions').insert({
+        order_id: orderId,
+        booking_id: params.bookingId || null,
+        amount_cents: amountCents,
+        status: isSuccess ? 'completed' : 'failed',
+        description: params.description || 'Addebito MIT',
+        customer_email: params.customerEmail || null,
+        metadata: {
+            type: 'mit_charge',
+            contract_id: params.contractId,
+            customer_name: params.customerName,
+            correlation_id: correlationId,
+            operation_result: operationResult,
+            nexi_response: responseData,
+        },
+        created_at: new Date().toISOString(),
+    })
+
+    if (!response.ok || !isSuccess) {
+        return {
+            success: false,
+            error: responseData.errors?.[0]?.description || operationResult || 'DECLINED',
+            orderId,
+            operationResult,
+        }
+    }
+
+    return { success: true, orderId, operationResult }
+}
 
 const processHandler: Handler = async () => {
     const now = new Date().toISOString()
@@ -129,7 +211,6 @@ Dubai Rent 7.0 S.p.A.`
         }
 
         try {
-            const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
             let currentAmountCents = addebito.amount_cents
             const minAmountCents = 50 // €0.50 minimum
             let charged = false
@@ -143,22 +224,16 @@ Dubai Rent 7.0 S.p.A.`
                 console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} for addebito ${addebito.id}`)
 
                 try {
-                    const chargeRes = await fetch(`${baseUrl}/.netlify/functions/nexi-charge-mit`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contractId: addebito.contract_id,
-                            amount: amountEur,
-                            description: `Addebito: ${addebito.causale} - Contratto ${addebito.contract_number}`,
-                            bookingId: addebito.booking_id || null,
-                            customerEmail: addebito.customer_email,
-                            customerName: addebito.customer_name,
-                        }),
+                    const result = await chargeMit({
+                        contractId: addebito.contract_id,
+                        amount: amountEur,
+                        description: `Addebito: ${addebito.causale} - Contratto ${addebito.contract_number}`,
+                        bookingId: addebito.booking_id || null,
+                        customerEmail: addebito.customer_email,
+                        customerName: addebito.customer_name,
                     })
 
-                    const chargeData = await chargeRes.json()
-
-                    if (chargeRes.ok && chargeData.success) {
+                    if (result.success) {
                         console.log(`[process-pending-addebiti] ✅ Charged €${amountEur.toFixed(2)} (attempt #${attempts}) for addebito ${addebito.id}`)
                         await supabase.from('pending_addebiti').update({
                             status: 'charged',
@@ -170,7 +245,7 @@ Dubai Rent 7.0 S.p.A.`
                         charged = true
                         break
                     } else {
-                        lastError = chargeData.error || 'DECLINED'
+                        lastError = result.error || 'DECLINED'
                         console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} rifiutato: ${lastError}`)
                     }
                 } catch (fetchErr: any) {
