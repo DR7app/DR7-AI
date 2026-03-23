@@ -31,6 +31,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     const [customLabel, setCustomLabel] = useState('')
     const [note, setNote] = useState('')
     const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
+    const [paymentMethod, setPaymentMethod] = useState('Contanti')
     const [amountPaid, setAmountPaid] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
@@ -145,6 +146,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     note: note || '',
                     date: italyDate,
                     paymentStatus: isPartial ? 'partial' : paymentStatus,
+                    paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
                     amountPaid: itemPaid,
                     photos: photoUrls,
                 }
@@ -266,7 +268,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
     const handleClose = () => {
         if (isGenerating) return
-        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setAmountPaid(''); setError(''); setPhotos([]); setPhotoPreviewUrls([]);  onClose()
+        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setPaymentMethod('Contanti'); setAmountPaid(''); setError(''); setPhotos([]); setPhotoPreviewUrls([]);  onClose()
     }
 
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
@@ -511,6 +513,45 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                             <option value="paid" className="bg-theme-bg-secondary text-theme-text-primary">Pagato</option>
                         </select>
                     </div>
+
+                    {/* Payment method - shown when Pagato */}
+                    {paymentStatus === 'paid' && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-[13px] text-theme-text-muted">Metodo</span>
+                            <select
+                                value={paymentMethod}
+                                onChange={e => setPaymentMethod(e.target.value)}
+                                disabled={isGenerating}
+                                className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                            >
+                                <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
+                                <option value="Bonifico">Bonifico</option>
+                                <option value="Contanti">Contanti</option>
+                                <option value="Credit Wallet">Credit Wallet</option>
+                                <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
+                                <option value="Paypal">Paypal</option>
+                                <option value="RIBA">RIBA</option>
+                                <option value="RID">RID</option>
+                                <option value="Bollettino postale">Bollettino postale</option>
+                                <option value="Assegno">Assegno</option>
+                                <option value="Assegno circolare">Assegno circolare</option>
+                                <option value="PagoPA">PagoPA</option>
+                                <option value="RID utenze">RID utenze</option>
+                                <option value="RIB veloce">RIB veloce</option>
+                                <option value="SEPA Direct Debit">SEPA Direct Debit</option>
+                                <option value="SEPA Direct Debit CORE">SEPA Direct Debit CORE</option>
+                                <option value="SEPA Direct Debit B2B">SEPA Direct Debit B2B</option>
+                                <option value="Domiciliazione bancaria">Domiciliazione bancaria</option>
+                                <option value="Domiciliazione postale">Domiciliazione postale</option>
+                                <option value="Trattenuta su somme già riscosse">Trattenuta su somme già riscosse</option>
+                                <option value="Bollettino bancario">Bollettino bancario</option>
+                                <option value="Contanti presso tesoreria">Contanti presso tesoreria</option>
+                                <option value="Vaglia cambiario">Vaglia cambiario</option>
+                                <option value="Quietanza erario">Quietanza erario</option>
+                                <option value="Giroconto su conti di contabilità">Giroconto su conti di contabilità</option>
+                            </select>
+                        </div>
+                    )}
 
                     {/* Amount paid - shown when Pagato */}
                     {paymentStatus === 'paid' && (
