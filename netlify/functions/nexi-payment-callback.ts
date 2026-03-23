@@ -220,7 +220,7 @@ const handler: Handler = async (event) => {
         if (isSuccess && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee')
+                .select('id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee')
                 .eq('id', transaction.booking_id)
                 .single();
 
@@ -356,7 +356,7 @@ const handler: Handler = async (event) => {
 
                 // Auto-generate contract → then send signing link via WhatsApp
                 // Skip for car wash / mechanical bookings — only car rentals get contracts
-                const isWashOrMech = booking.vehicle_type === 'car_wash' || booking.vehicle_type === 'mechanical' || booking.booking_details?.type === 'car_wash' || booking.booking_details?.type === 'mechanical'
+                const isWashOrMech = booking.service_type === 'car_wash' || booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical' || booking.vehicle_type === 'car_wash' || booking.vehicle_type === 'mechanical' || booking.booking_details?.type === 'car_wash' || booking.booking_details?.type === 'mechanical' || booking.booking_details?.service_type === 'car_wash'
                 if (isWashOrMech) {
                     console.log(`[nexi-payment-callback] Skipping contract for non-car booking (type: ${booking.vehicle_type || booking.booking_details?.type})`);
                 } else try {
