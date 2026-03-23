@@ -92,7 +92,7 @@ export default function UnpaidBookingsTab() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [processingKey, setProcessingKey] = useState<string | null>(null)
 
-  // Addebito Nexi state
+  // Addebito state
   const [showAddebitoModal, setShowAddebitoModal] = useState(false)
   const [addebitoGroup, setAddebitoGroup] = useState<CustomerGroup | null>(null)
   const [addebitoContractId, setAddebitoContractId] = useState<string | null>(null)
@@ -120,7 +120,7 @@ export default function UnpaidBookingsTab() {
     return () => { subscription.unsubscribe() }
   }, [])
 
-  // ── Addebito Nexi ──────────────────────────────────────────────────────────
+  // ── Addebito ──────────────────────────────────────────────────────────
 
   async function openAddebitoNexi(group: CustomerGroup) {
     setAddebitoGroup(group)
@@ -2006,11 +2006,11 @@ export default function UnpaidBookingsTab() {
                     >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
                   )}
 
-                  {/* Addebito Nexi button */}
+                  {/* Addebito button */}
                   <button
                     onClick={() => openAddebitoNexi(group)}
                     className="w-full px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                  >Addebito Nexi (auto-retry -10%)</button>
+                  >Addebito (auto-retry -10%)</button>
 
                   {/* Noleggio section */}
                   {hasNoleggio && (
@@ -2099,7 +2099,7 @@ export default function UnpaidBookingsTab() {
                     <button
                       onClick={() => openAddebitoNexi(group)}
                       className="w-full mt-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                    >Addebito Nexi</button>
+                    >Addebito</button>
                   </td>
 
                   {/* Noleggio column */}
@@ -2135,11 +2135,11 @@ export default function UnpaidBookingsTab() {
         </div>
       </div>
 
-      {/* Addebito Nexi Modal */}
+      {/* Addebito Modal */}
       {showAddebitoModal && addebitoGroup && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-lg space-y-4">
-            <h3 className="text-lg font-bold text-theme-text-primary">Addebito Nexi — {addebitoGroup.customerName}</h3>
+            <h3 className="text-lg font-bold text-theme-text-primary">Addebito — {addebitoGroup.customerName}</h3>
             <div className="text-sm text-theme-text-secondary space-y-1">
               <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
               <p><strong>Importo da saldare:</strong> <span className="text-red-400 font-bold">€{(addebitoGroup.totalRemaining / 100).toFixed(2)}</span></p>
