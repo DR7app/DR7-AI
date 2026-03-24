@@ -3403,6 +3403,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               contract_generated_at: existingBooking.booking_details.contract_generated_at,
               depositOption: existingBooking.booking_details.depositOption,
               noDepositSurcharge: existingBooking.booking_details.noDepositSurcharge,
+              // Preserve Nexi payment data
+              nexi_payment_link: existingBooking.booking_details.nexi_payment_link,
+              nexi_order_id: existingBooking.booking_details.nexi_order_id,
+              nexi_transaction_id: existingBooking.booking_details.nexi_transaction_id,
+              nexi_contract_id: existingBooking.booking_details.nexi_contract_id,
+              nexi_paid_at: existingBooking.booking_details.nexi_paid_at,
+              paymentStatus: existingBooking.booking_details.paymentStatus,
+              // Preserve danni & penali
+              danni: existingBooking.booking_details.danni,
+              penalties: existingBooking.booking_details.penalties,
             } : {}
           })() : {}),
           customer: {
