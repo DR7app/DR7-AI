@@ -7,6 +7,49 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
+const NEXI_API_KEY = process.env.NEXI_API_KEY!;
+const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
+
+// Fetch operation details from Nexi to get card info (maskedPan, card type)
+async function fetchNexiOperationDetails(operationId: string): Promise<any> {
+    try {
+        const res = await fetch(`${NEXI_BASE_URL}/operations/${operationId}`, {
+            headers: {
+                'X-Api-Key': NEXI_API_KEY,
+                'Correlation-Id': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+            }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            console.log('[nexi-payment-callback] Operation details:', JSON.stringify(data).substring(0, 500));
+            return data;
+        }
+        console.warn('[nexi-payment-callback] Failed to fetch operation:', res.status);
+    } catch (e) {
+        console.warn('[nexi-payment-callback] Error fetching operation:', e);
+    }
+    return null;
+}
+
+// BIN lookup to determine card type (credit/debit/prepaid)
+async function lookupBin(bin: string): Promise<{ type: string; brand: string } | null> {
+    try {
+        const res = await fetch(`https://lookup.binlist.net/${bin}`, {
+            headers: { 'Accept-Version': '3' }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            console.log('[nexi-payment-callback] BIN lookup result:', JSON.stringify(data));
+            return {
+                type: (data.type || '').toLowerCase(), // credit, debit, prepaid
+                brand: (data.scheme || '').toLowerCase()
+            };
+        }
+    } catch (e) {
+        console.warn('[nexi-payment-callback] BIN lookup error:', e);
+    }
+    return null;
+}
 
 const handler: Handler = async (event) => {
     const headers = {
@@ -452,13 +495,34 @@ const handler: Handler = async (event) => {
                     || booking.service_type === 'car_rental'
                     || booking.service_type === 'car_wash'
 
-                // Detect card type from Nexi callback data
-                const rawCardType = JSON.stringify(callbackData).toLowerCase()
-                const isPrepagata = rawCardType.includes('prepagat') || rawCardType.includes('prepaid')
-                const isCredito = rawCardType.includes('credito') || rawCardType.includes('credit')
-                const isDebito = rawCardType.includes('debito') || rawCardType.includes('debit')
+                // Detect card type: fetch Nexi operation details + BIN lookup
+                let cardTypeResult = ''
+                let maskedPan = ''
+                const opId = operationId || transactionId
+                if (opId) {
+                    const opDetails = await fetchNexiOperationDetails(opId)
+                    if (opDetails) {
+                        maskedPan = opDetails.paymentInstrumentInfo || opDetails.additionalData?.maskedPan || opDetails.operation?.additionalData?.maskedPan || ''
+                        // Try to get card type from operation details
+                        cardTypeResult = (opDetails.paymentMethod || opDetails.operation?.paymentMethod || '').toLowerCase()
+                    }
+                }
 
-                console.log(`[nexi-payment-callback] Card type detection: circuit=${paymentCircuit}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}, isInitialBooking=${isInitialBooking}, isEligibleService=${isEligibleService}`)
+                // BIN lookup if we have the first 6+ digits
+                let binType = ''
+                const binMatch = maskedPan.match(/^(\d{6,8})/)
+                if (binMatch) {
+                    const binResult = await lookupBin(binMatch[1])
+                    if (binResult) {
+                        binType = binResult.type // 'credit', 'debit', 'prepaid'
+                    }
+                }
+
+                const isPrepagata = binType === 'prepaid' || cardTypeResult.includes('prepaid') || cardTypeResult.includes('prepagat')
+                const isCredito = binType === 'credit' || (!binType && !isPrepagata && cardTypeResult.includes('credit'))
+                const isDebito = binType === 'debit' || (!binType && !isPrepagata && !isCredito && cardTypeResult.includes('debit'))
+
+                console.log(`[nexi-payment-callback] Card type: bin=${binType}, maskedPan=${maskedPan}, circuit=${paymentCircuit}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}`)
 
                 const paidCents = transaction.amount_cents;
 
