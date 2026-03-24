@@ -80,42 +80,55 @@ export default function CustomerWalletTab() {
   async function loadAllWalletCustomers() {
     setLoadingAll(true)
     try {
-      // Load ALL customers first
+      // Load ALL customers
       const response = await fetch('/.netlify/functions/list-customers')
       const result = await response.json()
       const allCustomers: any[] = result.customers || []
 
-      // Load wallets to merge balances
+      // Load wallets via referral_participants → wallets chain
+      // 1. Get all referral participants with their phone
+      const { data: participants } = await supabase
+        .from('referral_participants')
+        .select('id, telefono')
+
+      // 2. Get all wallets with balance
       const { data: wallets } = await supabase
-        .from('customer_wallets')
-        .select('customer_id, balance_cents')
+        .from('wallets')
+        .select('participant_id, balance_cents')
 
-      const walletMap = new Map<string, number>()
-      if (wallets) {
-        for (const w of wallets) walletMap.set(w.customer_id, w.balance_cents || 0)
-      }
-
-      // Also check user_credit_balance for website wallets
-      const { data: creditBalances } = await supabase
-        .from('user_credit_balance')
-        .select('user_id, balance')
-        .gt('balance', 0)
-
-      if (creditBalances) {
-        for (const cb of creditBalances) {
-          const existing = walletMap.get(cb.user_id) || 0
-          walletMap.set(cb.user_id, existing + Math.round(cb.balance * 100))
+      // Build phone → balance map
+      const phoneBalanceMap = new Map<string, number>()
+      if (participants && wallets) {
+        const participantMap = new Map<string, string>() // participant_id → telefono
+        for (const p of participants) {
+          if (p.telefono) participantMap.set(p.id, p.telefono)
+        }
+        for (const w of wallets) {
+          const phone = participantMap.get(w.participant_id)
+          if (phone && w.balance_cents > 0) {
+            phoneBalanceMap.set(phone, (phoneBalanceMap.get(phone) || 0) + w.balance_cents)
+          }
         }
       }
 
-      // Map all customers with their wallet balance
-      const mapped: CustomerResult[] = allCustomers.map((cust: any) => ({
-        id: cust.id,
-        full_name: (`${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.ragione_sociale || cust.denominazione || 'N/A'),
-        email: cust.email || null,
-        phone: cust.telefono || null,
-        balance_cents: walletMap.get(cust.id) || 0
-      }))
+      // Map all customers with their wallet balance (matched by phone)
+      const mapped: CustomerResult[] = allCustomers.map((cust: any) => {
+        const phone = cust.telefono || null
+        const balance = phone ? (phoneBalanceMap.get(phone) || 0) : 0
+        return {
+          id: cust.id,
+          full_name: (`${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.ragione_sociale || cust.denominazione || 'N/A'),
+          email: cust.email || null,
+          phone,
+          balance_cents: balance
+        }
+      })
+
+      // Sort: customers with balance first, then alphabetical
+      mapped.sort((a, b) => {
+        if ((b.balance_cents || 0) !== (a.balance_cents || 0)) return (b.balance_cents || 0) - (a.balance_cents || 0)
+        return (a.full_name || '').localeCompare(b.full_name || '')
+      })
 
       setAllWalletCustomers(mapped)
     } catch (err) {
