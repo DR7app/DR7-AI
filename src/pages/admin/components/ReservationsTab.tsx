@@ -2090,6 +2090,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       additional_amount: '0',
       extension_payment_status: 'pending',
       extension_payment_method: '',
+      link_expiration_hours: '1',
       notes: '',
       change_vehicle: false,
       new_vehicle_id: '',
