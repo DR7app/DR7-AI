@@ -27,6 +27,9 @@ interface VehicleReport {
   idleRate: number
   bookingsCount: number
   rentalRevenue: number
+  penaltyRevenue: number
+  danniRevenue: number
+  totalRevenue: number
   bookings?: BookingDetail[]
 }
 
@@ -44,6 +47,9 @@ interface VehicleReportData {
   totalBookingsFound: number
   unmatchedBookings?: UnmatchedBooking[]
   totalRentalRevenue: number
+  totalPenaltyRevenue: number
+  totalDanniRevenue: number
+  totalRevenue: number
   avgUtilizationRate: number
   vehicles: VehicleReport[]
 }
@@ -216,11 +222,14 @@ export default function ReportsTab() {
 
   function getCategorySummary(vehicles: VehicleReport[]) {
     const totalRented = vehicles.reduce((s, v) => s + v.rentedDays, 0)
-    const totalRevenue = vehicles.reduce((s, v) => s + v.rentalRevenue, 0)
+    const totalRentalRevenue = vehicles.reduce((s, v) => s + v.rentalRevenue, 0)
+    const totalPenaltyRevenue = vehicles.reduce((s, v) => s + v.penaltyRevenue, 0)
+    const totalDanniRevenue = vehicles.reduce((s, v) => s + v.danniRevenue, 0)
+    const totalRevenue = vehicles.reduce((s, v) => s + v.totalRevenue, 0)
     const avgUtil = vehicles.length > 0
       ? vehicles.reduce((s, v) => s + v.utilizationRate, 0) / vehicles.length
       : 0
-    return { totalRented, totalRevenue, avgUtil, count: vehicles.length }
+    return { totalRented, totalRentalRevenue, totalPenaltyRevenue, totalDanniRevenue, totalRevenue, avgUtil, count: vehicles.length }
   }
 
   function formatPercent(rate: number): string {
@@ -278,7 +287,16 @@ export default function ReportsTab() {
         Pren. {sortField === 'bookingsCount' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
       <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('rentalRevenue')}>
-        Ricavo {sortField === 'rentalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+        Noleggio {sortField === 'rentalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('penaltyRevenue')}>
+        Penale {sortField === 'penaltyRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('danniRevenue')}>
+        Danni {sortField === 'danniRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('totalRevenue')}>
+        TOTALE {sortField === 'totalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
     </tr>
   )
@@ -313,7 +331,7 @@ export default function ReportsTab() {
           />
         </div>
         {/* Stats grid */}
-        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+        <div className="grid grid-cols-3 gap-2 text-center text-xs mb-3">
           <div>
             <p className="text-green-400 font-bold">{v.rentedDays}g</p>
             <p className="text-theme-text-muted">Noleggio</p>
@@ -326,9 +344,28 @@ export default function ReportsTab() {
             <p className="text-theme-text-primary font-bold">{v.bookingsCount}</p>
             <p className="text-theme-text-muted">Pren.</p>
           </div>
-          <div>
-            <p className="text-dr7-gold font-bold">{formatCurrency(v.rentalRevenue)}</p>
-            <p className="text-theme-text-muted">Ricavo</p>
+        </div>
+        {/* Revenue breakdown */}
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between">
+            <span className="text-theme-text-muted">Ricavo Noleggio</span>
+            <span className="text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</span>
+          </div>
+          {v.penaltyRevenue > 0 && (
+            <div className="flex justify-between">
+              <span className="text-theme-text-muted">Ricavo Penale</span>
+              <span className="text-yellow-400 font-semibold">{formatCurrency(v.penaltyRevenue)}</span>
+            </div>
+          )}
+          {v.danniRevenue > 0 && (
+            <div className="flex justify-between">
+              <span className="text-theme-text-muted">Ricavo Danni</span>
+              <span className="text-red-400 font-semibold">{formatCurrency(v.danniRevenue)}</span>
+            </div>
+          )}
+          <div className="flex justify-between pt-1 border-t border-theme-border/50">
+            <span className="text-theme-text-muted font-bold">Ricavo TOTALE</span>
+            <span className="text-dr7-gold font-bold">{formatCurrency(v.totalRevenue)}</span>
           </div>
         </div>
         {/* Expanded booking details */}
@@ -395,11 +432,14 @@ export default function ReportsTab() {
             </div>
           </td>
           <td className="text-center px-4 py-3 text-theme-text-primary">{v.bookingsCount}</td>
-          <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(v.rentalRevenue)}</td>
+          <td className="text-right px-4 py-3 text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</td>
+          <td className="text-right px-4 py-3 text-yellow-400 font-semibold">{v.penaltyRevenue > 0 ? formatCurrency(v.penaltyRevenue) : '-'}</td>
+          <td className="text-right px-4 py-3 text-red-400 font-semibold">{v.danniRevenue > 0 ? formatCurrency(v.danniRevenue) : '-'}</td>
+          <td className="text-right px-4 py-3 text-dr7-gold font-bold">{formatCurrency(v.totalRevenue)}</td>
         </tr>
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <tr key={`${v.vehicleId}-details`}>
-            <td colSpan={8} className="px-4 py-2 bg-theme-bg-primary/30">
+            <td colSpan={11} className="px-4 py-2 bg-theme-bg-primary/30">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-theme-text-muted">
@@ -543,8 +583,24 @@ export default function ReportsTab() {
               </p>
             </div>
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Ricavo Totale Noleggi</p>
-              <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRentalRevenue)}</p>
+              <p className="text-xs text-theme-text-muted">Ricavo Noleggi</p>
+              <p className="text-2xl font-bold text-theme-text-primary">{formatCurrency(vehicleData.totalRentalRevenue)}</p>
+            </div>
+            {vehicleData.totalPenaltyRevenue > 0 && (
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-yellow-500/30 p-4">
+                <p className="text-xs text-theme-text-muted">Ricavo Penali</p>
+                <p className="text-2xl font-bold text-yellow-400">{formatCurrency(vehicleData.totalPenaltyRevenue)}</p>
+              </div>
+            )}
+            {vehicleData.totalDanniRevenue > 0 && (
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-red-500/30 p-4">
+                <p className="text-xs text-theme-text-muted">Ricavo Danni</p>
+                <p className="text-2xl font-bold text-red-400">{formatCurrency(vehicleData.totalDanniRevenue)}</p>
+              </div>
+            )}
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-dr7-gold/30 p-4">
+              <p className="text-xs text-theme-text-muted">Ricavo TOTALE</p>
+              <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRevenue)}</p>
             </div>
           </div>
 

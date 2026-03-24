@@ -261,6 +261,8 @@ async function generateVehicleReport(
     // Calculate rented days (union of all booking day ranges)
     const rentedDays = new Set<number>()
     let rentalRevenue = 0
+    let penaltyRevenue = 0
+    let danniRevenue = 0
     const matchedBookingDetails: any[] = []
     const bookingDetailsList: any[] = []
 
@@ -376,6 +378,21 @@ async function generateVehicleReport(
         payment_method: booking.payment_method || '-',
       })
 
+      // Sum danni and penalties from booking_details (amounts in EUR)
+      const details = booking.booking_details || {}
+      if (Array.isArray(details.danni)) {
+        details.danni.forEach((d: any) => {
+          const paid = parseFloat(d.amountPaid || d.total || 0)
+          if (paid > 0) danniRevenue += paid
+        })
+      }
+      if (Array.isArray(details.penalties)) {
+        details.penalties.forEach((p: any) => {
+          const paid = parseFloat(p.amountPaid || p.total || 0)
+          if (paid > 0) penaltyRevenue += paid
+        })
+      }
+
       if (debug) {
         matchedBookingDetails.push({
           id: booking.id,
@@ -433,6 +450,9 @@ async function generateVehicleReport(
       idleRate: Math.round((Math.max(0, idleCount) / daysInMonth) * 100) / 100,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
+      penaltyRevenue: Math.round(penaltyRevenue * 100) / 100,
+      danniRevenue: Math.round(danniRevenue * 100) / 100,
+      totalRevenue: Math.round((rentalRevenue + penaltyRevenue + danniRevenue) * 100) / 100,
       bookings: bookingDetailsList,
       _bookingIds: vehicleBookings.map(b => b.id)
     }
@@ -490,6 +510,9 @@ async function generateVehicleReport(
       totalBookingsFound: rentalBookings.length,
       unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
+      totalPenaltyRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.penaltyRevenue, 0) * 100) / 100,
+      totalDanniRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.danniRevenue, 0) * 100) / 100,
+      totalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.totalRevenue, 0) * 100) / 100,
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
     })
