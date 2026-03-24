@@ -44,7 +44,19 @@ import { clearAdminCache } from '../../utils/logAdminAction'
 type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing'
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<TabType>('reservations')
+  const [activeTab, _setActiveTab] = useState<TabType>('reservations')
+  const [tabHistory, setTabHistory] = useState<TabType[]>([])
+  const setActiveTab = (tab: TabType) => {
+    setTabHistory(prev => [...prev.slice(-19), activeTab])
+    _setActiveTab(tab)
+  }
+  const goBack = () => {
+    if (tabHistory.length > 0) {
+      const prev = tabHistory[tabHistory.length - 1]
+      setTabHistory(h => h.slice(0, -1))
+      _setActiveTab(prev)
+    }
+  }
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -538,12 +550,38 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Mobile Tab Indicator */}
-        <div className="mb-4 lg:hidden">
+        {/* Mobile Tab Indicator with Back Button */}
+        <div className="mb-4 lg:hidden flex items-center gap-3">
+          {tabHistory.length > 0 && (
+            <button
+              onClick={goBack}
+              className="p-2 rounded-full hover:bg-theme-bg-hover transition-colors text-theme-text-muted hover:text-theme-text-primary flex-shrink-0"
+              aria-label="Indietro"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           <h2 className="text-xl font-bold text-theme-text-primary">
             {tabLabels[activeTab] || activeTab}
           </h2>
         </div>
+
+        {/* Desktop Back Button */}
+        {tabHistory.length > 0 && (
+          <div className="mb-3 hidden lg:block">
+            <button
+              onClick={goBack}
+              className="flex items-center gap-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Indietro
+            </button>
+          </div>
+        )}
 
         <div className="mt-4 lg:mt-8">
           {activeTab === 'reservations' && (
