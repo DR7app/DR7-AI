@@ -2574,19 +2574,8 @@ export default function CustomersTab() {
                 notes: newCustomer.note,
                 source: 'db',
             } as any
-            setAllCustomers(prev => {
-              const existingIndex = prev.findIndex(c => c.id === clientId)
-              if (existingIndex !== -1) {
-                // Edit: replace existing customer in-place (don't inflate count)
-                const updated = [...prev]
-                updated[existingIndex] = mappedCustomer
-                return updated
-              }
-              // New: prepend to list
-              return [mappedCustomer, ...prev]
-            })
+            // Don't update state manually — just reload from DB for consistency
           }
-          // Always reload for full consistency (pagination fix ensures all customers are fetched)
           loadCustomers()
         }}
         initialData={selectedCustomer}
