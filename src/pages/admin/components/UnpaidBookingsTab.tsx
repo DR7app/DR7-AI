@@ -1817,11 +1817,14 @@ export default function UnpaidBookingsTab() {
             className="w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
           >Addebito</button>
         )}
-        {chargedViaMit != null && chargedViaMit > 0 && (
-          <div className="text-xs text-green-400 bg-green-900/20 border border-green-700/30 rounded-lg px-3 py-1.5 font-medium">
-            In attesa di pagamento: €{(chargedViaMit / 100).toFixed(2)}
-          </div>
-        )}
+        {chargedViaMit != null && chargedViaMit > 0 && (() => {
+          const totalItemsCents = Math.round(items.reduce((s, i) => s + i.remaining, 0) * 100)
+          return (
+            <div className="text-xs text-orange-400 bg-orange-900/20 border border-orange-700/30 rounded-lg px-3 py-1.5 font-medium">
+              Da incassare: €{(totalItemsCents / 100).toFixed(2)}
+            </div>
+          )
+        })()}
         {items.map((item, idx) => {
           const itemKey = `${type}:${item.bookingId}:${item.source}:${item.originalIndex}`
           const partialKey = `partial:${itemKey}`
@@ -2180,7 +2183,7 @@ export default function UnpaidBookingsTab() {
                       €{(group.totalRemaining / 100).toFixed(2)}
                     </div>
                     {group.chargedViaMit > 0 && (
-                      <div className="text-xs text-green-400 mt-0.5">In attesa di pagamento: €{(group.chargedViaMit / 100).toFixed(2)}</div>
+                      <div className="text-xs text-orange-400 mt-0.5">Da incassare: €{(group.totalRemaining / 100).toFixed(2)}</div>
                     )}
                     {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
                       <button
