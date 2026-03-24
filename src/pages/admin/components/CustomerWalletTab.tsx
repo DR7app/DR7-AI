@@ -145,7 +145,11 @@ export default function CustomerWalletTab() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     })
-    return res.json()
+    const data = await res.json()
+    if (!res.ok && !data.error) {
+      data.error = `HTTP ${res.status}: ${JSON.stringify(data).substring(0, 200)}`
+    }
+    return data
   }
 
   async function openModal(customer: CustomerResult, action: 'credit' | 'debit') {
@@ -284,7 +288,8 @@ export default function CustomerWalletTab() {
         closeModal()
         loadAllWalletCustomers()
       } else {
-        toast.error(data.error || 'Errore sconosciuto')
+        console.error('[Wallet] API error:', data)
+        toast.error(data.error || `Errore: ${JSON.stringify(data).substring(0, 150)}`)
       }
     } catch (err: any) {
       toast.error('Errore di connessione: ' + (err.message || ''))
