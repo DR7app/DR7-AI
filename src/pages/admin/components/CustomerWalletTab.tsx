@@ -166,22 +166,27 @@ export default function CustomerWalletTab() {
       const code = String(Math.floor(100000 + Math.random() * 900000))
       setSentOtp(code)
 
-      const actionLabel = action === 'credit' ? 'CREDITO' : 'ADDEBITO'
-      const message = `🔐 *CODICE VERIFICA WALLET*\n\n*Operazione:* ${actionLabel}\n*Cliente:* ${selectedCustomer.full_name}\n*Importo:* €${parsedAmount.toFixed(2)}\n${description ? `*Descrizione:* ${description}\n` : ''}\n*Codice:* ${code}\n\nComunica questo codice all'operatore per autorizzare l'operazione.`
-
-      await fetch('/.netlify/functions/send-whatsapp-notification', {
+      const res = await fetch('/.netlify/functions/send-wallet-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customPhone: '393472817258',
-          customMessage: message
+          code,
+          action,
+          customerName: selectedCustomer.full_name,
+          amount: parsedAmount.toFixed(2),
+          description: description || ''
         })
       })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Errore invio email')
+      }
 
       setOtpSent(true)
       setOtpVerified(false)
       setOtpCode('')
-      toast.success('Codice di verifica inviato via WhatsApp')
+      toast.success('Codice di verifica inviato via email')
     } catch (err) {
       toast.error('Errore invio codice')
     } finally {
