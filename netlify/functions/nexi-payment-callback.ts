@@ -220,7 +220,7 @@ const handler: Handler = async (event) => {
         if (isSuccess && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee')
+                .select('id, user_id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee')
                 .eq('id', transaction.booking_id)
                 .single();
 
@@ -446,16 +446,20 @@ const handler: Handler = async (event) => {
                 }
 
                 // ── Card type bonus/surcharge ──────────────────────────────
+                // Only for INITIAL bookings (car rental + lavaggio), NOT extensions
+                const isInitialBooking = paymentPurpose === 'booking'
+                const isEligibleService = !booking.service_type
+                    || booking.service_type === 'car_rental'
+                    || booking.service_type === 'car_wash'
+
                 // Detect card type from Nexi callback data
-                const cardType = (paymentCircuit || '').toLowerCase()
                 const rawCardType = JSON.stringify(callbackData).toLowerCase()
                 const isPrepagata = rawCardType.includes('prepagat') || rawCardType.includes('prepaid')
                 const isCredito = rawCardType.includes('credito') || rawCardType.includes('credit')
                 const isDebito = rawCardType.includes('debito') || rawCardType.includes('debit')
 
-                console.log(`[nexi-payment-callback] Card type detection: circuit=${paymentCircuit}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}`)
+                console.log(`[nexi-payment-callback] Card type detection: circuit=${paymentCircuit}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}, isInitialBooking=${isInitialBooking}, isEligibleService=${isEligibleService}`)
 
-                const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id || booking.user_id;
                 const paidCents = transaction.amount_cents;
 
                 if (isPrepagata && contractId && paidCents > 0) {
@@ -480,16 +484,17 @@ const handler: Handler = async (event) => {
                         });
                         const mitData = await mitRes.json();
                         if (mitRes.ok && mitData.success) {
-                            console.log(`[nexi-payment-callback] ✅ Prepagata surcharge €${surchargeEur} charged`);
+                            console.log(`[nexi-payment-callback] Prepagata surcharge €${surchargeEur} charged`);
                         } else {
-                            console.error(`[nexi-payment-callback] ❌ Prepagata surcharge failed:`, mitData.error);
+                            console.error(`[nexi-payment-callback] Prepagata surcharge failed:`, mitData.error);
                         }
                     } catch (mitErr) {
                         console.error('[nexi-payment-callback] Prepagata surcharge error:', mitErr);
                     }
 
-                } else if ((isCredito || isDebito) && custId && paidCents > 0) {
-                    // CREDITO: 6% wallet credit, DEBITO: 3% wallet credit
+                } else if ((isCredito || isDebito) && isInitialBooking && isEligibleService && paidCents > 0) {
+                    // CREDIT WALLET BONUS: credito 6%, debito 3%
+                    // Only for initial car rental + lavaggio bookings
                     const percentage = isCredito ? 0.06 : 0.03;
                     const bonusCents = Math.round(paidCents * percentage);
                     const bonusEur = (bonusCents / 100).toFixed(2);
@@ -499,48 +504,63 @@ const handler: Handler = async (event) => {
                     console.log(`[nexi-payment-callback] ${cardLabel} bonus: €${bonusEur} (${percentLabel} of €${amountEur})`);
 
                     try {
-                        // Find or create wallet
-                        let { data: wallet } = await supabase
-                            .from('customer_wallets')
-                            .select('id, balance_cents, total_earned_cents')
-                            .eq('customer_id', custId)
-                            .maybeSingle();
+                        // Find user_id for credit wallet (user_credit_balance)
+                        let userId = booking.user_id;
 
-                        if (!wallet) {
-                            const { data: newWallet } = await supabase
-                                .from('customer_wallets')
-                                .insert({
-                                    customer_id: custId,
-                                    balance_cents: 0,
-                                    total_earned_cents: 0,
-                                    total_spent_cents: 0,
-                                    total_topped_up_cents: 0
-                                })
-                                .select()
-                                .single();
-                            wallet = newWallet;
+                        // If no user_id on booking, look up by email in auth.users
+                        if (!userId) {
+                            const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase().trim();
+                            if (custEmail) {
+                                const { data: authUsers } = await supabase.auth.admin.listUsers();
+                                const matchedUser = authUsers?.users?.find((u: any) =>
+                                    u.email?.toLowerCase().trim() === custEmail
+                                );
+                                if (matchedUser) {
+                                    userId = matchedUser.id;
+                                    console.log(`[nexi-payment-callback] Found auth user by email: ${custEmail} → ${userId}`);
+                                }
+                            }
                         }
 
-                        if (wallet) {
-                            const newBalance = wallet.balance_cents + bonusCents;
+                        if (userId) {
+                            // Get or create credit balance
+                            let { data: creditBalance } = await supabase
+                                .from('user_credit_balance')
+                                .select('user_id, balance')
+                                .eq('user_id', userId)
+                                .maybeSingle();
 
-                            // Add wallet transaction
-                            await supabase.from('wallet_transactions').insert({
-                                wallet_id: wallet.id,
-                                type: 'nexi_card_bonus',
-                                amount_cents: bonusCents,
-                                balance_after_cents: newBalance,
-                                description: `Bonus ${percentLabel} pagamento ${cardLabel} - Prenotazione #${booking.id.substring(0, 8).toUpperCase()}`
+                            const currentBalance = creditBalance?.balance ? parseFloat(creditBalance.balance) : 0;
+                            const bonusEurNum = bonusCents / 100;
+                            const newBalance = Math.round((currentBalance + bonusEurNum) * 100) / 100;
+
+                            if (!creditBalance) {
+                                // Create credit balance row
+                                await supabase.from('user_credit_balance').insert({
+                                    user_id: userId,
+                                    balance: newBalance,
+                                    last_updated: new Date().toISOString()
+                                });
+                            } else {
+                                // Update existing balance
+                                await supabase.from('user_credit_balance').update({
+                                    balance: newBalance,
+                                    last_updated: new Date().toISOString()
+                                }).eq('user_id', userId);
+                            }
+
+                            // Record transaction
+                            await supabase.from('credit_transactions').insert({
+                                user_id: userId,
+                                transaction_type: 'credit',
+                                amount: bonusEurNum,
+                                balance_after: newBalance,
+                                description: `Bonus ${percentLabel} pagamento ${cardLabel} - Prenotazione #${booking.id.substring(0, 8).toUpperCase()}`,
+                                reference_id: booking.id,
+                                reference_type: 'card_bonus'
                             });
 
-                            // Update wallet balance
-                            await supabase.from('customer_wallets').update({
-                                balance_cents: newBalance,
-                                total_earned_cents: wallet.total_earned_cents + bonusCents,
-                                updated_at: new Date().toISOString()
-                            }).eq('id', wallet.id);
-
-                            console.log(`[nexi-payment-callback] ✅ Wallet credited €${bonusEur} for ${cardLabel}`);
+                            console.log(`[nexi-payment-callback] Credit wallet bonus: €${bonusEur} added for ${cardLabel}. New balance: €${newBalance.toFixed(2)}`);
 
                             // Notify customer about bonus
                             if (custPhone) {
@@ -550,13 +570,28 @@ const handler: Handler = async (event) => {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         customPhone: custPhone,
-                                        customMessage: `🎁 *Bonus pagamento!*\n\nGentile ${custName},\n\nHai ricevuto *€${bonusEur}* di credito sul tuo wallet DR7 grazie al pagamento con ${cardLabel}.\n\nSaldo attuale: *€${(newBalance / 100).toFixed(2)}*\n\nGrazie,\nDR7`
+                                        customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`
                                     })
                                 });
                             }
+
+                            // Notify admin
+                            const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+                            if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                                await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        chatId: `${NOTIFICATION_PHONE}@c.us`,
+                                        message: `*BONUS CARTA ACCREDITATO*\n\n*Cliente:* ${booking.customer_name || '-'}\n*Carta:* ${cardLabel}\n*Bonus:* €${bonusEur} (${percentLabel})\n*Nuovo saldo wallet:* €${newBalance.toFixed(2)}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}`
+                                    })
+                                });
+                            }
+                        } else {
+                            console.warn(`[nexi-payment-callback] No auth user found for card bonus. Customer: ${booking.customer_name}, email: ${booking.customer_email}. Bonus of €${bonusEur} NOT applied.`);
                         }
                     } catch (walletErr) {
-                        console.error('[nexi-payment-callback] Wallet bonus error:', walletErr);
+                        console.error('[nexi-payment-callback] Credit wallet bonus error:', walletErr);
                     }
                 }
             }

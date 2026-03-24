@@ -2360,7 +2360,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               customerName: custName,
               description: `Estensione noleggio — ${custName}`,
               expirationHours,
-              paymentPurpose: 'booking',
+              paymentPurpose: 'extension',
             }),
           })
           const linkData = await linkRes.json()

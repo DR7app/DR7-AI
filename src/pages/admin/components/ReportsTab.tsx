@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 interface BookingDetail {
   booking_id: string
+  customer_name: string
   targa: string
   start_at: string
   end_at: string
@@ -9,6 +10,8 @@ interface BookingDetail {
   days_in_month: number
   total_price: number
   revenue_per_day: number
+  payment_status: string
+  payment_method: string
 }
 
 interface VehicleReport {
@@ -130,6 +133,7 @@ export default function ReportsTab() {
   const [plateSearch, setPlateSearch] = useState('')
   const [sortField, setSortField] = useState<keyof VehicleReport>('utilizationRate')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null)
 
   async function fetchReport() {
     setLoading(true)
@@ -233,6 +237,23 @@ export default function ReportsTab() {
     return 'text-red-400'
   }
 
+  function getPaymentBadge(status: string, method: string): { label: string; color: string } {
+    const isPaid = status === 'paid' || status === 'completed' || status === 'succeeded'
+    if (method === 'credit' || status === 'succeeded') {
+      return { label: 'Wallet', color: 'bg-purple-500/20 text-purple-400' }
+    }
+    if (isPaid) {
+      return { label: 'Pagato', color: 'bg-green-500/20 text-green-400' }
+    }
+    return { label: status || 'N/A', color: 'bg-theme-bg-hover/20 text-theme-text-muted' }
+  }
+
+  function formatDateIT(dateStr: string): string {
+    if (!dateStr) return '-'
+    const d = new Date(dateStr)
+    return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+  }
+
   const grouped = getGroupedVehicles()
 
   const tableHeader = (
@@ -264,12 +285,20 @@ export default function ReportsTab() {
 
   // Mobile card view for a vehicle
   function renderVehicleCard(v: VehicleReport) {
+    const isExpanded = expandedVehicle === v.vehicleId
     return (
-      <div key={v.vehicleId} className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
+      <div
+        key={v.vehicleId}
+        className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border cursor-pointer"
+        onClick={() => setExpandedVehicle(isExpanded ? null : v.vehicleId)}
+      >
         {/* Header with name and plate */}
         <div className="flex justify-between items-start mb-3">
           <div>
-            <p className="font-semibold text-theme-text-primary text-sm">{v.label}</p>
+            <p className="font-semibold text-theme-text-primary text-sm">
+              <span className="mr-1 text-xs text-theme-text-muted">{isExpanded ? '▼' : '▶'}</span>
+              {v.label}
+            </p>
             <p className="text-xs text-theme-text-muted">{v.plate}</p>
           </div>
           <span className={`text-lg font-bold ${getUtilizationColor(v.utilizationRate)}`}>
@@ -302,39 +331,116 @@ export default function ReportsTab() {
             <p className="text-theme-text-muted">Ricavo</p>
           </div>
         </div>
+        {/* Expanded booking details */}
+        {isExpanded && v.bookings && v.bookings.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-theme-border space-y-2">
+            <p className="text-xs font-semibold text-theme-text-muted mb-1">Dettaglio Prenotazioni:</p>
+            {v.bookings.map((b: BookingDetail) => {
+              const badge = getPaymentBadge(b.payment_status, b.payment_method)
+              return (
+                <div key={b.booking_id} className="bg-theme-bg-primary/30 rounded p-2 text-xs">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium text-theme-text-primary">{b.customer_name}</span>
+                    <span className={`px-2 py-0.5 rounded-full font-semibold ${badge.color}`}>{badge.label}</span>
+                  </div>
+                  <div className="flex justify-between text-theme-text-muted">
+                    <span>{formatDateIT(b.start_at)} - {formatDateIT(b.end_at)}</span>
+                    <span className="text-dr7-gold font-semibold">{formatCurrency(b.total_price)}</span>
+                  </div>
+                  <div className="flex justify-between text-theme-text-muted mt-0.5">
+                    <span>{b.billable_days}g totali / {b.days_in_month}g nel mese</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }
 
-  // Desktop table row for a vehicle
+  // Desktop table row for a vehicle (clickable to expand booking details)
   function renderVehicleRow(v: VehicleReport) {
+    const isExpanded = expandedVehicle === v.vehicleId
     return (
-      <tr key={v.vehicleId} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
-        <td className="px-4 py-3 font-medium text-theme-text-primary">{v.label}</td>
-        <td className="px-4 py-3 text-theme-text-muted text-xs">{v.plate}</td>
-        <td className="text-center px-4 py-3">
-          <span className="text-green-400 font-semibold">{v.rentedDays}g</span>
-        </td>
-        <td className="text-center px-4 py-3">
-          <span className="text-orange-400 font-semibold">{v.maintenanceDays}g</span>
-        </td>
-        <td className="text-center px-4 py-3">
-          <span className="text-theme-text-muted">{v.idleDays}g</span>
-        </td>
-        <td className="text-center px-4 py-3">
-          <span className={`font-bold ${getUtilizationColor(v.utilizationRate)}`}>
-            {formatPercent(v.utilizationRate)}
-          </span>
-          <div className="w-full h-1.5 bg-theme-bg-tertiary rounded-full mt-1">
-            <div
-              className={`h-full rounded-full ${v.utilizationRate >= 0.7 ? 'bg-green-400' : v.utilizationRate >= 0.4 ? 'bg-yellow-400' : 'bg-red-400'}`}
-              style={{ width: `${Math.round(v.utilizationRate * 100)}%` }}
-            />
-          </div>
-        </td>
-        <td className="text-center px-4 py-3 text-theme-text-primary">{v.bookingsCount}</td>
-        <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(v.rentalRevenue)}</td>
-      </tr>
+      <>
+        <tr
+          key={v.vehicleId}
+          className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors cursor-pointer"
+          onClick={() => setExpandedVehicle(isExpanded ? null : v.vehicleId)}
+        >
+          <td className="px-4 py-3 font-medium text-theme-text-primary">
+            <span className="mr-2 text-xs text-theme-text-muted">{isExpanded ? '▼' : '▶'}</span>
+            {v.label}
+          </td>
+          <td className="px-4 py-3 text-theme-text-muted text-xs">{v.plate}</td>
+          <td className="text-center px-4 py-3">
+            <span className="text-green-400 font-semibold">{v.rentedDays}g</span>
+          </td>
+          <td className="text-center px-4 py-3">
+            <span className="text-orange-400 font-semibold">{v.maintenanceDays}g</span>
+          </td>
+          <td className="text-center px-4 py-3">
+            <span className="text-theme-text-muted">{v.idleDays}g</span>
+          </td>
+          <td className="text-center px-4 py-3">
+            <span className={`font-bold ${getUtilizationColor(v.utilizationRate)}`}>
+              {formatPercent(v.utilizationRate)}
+            </span>
+            <div className="w-full h-1.5 bg-theme-bg-tertiary rounded-full mt-1">
+              <div
+                className={`h-full rounded-full ${v.utilizationRate >= 0.7 ? 'bg-green-400' : v.utilizationRate >= 0.4 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                style={{ width: `${Math.round(v.utilizationRate * 100)}%` }}
+              />
+            </div>
+          </td>
+          <td className="text-center px-4 py-3 text-theme-text-primary">{v.bookingsCount}</td>
+          <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(v.rentalRevenue)}</td>
+        </tr>
+        {isExpanded && v.bookings && v.bookings.length > 0 && (
+          <tr key={`${v.vehicleId}-details`}>
+            <td colSpan={8} className="px-4 py-2 bg-theme-bg-primary/30">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-theme-text-muted">
+                    <th className="text-left py-1 px-2">Cliente</th>
+                    <th className="text-left py-1 px-2">Ritiro</th>
+                    <th className="text-left py-1 px-2">Riconsegna</th>
+                    <th className="text-center py-1 px-2">GG Tot.</th>
+                    <th className="text-center py-1 px-2">GG Mese</th>
+                    <th className="text-center py-1 px-2">Pagamento</th>
+                    <th className="text-right py-1 px-2">Totale</th>
+                    <th className="text-right py-1 px-2">Ricavo Mese</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {v.bookings.map((b: BookingDetail) => {
+                    const badge = getPaymentBadge(b.payment_status, b.payment_method)
+                    return (
+                      <tr key={b.booking_id} className="border-t border-theme-border/30">
+                        <td className="py-1 px-2 text-theme-text-primary font-medium">{b.customer_name}</td>
+                        <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.start_at)}</td>
+                        <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.end_at)}</td>
+                        <td className="text-center py-1 px-2 text-theme-text-primary">{b.billable_days}g</td>
+                        <td className="text-center py-1 px-2 text-green-400">{b.days_in_month}g</td>
+                        <td className="text-center py-1 px-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td className="text-right py-1 px-2 text-theme-text-primary">{formatCurrency(b.total_price)}</td>
+                        <td className="text-right py-1 px-2 text-dr7-gold">
+                          {formatCurrency(b.billable_days > 0 ? (b.total_price / b.billable_days) * b.days_in_month : 0)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </td>
+          </tr>
+        )}
+      </>
     )
   }
 

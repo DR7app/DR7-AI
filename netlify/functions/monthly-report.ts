@@ -197,7 +197,7 @@ async function generateVehicleReport(
   // Only fetch bookings with statuses that represent actual rentals
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date')
+    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name')
     .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
 
   if (bookingsError) throw bookingsError
@@ -350,12 +350,21 @@ async function generateVehicleReport(
 
       // Total booking days for revenue proration (shared function, UTC-safe)
       const totalBookingDays = computeBillableDays(pickupDateRaw, dropoffDateRaw)
-      const bookingRevenue = (booking.price_total || 0) / 100
+      // price_total may be numeric or string (wallet RPC casts to numeric)
+      const rawPrice = booking.price_total
+      const bookingRevenue = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
       rentalRevenue += (bookingRevenue / totalBookingDays) * overlapDays
+
+      // Customer name from top-level or booking_details
+      const customerName = booking.customer_name
+        || booking.booking_details?.customer?.fullName
+        || booking.vehicle_name
+        || '-'
 
       // Per-booking detail (always included in output)
       bookingDetailsList.push({
         booking_id: booking.id,
+        customer_name: customerName,
         targa: vPlate || (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase() || '-',
         start_at: pickupDateRaw,
         end_at: dropoffDateRaw,
@@ -363,6 +372,8 @@ async function generateVehicleReport(
         days_in_month: overlapDays,
         total_price: bookingRevenue,
         revenue_per_day: totalBookingDays > 0 ? Math.round((bookingRevenue / totalBookingDays) * 100) / 100 : 0,
+        payment_status: booking.payment_status || '-',
+        payment_method: booking.payment_method || '-',
       })
 
       if (debug) {
