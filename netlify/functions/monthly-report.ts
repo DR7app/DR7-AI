@@ -193,16 +193,22 @@ async function generateVehicleReport(
   if (vehiclesError) throw vehiclesError
 
   // Fetch ALL bookings that overlap with this month — we filter in JS for full control
-  // Only fetch bookings with statuses that represent actual rentals
+  // Only fetch bookings with statuses that represent actual rentals (exclude admin@dr7.app)
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name')
+    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email')
     .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
+    .neq('customer_email', 'admin@dr7.app')
 
   if (bookingsError) throw bookingsError
 
   // STEP 1: Filter to ONLY real rental bookings
   const rentalBookings = (allBookings || []).filter(b => {
+    // Exclude admin/test bookings
+    const custEmail = (b.customer_name || '').toLowerCase()
+    const bookingEmail = (b.booking_details?.customer?.email || '').toLowerCase()
+    if (custEmail.includes('admin dr7') || bookingEmail === 'admin@dr7.app') return false
+
     // Must have pickup_date and dropoff_date (car wash uses appointment_date instead)
     if (!b.pickup_date || !b.dropoff_date) return false
 
