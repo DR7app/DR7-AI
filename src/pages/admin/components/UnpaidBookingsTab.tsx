@@ -663,6 +663,29 @@ export default function UnpaidBookingsTab() {
       const arr: any[] = details[type] || []
       const pending = arr.filter((item: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
 
+      // 1. FIRST: Mark items as paid in DB (this must succeed)
+      if (pending.length > 0) {
+        const updated = arr.map((item: any) => {
+          if (!item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial') {
+            const total = item.total || (item.amount || 0) * (item.quantity || 1)
+            return { ...item, paymentStatus: 'paid', amountPaid: total }
+          }
+          return item
+        })
+        const { error: updateErr } = await supabase.from('bookings').update({ booking_details: { ...details, [type]: updated } }).eq('id', booking.id)
+        if (updateErr) throw updateErr
+      }
+
+      // Mark fattura source items as paid
+      const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
+      for (const fi of fItems) {
+        await markSingleFatturaItemPaid(fi)
+      }
+
+      toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
+      logAdminAction('mark_type_paid', 'booking', booking.id, { type })
+
+      // 2. THEN: Try to generate fattura (non-blocking — payment is already marked)
       if (pending.length > 0) {
         const invoiceItems = pending.map((item: any) => {
           const total = item.total || (item.amount || 0) * (item.quantity || 1)
@@ -671,40 +694,31 @@ export default function UnpaidBookingsTab() {
         }).filter((i: any) => i.amount > 0)
 
         if (invoiceItems.length > 0) {
-          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: booking.id,
-              customerId: booking.customer_id || booking.user_id,
-              items: invoiceItems,
-              type: type === 'danni' ? 'danni' : undefined,
-              paymentStatus: 'paid'
+          try {
+            const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookingId: booking.id,
+                customerId: booking.customer_id || booking.user_id,
+                items: invoiceItems,
+                type: type === 'danni' ? 'danni' : undefined,
+                paymentStatus: 'paid'
+              })
             })
-          })
-          if (!res.ok) {
-            const err = await res.json()
-            throw new Error(err.message || err.error || 'Errore generazione fattura')
+            if (res.ok) {
+              const data = await res.json()
+              toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata`)
+            } else {
+              const err = await res.json()
+              toast.error('Fattura non generata: ' + (err.message || err.error || 'errore'))
+            }
+          } catch (invErr: any) {
+            toast.error('Fattura non generata: ' + (invErr.message || 'errore'))
           }
         }
-
-        const updated = arr.map((item: any) => {
-          if (!item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial') {
-            const total = item.total || (item.amount || 0) * (item.quantity || 1)
-            return { ...item, paymentStatus: 'paid', amountPaid: total }
-          }
-          return item
-        })
-        await supabase.from('bookings').update({ booking_details: { ...details, [type]: updated } }).eq('id', booking.id)
       }
 
-      const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
-      for (const fi of fItems) {
-        await markSingleFatturaItemPaid(fi)
-      }
-
-      toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
-      logAdminAction('mark_type_paid', 'booking', booking.id, { type })
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
@@ -808,27 +822,7 @@ export default function UnpaidBookingsTab() {
         }
       }
 
-      // Generate ONE fattura for all booking_details items using first booking as anchor
-      if (invoiceLineItems.length > 0) {
-        const firstItem = items.find(i => i.source === 'booking_details')!
-        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: firstItem.bookingId,
-            customerId: firstItem.booking.customer_id || firstItem.booking.user_id,
-            items: invoiceLineItems,
-            type: type === 'danni' ? 'danni' : undefined,
-            paymentStatus: 'paid'
-          })
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.message || err.error || 'Errore generazione fattura')
-        }
-      }
-
-      // Mark all booking_details items as paid in DB
+      // 1. FIRST: Mark all booking_details items as paid in DB
       for (const [bookingId, { booking, indices }] of bookingUpdates) {
         const details = booking.booking_details || {}
         const arr: any[] = [...(details[type] || [])]
@@ -848,7 +842,35 @@ export default function UnpaidBookingsTab() {
         if (fi) await markSingleFatturaItemPaid(fi)
       }
 
-      toast.success(`Tutti ${type === 'danni' ? 'i danni' : 'le penali'} segnati come pagati — fattura unica generata!`)
+      toast.success(`Tutti ${type === 'danni' ? 'i danni' : 'le penali'} segnati come pagati`)
+
+      // 2. THEN: Try to generate fattura (non-blocking — payment is already marked)
+      if (invoiceLineItems.length > 0) {
+        const firstItem = items.find(i => i.source === 'booking_details')!
+        try {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: firstItem.bookingId,
+              customerId: firstItem.booking.customer_id || firstItem.booking.user_id,
+              items: invoiceLineItems,
+              type: type === 'danni' ? 'danni' : undefined,
+              paymentStatus: 'paid'
+            })
+          })
+          if (res.ok) {
+            const data = await res.json()
+            toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata`)
+          } else {
+            const err = await res.json()
+            toast.error('Fattura non generata: ' + (err.message || err.error || 'errore'))
+          }
+        } catch (invErr: any) {
+          toast.error('Fattura non generata: ' + (invErr.message || 'errore'))
+        }
+      }
+
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
