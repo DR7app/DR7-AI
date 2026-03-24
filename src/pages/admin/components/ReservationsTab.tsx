@@ -5947,7 +5947,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                     >
                       <option value="1">1 ora</option>
-                      <option value="6">6 ore</option>
                       <option value="12">12 ore</option>
                       <option value="24">24 ore</option>
                     </select>
