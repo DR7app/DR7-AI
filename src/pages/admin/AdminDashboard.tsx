@@ -5,6 +5,7 @@ import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import ReservationsTab from './components/ReservationsTab'
 import CustomersTab from './components/CustomersTab'
+import CustomerWalletTab from './components/CustomerWalletTab'
 import VehiclesTab from './components/VehiclesTab'
 import CalendarTab from './components/CalendarTab'
 import CarWashBookingsTab from './components/CarWashBookingsTab'
@@ -38,7 +39,7 @@ import OperatoriTab from './components/OperatoriTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -164,6 +165,7 @@ export default function AdminDashboard() {
     'report-lavaggio': 'Report Lavaggio',
     'report-clienti': 'Report Clienti',
     'report-penali-danni': 'Report Penali & Danni',
+    'customer-wallet': 'Credit Wallet',
     'reports': 'Report',
     'com-email': 'E-mail',
     'com-pec': 'PEC',
@@ -315,6 +317,7 @@ export default function AdminDashboard() {
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Clienti</div>
               <button onClick={() => { setActiveTab('customers'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'customers')}>Lead</button>
               <button onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
+              <button onClick={() => { setActiveTab('customer-wallet'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
 
               {/* MARKETING */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Marketing</div>
@@ -425,13 +428,14 @@ export default function AdminDashboard() {
 
               {/* CLIENTI Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['customers', 'unpaid'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['customers', 'unpaid', 'customer-wallet'].includes(activeTab))}>
                   Clienti
                   <span className="text-xs">▼</span>
                 </button>
                 <div className="absolute left-0 mt-0 w-56 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                   <button onClick={() => setActiveTab('customers')} className={dropdownItemClass(activeTab === 'customers')}>Lead</button>
                   <button onClick={() => setActiveTab('unpaid')} className={dropdownItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
+                  <button onClick={() => setActiveTab('customer-wallet')} className={dropdownItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
                 </div>
               </div>
 
@@ -542,6 +546,7 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'unpaid' && <UnpaidBookingsTab />}
           {activeTab === 'customers' && <CustomersTab />}
+          {activeTab === 'customer-wallet' && <CustomerWalletTab />}
           {activeTab === 'vehicles' && <VehiclesTab />}
           {activeTab === 'calendar' && (
             <CalendarTab
