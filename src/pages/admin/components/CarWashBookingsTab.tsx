@@ -919,7 +919,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: customerPhone,
-                customMessage: `Gentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7`
+                customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\nGentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
               })
             })
           }
@@ -980,16 +980,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           paymentLabel = 'Da saldare'
         }
 
-        let custMsg = `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
+        let custMsg = `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n`
+        custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
         custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`
         custMsg += `*ID:* DR7-${bookingIdShort}\n`
         custMsg += `*Servizio:* ${serviceNames}\n`
         if (vehiclePlate) custMsg += `*Targa:* ${vehiclePlate}\n`
         custMsg += `*Data e Ora:* ${fmtDate} alle ${fmtTime}\n`
-        if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
         custMsg += `*Totale:* €${totalEur}\n`
         custMsg += `*Pagamento:* ${paymentLabel}\n`
-        custMsg += `\nCordiali Saluti,\nDR7`
+        if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
+        custMsg += `\nCordiali Saluti,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
 
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',

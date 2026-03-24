@@ -287,48 +287,79 @@ const handler: Handler = async (event) => {
                     const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
                     const custFirstName = custName.split(' ')[0] || 'Cliente';
                     const bookingRef = booking.id.substring(0, 8).toUpperCase();
+                    const totalEur = booking.price_total ? (booking.price_total / 100).toFixed(2) : amountEur;
 
                     // Format dates in Rome timezone
                     const fmtDate = (d: string) => new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' });
                     const fmtTime = (d: string) => new Date(d).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
 
-                    const pickupLabel = booking.pickup_location === 'dr7_office' ? 'DR7 Office' : (booking.booking_details?.delivery_address ? `${booking.booking_details.delivery_address.street}, ${booking.booking_details.delivery_address.city}` : booking.pickup_location || 'DR7 Office');
+                    let custMsg = '';
 
-                    // KM info
-                    const unlimitedKm = booking.booking_details?.unlimited_km;
-                    const kmLimit = booking.booking_details?.km_limit;
-                    let kmLabel = '-';
-                    if (unlimitedKm || kmLimit === 'Illimitati') {
-                        kmLabel = 'Illimitati';
-                    } else if (kmLimit) {
-                        kmLabel = `${kmLimit} km`;
+                    // Detect car wash / mechanical
+                    const isCarWashBooking = booking.service_type === 'car_wash' || booking.booking_details?.service_type === 'car_wash' || booking.booking_details?.type === 'car_wash';
+                    const isMechBooking = booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical';
+
+                    if (isCarWashBooking) {
+                        // Car wash confirmation
+                        const serviceName = booking.booking_details?.serviceName || booking.vehicle_name || 'Autolavaggio';
+                        const apptDate = booking.pickup_date || booking.booking_details?.appointment_date;
+                        const fmtApptDate = apptDate ? new Date(apptDate).toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' }) : '';
+                        const fmtApptTime = apptDate ? new Date(apptDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '';
+
+                        const vehiclePlate = booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '';
+                        custMsg = `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n`;
+                        custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`;
+                        custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
+                        custMsg += `*ID:* DR7-${bookingRef}\n`;
+                        custMsg += `*Servizio:* ${serviceName}\n`;
+                        if (vehiclePlate) custMsg += `*Targa:* ${vehiclePlate}\n`;
+                        if (fmtApptDate) custMsg += `*Data e Ora:* ${fmtApptDate} alle ${fmtApptTime}\n`;
+                        custMsg += `*Totale:* €${totalEur}\n`;
+                        custMsg += `*Pagamento:* Pagato\n`;
+                        if (booking.booking_details?.notes) custMsg += `*Note:* ${booking.booking_details.notes}\n`;
+                        custMsg += `\nCordiali Saluti,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`;
+                    } else if (isMechBooking) {
+                        // Mechanical confirmation (simple)
+                        custMsg = `Salve ${custFirstName},\n\nConfermiamo il pagamento per il servizio meccanico.\n\n`;
+                        custMsg += `*ID:* DR7-${bookingRef}\n`;
+                        custMsg += `*Totale:* €${totalEur}\n`;
+                        custMsg += `*Pagamento:* Pagato\n`;
+                        custMsg += `\nCordiali Saluti,\nDR7`;
+                    } else {
+                        // Car rental confirmation
+                        const pickupLabel = booking.pickup_location === 'dr7_office' ? 'DR7 Office' : (booking.booking_details?.delivery_address ? `${booking.booking_details.delivery_address.street}, ${booking.booking_details.delivery_address.city}` : booking.pickup_location || 'DR7 Office');
+
+                        const unlimitedKm = booking.booking_details?.unlimited_km;
+                        const kmLimit = booking.booking_details?.km_limit;
+                        let kmLabel = '-';
+                        if (unlimitedKm || kmLimit === 'Illimitati') {
+                            kmLabel = 'Illimitati';
+                        } else if (kmLimit) {
+                            kmLabel = `${kmLimit} km`;
+                        }
+
+                        const depositEur = booking.deposit_amount ? (booking.deposit_amount / 100).toFixed(2) : (booking.booking_details?.deposit || '0');
+                        const depositStatus = booking.booking_details?.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare';
+                        const depositLabel = parseFloat(String(depositEur)) > 0 ? `€${depositEur} (${depositStatus})` : '€0';
+
+                        const insMap: Record<string, string> = { 'KASKO': 'Kasko', 'KASKO_BASE': 'Kasko Base', 'KASKO_BLACK': 'Kasko Black', 'KASKO_SIGNATURE': 'Kasko Signature', 'DR7': 'Kasko DR7' };
+                        const insuranceLabel = insMap[booking.booking_details?.insuranceOption || ''] || 'Kasko Base';
+
+                        custMsg = `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`;
+                        custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
+                        custMsg += `*ID:* DR7-${bookingRef}\n`;
+                        custMsg += `*Veicolo:* ${booking.vehicle_name || 'N/A'}\n`;
+                        custMsg += `*Ritiro:* ${fmtDate(booking.pickup_date)} alle ${fmtTime(booking.pickup_date)}\n`;
+                        custMsg += `*Riconsegna:* ${fmtDate(booking.dropoff_date)} alle ${fmtTime(booking.dropoff_date)}\n`;
+                        custMsg += `*Luogo ritiro:* ${pickupLabel}\n`;
+                        custMsg += `*Assicurazione:* ${insuranceLabel}\n`;
+                        custMsg += `*Totale:* €${totalEur}\n`;
+                        custMsg += `*Cauzione:* ${depositLabel}\n`;
+                        custMsg += `*KM:* ${kmLabel}\n`;
+                        custMsg += `*Pagamento:* Pagato (Nexi Pay by Link)\n`;
+                        if (booking.booking_details?.notes) custMsg += `*Note:* ${booking.booking_details.notes}\n`;
+                        custMsg += `\nCordiali Saluti,\nDR7`;
                     }
-
-                    // Deposit
-                    const depositEur = booking.deposit_amount ? (booking.deposit_amount / 100).toFixed(2) : (booking.booking_details?.deposit || '0');
-                    const depositStatus = booking.booking_details?.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare';
-                    const depositLabel = parseFloat(String(depositEur)) > 0 ? `€${depositEur} (${depositStatus})` : '€0';
-
-                    // Insurance
-                    const insMap: Record<string, string> = { 'KASKO': 'Kasko', 'KASKO_BASE': 'Kasko Base', 'KASKO_BLACK': 'Kasko Black', 'KASKO_SIGNATURE': 'Kasko Signature', 'DR7': 'Kasko DR7' };
-                    const insuranceLabel = insMap[booking.booking_details?.insuranceOption || ''] || 'Kasko Base';
-
-                    const totalEur = booking.price_total ? (booking.price_total / 100).toFixed(2) : amountEur;
-
-                    let custMsg = `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`;
-                    custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
-                    custMsg += `*ID:* DR7-${bookingRef}\n`;
-                    custMsg += `*Veicolo:* ${booking.vehicle_name || 'N/A'}\n`;
-                    custMsg += `*Ritiro:* ${fmtDate(booking.pickup_date)} alle ${fmtTime(booking.pickup_date)}\n`;
-                    custMsg += `*Riconsegna:* ${fmtDate(booking.dropoff_date)} alle ${fmtTime(booking.dropoff_date)}\n`;
-                    custMsg += `*Luogo ritiro:* ${pickupLabel}\n`;
-                    custMsg += `*Assicurazione:* ${insuranceLabel}\n`;
-                    custMsg += `*Totale:* €${totalEur}\n`;
-                    custMsg += `*Cauzione:* ${depositLabel}\n`;
-                    custMsg += `*KM:* ${kmLabel}\n`;
-                    custMsg += `*Pagamento:* Pagato (Nexi Pay by Link)\n`;
-                    if (booking.booking_details?.notes) custMsg += `*Note:* ${booking.booking_details.notes}\n`;
-                    custMsg += `\nCordiali Saluti,\nDR7`;
 
                     await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
                         method: 'POST',
