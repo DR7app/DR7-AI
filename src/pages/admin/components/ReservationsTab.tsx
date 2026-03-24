@@ -342,6 +342,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     additional_amount: '0',
     extension_payment_status: 'pending' as 'paid' | 'pending' | 'nexi_pay_by_link',
     extension_payment_method: '',
+    link_expiration_hours: '1',
     notes: '',
     change_vehicle: false,
     new_vehicle_id: '',
@@ -2329,6 +2330,70 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
         } catch (invoiceError) {
           console.error('[handleConfirmExtend] ⚠️ Failed to generate extension fattura:', invoiceError)
+        }
+      }
+
+      // Generate Nexi Pay by Link for extension
+      if (extendData.extension_payment_status === 'nexi_pay_by_link' && additionalAmount > 0) {
+        try {
+          let customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
+          const custEmail = extendingBooking.customer_email || extendingBooking.booking_details?.customer?.email
+          const custName = extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'Cliente'
+
+          if (!customerPhone) {
+            const custId = extendingBooking.booking_details?.customer?.customerId || extendingBooking.booking_details?.customer_id
+            if (custId) {
+              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle()
+              if (cust?.telefono) customerPhone = cust.telefono
+            }
+          }
+
+          const expirationHours = parseInt(extendData.link_expiration_hours) || 1
+          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: extendingBooking.id,
+              amount: additionalAmount,
+              customerEmail: custEmail || '',
+              customerName: custName,
+              description: `Estensione noleggio — ${custName}`,
+              expirationHours,
+              paymentPurpose: 'booking',
+            }),
+          })
+          const linkData = await linkRes.json()
+
+          if (linkRes.ok && linkData.paymentUrl) {
+            // Store link on booking
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...updatedBookingDetails,
+                nexi_payment_link: linkData.paymentUrl,
+                nexi_order_id: linkData.orderId,
+              }
+            }).eq('id', extendingBooking.id)
+
+            if (customerPhone) {
+              const bookingRef = extendingBooking.id.substring(0, 8).toUpperCase()
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: customerPhone,
+                  customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nLa sua prenotazione #${bookingRef} è stata estesa.\n\n*Modalità di pagamento (leggere prima di procedere):*\n•⁠ Carta prepagata → autorizzo accredito +20% sulla tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nPer completare il pagamento dell'estensione di €${additionalAmount.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di ${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}.\n\nIl pagamento implica accettazione delle condizioni contrattuali DR7.\n\nGrazie per la collaborazione.\n\nDR7`
+                })
+              })
+            }
+
+            try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+            toast.success(`Pay by Link estensione inviato! €${additionalAmount.toFixed(2)} (validità ${expirationHours}h)`)
+          } else {
+            toast.error('Errore Pay by Link: ' + (linkData.error || 'Errore'))
+          }
+        } catch (linkErr: any) {
+          console.error('[handleConfirmExtend] Pay by Link error:', linkErr)
+          toast.error('Errore Pay by Link: ' + linkErr.message)
         }
       }
 
@@ -5869,6 +5934,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
                       <option value="Credit Wallet">Credit Wallet</option>
                       <option value="Paypal">Paypal</option>
+                    </select>
+                  </div>
+                )}
+
+                {extendData.extension_payment_status === 'nexi_pay_by_link' && (
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Validità Link</label>
+                    <select
+                      value={extendData.link_expiration_hours}
+                      onChange={(e) => setExtendData({ ...extendData, link_expiration_hours: e.target.value })}
+                      className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="1">1 ora</option>
+                      <option value="6">6 ore</option>
+                      <option value="12">12 ore</option>
+                      <option value="24">24 ore</option>
                     </select>
                   </div>
                 )}
