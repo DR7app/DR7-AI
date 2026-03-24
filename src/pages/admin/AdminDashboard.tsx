@@ -36,10 +36,11 @@ import TrusteraTab from './components/TrusteraTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import CarWashCatalogTab from './components/CarWashCatalogTab'
 import OperatoriTab from './components/OperatoriTab'
+import DashboardTab from './components/DashboardTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -177,6 +178,7 @@ export default function AdminDashboard() {
     'scadenze': 'Scadenze',
     'fattura': 'Fattura',
     'operatori': 'Operatori',
+    'dashboard-kpi': 'Dashboard',
   }
 
   return (
@@ -355,6 +357,7 @@ export default function AdminDashboard() {
               {adminRole === 'superadmin' && (
                 <button onClick={() => { setActiveTab('operatori'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'operatori')}>Operatori</button>
               )}
+              <button onClick={() => { setActiveTab('dashboard-kpi'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
 
               {/* COMUNICAZIONE */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Comunicazione</div>
@@ -480,7 +483,7 @@ export default function AdminDashboard() {
 
               {/* REPORT Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'reports', 'operatori'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'reports', 'operatori', 'dashboard-kpi'].includes(activeTab))}>
                   Report
                   <span className="text-xs">▼</span>
                 </button>
@@ -492,6 +495,7 @@ export default function AdminDashboard() {
                   {adminRole === 'superadmin' && (
                     <button onClick={() => setActiveTab('operatori')} className={dropdownItemClass(activeTab === 'operatori')}>Operatori</button>
                   )}
+                  <button onClick={() => setActiveTab('dashboard-kpi')} className={dropdownItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
                 </div>
               </div>
 
@@ -597,6 +601,7 @@ export default function AdminDashboard() {
           {activeTab === 'com-chatgpt' && <PlaceholderTab title="Chat GPT" />}
           {activeTab === 'com-aruba' && <PlaceholderTab title="Aruba" />}
           {activeTab === 'operatori' && adminRole === 'superadmin' && <OperatoriTab />}
+          {activeTab === 'dashboard-kpi' && <DashboardTab />}
         </div>
       </main>
 
