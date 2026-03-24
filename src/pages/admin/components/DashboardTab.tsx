@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface DashboardData {
   period: { month: string; daysInMonth: number; daysElapsed: number }
@@ -162,8 +162,32 @@ export default function DashboardTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Supplier costs state
+  const [supplierData, setSupplierData] = useState<{
+    invoices: any[]; supplierTotals: Record<string, { count: number; total: number }>
+    grandTotal: number; totalCount: number
+  } | null>(null)
+  const [supplierLoading, setSupplierLoading] = useState(false)
+  const [supplierExpanded, setSupplierExpanded] = useState(false)
+  const [supplierDetailOpen, setSupplierDetailOpen] = useState<string | null>(null)
+
+  const fetchSupplierCosts = useCallback(async (month: string) => {
+    setSupplierLoading(true)
+    try {
+      const res = await fetch(`/.netlify/functions/get-incoming-invoices?month=${month}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      if (json.success) setSupplierData(json)
+    } catch (err: any) {
+      console.error('[Dashboard] Supplier costs error:', err)
+    } finally {
+      setSupplierLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchDashboard()
+    fetchSupplierCosts(selectedMonth)
   }, [selectedMonth])
 
   const fetchDashboard = async () => {
@@ -502,6 +526,122 @@ export default function DashboardTab() {
                 <div className="w-2.5 h-2.5 rounded-full bg-red-500" /> Scaduti
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ========== COSTI FORNITORI ========== */}
+      <div>
+        <SectionHeader title="Costi Fornitori" subtitle="Fatture ricevute dai fornitori tramite Aruba SDI" />
+
+        {supplierLoading && (
+          <div className="bg-theme-bg-secondary/60 rounded-2xl p-6 border border-white/5 text-center">
+            <p className="text-theme-text-muted text-sm">Caricamento fatture fornitori...</p>
+          </div>
+        )}
+
+        {!supplierLoading && supplierData && (
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard
+                label="Totale Costi Mese"
+                value={`\u20AC ${fmtDec(supplierData.grandTotal)}`}
+                sub={`${supplierData.totalCount} fatture ricevute`}
+                accent="red"
+                border
+              />
+              <StatCard
+                label="Fornitori Attivi"
+                value={String(Object.keys(supplierData.supplierTotals).length)}
+                sub={`su 9 monitorati`}
+                accent="default"
+                border
+              />
+              {d && (
+                <StatCard
+                  label="Margine Operativo"
+                  value={`\u20AC ${fmt(Math.round(d.revenue.currentMonth - supplierData.grandTotal))}`}
+                  sub={`Fatturato \u20AC ${fmt(d.revenue.currentMonth)} - Costi \u20AC ${fmt(Math.round(supplierData.grandTotal))}`}
+                  accent={d.revenue.currentMonth - supplierData.grandTotal > 0 ? 'green' : 'red'}
+                  border
+                />
+              )}
+            </div>
+
+            {/* Supplier breakdown table */}
+            <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden">
+              <button
+                onClick={() => setSupplierExpanded(!supplierExpanded)}
+                className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+              >
+                <span className="text-sm font-semibold text-theme-text-primary uppercase tracking-wide">Dettaglio per Fornitore</span>
+                <svg className={`w-4 h-4 text-theme-text-muted transition-transform ${supplierExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {supplierExpanded && (
+                <div className="border-t border-white/5">
+                  {Object.entries(supplierData.supplierTotals)
+                    .sort(([, a], [, b]) => b.total - a.total)
+                    .map(([supplier, info]) => (
+                      <div key={supplier} className="border-b border-white/5 last:border-b-0">
+                        <button
+                          onClick={() => setSupplierDetailOpen(supplierDetailOpen === supplier ? null : supplier)}
+                          className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
+                              <span className="text-red-400 text-xs font-bold">{info.count}</span>
+                            </div>
+                            <span className="text-sm text-theme-text-primary truncate">{supplier}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-red-400">{'\u20AC'} {fmtDec(info.total)}</span>
+                            <svg className={`w-3.5 h-3.5 text-theme-text-muted transition-transform ${supplierDetailOpen === supplier ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </button>
+
+                        {/* Expanded invoice list for this supplier */}
+                        {supplierDetailOpen === supplier && (
+                          <div className="px-5 pb-3 space-y-1.5">
+                            {supplierData.invoices
+                              .filter(inv => inv.sender === supplier)
+                              .map((inv: any, idx: number) => (
+                                <div key={inv.id || idx} className="flex items-center justify-between bg-white/[0.02] rounded-lg px-3 py-2">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <span className="text-xs text-theme-text-muted w-20 flex-shrink-0">
+                                      {inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString('it-IT') : '—'}
+                                    </span>
+                                    <span className="text-xs text-theme-text-secondary truncate">
+                                      {inv.invoiceNumber || 'N/A'}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs font-mono text-theme-text-primary flex-shrink-0">{'\u20AC'} {fmtDec(inv.amount)}</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                  {Object.keys(supplierData.supplierTotals).length === 0 && (
+                    <div className="px-5 py-8 text-center text-theme-text-muted text-sm">
+                      Nessuna fattura fornitore trovata per questo mese
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!supplierLoading && !supplierData && (
+          <div className="bg-theme-bg-secondary/60 rounded-2xl p-6 border border-white/5 text-center">
+            <p className="text-theme-text-muted text-sm">Impossibile caricare le fatture fornitori</p>
           </div>
         )}
       </div>
