@@ -1819,7 +1819,7 @@ export default function UnpaidBookingsTab() {
         )}
         {chargedViaMit != null && chargedViaMit > 0 && (
           <div className="text-xs text-green-400 bg-green-900/20 border border-green-700/30 rounded-lg px-3 py-1.5 font-medium">
-            Incassato via addebito: €{(chargedViaMit / 100).toFixed(2)}
+            In attesa di pagamento: €{(chargedViaMit / 100).toFixed(2)}
           </div>
         )}
         {items.map((item, idx) => {
@@ -2180,7 +2180,7 @@ export default function UnpaidBookingsTab() {
                       €{(group.totalRemaining / 100).toFixed(2)}
                     </div>
                     {group.chargedViaMit > 0 && (
-                      <div className="text-xs text-green-400 mt-0.5">Incassato via addebito: €{(group.chargedViaMit / 100).toFixed(2)}</div>
+                      <div className="text-xs text-green-400 mt-0.5">In attesa di pagamento: €{(group.chargedViaMit / 100).toFixed(2)}</div>
                     )}
                     {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
                       <button
@@ -2237,7 +2237,7 @@ export default function UnpaidBookingsTab() {
             </h3>
             <div className="text-sm text-theme-text-secondary space-y-1">
               <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
-              <p><strong>Importo:</strong> <span className="text-red-400 font-bold">€{((addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining) / 100).toFixed(2)}</span></p>
+              <p><strong>Da incassare:</strong> <span className="text-red-400 font-bold">€{((addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining) / 100).toFixed(2)}</span></p>
               {addebitoItemAmount != null && addebitoCarryForward > 0 && (
                 <div className="text-xs bg-orange-900/20 border border-orange-700/30 rounded-lg p-2 mt-1 space-y-0.5">
                   <p className="text-theme-text-muted">
