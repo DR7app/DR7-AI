@@ -102,6 +102,7 @@ export default function UnpaidBookingsTab() {
   const [addebitoSending, setAddebitoSending] = useState(false)
   const [addebitoItemAmount, setAddebitoItemAmount] = useState<number | null>(null) // cents, null = full group
   const [addebitoItemLabel, setAddebitoItemLabel] = useState<string | null>(null)
+  const [addebitoCarryForward, setAddebitoCarryForward] = useState<number>(0) // cents carry-forward from other unpaid items
 
   useEffect(() => {
     loadUnpaidBookings()
@@ -124,7 +125,16 @@ export default function UnpaidBookingsTab() {
     setAddebitoSending(false)
     setAddebitoContractId(null)
     setAddebitoDanniPhotos([])
-    setAddebitoItemAmount(itemAmountCents ?? null)
+
+    // Calculate carry-forward: remaining from OTHER items when charging a single item
+    let carryForward = 0
+    if (itemAmountCents != null) {
+      // totalRemaining includes ALL items; subtract this item to get carry-forward
+      carryForward = Math.max(0, group.totalRemaining - itemAmountCents)
+    }
+    setAddebitoCarryForward(carryForward)
+    // Total charge = item amount + carry-forward from other unpaid items
+    setAddebitoItemAmount(itemAmountCents != null ? itemAmountCents + carryForward : null)
     setAddebitoItemLabel(itemLabel ?? null)
     setShowAddebitoModal(true)
 
@@ -2228,8 +2238,18 @@ export default function UnpaidBookingsTab() {
             <div className="text-sm text-theme-text-secondary space-y-1">
               <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
               <p><strong>Importo:</strong> <span className="text-red-400 font-bold">€{((addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining) / 100).toFixed(2)}</span></p>
-              {addebitoItemAmount != null && (
-                <p className="text-xs text-theme-text-muted">Totale cliente: €{(addebitoGroup.totalRemaining / 100).toFixed(2)}</p>
+              {addebitoItemAmount != null && addebitoCarryForward > 0 && (
+                <div className="text-xs bg-orange-900/20 border border-orange-700/30 rounded-lg p-2 mt-1 space-y-0.5">
+                  <p className="text-theme-text-muted">
+                    {addebitoItemLabel}: <span className="text-theme-text-primary font-semibold">€{((addebitoItemAmount - addebitoCarryForward) / 100).toFixed(2)}</span>
+                  </p>
+                  <p className="text-theme-text-muted">
+                    Saldo precedente non riscosso: <span className="text-orange-400 font-semibold">+€{(addebitoCarryForward / 100).toFixed(2)}</span>
+                  </p>
+                  <p className="text-theme-text-primary font-bold pt-0.5 border-t border-orange-700/20">
+                    Totale addebito: €{(addebitoItemAmount / 100).toFixed(2)}
+                  </p>
+                </div>
               )}
               <p><strong>Contract ID:</strong> {addebitoContractId ? <span className="font-mono text-xs text-green-400">{addebitoContractId}</span> : <span className="text-red-400">Non trovato</span>}</p>
             </div>
