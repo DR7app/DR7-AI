@@ -113,8 +113,9 @@ const handler: Handler = async (event) => {
             || (transaction.description?.toLowerCase().startsWith('penali') ? 'penali' : null)
             || 'booking';
         const isDanniPenali = paymentPurpose === 'danni' || paymentPurpose === 'penali' || paymentPurpose === 'danni_penali';
+        const isExtension = paymentPurpose === 'extension';
 
-        console.log(`[nexi-payment-callback] Payment purpose: ${paymentPurpose}, isDanniPenali: ${isDanniPenali}`);
+        console.log(`[nexi-payment-callback] Payment purpose: ${paymentPurpose}, isDanniPenali: ${isDanniPenali}, isExtension: ${isExtension}`);
 
         // Update transaction status (preserve original metadata)
         await supabase.from('nexi_transactions').update({
@@ -257,6 +258,88 @@ const handler: Handler = async (event) => {
 
             // NO contract, NO booking confirmation — just danni/penali
             return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'danni_penali_paid' }) };
+        }
+
+        // ── EXTENSION PAYMENT ────────────────────────────────────────────
+        if (isSuccess && isExtension && transaction.booking_id) {
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('id, customer_name, customer_phone, customer_email, vehicle_name, booking_details')
+                .eq('id', transaction.booking_id)
+                .single();
+
+            if (booking) {
+                const amountEur = (transaction.amount_cents / 100).toFixed(2);
+                console.log(`[nexi-payment-callback] Extension payment received — €${amountEur} for booking ${booking.id}`);
+
+                // Mark the latest pending extension as paid in booking_details
+                const details = booking.booking_details || {};
+                const extensions = details.extension_history || [];
+                let markedPaid = false;
+                for (const ext of extensions) {
+                    if (ext.payment_status === 'pending' || ext.payment_status === 'nexi_pay_by_link') {
+                        ext.payment_status = 'paid';
+                        ext.payment_method = 'Nexi Pay by Link';
+                        ext.paid_at = new Date().toISOString();
+                        markedPaid = true;
+                        break; // Mark only the first pending extension
+                    }
+                }
+
+                if (markedPaid) {
+                    await supabase.from('bookings').update({
+                        booking_details: {
+                            ...details,
+                            extension_history: extensions,
+                            nexi_extension_paid_at: new Date().toISOString(),
+                        }
+                    }).eq('id', booking.id);
+                    console.log(`[nexi-payment-callback] Extension marked as paid in booking_details`);
+                }
+
+                // Generate fattura for EXTENSION AMOUNT ONLY (not full booking)
+                try {
+                    const extensionAmountEur = transaction.amount_cents / 100;
+                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extensionAmountEur })
+                    });
+                    console.log(`[nexi-payment-callback] Extension fattura generated — €${amountEur}`);
+                } catch (invErr) {
+                    console.error('[nexi-payment-callback] Extension fattura failed:', invErr);
+                }
+
+                // Send WhatsApp confirmation to customer
+                const custPhone = booking.customer_phone || details.customer?.phone;
+                if (custPhone) {
+                    const custName = booking.customer_name || details.customer?.fullName || 'Cliente';
+                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: custPhone,
+                            customMessage: `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per l'estensione del noleggio.\n\nGrazie,\nDR7`
+                        })
+                    });
+                }
+
+                // Admin notification
+                const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+                if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${NOTIFICATION_PHONE}@c.us`,
+                            message: `💰 *PAGAMENTO ESTENSIONE RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nFattura estensione generata automaticamente.`
+                        })
+                    });
+                }
+            }
+
+            // NO contract, NO booking re-confirmation — just extension
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'extension_paid' }) };
         }
 
         // ── REGULAR BOOKING PAYMENT ───────────────────────────────────────
