@@ -145,6 +145,60 @@ export default function CustomerWalletTab() {
   const [description, setDescription] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
+  // OTP verification
+  const [otpCode, setOtpCode] = useState('')
+  const [sentOtp, setSentOtp] = useState('')
+  const [otpSending, setOtpSending] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'credit' | 'debit' | null>(null)
+
+  async function sendOtp(action: 'credit' | 'debit') {
+    const parsedAmount = parseFloat(amount)
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast.error('Inserisci un importo valido')
+      return
+    }
+    if (!selectedCustomer) return
+
+    setOtpSending(true)
+    setPendingAction(action)
+    try {
+      const code = String(Math.floor(100000 + Math.random() * 900000))
+      setSentOtp(code)
+
+      const actionLabel = action === 'credit' ? 'CREDITO' : 'ADDEBITO'
+      const message = `🔐 *CODICE VERIFICA WALLET*\n\n*Operazione:* ${actionLabel}\n*Cliente:* ${selectedCustomer.full_name}\n*Importo:* €${parsedAmount.toFixed(2)}\n${description ? `*Descrizione:* ${description}\n` : ''}\n*Codice:* ${code}\n\nComunica questo codice all'operatore per autorizzare l'operazione.`
+
+      await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: '393472817258',
+          customMessage: message
+        })
+      })
+
+      setOtpSent(true)
+      setOtpVerified(false)
+      setOtpCode('')
+      toast.success('Codice di verifica inviato via WhatsApp')
+    } catch (err) {
+      toast.error('Errore invio codice')
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  function verifyOtp() {
+    if (otpCode === sentOtp) {
+      setOtpVerified(true)
+      toast.success('Codice verificato!')
+    } else {
+      toast.error('Codice errato')
+    }
+  }
+
   async function apiCall(body: Record<string, any>) {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     const res = await fetch('/.netlify/functions/customer-wallet-admin', {
@@ -205,6 +259,12 @@ export default function CustomerWalletTab() {
       return
     }
 
+    // Require OTP verification
+    if (!otpVerified || pendingAction !== action) {
+      sendOtp(action)
+      return
+    }
+
     setActionLoading(true)
     try {
       const data = await apiCall({
@@ -218,6 +278,12 @@ export default function CustomerWalletTab() {
         toast.success(`${action === 'credit' ? 'Credito' : 'Addebito'} di €${parsedAmount.toFixed(2)} applicato`)
         setAmount('')
         setDescription('')
+        // Reset OTP
+        setOtpCode('')
+        setSentOtp('')
+        setOtpSent(false)
+        setOtpVerified(false)
+        setPendingAction(null)
         // Refresh detail
         loadCustomerDetail(selectedCustomer)
         // Update balance in search results
@@ -392,20 +458,50 @@ export default function CustomerWalletTab() {
                     placeholder="Descrizione (opzionale)"
                     className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-lg text-theme-text-primary text-sm mb-2"
                   />
+                  {/* OTP Verification */}
+                  {otpSent && !otpVerified && (
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-2">
+                      <p className="text-blue-400 text-xs mb-2">Codice inviato via WhatsApp. Inserisci il codice per confermare:</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && verifyOtp()}
+                          placeholder="Codice a 6 cifre"
+                          maxLength={6}
+                          className="flex-1 px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-lg text-theme-text-primary text-sm text-center tracking-widest font-mono"
+                        />
+                        <button
+                          onClick={verifyOtp}
+                          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                        >
+                          Verifica
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {otpVerified && (
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 mb-2 text-center">
+                      <p className="text-green-400 text-xs font-semibold">Codice verificato — clicca per confermare l'operazione</p>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleCreditDebit('credit')}
-                      disabled={actionLoading || !amount}
+                      disabled={actionLoading || otpSending || !amount}
                       className="flex-1 px-3 py-2 text-sm bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-50 font-medium"
                     >
-                      + Credita
+                      {otpSending && pendingAction === 'credit' ? 'Invio codice...' : otpVerified && pendingAction === 'credit' ? 'Conferma Credito' : '+ Credita'}
                     </button>
                     <button
                       onClick={() => handleCreditDebit('debit')}
-                      disabled={actionLoading || !amount}
+                      disabled={actionLoading || otpSending || !amount}
                       className="flex-1 px-3 py-2 text-sm bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 disabled:opacity-50 font-medium"
                     >
-                      - Addebita
+                      {otpSending && pendingAction === 'debit' ? 'Invio codice...' : otpVerified && pendingAction === 'debit' ? 'Conferma Addebito' : '- Addebita'}
                     </button>
                   </div>
                 </div>
