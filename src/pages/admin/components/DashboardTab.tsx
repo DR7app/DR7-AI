@@ -168,18 +168,24 @@ export default function DashboardTab() {
     grandTotal: number; totalCount: number
   } | null>(null)
   const [supplierLoading, setSupplierLoading] = useState(false)
+  const [supplierError, setSupplierError] = useState<string | null>(null)
   const [supplierExpanded, setSupplierExpanded] = useState(false)
   const [supplierDetailOpen, setSupplierDetailOpen] = useState<string | null>(null)
 
   const fetchSupplierCosts = useCallback(async (month: string) => {
     setSupplierLoading(true)
+    setSupplierError(null)
     try {
       const res = await fetch(`/.netlify/functions/get-incoming-invoices?month=${month}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      if (json.success) setSupplierData(json)
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `HTTP ${res.status}`)
+      }
+      setSupplierData(json)
     } catch (err: any) {
       console.error('[Dashboard] Supplier costs error:', err)
+      setSupplierError(err.message || 'Errore sconosciuto')
+      setSupplierData(null)
     } finally {
       setSupplierLoading(false)
     }
@@ -639,9 +645,13 @@ export default function DashboardTab() {
           </div>
         )}
 
-        {!supplierLoading && !supplierData && (
-          <div className="bg-theme-bg-secondary/60 rounded-2xl p-6 border border-white/5 text-center">
-            <p className="text-theme-text-muted text-sm">Impossibile caricare le fatture fornitori</p>
+        {!supplierLoading && supplierError && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center">
+            <p className="text-red-400 font-medium text-sm mb-1">Errore caricamento fatture fornitori</p>
+            <p className="text-theme-text-muted text-xs">{supplierError}</p>
+            <button onClick={() => fetchSupplierCosts(selectedMonth)} className="mt-3 px-4 py-1.5 bg-[#D4AF37] text-black rounded-lg text-xs font-bold hover:bg-[#c4a030] transition-colors">
+              Riprova
+            </button>
           </div>
         )}
       </div>
