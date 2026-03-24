@@ -184,11 +184,10 @@ async function generateVehicleReport(
   month: string,
   debug: boolean
 ) {
-  // Fetch all vehicles (excluding retired)
+  // Fetch ALL vehicles (including retired — they may have historical bookings)
   const { data: vehicles, error: vehiclesError } = await supabase
     .from('vehicles')
     .select('id, display_name, plate, status, daily_rate, category, metadata')
-    .neq('status', 'retired')
     .order('display_name')
 
   if (vehiclesError) throw vehiclesError
@@ -442,6 +441,7 @@ async function generateVehicleReport(
       label: vehicle.display_name,
       plate: vehicle.plate || '-',
       category: vehicle.category || '-',
+      status: vehicle.status || 'available',
       rentedDays: rentedCount,
       maintenanceDays: maintenanceCount,
       idleDays: Math.max(0, idleCount),

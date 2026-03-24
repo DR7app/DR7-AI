@@ -19,6 +19,7 @@ interface VehicleReport {
   label: string
   plate: string
   category: string
+  status?: string
   rentedDays: number
   maintenanceDays: number
   idleDays: number
@@ -173,6 +174,8 @@ export default function ReportsTab() {
 
   const filteredVehicles = vehicleData?.vehicles
     ? vehicleData.vehicles.filter(v => {
+        // Hide retired vehicles with zero activity in this month
+        if (v.status === 'retired' && v.rentedDays === 0 && v.totalRevenue === 0) return false
         if (!plateSearch.trim()) return true
         const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
         const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
