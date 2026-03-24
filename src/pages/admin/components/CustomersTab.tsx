@@ -412,81 +412,8 @@ export default function CustomersTab() {
       const { data: { user } } = await supabase.auth.getUser()
       console.log('[CustomersTab] Current user:', user?.email)
 
-      // Get unique customers from bookings table (primary source of customer data)
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('customer_name, customer_email, customer_phone, user_id, booked_at, booking_details')
-        .order('booked_at', { ascending: false })
-
-
-      if (bookingsError) {
-        console.error('[CustomersTab] Could not load customers from bookings:', bookingsError)
-      }
-
-      // Merge customers by email or phone
+      // Use customers_extended as the SINGLE source of truth (no more bookings merge = no duplicates)
       const customerMap = new Map<string, Customer>()
-      const collisionCounter: Record<string, number> = {}
-
-      // Process bookings data to create unique customer entries
-      if (bookingsData) {
-        console.log('Total bookings:', bookingsData.length)
-        console.log('Top Collisions:', Object.entries(collisionCounter).filter(([, v]) => v > 1).sort((a, b) => b[1] - a[1]).slice(0, 5))
-        bookingsData.forEach((booking: any) => {
-          // Extract customer data from booking_details if available
-          const details = booking.booking_details?.customer || {}
-
-          // Get customer info from direct columns or booking_details
-          const customerName = booking.customer_name || details.fullName || 'Cliente'
-          // CRITICAL FIX: Normalize email and phone to ensure keys match with customers_extended
-          const customerEmail = (booking.customer_email || details.email || '').toLowerCase().trim() || null
-          const customerPhone = (booking.customer_phone || details.phone || '').trim() || null
-
-          // Debug log
-          if (!customerPhone && !customerEmail) {
-            console.log('Missing contact info for:', {
-              customerName,
-              booking_details: booking.booking_details
-            })
-          }
-
-          // Use email as primary key for merging, fallback to phone or user_id
-          const key = customerEmail || customerPhone || booking.user_id
-
-          if (key) {
-            // ... existing logic ...
-            const existing = customerMap.get(key)
-            if (existing) {
-              if (!existing.phone && customerPhone) {
-                existing.phone = customerPhone
-              }
-              if (!existing.email && customerEmail) {
-                existing.email = customerEmail
-              }
-              if (existing.full_name === 'Cliente' && customerName) {
-                existing.full_name = customerName
-              }
-            } else {
-              // Create new customer entry - use user_id if valid, otherwise generate temp ID
-              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-              const customerId = (booking.user_id && uuidRegex.test(booking.user_id))
-                ? booking.user_id
-                : `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-              customerMap.set(key, {
-                id: customerId,
-                full_name: customerName,
-                email: customerEmail,
-                phone: customerPhone,
-                driver_license_number: null,
-                notes: null,
-                created_at: booking.booked_at,
-                updated_at: booking.booked_at
-              })
-            }
-          }
-        })
-        console.log('Unique customers from bookings:', customerMap.size)
-      }
 
       // Get customers from customers_extended table via Netlify function (bypasses RLS)
       console.log('[CustomersTab] Fetching customers_extended via Netlify function...')
@@ -518,36 +445,9 @@ export default function CustomersTab() {
 
       if (!customersExtendedError && customersExtendedData) {
         console.log('[CustomersTab] Customers from customers_extended:', customersExtendedData.length)
-        // console.log('[CustomersTab] Sample customer:', customersExtendedData[0])
-
-        // First, deduplicate customers_extended by ID to ensure we only process each once
-        const seenIds = new Set<string>()
 
         customersExtendedData.forEach((customer: any) => {
-          // Skip if we've already processed this ID
-          if (seenIds.has(customer.id)) {
-            console.warn('[CustomersTab] Skipping duplicate ID:', customer.id)
-            return
-          }
-          seenIds.add(customer.id)
-
-          // CRITICAL: We want to overwrite any existing "booking entry" that matches this customer's email or phone
-          // because the DB record is the "real" one with the correct ID.
-
-          let matchedKey: string | null = null;
-
-          if (customer.email && customer.email.trim()) {
-            const emailKey = customer.email.trim().toLowerCase()
-            if (customerMap.has(emailKey)) matchedKey = emailKey
-          }
-
-          if (!matchedKey && customer.telefono && customer.telefono.trim()) {
-            const phoneKey = customer.telefono.trim()
-            if (customerMap.has(phoneKey)) matchedKey = phoneKey
-          }
-
-          // Determine the key we will use for this customer in the map
-          // Ideally, we use the ID to be absolutely unique
+          // Use customer ID as unique key — no duplicates possible
           const canonicalKey = customer.id
 
           // Create display name based on customer type
@@ -641,23 +541,7 @@ export default function CustomersTab() {
             metadata: customer.metadata
           }
 
-          // INSERT the "Real" customer
           customerMap.set(canonicalKey, extendedData as any)
-
-          // REMOVE any placeholder entries that were based on email or phone
-          // This ensures we don't have duplicates (one real, one from booking with temp ID)
-          if (matchedKey && matchedKey !== canonicalKey) {
-            // console.log(`[CustomersTab] Replacing placeholder ${matchedKey} with DB record ${canonicalKey}`)
-            customerMap.delete(matchedKey)
-          }
-
-          // Also check explicitly for email key again to be sure
-          if (customer.email && customer.email.trim()) {
-            const emailKey = customer.email.trim().toLowerCase()
-            if (emailKey !== canonicalKey && customerMap.has(emailKey)) {
-              customerMap.delete(emailKey)
-            }
-          }
         })
 
       }
