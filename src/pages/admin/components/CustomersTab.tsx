@@ -438,7 +438,7 @@ export default function CustomersTab() {
 
       // DEBUG: Log counts
       console.log('STATS:', {
-        bookings: bookingsData?.length || 0,
+        bookings: 0,
         customers_extended: customersExtendedData?.length || 0,
         unique_map_size: customerMap.size
       })
@@ -2551,31 +2551,7 @@ export default function CustomersTab() {
           console.log('[onClientCreated] called with:', { clientId, hasData: !!customerData })
           setShowNewClientModal(false)
           setSelectedCustomer(null)
-          // Use the customer data passed directly from the Netlify function response
-          // (avoids RLS issues that block client-side re-fetching from customers_extended)
-          if (customerData) {
-            const newCustomer = customerData
-            let fullName = 'Cliente'
-            if (newCustomer.tipo_cliente === 'persona_fisica') {
-              fullName = `${newCustomer.nome || ''} ${newCustomer.cognome || ''}`.trim()
-            } else if (newCustomer.tipo_cliente === 'azienda') {
-              fullName = newCustomer.ragione_sociale || newCustomer.denominazione || 'Azienda'
-            } else if (newCustomer.tipo_cliente === 'pubblica_amministrazione') {
-              fullName = newCustomer.ente_ufficio || newCustomer.denominazione || 'Pubblica Amministrazione'
-            }
-            const mappedCustomer = {
-              ...newCustomer,
-              id: clientId,
-                full_name: fullName || 'Cliente',
-                phone: newCustomer.telefono,
-                driver_license_number: newCustomer.numero_patente,
-                created_at: newCustomer.created_at,
-                updated_at: newCustomer.updated_at || newCustomer.created_at,
-                notes: newCustomer.note,
-                source: 'db',
-            } as any
-            // Don't update state manually — just reload from DB for consistency
-          }
+          // Don't update state manually — just reload from DB for consistency
           loadCustomers()
         }}
         initialData={selectedCustomer}

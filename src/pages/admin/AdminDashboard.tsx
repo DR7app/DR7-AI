@@ -37,10 +37,11 @@ import PlaceholderTab from './components/PlaceholderTab'
 import CarWashCatalogTab from './components/CarWashCatalogTab'
 import OperatoriTab from './components/OperatoriTab'
 import DashboardTab from './components/DashboardTab'
+import RevenuePricingTab from './components/RevenuePricingTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
 
-type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('reservations')
@@ -179,6 +180,7 @@ export default function AdminDashboard() {
     'fattura': 'Fattura',
     'operatori': 'Operatori',
     'dashboard-kpi': 'Dashboard',
+    'revenue-pricing': 'Revenue Management',
   }
 
   return (
@@ -358,6 +360,7 @@ export default function AdminDashboard() {
                 <button onClick={() => { setActiveTab('operatori'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'operatori')}>Operatori</button>
               )}
               <button onClick={() => { setActiveTab('dashboard-kpi'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
+              <button onClick={() => { setActiveTab('revenue-pricing'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'revenue-pricing')}>Revenue Management</button>
 
               {/* COMUNICAZIONE */}
               <div className="px-4 pt-4 pb-1 text-xs font-bold text-theme-text-muted uppercase tracking-wider">Comunicazione</div>
@@ -483,7 +486,7 @@ export default function AdminDashboard() {
 
               {/* REPORT Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'reports', 'operatori', 'dashboard-kpi'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'reports', 'operatori', 'dashboard-kpi', 'revenue-pricing'].includes(activeTab))}>
                   Report
                   <span className="text-xs">▼</span>
                 </button>
@@ -496,6 +499,7 @@ export default function AdminDashboard() {
                     <button onClick={() => setActiveTab('operatori')} className={dropdownItemClass(activeTab === 'operatori')}>Operatori</button>
                   )}
                   <button onClick={() => setActiveTab('dashboard-kpi')} className={dropdownItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
+                  <button onClick={() => setActiveTab('revenue-pricing')} className={dropdownItemClass(activeTab === 'revenue-pricing')}>Revenue Management</button>
                 </div>
               </div>
 
@@ -602,6 +606,7 @@ export default function AdminDashboard() {
           {activeTab === 'com-aruba' && <PlaceholderTab title="Aruba" />}
           {activeTab === 'operatori' && adminRole === 'superadmin' && <OperatoriTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
+          {activeTab === 'revenue-pricing' && <RevenuePricingTab />}
         </div>
       </main>
 

@@ -67,7 +67,6 @@ export default function CustomerWalletTab() {
         .order('balance_cents', { ascending: false })
 
       if (wallets && wallets.length > 0) {
-        const customerIds = wallets.map(w => w.customer_id)
         const response = await fetch('/.netlify/functions/list-customers')
         const result = await response.json()
         const allCustomers = result.customers || []

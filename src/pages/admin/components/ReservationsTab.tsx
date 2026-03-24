@@ -454,6 +454,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     garante_email: '',
   })
 
+  // Revenue Management — dynamic price suggestion
+  const [revenueSuggestion, setRevenueSuggestion] = useState<{
+    suggestedPrice: number; dailyRate: number; rentalDays: number; basePrice: number
+    breakdown: { label: string; coeff: number; description: string }[]
+    occupationPct: number; daysAhead: number
+    limits: { minHit: boolean; maxHit: boolean }
+  } | null>(null)
+  const [revenueLoading, setRevenueLoading] = useState(false)
+  const [revenueExpanded, setRevenueExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
+      setRevenueSuggestion(null)
+      return
+    }
+    const pickup = `${formData.pickup_date}T${formData.pickup_time || '10:00'}`
+    const dropoff = `${formData.return_date}T${formData.return_time || '10:00'}`
+
+    let cancelled = false
+    setRevenueLoading(true)
+    fetch('/.netlify/functions/calculate-dynamic-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vehicle_id: formData.vehicle_id, pickup_date: pickup, dropoff_date: dropoff })
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.enabled && data.suggestedPrice) {
+          setRevenueSuggestion(data)
+        } else {
+          setRevenueSuggestion(null)
+        }
+      })
+      .catch(() => { if (!cancelled) setRevenueSuggestion(null) })
+      .finally(() => { if (!cancelled) setRevenueLoading(false) })
+
+    return () => { cancelled = true }
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
+
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
     if (formData.second_driver_id && !newSecondDriverMode) {
@@ -3462,7 +3502,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             notes: formData.pickup_notes
           } : null,
           pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
-          notes: formData.notes || null
+          notes: formData.notes || null,
+          // Revenue Management tracking
+          ...(revenueSuggestion ? {
+            revenue_suggested_price: revenueSuggestion.suggestedPrice,
+            revenue_breakdown: revenueSuggestion.breakdown,
+            revenue_daily_rate: revenueSuggestion.dailyRate,
+            revenue_base_price: revenueSuggestion.basePrice,
+            operator_override: Math.abs(parseFloat(formData.total_amount || '0') - revenueSuggestion.suggestedPrice) > 0.01
+          } : {})
         }
       }
 
@@ -5072,6 +5120,67 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     { value: 'Giroconto su conti di contabilità', label: 'Giroconto su conti di contabilità' }
                   ]}
                 />
+              )}
+              {/* Revenue Management — Prezzo Suggerito */}
+              {(revenueSuggestion || revenueLoading) && (
+                <div className="border border-amber-500/40 bg-amber-500/5 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-amber-400">
+                      {revenueLoading ? 'Calcolo prezzo...' : 'Prezzo Suggerito'}
+                    </span>
+                    {revenueSuggestion && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-amber-400">
+                          €{revenueSuggestion.suggestedPrice.toFixed(2)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              total_amount: revenueSuggestion.suggestedPrice.toFixed(2)
+                            }))
+                          }}
+                          className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
+                        >
+                          Applica
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {revenueSuggestion && (
+                    <>
+                      <div className="text-xs text-theme-text-muted">
+                        €{revenueSuggestion.dailyRate.toFixed(2)}/giorno × {revenueSuggestion.rentalDays} giorni
+                        {revenueSuggestion.limits.minHit && ' (min raggiunto)'}
+                        {revenueSuggestion.limits.maxHit && ' (max raggiunto)'}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRevenueExpanded(!revenueExpanded)}
+                        className="text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        {revenueExpanded ? 'Nascondi dettagli' : 'Mostra dettagli'}
+                      </button>
+                      {revenueExpanded && (
+                        <div className="space-y-1 pt-1 border-t border-theme-border">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-theme-text-muted">Base</span>
+                            <span className="text-theme-text-primary">€{revenueSuggestion.basePrice.toFixed(2)}/g</span>
+                          </div>
+                          {revenueSuggestion.breakdown.map((item, i) => (
+                            <div key={i} className="flex justify-between text-xs">
+                              <span className="text-theme-text-muted">{item.label} ({item.description})</span>
+                              <span className={`font-mono ${item.coeff > 1 ? 'text-red-400' : item.coeff < 1 ? 'text-green-400' : 'text-theme-text-primary'}`}>
+                                ×{item.coeff.toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
               <Input
                 label="Importo Totale (€)"
