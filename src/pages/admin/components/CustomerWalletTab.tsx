@@ -80,76 +80,50 @@ export default function CustomerWalletTab() {
   async function loadAllWalletCustomers() {
     setLoadingAll(true)
     try {
+      // Load ALL customers first
+      const response = await fetch('/.netlify/functions/list-customers')
+      const result = await response.json()
+      const allCustomers: any[] = result.customers || []
+
+      // Load wallets to merge balances
       const { data: wallets } = await supabase
         .from('customer_wallets')
         .select('customer_id, balance_cents')
-        .gt('balance_cents', 0)
-        .order('balance_cents', { ascending: false })
 
-      if (wallets && wallets.length > 0) {
-        const response = await fetch('/.netlify/functions/list-customers')
-        const result = await response.json()
-        const allCustomers = result.customers || []
-
-        const mapped: CustomerResult[] = wallets.map(w => {
-          const cust = allCustomers.find((c: any) => c.id === w.customer_id)
-          return {
-            id: w.customer_id,
-            full_name: cust ? (`${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.ragione_sociale || cust.denominazione || 'N/A') : 'Cliente sconosciuto',
-            email: cust?.email || null,
-            phone: cust?.telefono || null,
-            balance_cents: w.balance_cents
-          }
-        })
-        setAllWalletCustomers(mapped)
+      const walletMap = new Map<string, number>()
+      if (wallets) {
+        for (const w of wallets) walletMap.set(w.customer_id, w.balance_cents || 0)
       }
+
+      // Also check user_credit_balance for website wallets
+      const { data: creditBalances } = await supabase
+        .from('user_credit_balance')
+        .select('user_id, balance')
+        .gt('balance', 0)
+
+      if (creditBalances) {
+        for (const cb of creditBalances) {
+          const existing = walletMap.get(cb.user_id) || 0
+          walletMap.set(cb.user_id, existing + Math.round(cb.balance * 100))
+        }
+      }
+
+      // Map all customers with their wallet balance
+      const mapped: CustomerResult[] = allCustomers.map((cust: any) => ({
+        id: cust.id,
+        full_name: (`${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.ragione_sociale || cust.denominazione || 'N/A'),
+        email: cust.email || null,
+        phone: cust.telefono || null,
+        balance_cents: walletMap.get(cust.id) || 0
+      }))
+
+      setAllWalletCustomers(mapped)
     } catch (err) {
-      console.error('Error loading wallet customers:', err)
+      console.error('Error loading customers:', err)
     } finally {
       setLoadingAll(false)
     }
   }
-
-  // Website wallets
-  useEffect(() => {
-    async function loadWebsiteWallets() {
-      try {
-        const { data: creditBalances } = await supabase
-          .from('user_credit_balance')
-          .select('user_id, balance')
-          .gt('balance', 0)
-
-        if (creditBalances && creditBalances.length > 0) {
-          for (const cb of creditBalances) {
-            const existing = allWalletCustomers.find(c => c.id === cb.user_id)
-            if (!existing) {
-              const { data: cust } = await supabase
-                .from('customers_extended')
-                .select('id, nome, cognome, email, telefono')
-                .eq('user_id', cb.user_id)
-                .maybeSingle()
-
-              if (cust) {
-                setAllWalletCustomers(prev => {
-                  if (prev.find(c => c.id === cust.id)) return prev
-                  return [...prev, {
-                    id: cust.id,
-                    full_name: `${cust.nome || ''} ${cust.cognome || ''}`.trim() || 'N/A',
-                    email: cust.email,
-                    phone: cust.telefono,
-                    balance_cents: Math.round(cb.balance * 100)
-                  }]
-                })
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error loading website wallets:', err)
-      }
-    }
-    if (!loadingAll) loadWebsiteWallets()
-  }, [loadingAll])
 
   async function apiCall(body: Record<string, any>) {
     const token = (await supabase.auth.getSession()).data.session?.access_token
