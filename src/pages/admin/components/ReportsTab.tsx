@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DashboardTab from './DashboardTab'
 
 interface BookingDetail {
   booking_id: string
@@ -129,7 +130,7 @@ export default function ReportsTab() {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [activeReport, setActiveReport] = useState<'vehicles' | 'washes' | 'cauzioni'>('vehicles')
+  const [activeReport, setActiveReport] = useState<'vehicles' | 'washes' | 'cauzioni' | 'dashboard'>('vehicles')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -500,7 +501,7 @@ export default function ReportsTab() {
           {/* Report Type Toggle */}
           <div>
             <label className="block text-xs text-theme-text-muted mb-1">Tipo Report</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setActiveReport('vehicles')}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
@@ -531,28 +532,40 @@ export default function ReportsTab() {
               >
                 Cauzioni
               </button>
+              <button
+                onClick={() => setActiveReport('dashboard')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                  activeReport === 'dashboard'
+                    ? 'bg-dr7-gold text-black border-dr7-gold'
+                    : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
+                }`}
+              >
+                Dashboard
+              </button>
             </div>
           </div>
 
-          {/* Month Selector */}
-          <div>
-            <label className="block text-xs text-theme-text-muted mb-1">Mese</label>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
-            />
-          </div>
-
-          {/* Generate Button */}
-          <button
-            onClick={fetchReport}
-            disabled={loading}
-            className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Caricamento...' : 'Genera Report'}
-          </button>
+          {/* Month Selector & Generate — hidden when Dashboard active (has its own) */}
+          {activeReport !== 'dashboard' && (
+            <>
+              <div>
+                <label className="block text-xs text-theme-text-muted mb-1">Mese</label>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
+                />
+              </div>
+              <button
+                onClick={fetchReport}
+                disabled={loading}
+                className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Caricamento...' : 'Genera Report'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -561,6 +574,9 @@ export default function ReportsTab() {
           {error}
         </div>
       )}
+
+      {/* Dashboard */}
+      {activeReport === 'dashboard' && <DashboardTab />}
 
       {/* Vehicle Report */}
       {activeReport === 'vehicles' && vehicleData && (
