@@ -25,6 +25,8 @@ import ScadenzeTab from './components/ScadenzeTab'
 import ReportsTab from './components/ReportsTab'
 import ReportLavaggioTab from './components/ReportLavaggioTab'
 import ReportClientiTab from './components/ReportClientiTab'
+import ReportPenaliTab from './components/ReportPenaliTab'
+import ReportDanniTab from './components/ReportDanniTab'
 import BulkImportTab from './components/BulkImportTab'
 import ReferralProgramTab from './components/ReferralProgramTab'
 import CodiciScontoTab from './components/CodiciScontoTab'
@@ -162,6 +164,8 @@ export default function AdminDashboard() {
     'report-noleggio': 'Report Noleggio',
     'report-lavaggio': 'Report Lavaggio',
     'report-clienti': 'Report Clienti',
+    'report-penali': 'Report Penali',
+    'report-danni': 'Report Danni',
     'reports': 'Report',
     'com-email': 'E-mail',
     'com-pec': 'PEC',
@@ -346,6 +350,8 @@ export default function AdminDashboard() {
               <button onClick={() => { setActiveTab('report-noleggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
               <button onClick={() => { setActiveTab('report-lavaggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
               <button onClick={() => { setActiveTab('report-clienti'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-clienti')}>Clienti</button>
+              <button onClick={() => { setActiveTab('report-penali'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-penali')}>Penali</button>
+              <button onClick={() => { setActiveTab('report-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-danni')}>Danni</button>
               {adminRole === 'superadmin' && (
                 <button onClick={() => { setActiveTab('operatori'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'operatori')}>Operatori</button>
               )}
@@ -473,7 +479,7 @@ export default function AdminDashboard() {
 
               {/* REPORT Dropdown */}
               <div className="relative group">
-                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'reports', 'operatori'].includes(activeTab))}>
+                <button className={dropdownBtnClass(['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali', 'report-danni', 'reports', 'operatori'].includes(activeTab))}>
                   Report
                   <span className="text-xs">▼</span>
                 </button>
@@ -481,6 +487,8 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('report-noleggio')} className={dropdownItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
                   <button onClick={() => setActiveTab('report-lavaggio')} className={dropdownItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
                   <button onClick={() => setActiveTab('report-clienti')} className={dropdownItemClass(activeTab === 'report-clienti')}>Clienti</button>
+                  <button onClick={() => setActiveTab('report-penali')} className={dropdownItemClass(activeTab === 'report-penali')}>Penali</button>
+                  <button onClick={() => setActiveTab('report-danni')} className={dropdownItemClass(activeTab === 'report-danni')}>Danni</button>
                   {adminRole === 'superadmin' && (
                     <button onClick={() => setActiveTab('operatori')} className={dropdownItemClass(activeTab === 'operatori')}>Operatori</button>
                   )}
@@ -579,6 +587,8 @@ export default function AdminDashboard() {
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && <ReportLavaggioTab />}
           {activeTab === 'report-clienti' && <ReportClientiTab />}
+          {activeTab === 'report-penali' && <ReportPenaliTab />}
+          {activeTab === 'report-danni' && <ReportDanniTab />}
           {activeTab === 'com-email' && <PlaceholderTab title="E-mail" />}
           {activeTab === 'com-pec' && <PlaceholderTab title="PEC" />}
           {activeTab === 'com-whatsapp' && <PlaceholderTab title="WhatsApp" />}
