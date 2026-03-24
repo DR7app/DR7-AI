@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 
@@ -47,6 +47,92 @@ export default function CustomerWalletTab() {
   const [searchResults, setSearchResults] = useState<CustomerResult[]>([])
   const [searching, setSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+
+  // All customers with wallets (auto-loaded)
+  const [allWalletCustomers, setAllWalletCustomers] = useState<CustomerResult[]>([])
+  const [loadingAll, setLoadingAll] = useState(true)
+
+  useEffect(() => {
+    loadAllWalletCustomers()
+  }, [])
+
+  async function loadAllWalletCustomers() {
+    setLoadingAll(true)
+    try {
+      // Fetch all wallets with balance > 0
+      const { data: wallets } = await supabase
+        .from('customer_wallets')
+        .select('customer_id, balance_cents')
+        .gt('balance_cents', 0)
+        .order('balance_cents', { ascending: false })
+
+      if (wallets && wallets.length > 0) {
+        const customerIds = wallets.map(w => w.customer_id)
+        const response = await fetch('/.netlify/functions/list-customers')
+        const result = await response.json()
+        const allCustomers = result.customers || []
+
+        const mapped: CustomerResult[] = wallets.map(w => {
+          const cust = allCustomers.find((c: any) => c.id === w.customer_id)
+          return {
+            id: w.customer_id,
+            full_name: cust ? (`${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.ragione_sociale || cust.denominazione || 'N/A') : 'Cliente sconosciuto',
+            email: cust?.email || null,
+            phone: cust?.telefono || null,
+            balance_cents: w.balance_cents
+          }
+        })
+        setAllWalletCustomers(mapped)
+      }
+    } catch (err) {
+      console.error('Error loading wallet customers:', err)
+    } finally {
+      setLoadingAll(false)
+    }
+  }
+
+  // Also check user_credit_balance for website wallets
+  useEffect(() => {
+    async function loadWebsiteWallets() {
+      try {
+        const { data: creditBalances } = await supabase
+          .from('user_credit_balance')
+          .select('user_id, balance')
+          .gt('balance', 0)
+
+        if (creditBalances && creditBalances.length > 0) {
+          // Find matching customers
+          for (const cb of creditBalances) {
+            const existing = allWalletCustomers.find(c => c.id === cb.user_id)
+            if (!existing) {
+              // Try to find customer by user_id
+              const { data: cust } = await supabase
+                .from('customers_extended')
+                .select('id, nome, cognome, email, telefono')
+                .eq('user_id', cb.user_id)
+                .maybeSingle()
+
+              if (cust) {
+                setAllWalletCustomers(prev => {
+                  if (prev.find(c => c.id === cust.id)) return prev
+                  return [...prev, {
+                    id: cust.id,
+                    full_name: `${cust.nome || ''} ${cust.cognome || ''}`.trim() || 'N/A',
+                    email: cust.email,
+                    phone: cust.telefono,
+                    balance_cents: Math.round(cb.balance * 100)
+                  }]
+                })
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error loading website wallets:', err)
+      }
+    }
+    if (!loadingAll) loadWebsiteWallets()
+  }, [loadingAll])
 
   // Selected customer detail
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerResult | null>(null)
@@ -186,13 +272,27 @@ export default function CustomerWalletTab() {
       <div className="flex gap-4">
         {/* Results List */}
         <div className={`${selectedCustomer ? 'w-1/2' : 'w-full'} transition-all`}>
-          {searching ? (
-            <div className="text-center py-10 text-theme-text-muted">Ricerca in corso...</div>
+          {/* Summary */}
+          {allWalletCustomers.length > 0 && !hasSearched && (
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                <p className="text-xs text-theme-text-muted">Clienti con Wallet</p>
+                <p className="text-2xl font-bold text-theme-text-primary">{allWalletCustomers.length}</p>
+              </div>
+              <div className="bg-dr7-gold/10 rounded-xl border border-dr7-gold/30 p-4">
+                <p className="text-xs text-theme-text-muted">Credito Totale</p>
+                <p className="text-2xl font-bold text-dr7-gold">{formatEur(allWalletCustomers.reduce((s, c) => s + (c.balance_cents || 0), 0))}</p>
+              </div>
+            </div>
+          )}
+
+          {searching || loadingAll ? (
+            <div className="text-center py-10 text-theme-text-muted">{searching ? 'Ricerca in corso...' : 'Caricamento wallet...'}</div>
           ) : hasSearched && searchResults.length === 0 ? (
             <div className="text-center py-10 text-theme-text-muted">Nessun cliente trovato</div>
-          ) : searchResults.length > 0 ? (
+          ) : (hasSearched ? searchResults : allWalletCustomers).length > 0 ? (
             <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-              {searchResults.map((customer) => (
+              {(hasSearched ? searchResults : allWalletCustomers).map((customer) => (
                 <div
                   key={customer.id}
                   onClick={() => loadCustomerDetail(customer)}
