@@ -215,9 +215,9 @@ export default function CauzioniTab() {
                 return
             }
 
-            if (!confirm(`Addebitare €${Number(cauzione.importo).toFixed(2)} sulla carta salvata di ${cauzione.cliente_nome}?`)) return
+            if (!confirm(`Bloccare €${Number(cauzione.importo).toFixed(2)} sulla carta salvata di ${cauzione.cliente_nome}? (Pre-autorizzazione)`)) return
 
-            toast.loading('Addebito in corso...', { id: 'mit' })
+            toast.loading('Pre-autorizzazione in corso...', { id: 'mit' })
             const res = await fetch('/.netlify/functions/nexi-charge-mit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -226,19 +226,21 @@ export default function CauzioniTab() {
                     amount: Number(cauzione.importo),
                     description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
                     bookingId: cauzione.riferimento_contratto_id || null,
-                    customerName: cauzione.cliente_nome || ''
+                    customerName: cauzione.cliente_nome || '',
+                    captureType: 'EXPLICIT'
                 })
             })
             const result = await res.json()
             toast.dismiss('mit')
 
             if (res.ok && result.success) {
-                toast.success(`€${Number(cauzione.importo).toFixed(2)} addebitato con successo!`)
-                // Update cauzione status
+                toast.success(`€${Number(cauzione.importo).toFixed(2)} bloccato sulla carta!`)
+                // Update cauzione with transaction info
                 await supabase.from('cauzioni').update({
-                    stato: 'Incassata',
-                    data_incasso: new Date().toISOString(),
-                    note: `Incassata via MIT (carta salvata) — ${new Date().toLocaleDateString('it-IT')}`,
+                    stato: 'Attiva',
+                    nexi_transaction_id: result.operationId || result.orderId,
+                    nexi_order_id: result.orderId,
+                    note: `Pre-auth MIT — €${Number(cauzione.importo).toFixed(2)} bloccati sulla carta — ${new Date().toLocaleDateString('it-IT')}`,
                     updated_at: new Date().toISOString()
                 }).eq('id', cauzione.id)
                 fetchCauzioni()
@@ -785,7 +787,7 @@ export default function CauzioniTab() {
                                                 onClick={() => handleAddebitaMIT(cauzione)}
                                                 className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors font-semibold"
                                             >
-                                                ADDEBITA
+                                                PRE-AUTH
                                             </button>
                                             <button
                                                 onClick={() => handleSendPayLink(cauzione)}

@@ -32,7 +32,8 @@ const handler: Handler = async (event) => {
             bookingId,
             customerId,
             customerEmail,
-            customerName
+            customerName,
+            captureType
         } = JSON.parse(event.body || '{}');
 
         if (!contractId) {
@@ -76,7 +77,7 @@ const handler: Handler = async (event) => {
                 description: description || 'Addebito DR7 Empire'
             },
             contractId,
-            captureType: 'IMPLICIT' // Auto-capture (charge immediately)
+            captureType: captureType || 'IMPLICIT' // IMPLICIT = charge now, EXPLICIT = pre-auth hold
         };
 
         if (customerEmail || customerName) {
