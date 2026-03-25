@@ -661,12 +661,12 @@ export default function UnpaidBookingsTab() {
       const { data: fresh } = await supabase.from('bookings').select('booking_details').eq('id', booking.id).single()
       const details = fresh?.booking_details || booking.booking_details || {}
       const arr: any[] = details[type] || []
-      const pending = arr.filter((item: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+      const pending = arr.filter((item: any) => item.paymentStatus !== 'paid')
 
       // 1. FIRST: Mark items as paid in DB (this must succeed)
       if (pending.length > 0) {
         const updated = arr.map((item: any) => {
-          if (!item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial') {
+          if (item.paymentStatus !== 'paid') {
             const total = item.total || (item.amount || 0) * (item.quantity || 1)
             return { ...item, paymentStatus: 'paid', amountPaid: total }
           }
@@ -1457,8 +1457,8 @@ export default function UnpaidBookingsTab() {
         if (getEffectiveType(b) === 'rental') g.rental = true
         else g.pw = true
       }
-      const hasPen = (b.booking_details?.penalties || []).some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
-      const hasDan = (b.booking_details?.danni || []).some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
+      const hasPen = (b.booking_details?.penalties || []).some((p: any) => p.paymentStatus !== 'paid')
+      const hasDan = (b.booking_details?.danni || []).some((d: any) => d.paymentStatus !== 'paid')
       if (hasPen || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'penalties')) g.penali = true
       if (hasDan || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'danni')) g.danni = true
     }
