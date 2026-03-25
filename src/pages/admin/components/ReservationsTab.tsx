@@ -3397,22 +3397,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // (extension history, contracts, deposit options, etc.)
           ...(editingId ? (() => {
             const existingBooking = bookings.find(b => b.id === editingId)
-            return existingBooking?.booking_details ? {
-              extension_history: existingBooking.booking_details.extension_history,
-              extension_contracts: existingBooking.booking_details.extension_contracts,
-              contract_generated_at: existingBooking.booking_details.contract_generated_at,
-              depositOption: existingBooking.booking_details.depositOption,
-              noDepositSurcharge: existingBooking.booking_details.noDepositSurcharge,
+            const bd = existingBooking?.booking_details
+            return bd ? {
+              extension_history: bd.extension_history,
+              extension_contracts: bd.extension_contracts,
+              contract_generated_at: bd.contract_generated_at,
+              depositOption: bd.depositOption,
+              noDepositSurcharge: bd.noDepositSurcharge,
               // Preserve Nexi payment data
-              nexi_payment_link: existingBooking.booking_details.nexi_payment_link,
-              nexi_order_id: existingBooking.booking_details.nexi_order_id,
-              nexi_transaction_id: existingBooking.booking_details.nexi_transaction_id,
-              nexi_contract_id: existingBooking.booking_details.nexi_contract_id,
-              nexi_paid_at: existingBooking.booking_details.nexi_paid_at,
-              paymentStatus: existingBooking.booking_details.paymentStatus,
+              nexi_payment_link: bd.nexi_payment_link,
+              nexi_order_id: bd.nexi_order_id,
+              nexi_transaction_id: bd.nexi_transaction_id,
+              nexi_contract_id: bd.nexi_contract_id,
+              nexi_paid_at: bd.nexi_paid_at,
+              nexi_extension_paid_at: bd.nexi_extension_paid_at,
+              paymentStatus: bd.paymentStatus,
               // Preserve danni & penali
-              danni: existingBooking.booking_details.danni,
-              penalties: existingBooking.booking_details.penalties,
+              danni: bd.danni,
+              penalties: bd.penalties,
+              // Preserve reminder flags (set by trigger-reminders)
+              deposit_reminder_sent: bd.deposit_reminder_sent,
+              deposit_reminder_sent_at: bd.deposit_reminder_sent_at,
+              day_before_reminder_sent: bd.day_before_reminder_sent,
+              day_before_reminder_sent_at: bd.day_before_reminder_sent_at,
+              pre_rental_offer_sent: bd.pre_rental_offer_sent,
+              iban_request_sent: bd.iban_request_sent,
+              // Preserve insurance field (read by invoice generator)
+              insurance: bd.insurance,
             } : {}
           })() : {}),
           customer: {
