@@ -623,8 +623,65 @@ const handler: Handler = async (event) => {
                     console.log(`[nexi-payment-callback] Card type: prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}, raw_has_keywords=${rawCallback.includes('credit') || rawCallback.includes('debit') || rawCallback.includes('prepag')}`)
 
                 if (isPrepagata) {
-                    // Prepagata: blocked by Nexi, log only
-                    console.log(`[nexi-payment-callback] Prepagata detected — no surcharge, card should be blocked by Nexi`)
+                    // PREPAGATA BLOCKED: cancel booking, refund via Nexi void, notify customer
+                    console.log(`[nexi-payment-callback] PREPAGATA BLOCKED — cancelling booking ${booking.id}`)
+
+                    // Cancel the booking
+                    await supabase.from('bookings').update({
+                        status: 'cancelled',
+                        payment_status: 'unpaid',
+                        booking_details: {
+                            ...booking.booking_details,
+                            cancelled_reason: 'Carta prepagata non accettata',
+                            cancelled_at: new Date().toISOString()
+                        }
+                    }).eq('id', booking.id);
+
+                    // Void/refund the payment via Nexi
+                    const refundOpId = operationId || transactionId
+                    if (refundOpId) {
+                        try {
+                            const voidRes = await fetch(`${NEXI_BASE_URL}/operations/${refundOpId}/cancels`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-Api-Key': NEXI_API_KEY,
+                                    'Correlation-Id': `${Date.now()}`
+                                },
+                                body: JSON.stringify({ description: 'Carta prepagata non accettata — rimborso automatico' })
+                            });
+                            console.log(`[nexi-payment-callback] Void/refund result: ${voidRes.status}`);
+                        } catch (voidErr) {
+                            console.error('[nexi-payment-callback] Void/refund error:', voidErr);
+                        }
+                    }
+
+                    // Notify customer
+                    if (custPhone) {
+                        await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                customPhone: custPhone,
+                                customMessage: `⚠️ *Pagamento rifiutato*\n\nGentile ${booking.customer_name || 'Cliente'},\n\nLe carte prepagate non sono accettate per le prenotazioni DR7.\n\nLa prenotazione #${booking.id.substring(0, 8).toUpperCase()} è stata annullata e il pagamento verrà rimborsato.\n\nLa preghiamo di riprovare con una carta di credito o debito.\n\nDR7`
+                            })
+                        });
+                    }
+
+                    // Notify admin
+                    if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                        const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+                        await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chatId: `${NOTIFICATION_PHONE}@c.us`,
+                                message: `🚫 *CARTA PREPAGATA BLOCCATA*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}\n\nPrenotazione annullata e rimborso avviato.`
+                            })
+                        });
+                    }
+
+                    // Don't continue with bonus — booking is cancelled
                 } else if ((isCredito || isDebito) && isInitialBooking && isEligibleService && paidCents > 0) {
                     // CREDIT WALLET BONUS: credito 6%, debito 3%
                     // Only for initial car rental + lavaggio bookings
