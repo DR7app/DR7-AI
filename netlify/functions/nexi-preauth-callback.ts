@@ -69,7 +69,7 @@ const handler: Handler = async (event) => {
         }
 
         // Update cauzione based on result
-        const isSuccess = result === 'OK' || result === 'AUTHORIZED' || resultCode === '00';
+        const isSuccess = result === 'OK' || result === 'AUTHORIZED' || result === 'EXECUTED' || resultCode === '00';
 
         const updateData: any = {
             updated_at: new Date().toISOString()

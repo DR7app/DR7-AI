@@ -236,10 +236,10 @@ export default function CauzioniTab() {
             if (cauzione.cliente_id) {
                 const { data: cust } = await supabase
                     .from('customers_extended')
-                    .select('nexi_contract_id, metadata')
+                    .select('metadata')
                     .eq('id', cauzione.cliente_id)
                     .maybeSingle()
-                contractId = cust?.nexi_contract_id || cust?.metadata?.nexi_contract_id || ''
+                contractId = cust?.metadata?.nexi_contract_id || ''
             }
 
             // Fallback 1: check nexi_transactions for this customer's booking
