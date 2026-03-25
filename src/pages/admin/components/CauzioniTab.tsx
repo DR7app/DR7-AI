@@ -182,6 +182,75 @@ export default function CauzioniTab() {
         }
     }
 
+    const handleAddebitaMIT = async (cauzione: Cauzione) => {
+        try {
+            // Find customer's contractId from customers_extended or nexi_transactions
+            let contractId = ''
+
+            if (cauzione.cliente_id) {
+                const { data: cust } = await supabase
+                    .from('customers_extended')
+                    .select('nexi_contract_id, metadata')
+                    .eq('id', cauzione.cliente_id)
+                    .maybeSingle()
+                contractId = cust?.nexi_contract_id || cust?.metadata?.nexi_contract_id || ''
+            }
+
+            // Fallback: check nexi_transactions for this customer's booking
+            if (!contractId && cauzione.riferimento_contratto_id) {
+                const { data: txn } = await supabase
+                    .from('nexi_transactions')
+                    .select('contract_id')
+                    .eq('booking_id', cauzione.riferimento_contratto_id)
+                    .eq('status', 'completed')
+                    .not('contract_id', 'is', null)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                contractId = txn?.contract_id || ''
+            }
+
+            if (!contractId) {
+                toast.error('Nessuna carta tokenizzata trovata per questo cliente. Usa "INVIA LINK" invece.')
+                return
+            }
+
+            if (!confirm(`Addebitare €${Number(cauzione.importo).toFixed(2)} sulla carta salvata di ${cauzione.cliente_nome}?`)) return
+
+            toast.loading('Addebito in corso...', { id: 'mit' })
+            const res = await fetch('/.netlify/functions/nexi-charge-mit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contractId,
+                    amount: Number(cauzione.importo),
+                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
+                    bookingId: cauzione.riferimento_contratto_id || null,
+                    customerName: cauzione.cliente_nome || ''
+                })
+            })
+            const result = await res.json()
+            toast.dismiss('mit')
+
+            if (res.ok && result.success) {
+                toast.success(`€${Number(cauzione.importo).toFixed(2)} addebitato con successo!`)
+                // Update cauzione status
+                await supabase.from('cauzioni').update({
+                    stato: 'Incassata',
+                    data_incasso: new Date().toISOString(),
+                    note: `Incassata via MIT (carta salvata) — ${new Date().toLocaleDateString('it-IT')}`,
+                    updated_at: new Date().toISOString()
+                }).eq('id', cauzione.id)
+                fetchCauzioni()
+            } else {
+                toast.error('Addebito fallito: ' + (result.error || 'Errore'))
+            }
+        } catch (error: any) {
+            toast.dismiss('mit')
+            toast.error(error.message || 'Errore')
+        }
+    }
+
     const handleSendPayLink = async (cauzione: Cauzione) => {
         try {
             toast.loading('Generazione link...', { id: 'paylink' })
@@ -711,6 +780,12 @@ export default function CauzioniTab() {
                                                 className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
                                             >
                                                 INCASSA
+                                            </button>
+                                            <button
+                                                onClick={() => handleAddebitaMIT(cauzione)}
+                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors font-semibold"
+                                            >
+                                                ADDEBITA
                                             </button>
                                             <button
                                                 onClick={() => handleSendPayLink(cauzione)}
