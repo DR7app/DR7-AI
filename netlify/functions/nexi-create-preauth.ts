@@ -37,8 +37,9 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // Generate unique order ID
-        const orderId = `CAU-${cauzioneId.slice(0, 8)}-${Date.now()}`;
+        // Generate unique order ID (max 18 chars for Nexi)
+        const ts = Date.now().toString(36)
+        const orderId = `C${cauzioneId.slice(0, 8)}${ts}`.slice(0, 18);
 
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
@@ -59,9 +60,9 @@ const handler: Handler = async (event) => {
                 actionType: 'AUTH',  // AUTH = pre-authorization (hold funds, don't capture)
                 amount: amountCents.toString(),
                 language: 'ita',
-                resultUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/admin?cauzione=${cauzioneId}&status=success`,
-                cancelUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/admin?cauzione=${cauzioneId}&status=cancelled`,
-                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-preauth-callback`,
+                resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=success`,
+                cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=cancelled`,
+                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-preauth-callback`,
                 recurrence: {
                     action: 'CONTRACT_CREATION',
                     contractId: orderId.slice(0, 18),
@@ -72,16 +73,32 @@ const handler: Handler = async (event) => {
 
         console.log('Creating Nexi pre-authorization:', { orderId, amountCents, cauzioneId });
 
+        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
         const response = await fetch(`${NEXI_BASE_URL}/orders/build`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Api-Key': NEXI_API_KEY,
+                'Correlation-Id': correlationId
             },
             body: JSON.stringify(payload)
         });
 
-        const responseData = await response.json();
+        const responseText = await response.text();
+        console.log('Nexi preauth response:', response.status, responseText.substring(0, 500));
+        let responseData: any;
+        try {
+            responseData = JSON.parse(responseText);
+        } catch {
+            return {
+                statusCode: 502,
+                headers,
+                body: JSON.stringify({ error: `Nexi API error (${response.status}): ${responseText.substring(0, 200) || 'risposta vuota'}` })
+            };
+        }
 
         if (!response.ok) {
             console.error('Nexi pre-auth error:', responseData);
