@@ -8,6 +8,7 @@ interface CustomerResult {
   email: string | null
   phone: string | null
   balance_cents: number | null
+  user_id?: string | null
   recent_transactions?: { amount_cents: number; created_at: string }[]
 }
 
@@ -111,16 +112,43 @@ export default function CustomerWalletTab() {
         }
       }
 
-      // Map all customers with their wallet balance (matched by phone)
+      // Also load from user_credit_balance (website wallet — stores in EUR, not cents)
+      const { data: creditBalances } = await supabase
+        .from('user_credit_balance')
+        .select('user_id, balance')
+
+      // Build user_id → balance map (convert EUR to cents)
+      const userCreditMap = new Map<string, number>()
+      if (creditBalances) {
+        for (const cb of creditBalances) {
+          if (cb.balance && cb.balance > 0) {
+            userCreditMap.set(cb.user_id, Math.round(cb.balance * 100))
+          }
+        }
+      }
+
+      // Build user_id → customer_id map from customers_extended
+      const userIdToCustId = new Map<string, string>()
+      for (const cust of allCustomers) {
+        if (cust.user_id) userIdToCustId.set(cust.user_id, cust.id)
+      }
+
+      // Map all customers with their wallet balance from BOTH systems
       const mapped: CustomerResult[] = allCustomers.map((cust: any) => {
         const phone = cust.telefono || null
-        const balance = phone ? (phoneBalanceMap.get(phone) || 0) : 0
+        // Referral wallet (by phone)
+        const referralBalance = phone ? (phoneBalanceMap.get(phone) || 0) : 0
+        // Website credit wallet (by user_id)
+        const creditBalance = cust.user_id ? (userCreditMap.get(cust.user_id) || 0) : 0
+        // Use the higher of the two (they shouldn't both have balance for same customer)
+        const totalBalance = referralBalance + creditBalance
         return {
           id: cust.id,
           full_name: (`${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.ragione_sociale || cust.denominazione || 'N/A'),
           email: cust.email || null,
           phone,
-          balance_cents: balance
+          balance_cents: totalBalance,
+          user_id: cust.user_id || null
         }
       })
 
