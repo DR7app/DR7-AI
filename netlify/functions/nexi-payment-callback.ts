@@ -622,36 +622,9 @@ const handler: Handler = async (event) => {
 
                     console.log(`[nexi-payment-callback] Card type: prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}, raw_has_keywords=${rawCallback.includes('credit') || rawCallback.includes('debit') || rawCallback.includes('prepag')}`)
 
-                if (isPrepagata && contractId && paidCents > 0) {
-                    // PREPAGATA: charge 20% surcharge via MIT
-                    const surchargeCents = Math.round(paidCents * 0.20);
-                    const surchargeEur = (surchargeCents / 100).toFixed(2);
-                    console.log(`[nexi-payment-callback] Prepagata surcharge: €${surchargeEur} (20% of €${amountEur})`);
-
-                    try {
-                        const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
-                        const mitRes = await fetch(`${baseUrl}/.netlify/functions/nexi-charge-mit`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contractId: contractId,
-                                amount: surchargeCents / 100,
-                                description: `Supplemento carta prepagata 20% - Prenotazione #${booking.id.substring(0, 8).toUpperCase()}`,
-                                bookingId: booking.id,
-                                customerEmail: booking.customer_email || '',
-                                customerName: booking.customer_name || ''
-                            })
-                        });
-                        const mitData = await mitRes.json();
-                        if (mitRes.ok && mitData.success) {
-                            console.log(`[nexi-payment-callback] Prepagata surcharge €${surchargeEur} charged`);
-                        } else {
-                            console.error(`[nexi-payment-callback] Prepagata surcharge failed:`, mitData.error);
-                        }
-                    } catch (mitErr) {
-                        console.error('[nexi-payment-callback] Prepagata surcharge error:', mitErr);
-                    }
-
+                if (isPrepagata) {
+                    // Prepagata: blocked by Nexi, log only
+                    console.log(`[nexi-payment-callback] Prepagata detected — no surcharge, card should be blocked by Nexi`)
                 } else if ((isCredito || isDebito) && isInitialBooking && isEligibleService && paidCents > 0) {
                     // CREDIT WALLET BONUS: credito 6%, debito 3%
                     // Only for initial car rental + lavaggio bookings
