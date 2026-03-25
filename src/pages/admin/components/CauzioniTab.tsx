@@ -63,7 +63,6 @@ export default function CauzioniTab() {
         try {
             // Try FK join first, fall back to separate queries if FKs not set up
             let data: any[] | null = null
-            let usedJoin = false
 
             const { data: joinData, error: joinError } = await supabase
                 .from('cauzioni')
@@ -76,7 +75,6 @@ export default function CauzioniTab() {
 
             if (!joinError && joinData) {
                 data = joinData
-                usedJoin = true
             } else {
                 // FK join failed — fetch cauzioni plain, then enrich with separate queries
                 console.warn('FK join failed, using fallback:', joinError?.message)
