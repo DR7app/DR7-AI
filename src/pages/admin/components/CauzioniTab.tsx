@@ -337,17 +337,18 @@ export default function CauzioniTab() {
 
     const handleSendPayLink = async (cauzione: Cauzione) => {
         try {
-            toast.loading('Generazione link...', { id: 'paylink' })
-            const response = await fetch('/.netlify/functions/nexi-pay-by-link', {
+            toast.loading('Generazione link pre-autorizzazione...', { id: 'paylink' })
+
+            // Use nexi-create-preauth for cauzioni — holds the money without charging
+            const response = await fetch('/.netlify/functions/nexi-create-preauth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    bookingId: cauzione.riferimento_contratto_id || null,
+                    cauzioneId: cauzione.id,
                     amount: cauzione.importo,
                     customerEmail: cauzione.cliente_email || '',
                     customerName: cauzione.cliente_nome || 'Cliente',
-                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
-                    expirationDays: 7
+                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`
                 })
             })
             const result = await response.json()
@@ -358,7 +359,7 @@ export default function CauzioniTab() {
             if (result.paymentUrl) {
                 // Copy to clipboard
                 await navigator.clipboard.writeText(result.paymentUrl)
-                toast.success('Link copiato! Invialo al cliente.')
+                toast.success('Link pre-autorizzazione copiato!')
 
                 // Send via WhatsApp if phone available
                 const phone = cauzione.cliente_telefono
@@ -368,11 +369,13 @@ export default function CauzioniTab() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare il pagamento della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi qui:\n${result.paymentUrl}\n\nGrazie,\nDR7`
+                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare la pre-autorizzazione della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi qui:\n${result.paymentUrl}\n\nL'importo verrà solo bloccato sulla carta e sbloccato al termine del noleggio.\n\nGrazie,\nDR7`
                         })
                     })
                     toast.success('Link inviato via WhatsApp!')
                 }
+
+                fetchCauzioni()
             }
         } catch (error: any) {
             toast.dismiss('paylink')
