@@ -23,6 +23,7 @@ interface Cauzione {
     days_until_deadline: number
     cliente_nome?: string
     cliente_email?: string
+    cliente_telefono?: string
     veicolo_modello?: string
     veicolo_targa?: string
     nexi_transaction_id?: string | null
