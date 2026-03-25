@@ -30,19 +30,20 @@ const handler: Handler = async (event) => {
             callbackData = Object.fromEntries(params.entries());
         }
 
-        const {
-            orderId,
-            operationId,
-            transactionId,
-            result,
-            resultCode,
-            authorizationCode,
-            amount,
-            currency,
-            contractId
-        } = callbackData;
+        // Nexi Pay-by-Link v2 sends nested format: { operation: { orderId, operationResult, ... } }
+        // Nexi hosted payment sends flat format: { orderId, result, resultCode, ... }
+        const op = callbackData.operation || {};
+        const orderId = callbackData.orderId || op.orderId;
+        const operationId = callbackData.operationId || op.operationId;
+        const transactionId = callbackData.transactionId || op.paymentEndToEndId;
+        const result = callbackData.result || op.operationResult;
+        const resultCode = callbackData.resultCode;
+        const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
+        const contractId = callbackData.contractId || op.additionalData?.contractId;
+        const amount = callbackData.amount || op.operationAmount;
+        const currency = callbackData.currency || op.operationCurrency;
 
-        console.log('Parsed callback data:', { orderId, operationId, result, authorizationCode });
+        console.log('[nexi-preauth-callback] Parsed:', { orderId, operationId, result, resultCode, authorizationCode, contractId, raw_keys: Object.keys(callbackData), raw_op_keys: Object.keys(op) });
 
         if (!orderId) {
             return {
@@ -109,15 +110,15 @@ const handler: Handler = async (event) => {
                 // Get booking from cauzione to find customer
                 const { data: cauzioneFull } = await supabase
                     .from('cauzioni')
-                    .select('booking_id')
+                    .select('riferimento_contratto_id')
                     .eq('id', cauzione.id)
                     .single();
 
-                if (cauzioneFull?.booking_id) {
+                if (cauzioneFull?.riferimento_contratto_id) {
                     const { data: booking } = await supabase
                         .from('bookings')
                         .select('customer_email, booking_details')
-                        .eq('id', cauzioneFull.booking_id)
+                        .eq('id', cauzioneFull.riferimento_contratto_id)
                         .single();
 
                     if (booking) {
