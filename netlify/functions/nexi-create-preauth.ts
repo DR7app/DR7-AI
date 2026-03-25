@@ -76,7 +76,8 @@ const handler: Handler = async (event) => {
             expirationDate: expDateStr
         };
 
-        console.log('Creating Nexi pre-authorization:', { orderId, amountCents, cauzioneId });
+        const siteUrl = process.env.URL || 'https://admin.dr7empire.com';
+        console.log('[nexi-create-preauth] Creating:', { orderId, amountCents, cauzioneId, siteUrl, notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback` });
 
         const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0

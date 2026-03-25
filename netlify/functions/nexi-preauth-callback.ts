@@ -17,18 +17,32 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        console.log('Nexi pre-auth callback received:', event.body);
+        console.log('[nexi-preauth-callback] Method:', event.httpMethod);
+        console.log('[nexi-preauth-callback] Body:', event.body);
+        console.log('[nexi-preauth-callback] Query:', JSON.stringify(event.queryStringParameters));
+        console.log('[nexi-preauth-callback] Headers content-type:', event.headers['content-type']);
 
-        // Parse callback data (Nexi sends as form-urlencoded or JSON)
+        // Parse callback data — Nexi may send as POST JSON, POST form-urlencoded, or GET with query params
         let callbackData: any;
 
-        if (event.headers['content-type']?.includes('application/json')) {
+        if (event.queryStringParameters && Object.keys(event.queryStringParameters).length > 0) {
+            // GET request with query params
+            callbackData = event.queryStringParameters;
+        } else if (event.headers['content-type']?.includes('application/json')) {
             callbackData = JSON.parse(event.body || '{}');
+        } else if (event.body) {
+            // Try JSON first, then URL-encoded
+            try {
+                callbackData = JSON.parse(event.body);
+            } catch {
+                const params = new URLSearchParams(event.body);
+                callbackData = Object.fromEntries(params.entries());
+            }
         } else {
-            // Parse URL-encoded form data
-            const params = new URLSearchParams(event.body || '');
-            callbackData = Object.fromEntries(params.entries());
+            callbackData = {};
         }
+
+        console.log('[nexi-preauth-callback] Parsed callbackData keys:', Object.keys(callbackData));
 
         // Nexi Pay-by-Link v2 sends nested format: { operation: { orderId, operationResult, ... } }
         // Nexi hosted payment sends flat format: { orderId, result, resultCode, ... }
