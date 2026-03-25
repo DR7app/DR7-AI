@@ -63,7 +63,8 @@ const handler: Handler = async (event) => {
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=cancelled`,
                 notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-preauth-callback`,
-                expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
                 recurrence: {
                     action: 'CONTRACT_CREATION',
                     contractId: orderId.slice(0, 18),
