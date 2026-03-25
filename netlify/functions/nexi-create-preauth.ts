@@ -57,12 +57,13 @@ const handler: Handler = async (event) => {
                 }
             },
             paymentSession: {
-                actionType: 'AUTH',  // AUTH = pre-authorization (hold funds, don't capture)
+                actionType: 'PREAUTH',  // PREAUTH = pre-authorization (hold funds, don't capture)
                 amount: amountCents.toString(),
                 language: 'ita',
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=cancelled`,
                 notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-preauth-callback`,
+                expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 recurrence: {
                     action: 'CONTRACT_CREATION',
                     contractId: orderId.slice(0, 18),
@@ -77,7 +78,9 @@ const handler: Handler = async (event) => {
             const r = Math.random() * 16 | 0
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
-        const response = await fetch(`${NEXI_BASE_URL}/orders/build`, {
+        const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
+        console.log('[nexi-create-preauth] Using URL:', payByLinkUrl);
+        const response = await fetch(payByLinkUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -134,7 +137,7 @@ const handler: Handler = async (event) => {
             headers,
             body: JSON.stringify({
                 success: true,
-                paymentUrl: responseData.hostedPage,
+                paymentUrl: responseData.paymentLink?.link || responseData.hostedPage,
                 orderId: orderId,
                 message: 'Redirect customer to payment page'
             })
