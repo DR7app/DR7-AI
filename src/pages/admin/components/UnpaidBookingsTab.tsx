@@ -303,11 +303,13 @@ export default function UnpaidBookingsTab() {
       }
       setMitChargedMap(mitMap)
 
+      const isPaid = (s: string) => s === 'paid' || s === 'completed' || s === 'succeeded'
+
       const unpaidBookings = (data || []).filter(booking => {
         if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
 
         const extensions = booking.booking_details?.extension_history || []
-        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link' || ext.payment_status === 'nexi_pay_by_link')) return true
+        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')) return true
 
         const penalties = booking.booking_details?.penalties || []
         if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link')) return true
@@ -315,7 +317,8 @@ export default function UnpaidBookingsTab() {
         const danni = booking.booking_details?.danni || []
         if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link')) return true
 
-        if (bookingIdsWithFatturaItems.has(booking.id)) return true
+        // Only keep for fattura items if the booking itself is NOT paid
+        if (bookingIdsWithFatturaItems.has(booking.id) && !isPaid(booking.payment_status)) return true
 
         return false
       })
@@ -346,14 +349,25 @@ export default function UnpaidBookingsTab() {
 
       if (newStatus === 'paid') {
         try {
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId, includeIVA: true })
-          })
-          if (invoiceRes.ok) {
-            const invoiceData = await invoiceRes.json()
-            toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata e inviata a SDI`)
+          // Check if fattura already exists for this booking
+          const { data: existingFattura } = await supabase
+            .from('fatture')
+            .select('id, numero_fattura')
+            .eq('booking_id', bookingId)
+            .maybeSingle()
+
+          if (existingFattura) {
+            toast.success(`Fattura ${existingFattura.numero_fattura} già esistente`)
+          } else {
+            const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, includeIVA: true })
+            })
+            if (invoiceRes.ok) {
+              const invoiceData = await invoiceRes.json()
+              toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata`)
+            }
           }
         } catch (invoiceErr) {
           console.warn('Auto-invoice generation failed:', invoiceErr)
