@@ -197,12 +197,40 @@ export default function CauzioniTab() {
                 contractId = cust?.nexi_contract_id || cust?.metadata?.nexi_contract_id || ''
             }
 
-            // Fallback: check nexi_transactions for this customer's booking
+            // Fallback 1: check nexi_transactions for this customer's booking
             if (!contractId && cauzione.riferimento_contratto_id) {
                 const { data: txn } = await supabase
                     .from('nexi_transactions')
                     .select('contract_id')
                     .eq('booking_id', cauzione.riferimento_contratto_id)
+                    .eq('status', 'completed')
+                    .not('contract_id', 'is', null)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                contractId = txn?.contract_id || ''
+            }
+
+            // Fallback 2: check nexi_transactions by customer email
+            if (!contractId && cauzione.cliente_email) {
+                const { data: txn } = await supabase
+                    .from('nexi_transactions')
+                    .select('contract_id')
+                    .eq('customer_email', cauzione.cliente_email)
+                    .eq('status', 'completed')
+                    .not('contract_id', 'is', null)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                contractId = txn?.contract_id || ''
+            }
+
+            // Fallback 3: check by customer email case-insensitive
+            if (!contractId && cauzione.cliente_email) {
+                const { data: txn } = await supabase
+                    .from('nexi_transactions')
+                    .select('contract_id')
+                    .ilike('customer_email', cauzione.cliente_email)
                     .eq('status', 'completed')
                     .not('contract_id', 'is', null)
                     .order('created_at', { ascending: false })
