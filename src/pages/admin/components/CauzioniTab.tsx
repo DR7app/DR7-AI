@@ -61,7 +61,11 @@ export default function CauzioniTab() {
     const fetchCauzioni = async () => {
         setLoading(true)
         try {
-            const { data, error } = await supabase
+            // Try FK join first, fall back to separate queries if FKs not set up
+            let data: any[] | null = null
+            let usedJoin = false
+
+            const { data: joinData, error: joinError } = await supabase
                 .from('cauzioni')
                 .select(`
           *,
@@ -70,7 +74,50 @@ export default function CauzioniTab() {
         `)
                 .order('scadenza_cauzione', { ascending: true })
 
-            if (error) throw error
+            if (!joinError && joinData) {
+                data = joinData
+                usedJoin = true
+            } else {
+                // FK join failed — fetch cauzioni plain, then enrich with separate queries
+                console.warn('FK join failed, using fallback:', joinError?.message)
+                const { data: plainData, error: plainError } = await supabase
+                    .from('cauzioni')
+                    .select('*')
+                    .order('scadenza_cauzione', { ascending: true })
+
+                if (plainError) throw plainError
+                data = plainData || []
+
+                // Batch-fetch customers and vehicles
+                const clienteIds = [...new Set(data.map((c: any) => c.cliente_id).filter(Boolean))]
+                const veicoloIds = [...new Set(data.map((c: any) => c.veicolo_id).filter(Boolean))]
+
+                const customersMap: Record<string, any> = {}
+                const vehiclesMap: Record<string, any> = {}
+
+                if (clienteIds.length > 0) {
+                    const { data: customers } = await supabase
+                        .from('customers_extended')
+                        .select('id, nome, cognome, denominazione, ragione_sociale, tipo_cliente, email')
+                        .in('id', clienteIds)
+                    ;(customers || []).forEach((c: any) => { customersMap[c.id] = c })
+                }
+
+                if (veicoloIds.length > 0) {
+                    const { data: vehicles } = await supabase
+                        .from('vehicles')
+                        .select('id, display_name, plate')
+                        .in('id', veicoloIds)
+                    ;(vehicles || []).forEach((v: any) => { vehiclesMap[v.id] = v })
+                }
+
+                // Attach to data
+                data = data.map((c: any) => ({
+                    ...c,
+                    customers_extended: customersMap[c.cliente_id] || null,
+                    vehicles: vehiclesMap[c.veicolo_id] || null
+                }))
+            }
 
             const today = new Date()
             today.setHours(0, 0, 0, 0)
@@ -247,29 +294,52 @@ export default function CauzioniTab() {
             if (!confirm(`Bloccare €${Number(cauzione.importo).toFixed(2)} sulla carta salvata di ${cauzione.cliente_nome}? (Pre-autorizzazione)`)) return
 
             toast.loading('Pre-autorizzazione in corso...', { id: 'mit' })
-            const res = await fetch('/.netlify/functions/nexi-charge-mit', {
+
+            const mitPayload = {
+                contractId,
+                amount: Number(cauzione.importo),
+                description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
+                bookingId: cauzione.riferimento_contratto_id || null,
+                customerName: cauzione.cliente_nome || '',
+                captureType: 'EXPLICIT'
+            }
+
+            // Try EXPLICIT (pre-auth hold) first; if contract doesn't support it, fall back to IMPLICIT (direct charge)
+            let res = await fetch('/.netlify/functions/nexi-charge-mit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contractId,
-                    amount: Number(cauzione.importo),
-                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
-                    bookingId: cauzione.riferimento_contratto_id || null,
-                    customerName: cauzione.cliente_nome || '',
-                    captureType: 'EXPLICIT'
-                })
+                body: JSON.stringify(mitPayload)
             })
-            const result = await res.json()
+            let result = await res.json()
+            let usedImplicit = false
+
+            if (!res.ok && JSON.stringify(result).toLowerCase().includes('implicit')) {
+                // Contract was created with implicit capture — retry as direct charge
+                console.warn('[Cauzioni] EXPLICIT not supported, retrying with IMPLICIT')
+                res = await fetch('/.netlify/functions/nexi-charge-mit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...mitPayload, captureType: 'IMPLICIT' })
+                })
+                result = await res.json()
+                usedImplicit = true
+            }
+
             toast.dismiss('mit')
 
             if (res.ok && result.success) {
-                toast.success(`€${Number(cauzione.importo).toFixed(2)} bloccato sulla carta!`)
-                // Update cauzione with transaction info
+                const noteText = usedImplicit
+                    ? `Addebito diretto MIT — €${Number(cauzione.importo).toFixed(2)} addebitato sulla carta — ${new Date().toLocaleDateString('it-IT')}`
+                    : `Pre-auth MIT — €${Number(cauzione.importo).toFixed(2)} bloccati sulla carta — ${new Date().toLocaleDateString('it-IT')}`
+                toast.success(usedImplicit
+                    ? `€${Number(cauzione.importo).toFixed(2)} addebitato sulla carta (addebito diretto)`
+                    : `€${Number(cauzione.importo).toFixed(2)} bloccato sulla carta!`
+                )
                 await supabase.from('cauzioni').update({
                     stato: 'Attiva',
                     nexi_transaction_id: result.operationId || result.orderId,
                     nexi_order_id: result.orderId,
-                    note: `Pre-auth MIT — €${Number(cauzione.importo).toFixed(2)} bloccati sulla carta — ${new Date().toLocaleDateString('it-IT')}`,
+                    note: noteText,
                     updated_at: new Date().toISOString()
                 }).eq('id', cauzione.id)
                 fetchCauzioni()
