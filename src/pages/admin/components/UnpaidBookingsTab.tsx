@@ -630,6 +630,47 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  async function sendPayByLink(booking: UnpaidBooking, amountEur: number, description: string) {
+    try {
+      toast.loading('Generazione link...', { id: 'paylink' })
+      const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          amount: amountEur,
+          customerEmail: booking.customer_email || booking.booking_details?.customer?.email || '',
+          customerName: booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente',
+          description,
+          expirationDays: 7
+        })
+      })
+      const result = await res.json()
+      toast.dismiss('paylink')
+      if (!res.ok) throw new Error(result.error || 'Errore')
+      if (result.paymentUrl) {
+        await navigator.clipboard.writeText(result.paymentUrl)
+        toast.success('Link copiato!')
+        // Send via WhatsApp
+        const phone = booking.customer_phone || booking.booking_details?.customer?.phone
+        if (phone) {
+          await fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customPhone: phone,
+              customMessage: `Gentile ${booking.customer_name || 'Cliente'},\n\nPer completare il pagamento di *€${amountEur.toFixed(2)}* (${description}), clicchi qui:\n${result.paymentUrl}\n\nGrazie,\nDR7`
+            })
+          })
+          toast.success('Link inviato via WhatsApp!')
+        }
+      }
+    } catch (err: any) {
+      toast.dismiss('paylink')
+      toast.error(err.message || 'Errore')
+    }
+  }
+
   async function markSingleFatturaItemPaid(fi: FatturaItem) {
     try {
       const { data: fattura, error: fetchErr } = await supabase
@@ -1645,6 +1686,10 @@ export default function UnpaidBookingsTab() {
                             onClick={() => markSingleExtensionPaid(booking, extIdx)}
                             className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                           >Pagato</button>
+                          <button
+                            onClick={() => sendPayByLink(booking, extRemaining, `Estensione ${booking.vehicle_name || ''}`)}
+                            className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                          >Invia Link</button>
                           {partialPayItemKey !== extPartialKey && (
                             <button
                               onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue('') }}
@@ -1695,6 +1740,12 @@ export default function UnpaidBookingsTab() {
                     onClick={() => updatePaymentStatus(booking.id, 'paid')}
                     className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                   >Pagato</button>
+                )}
+                {isPending && (
+                  <button
+                    onClick={() => sendPayByLink(booking, remainingEur, `Noleggio ${booking.vehicle_name || ''}`)}
+                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                  >Invia Link</button>
                 )}
                 {isPending && partialPayItemKey !== bkKey && (
                   <button
