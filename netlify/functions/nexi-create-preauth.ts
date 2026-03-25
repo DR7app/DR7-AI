@@ -66,7 +66,12 @@ const handler: Handler = async (event) => {
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=cancelled`,
                 notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-preauth-callback`,
                 expirationDate: expDateStr,
-                expirationTime: expDate.toISOString()
+                expirationTime: expDate.toISOString(),
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId.slice(0, 18),
+                    contractType: 'MIT_UNSCHEDULED'
+                }
             },
             expirationDate: expDateStr
         };
@@ -113,11 +118,15 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // Update cauzione with order ID (transaction ID will come from callback)
+        // Store contractId for future MIT charges (danni, penalties, etc.)
+        const contractId = orderId.slice(0, 18)
+
+        // Update cauzione with order ID and contract ID (transaction ID will come from callback)
         const { error: updateError } = await supabase
             .from('cauzioni')
             .update({
                 nexi_order_id: orderId,
+                nexi_contract_id: contractId,
                 note: `Preautorizzazione in attesa - Order: ${orderId}`,
                 updated_at: new Date().toISOString()
             })
