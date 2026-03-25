@@ -578,43 +578,49 @@ const handler: Handler = async (event) => {
 
                 // Only attempt bonus for eligible bookings with payment
                 if (isInitialBooking && isEligibleService && paidCents > 0) try {
-                    // Detect card type via BIN lookup (with 5s timeout)
-                    let binType = ''
-                    const opId = operationId || transactionId
-                    if (opId) {
-                        const controller = new AbortController()
-                        const timeout = globalThis.setTimeout(() => controller.abort(), 5000)
-                        try {
-                            const opRes = await fetch(`${NEXI_BASE_URL}/operations/${opId}`, {
-                                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': `${Date.now()}` },
-                                signal: controller.signal
-                            })
-                            if (opRes.ok) {
-                                const opData = await opRes.json()
-                                const maskedPan = opData.paymentInstrumentInfo || opData.operation?.additionalData?.maskedPan || ''
-                                const binMatch = maskedPan.match(/^(\d{6,8})/)
-                                if (binMatch) {
-                                    const binRes = await fetch(`https://lookup.binlist.net/${binMatch[1]}`, {
-                                        headers: { 'Accept-Version': '3' },
-                                        signal: controller.signal
-                                    })
-                                    if (binRes.ok) {
-                                        const binData = await binRes.json()
-                                        binType = (binData.type || '').toLowerCase()
+                    // PRIMARY: Detect card type from callback data keywords (fast, reliable)
+                    const rawCallback = JSON.stringify(callbackData).toLowerCase()
+                    let isPrepagata = rawCallback.includes('prepagat') || rawCallback.includes('prepaid')
+                    let isCredito = rawCallback.includes('credito') || rawCallback.includes('credit card')
+                    let isDebito = rawCallback.includes('debito') || rawCallback.includes('debit')
+
+                    // FALLBACK: If no keywords found, try BIN lookup (with 3s timeout)
+                    if (!isPrepagata && !isCredito && !isDebito) {
+                        const opId = operationId || transactionId
+                        if (opId) {
+                            try {
+                                const controller = new AbortController()
+                                const timeout = globalThis.setTimeout(() => controller.abort(), 3000)
+                                const opRes = await fetch(`${NEXI_BASE_URL}/operations/${opId}`, {
+                                    headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': `${Date.now()}` },
+                                    signal: controller.signal
+                                })
+                                if (opRes.ok) {
+                                    const opData = await opRes.json()
+                                    const maskedPan = opData.paymentInstrumentInfo || opData.operation?.additionalData?.maskedPan || ''
+                                    const binMatch = maskedPan.match(/^(\d{6,8})/)
+                                    if (binMatch) {
+                                        const binRes = await fetch(`https://lookup.binlist.net/${binMatch[1]}`, {
+                                            headers: { 'Accept-Version': '3' },
+                                            signal: controller.signal
+                                        })
+                                        if (binRes.ok) {
+                                            const binData = await binRes.json()
+                                            const binType = (binData.type || '').toLowerCase()
+                                            if (binType === 'prepaid') isPrepagata = true
+                                            else if (binType === 'credit') isCredito = true
+                                            else if (binType === 'debit') isDebito = true
+                                        }
                                     }
                                 }
+                                clearTimeout(timeout)
+                            } catch (e) {
+                                console.warn('[nexi-payment-callback] BIN lookup timeout/error (non-fatal):', e)
                             }
-                        } catch (e) {
-                            console.warn('[nexi-payment-callback] BIN lookup timeout/error:', e)
-                        } finally {
-                            clearTimeout(timeout)
                         }
                     }
 
-                    const isPrepagata = binType === 'prepaid'
-                    const isCredito = binType === 'credit'
-                    const isDebito = binType === 'debit'
-                    console.log(`[nexi-payment-callback] Card type: bin=${binType}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}`)
+                    console.log(`[nexi-payment-callback] Card type: prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}, raw_has_keywords=${rawCallback.includes('credit') || rawCallback.includes('debit') || rawCallback.includes('prepag')}`)
 
                 if (isPrepagata && contractId && paidCents > 0) {
                     // PREPAGATA: charge 20% surcharge via MIT
