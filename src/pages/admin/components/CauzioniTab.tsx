@@ -302,48 +302,33 @@ export default function CauzioniTab() {
                 captureType: 'EXPLICIT'
             }
 
-            // Try EXPLICIT (pre-auth hold) first; if contract doesn't support it, fall back to IMPLICIT (direct charge)
-            let res = await fetch('/.netlify/functions/nexi-charge-mit', {
+            const res = await fetch('/.netlify/functions/nexi-charge-mit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(mitPayload)
             })
-            let result = await res.json()
-            let usedImplicit = false
-
-            if (!res.ok && JSON.stringify(result).toLowerCase().includes('implicit')) {
-                // Contract was created with implicit capture — retry as direct charge
-                console.warn('[Cauzioni] EXPLICIT not supported, retrying with IMPLICIT')
-                res = await fetch('/.netlify/functions/nexi-charge-mit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...mitPayload, captureType: 'IMPLICIT' })
-                })
-                result = await res.json()
-                usedImplicit = true
-            }
-
+            const result = await res.json()
             toast.dismiss('mit')
 
-            if (res.ok && result.success) {
-                const noteText = usedImplicit
-                    ? `Addebito diretto MIT — €${Number(cauzione.importo).toFixed(2)} addebitato sulla carta — ${new Date().toLocaleDateString('it-IT')}`
-                    : `Pre-auth MIT — €${Number(cauzione.importo).toFixed(2)} bloccati sulla carta — ${new Date().toLocaleDateString('it-IT')}`
-                toast.success(usedImplicit
-                    ? `€${Number(cauzione.importo).toFixed(2)} addebitato sulla carta (addebito diretto)`
-                    : `€${Number(cauzione.importo).toFixed(2)} bloccato sulla carta!`
-                )
-                await supabase.from('cauzioni').update({
-                    stato: 'Attiva',
-                    nexi_transaction_id: result.operationId || result.orderId,
-                    nexi_order_id: result.orderId,
-                    note: noteText,
-                    updated_at: new Date().toISOString()
-                }).eq('id', cauzione.id)
-                fetchCauzioni()
-            } else {
-                toast.error('Addebito fallito: ' + (result.error || 'Errore'))
+            if (!res.ok) {
+                if (JSON.stringify(result).toLowerCase().includes('implicit')) {
+                    // Contract doesn't support pre-auth — tell admin to use pay link instead
+                    toast.error('La carta di questo cliente non supporta la pre-autorizzazione. Usa "INVIA LINK" per creare un pagamento con blocco.')
+                } else {
+                    toast.error('Pre-autorizzazione fallita: ' + (result.error || 'Errore'))
+                }
+                return
             }
+
+            toast.success(`€${Number(cauzione.importo).toFixed(2)} bloccato sulla carta!`)
+            await supabase.from('cauzioni').update({
+                stato: 'Attiva',
+                nexi_transaction_id: result.operationId || result.orderId,
+                nexi_order_id: result.orderId,
+                note: `Pre-auth MIT — €${Number(cauzione.importo).toFixed(2)} bloccati sulla carta — ${new Date().toLocaleDateString('it-IT')}`,
+                updated_at: new Date().toISOString()
+            }).eq('id', cauzione.id)
+            fetchCauzioni()
         } catch (error: any) {
             toast.dismiss('mit')
             toast.error(error.message || 'Errore')
