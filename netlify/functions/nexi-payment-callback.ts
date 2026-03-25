@@ -571,43 +571,50 @@ const handler: Handler = async (event) => {
                     console.error('[nexi-payment-callback] Fattura generation failed:', invErr);
                 }
 
-                // ── Card type bonus/surcharge ──────────────────────────────
-                // Only for INITIAL bookings (car rental + lavaggio), NOT extensions
+                // ── Card type bonus (non-blocking — wrapped in try/catch) ──────
                 const isInitialBooking = paymentPurpose === 'booking'
-                const isEligibleService = !booking.service_type
-                    || booking.service_type === 'car_rental'
-                    || booking.service_type === 'car_wash'
+                const isEligibleService = !booking.service_type || booking.service_type === 'car_rental' || booking.service_type === 'car_wash'
+                const paidCents = transaction.amount_cents
 
-                // Detect card type: fetch Nexi operation details + BIN lookup
-                let cardTypeResult = ''
-                let maskedPan = ''
-                const opId = operationId || transactionId
-                if (opId) {
-                    const opDetails = await fetchNexiOperationDetails(opId)
-                    if (opDetails) {
-                        maskedPan = opDetails.paymentInstrumentInfo || opDetails.additionalData?.maskedPan || opDetails.operation?.additionalData?.maskedPan || ''
-                        // Try to get card type from operation details
-                        cardTypeResult = (opDetails.paymentMethod || opDetails.operation?.paymentMethod || '').toLowerCase()
+                // Only attempt bonus for eligible bookings with payment
+                if (isInitialBooking && isEligibleService && paidCents > 0) try {
+                    // Detect card type via BIN lookup (with 5s timeout)
+                    let binType = ''
+                    const opId = operationId || transactionId
+                    if (opId) {
+                        const controller = new AbortController()
+                        const timeout = globalThis.setTimeout(() => controller.abort(), 5000)
+                        try {
+                            const opRes = await fetch(`${NEXI_BASE_URL}/operations/${opId}`, {
+                                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': `${Date.now()}` },
+                                signal: controller.signal
+                            })
+                            if (opRes.ok) {
+                                const opData = await opRes.json()
+                                const maskedPan = opData.paymentInstrumentInfo || opData.operation?.additionalData?.maskedPan || ''
+                                const binMatch = maskedPan.match(/^(\d{6,8})/)
+                                if (binMatch) {
+                                    const binRes = await fetch(`https://lookup.binlist.net/${binMatch[1]}`, {
+                                        headers: { 'Accept-Version': '3' },
+                                        signal: controller.signal
+                                    })
+                                    if (binRes.ok) {
+                                        const binData = await binRes.json()
+                                        binType = (binData.type || '').toLowerCase()
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[nexi-payment-callback] BIN lookup timeout/error:', e)
+                        } finally {
+                            clearTimeout(timeout)
+                        }
                     }
-                }
 
-                // BIN lookup if we have the first 6+ digits
-                let binType = ''
-                const binMatch = maskedPan.match(/^(\d{6,8})/)
-                if (binMatch) {
-                    const binResult = await lookupBin(binMatch[1])
-                    if (binResult) {
-                        binType = binResult.type // 'credit', 'debit', 'prepaid'
-                    }
-                }
-
-                const isPrepagata = binType === 'prepaid' || cardTypeResult.includes('prepaid') || cardTypeResult.includes('prepagat')
-                const isCredito = binType === 'credit' || (!binType && !isPrepagata && cardTypeResult.includes('credit'))
-                const isDebito = binType === 'debit' || (!binType && !isPrepagata && !isCredito && cardTypeResult.includes('debit'))
-
-                console.log(`[nexi-payment-callback] Card type: bin=${binType}, maskedPan=${maskedPan}, circuit=${paymentCircuit}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}`)
-
-                const paidCents = transaction.amount_cents;
+                    const isPrepagata = binType === 'prepaid'
+                    const isCredito = binType === 'credit'
+                    const isDebito = binType === 'debit'
+                    console.log(`[nexi-payment-callback] Card type: bin=${binType}, prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}`)
 
                 if (isPrepagata && contractId && paidCents > 0) {
                     // PREPAGATA: charge 20% surcharge via MIT
@@ -740,6 +747,9 @@ const handler: Handler = async (event) => {
                     } catch (walletErr) {
                         console.error('[nexi-payment-callback] Credit wallet bonus error:', walletErr);
                     }
+                }
+                } catch (bonusErr) {
+                    console.error('[nexi-payment-callback] Card bonus processing error (non-fatal):', bonusErr);
                 }
             }
         }
