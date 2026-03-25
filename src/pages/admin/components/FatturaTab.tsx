@@ -344,13 +344,21 @@ export default function FatturaTab() {
                       {invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata' ? 'Reinvia SDI' : 'Invia SDI'}
                     </button>
                   ) : (
-                    <button
-                      onClick={() => handleCheckStatus(invoice.id)}
-                      disabled={checkingStatus === invoice.id}
-                      className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                    >
-                      {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleCheckStatus(invoice.id)}
+                        disabled={checkingStatus === invoice.id}
+                        className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
+                      </button>
+                      <button
+                        onClick={() => handleSendToSDI(invoice)}
+                        className="bg-orange-600 hover:bg-orange-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      >
+                        Reinvia SDI
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => handleDelete(invoice.id)}
