@@ -44,7 +44,9 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Create pre-authorization request
+        // Create pre-authorization request (same structure as working pay-by-link)
+        const expDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const expDateStr = expDate.toISOString().split('T')[0];
         const payload = {
             order: {
                 orderId: orderId,
@@ -57,20 +59,21 @@ const handler: Handler = async (event) => {
                 }
             },
             paymentSession: {
-                actionType: 'PREAUTH',  // PREAUTH = pre-authorization (hold funds, don't capture)
+                actionType: 'PREAUTH',
                 amount: amountCents.toString(),
                 language: 'ita',
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=cancelled`,
                 notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-preauth-callback`,
-                expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-                expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                expirationDate: expDateStr,
+                expirationTime: expDate.toISOString(),
                 recurrence: {
                     action: 'CONTRACT_CREATION',
                     contractId: orderId.slice(0, 18),
                     contractType: 'MIT_UNSCHEDULED'
                 }
-            }
+            },
+            expirationDate: expDateStr
         };
 
         console.log('Creating Nexi pre-authorization:', { orderId, amountCents, cauzioneId });
