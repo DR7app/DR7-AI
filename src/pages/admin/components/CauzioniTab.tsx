@@ -182,6 +182,51 @@ export default function CauzioniTab() {
         }
     }
 
+    const handleSendPayLink = async (cauzione: Cauzione) => {
+        try {
+            toast.loading('Generazione link...', { id: 'paylink' })
+            const response = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bookingId: cauzione.riferimento_contratto_id || null,
+                    amount: cauzione.importo,
+                    customerEmail: cauzione.cliente_email || '',
+                    customerName: cauzione.cliente_nome || 'Cliente',
+                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
+                    expirationDays: 7
+                })
+            })
+            const result = await response.json()
+            toast.dismiss('paylink')
+
+            if (!response.ok) throw new Error(result.error || 'Errore generazione link')
+
+            if (result.paymentUrl) {
+                // Copy to clipboard
+                await navigator.clipboard.writeText(result.paymentUrl)
+                toast.success('Link copiato! Invialo al cliente.')
+
+                // Send via WhatsApp if phone available
+                const phone = cauzione.cliente_telefono
+                if (phone) {
+                    await fetch('/.netlify/functions/send-whatsapp-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: phone,
+                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare il pagamento della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi qui:\n${result.paymentUrl}\n\nGrazie,\nDR7`
+                        })
+                    })
+                    toast.success('Link inviato via WhatsApp!')
+                }
+            }
+        } catch (error: any) {
+            toast.dismiss('paylink')
+            toast.error(error.message || 'Errore')
+        }
+    }
+
     const handleCreatePreauth = async (cauzione: Cauzione) => {
         try {
             const response = await fetch('/.netlify/functions/nexi-create-preauth', {
@@ -666,6 +711,12 @@ export default function CauzioniTab() {
                                                 className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
                                             >
                                                 INCASSA
+                                            </button>
+                                            <button
+                                                onClick={() => handleSendPayLink(cauzione)}
+                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors font-semibold"
+                                            >
+                                                INVIA LINK
                                             </button>
                                             {cauzione.metodo === 'preautorizzazione' && !cauzione.nexi_transaction_id && (
                                                 <button
