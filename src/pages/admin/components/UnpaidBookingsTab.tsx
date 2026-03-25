@@ -1743,7 +1743,7 @@ export default function UnpaidBookingsTab() {
                 )}
                 {isPending && (
                   <button
-                    onClick={() => sendPayByLink(booking, remainingEur, `Noleggio ${booking.vehicle_name || ''}`)}
+                    onClick={() => sendPayByLink(booking, remainingCents / 100, `Noleggio ${booking.vehicle_name || ''}`)}
                     className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
                   >Invia Link</button>
                 )}
