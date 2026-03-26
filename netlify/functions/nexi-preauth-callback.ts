@@ -84,23 +84,34 @@ const handler: Handler = async (event) => {
         }
 
         // Update cauzione based on result
-        const isSuccess = result === 'OK' || result === 'AUTHORIZED' || result === 'EXECUTED' || resultCode === '00';
+        // AUTHORIZED = funds held (correct for preauth), EXECUTED = funds charged (wrong for preauth)
+        const isPreauthorized = result === 'AUTHORIZED' || (resultCode === '00' && result !== 'EXECUTED');
+        const wasCharged = result === 'EXECUTED' || result === 'OK';
 
         const updateData: any = {
             updated_at: new Date().toISOString()
         };
 
-        if (isSuccess) {
-            // Save operationId (used for capture/void) — prefer operationId over transactionId
+        if (isPreauthorized) {
+            // Correct: funds are HELD, not charged
             updateData.nexi_transaction_id = operationId || transactionId;
             updateData.nexi_operation_id = operationId;
-            // Store contractId from Nexi response (for future MIT charges)
             if (contractId) {
                 updateData.nexi_contract_id = contractId;
             }
             updateData.stato = 'Attiva'; // Pre-authorized and ready for SBLOCCA or INCASSA
-            updateData.note = `Preautorizzazione completata - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'}${contractId ? ` - Carta registrata (${contractId})` : ''} - Importo: €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
-            console.log('[nexi-preauth-callback] SUCCESS — operationId:', operationId, 'transactionId:', transactionId, 'authCode:', authorizationCode);
+            updateData.note = `Preautorizzazione completata (fondi bloccati) - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'}${contractId ? ` - Carta registrata (${contractId})` : ''} - Importo: €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
+            console.log('[nexi-preauth-callback] PREAUTH SUCCESS — operationId:', operationId, 'transactionId:', transactionId, 'authCode:', authorizationCode);
+        } else if (wasCharged) {
+            // WARNING: funds were CHARGED instead of held — this means the endpoint did PAY not PREAUTH
+            updateData.nexi_transaction_id = operationId || transactionId;
+            updateData.nexi_operation_id = operationId;
+            if (contractId) {
+                updateData.nexi_contract_id = contractId;
+            }
+            updateData.stato = 'Incassata'; // Mark as charged since money was taken
+            updateData.note = `ATTENZIONE: Importo INCASSATO (non bloccato) - Result: ${result} - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'} - €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
+            console.log('[nexi-preauth-callback] WARNING: CHARGED instead of PREAUTH — result:', result, 'operationId:', operationId);
         } else {
             updateData.note = `Preautorizzazione fallita - ${result || resultCode}`;
             console.log('[nexi-preauth-callback] FAILED — result:', result, 'resultCode:', resultCode);
