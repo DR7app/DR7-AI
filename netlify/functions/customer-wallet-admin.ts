@@ -94,11 +94,22 @@ const handler: Handler = async (event) => {
 
         // 2. Referral wallet_transactions (by phone → participant → wallet)
         if (custPhone) {
-          const { data: participant } = await svc
-            .from('referral_participants')
-            .select('id')
-            .eq('telefono', custPhone)
-            .maybeSingle();
+          // Try multiple phone formats
+          let cleanPhone = custPhone.replace(/[\s\-\+\(\)]/g, '')
+          const phoneVariants = [cleanPhone]
+          if (cleanPhone.startsWith('39') && cleanPhone.length === 12) phoneVariants.push(cleanPhone.substring(2))
+          if (!cleanPhone.startsWith('39') && cleanPhone.length === 10) phoneVariants.push('39' + cleanPhone)
+          phoneVariants.push('+39' + cleanPhone.replace(/^39/, ''))
+
+          let participant: any = null
+          for (const pv of phoneVariants) {
+            const { data: p } = await svc
+              .from('referral_participants')
+              .select('id')
+              .eq('telefono', pv)
+              .maybeSingle()
+            if (p) { participant = p; break }
+          }
 
           if (participant) {
             const { data: wallet } = await svc
