@@ -621,8 +621,9 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                         <button
                             type="button"
                             onClick={handleSubmit}
-                            disabled={isGenerating || cart.length === 0}
+                            disabled={isGenerating || cart.length === 0 || cartTotal < 10}
                             className="flex-1 py-3 bg-dr7-gold hover:bg-[#247a6f] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={cartTotal > 0 && cartTotal < 10 ? 'Importo minimo: €10.00' : undefined}
                         >
                             {isGenerating ? (
                                 <span className="flex items-center justify-center gap-2">
@@ -632,7 +633,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                     </svg>
                                     Generazione...
                                 </span>
-                            ) : `Conferma`}
+                            ) : cartTotal > 0 && cartTotal < 10 ? `Minimo €10.00` : `Conferma`}
                         </button>
                     </div>
                 </div>

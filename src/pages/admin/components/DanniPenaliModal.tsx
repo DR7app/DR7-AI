@@ -750,8 +750,9 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         >
                             Annulla
                         </button>
-                        <button type="button" onClick={handleSubmit} disabled={isGenerating || cart.length === 0}
+                        <button type="button" onClick={handleSubmit} disabled={isGenerating || cart.length === 0 || cartTotal < 10}
                             className="flex-1 py-3 bg-gradient-to-r from-red-500 to-dr7-gold hover:from-red-600 hover:to-[#247a6f] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={cartTotal > 0 && cartTotal < 10 ? 'Importo minimo: €10.00' : undefined}
                         >
                             {isGenerating ? (
                                 <span className="flex items-center justify-center gap-2">
@@ -761,7 +762,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                     </svg>
                                     Generazione...
                                 </span>
-                            ) : 'Conferma'}
+                            ) : cartTotal > 0 && cartTotal < 10 ? 'Minimo €10.00' : 'Conferma'}
                         </button>
                     </div>
                 </div>
