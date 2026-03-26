@@ -357,9 +357,14 @@ export default function CauzioniTab() {
             if (!response.ok) throw new Error(result.error || 'Errore generazione link')
 
             if (result.paymentUrl) {
-                // Copy to clipboard
-                await navigator.clipboard.writeText(result.paymentUrl)
-                toast.success('Link pre-autorizzazione copiato!')
+                // Copy to clipboard (with fallback)
+                try {
+                    await navigator.clipboard.writeText(result.paymentUrl)
+                    toast.success('Link pre-autorizzazione copiato!')
+                } catch {
+                    // Fallback: prompt user to copy manually
+                    prompt('Copia il link:', result.paymentUrl)
+                }
 
                 // Send via WhatsApp if phone available
                 const phone = cauzione.cliente_telefono
