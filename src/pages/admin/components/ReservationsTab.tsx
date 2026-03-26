@@ -3924,24 +3924,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (sigRes.ok) {
               console.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
 
-              // Also send contract PDF to garante if cauzione auto with different owner
-              if (formData.cauzione_auto && formData.cauzione_proprietario_tipo === 'diverso' && formData.garante_phone) {
-                try {
-                  const garanteName = `${formData.garante_nome} ${formData.garante_cognome}`.trim()
-                  const contractNum = contractForSig.id.substring(0, 8).toUpperCase()
-                  await fetch('/.netlify/functions/send-whatsapp-notification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      customPhone: formData.garante_phone,
-                      customMessage: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\nGentile *${garanteName}*,\n\nLe inviamo il contratto di noleggio n. *${contractNum}* in quanto proprietario/garante del veicolo *${formData.cauzione_targa}* fornito come cauzione.\n\nPuò scaricare il contratto al seguente link:\n${contractForSig.pdf_url}\n\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, può semplicemente ignorarlo._`
-                    })
-                  })
-                  console.log('[Auto-Gen] ✅ Contract also sent to garante:', formData.garante_phone)
-                } catch (garanteErr) {
-                  console.error('[Auto-Gen] ⚠️ Failed to send contract to garante:', garanteErr)
-                }
-              }
+              // Garante signing link is now handled by signature-init (multi-signer support)
             } else {
               const sigErr = await sigRes.json()
               console.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
