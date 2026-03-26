@@ -2610,12 +2610,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             id: customer.id || targetCustomerId
           }
 
-          // Validate ALL required fields for contract & fattura — even if customer exists in DB
+          // Validate only essential fields for booking creation
+          // Contract/fattura generation will handle its own validation when needed
           const isAzienda = customer.tipo_cliente === 'azienda'
-          if (!customer.indirizzo) missing.push('indirizzo')
-          if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
-          if (!customer.provincia_residenza) missing.push('provincia_residenza')
-          if (!customer.codice_postale) missing.push('codice_postale')
 
           if (isAzienda) {
             if (!customer.partita_iva && !customer.codice_fiscale) missing.push('partita_iva')
@@ -2623,16 +2620,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else {
             if (!customer.nome) missing.push('nome')
             if (!customer.cognome) missing.push('cognome')
-            if (!customer.codice_fiscale) missing.push('codice_fiscale')
-            if (!customer.data_nascita) missing.push('data_nascita')
-            if (!customer.luogo_nascita) missing.push('luogo_nascita')
-            if (!customer.sesso && !customer.metadata?.sesso) missing.push('sesso')
-            if (!customer.numero_patente && !customer.patente && !customer.metadata?.patente?.numero) missing.push('numero_patente')
-            if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
-            if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
-            if (!customer.scadenza_patente && !customer.metadata?.patente?.scadenza) missing.push('scadenza_patente')
-            if (!customer.documento_numero) missing.push('documento_numero')
-            if (!customer.documento_tipo) missing.push('documento_tipo')
           }
 
           if (missing.length > 0) {
