@@ -617,18 +617,23 @@ export default function CauzioniTab() {
 
     const getStatoBadgeClass = (cauzione: Cauzione) => {
         if (cauzione.stato === 'Bloccata') return 'bg-orange-600 text-white'
+        if (cauzione.stato === 'Incassata') return 'bg-purple-600 text-white'
         if (!cauzione.data_incasso) return 'bg-yellow-600 text-black' // Da incassare
         if (cauzione.is_overdue) return 'bg-red-600 text-white'
         if (cauzione.stato === 'In scadenza') return 'bg-yellow-600 text-black'
-        return 'bg-green-600 text-white' // Incassata / Attiva
+        if (cauzione.nexi_transaction_id && cauzione.metodo === 'preautorizzazione') return 'bg-blue-600 text-white' // Pre-autorizzata
+        return 'bg-green-600 text-white' // Attiva
     }
 
     const getStatoLabel = (cauzione: Cauzione) => {
         if (cauzione.stato === 'Bloccata') return 'Bloccata'
+        if (cauzione.stato === 'Incassata') return 'Incassata'
         if (!cauzione.data_incasso) return 'Da incassare'
         if (cauzione.is_overdue) return 'Scaduta'
         if (cauzione.stato === 'In scadenza') return 'In scadenza'
-        return 'Attiva' // Incassata and within deadline
+        // Show Pre-autorizzata when preauth exists (nexi_transaction_id set, metodo preautorizzazione)
+        if (cauzione.nexi_transaction_id && cauzione.metodo === 'preautorizzazione') return 'Pre-autorizzata'
+        return 'Attiva'
     }
 
     const getStoricoStatoBadge = (stato: string) => {
@@ -909,6 +914,12 @@ export default function CauzioniTab() {
                                                     </button>
                                                 </>
                                             )}
+                                            <button
+                                                onClick={() => handleMarkRestituita(cauzione)}
+                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
+                                            >
+                                                RESTITUITA
+                                            </button>
                                         </>)
                                     )
                                 )}
