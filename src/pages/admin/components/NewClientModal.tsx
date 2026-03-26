@@ -1366,7 +1366,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {driversLicenseFront && (
@@ -1381,7 +1381,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {driversLicenseBack && (
@@ -1408,7 +1408,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {identityFront && (
@@ -1423,7 +1423,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {identityBack && (
@@ -1450,7 +1450,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {codiceFiscaleFront && (
@@ -1465,7 +1465,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
                           file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {codiceFiscaleBack && (

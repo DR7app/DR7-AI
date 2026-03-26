@@ -217,7 +217,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
         </div>
         <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-[#2d8a7e] to-yellow-500 rounded-full transition-all duration-500"
+            className="h-full bg-gradient-to-r from-[#2d8a7e] to-[#247a6f] rounded-full transition-all duration-500"
             style={{ width: `${(data.referrals.progress_to_milestone / 10) * 100}%` }}
           />
         </div>
@@ -293,7 +293,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
             <button
               onClick={handleTopup}
               disabled={topupLoading || !topupAmount || parseFloat(topupAmount) < 10}
-              className="px-6 py-3 bg-[#2d8a7e] text-black font-bold rounded-xl hover:bg-[#c4a030] transition-colors disabled:opacity-50"
+              className="px-6 py-3 bg-[#2d8a7e] text-white font-bold rounded-xl hover:bg-[#247a6f] transition-colors disabled:opacity-50"
             >
               {topupLoading ? '...' : 'Ricarica'}
             </button>

@@ -356,7 +356,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
               onClick={() => setHideFinancials(!hideFinancials)}
               className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
                 ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                : 'bg-dr7-gold text-white hover:bg-[#247a6f]'
                 }`}
             >
               {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -399,13 +399,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                 <div
                   key={day}
                   className={`
-                    flex flex-col items-center justify-center border-r border-theme-border/10 relative
+                    flex flex-col items-center justify-center border-r border-theme-border/40 relative
                     ${(isHol || isSun) ? 'bg-theme-text-primary/[0.02]' : ''}
                     ${isToday ? 'bg-dr7-gold/40' : ''}
                   `}
                   style={{
                     width: CELL_WIDTH,
-                    boxShadow: isToday ? 'inset 2px 0 0 0 rgba(212, 175, 55, 0.7), inset -2px 0 0 0 rgba(212, 175, 55, 0.7)' : undefined
+                    boxShadow: isToday ? 'inset 2px 0 0 0 rgba(45, 138, 126, 0.7), inset -2px 0 0 0 rgba(45, 138, 126, 0.7)' : undefined
                   }}
                 >
                   {/* Red dot for Sundays and holidays */}
@@ -438,7 +438,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             return (
               <div
                 key={row.vehicle.id}
-                className="flex border-b border-theme-border/50 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
+                className="flex border-b border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors group relative"
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
@@ -479,13 +479,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         <div
                           key={day}
                           className={`
-                                border-r border-white/[0.02] h-full
-                                ${isToday ? 'bg-dr7-gold/40' : 'bg-green-500/[0.15]'}
-                                ${isRedDay && !isToday ? 'bg-theme-text-primary/[0.01]' : ''}
+                                border-r border-theme-border/40 h-full
+                                ${isToday ? 'bg-dr7-gold/20' : ''}
+                                ${isRedDay && !isToday ? 'bg-theme-text-primary/[0.03]' : ''}
                               `}
                           style={{
                             width: CELL_WIDTH,
-                            boxShadow: isToday ? 'inset 2px 0 0 0 rgba(212, 175, 55, 0.7), inset -2px 0 0 0 rgba(212, 175, 55, 0.7)' : undefined
+                            boxShadow: isToday ? 'inset 2px 0 0 0 rgba(45, 138, 126, 0.7), inset -2px 0 0 0 rgba(45, 138, 126, 0.7)' : undefined
                           }}
                         />
                       )

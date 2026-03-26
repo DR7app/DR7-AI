@@ -811,7 +811,7 @@ export default function CauzioniTab() {
                                             </button>
                                             <button
                                                 onClick={() => handleSegnaDaIncassare(cauzione)}
-                                                className="px-3 py-2 bg-yellow-600 text-black text-xs rounded-full hover:bg-[#247a6f] transition-colors font-semibold"
+                                                className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#247a6f] transition-colors font-semibold"
                                             >
                                                 DA INCASSARE
                                             </button>

@@ -211,7 +211,7 @@ export default function FirmaPage() {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2d8a7e] mx-auto mb-4"></div>
                     <p className="text-gray-600">Caricamento contratto...</p>
                 </div>
             </div>
@@ -297,7 +297,7 @@ export default function FirmaPage() {
                                 href={contract.pdfUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm font-semibold text-yellow-600 hover:text-yellow-700 transition-colors"
+                                className="text-sm font-semibold text-[#2d8a7e] hover:text-[#247a6f] transition-colors"
                             >
                                 Scarica PDF
                             </a>
@@ -321,7 +321,7 @@ export default function FirmaPage() {
                         </p>
                         <button
                             onClick={handleRequestOtp}
-                            className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg"
+                            className="bg-[#2d8a7e] hover:bg-[#247a6f] text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg"
                         >
                             Invia Codice di Verifica
                         </button>
@@ -330,7 +330,7 @@ export default function FirmaPage() {
 
                 {status === 'otp_sending' && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 mx-auto mb-4"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2d8a7e] mx-auto mb-4"></div>
                         <p className="text-gray-600">Invio codice di verifica...</p>
                     </div>
                 )}
@@ -356,7 +356,7 @@ export default function FirmaPage() {
                                     value={digit}
                                     onChange={e => handleOtpChange(i, e.target.value)}
                                     onKeyDown={e => handleOtpKeyDown(i, e)}
-                                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-yellow-500 focus:outline-none transition-colors"
+                                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2d8a7e] focus:outline-none transition-colors"
                                     disabled={status === 'otp_verifying'}
                                 />
                             ))}
@@ -372,7 +372,7 @@ export default function FirmaPage() {
                             <button
                                 onClick={handleVerifyOtp}
                                 disabled={otp.join('').length !== 6 || status === 'otp_verifying'}
-                                className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full max-w-xs"
+                                className="bg-[#2d8a7e] hover:bg-[#247a6f] disabled:bg-gray-300 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full max-w-xs"
                             >
                                 {status === 'otp_verifying' ? 'Verifica in corso...' : 'Verifica Codice'}
                             </button>
@@ -413,7 +413,7 @@ export default function FirmaPage() {
                                 type="checkbox"
                                 checked={acceptedTerms}
                                 onChange={e => setAcceptedTerms(e.target.checked)}
-                                className="mt-1 h-5 w-5 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
+                                className="mt-1 h-5 w-5 rounded border-gray-300 text-[#2d8a7e] focus:ring-[#2d8a7e]"
                             />
                             <span className="text-sm text-gray-700">
                                 Confermo che i dati inseriti sono corretti e accetto i termini e le condizioni del contratto.
@@ -426,7 +426,7 @@ export default function FirmaPage() {
                                     <button
                                         type="button"
                                         onClick={() => setShowMarketingInfo(true)}
-                                        className="underline text-yellow-700 hover:text-yellow-800 transition-colors"
+                                        className="underline text-[#247a6f] hover:text-[#1a6b62] transition-colors"
                                     >
                                         Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
                                     </button>
@@ -438,7 +438,7 @@ export default function FirmaPage() {
                                             name="marketing"
                                             checked={acceptedMarketing === true}
                                             onChange={() => setAcceptedMarketing(true)}
-                                            className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
+                                            className="h-5 w-5 text-[#2d8a7e] focus:ring-[#2d8a7e]"
                                         />
                                         <span className="text-sm font-medium text-gray-700">Si</span>
                                     </label>
@@ -448,7 +448,7 @@ export default function FirmaPage() {
                                             name="marketing"
                                             checked={acceptedMarketing === false}
                                             onChange={() => setAcceptedMarketing(false)}
-                                            className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
+                                            className="h-5 w-5 text-[#2d8a7e] focus:ring-[#2d8a7e]"
                                         />
                                         <span className="text-sm font-medium text-gray-700">No</span>
                                     </label>
@@ -459,7 +459,7 @@ export default function FirmaPage() {
                         <button
                             onClick={handleSign}
                             disabled={!acceptedTerms || (existingMarketingConsent !== true && acceptedMarketing === null)}
-                            className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-lg transition-colors text-lg"
+                            className="w-full bg-[#2d8a7e] hover:bg-[#247a6f] disabled:bg-gray-300 text-white font-bold py-4 rounded-lg transition-colors text-lg"
                         >
                             Firma il Documento
                         </button>
@@ -508,7 +508,7 @@ export default function FirmaPage() {
                         </div>
                         <button
                             onClick={() => setShowMarketingInfo(false)}
-                            className="mt-6 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg transition-colors"
+                            className="mt-6 w-full bg-[#2d8a7e] hover:bg-[#247a6f] text-white font-bold py-3 rounded-lg transition-colors"
                         >
                             Chiudi
                         </button>

@@ -192,11 +192,11 @@ export default function AdminDashboard() {
     <div className="min-h-screen flex bg-theme-bg-secondary">
       {/* Sidebar Overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-30 lg:block" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/40 z-[60] lg:block" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 max-w-[85vw] bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[70] w-64 max-w-[85vw] bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo + Close */}
         <div className="px-5 py-4 bg-white flex items-center justify-between">
           <div className="flex items-center gap-3">

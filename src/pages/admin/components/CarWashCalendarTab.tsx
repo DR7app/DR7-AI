@@ -365,7 +365,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               onClick={() => setHideFinancials(!hideFinancials)}
               className={`px-3 py-2 rounded text-xs font-semibold transition-colors ${hideFinancials
                 ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                : 'bg-dr7-gold text-white hover:bg-[#247a6f]'
                 }`}
             >
               {hideFinancials ? 'MOSTRA' : 'NASCONDI'}

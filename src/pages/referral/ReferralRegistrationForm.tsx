@@ -188,7 +188,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-[#2d8a7e] text-black font-bold rounded-xl hover:bg-[#c4a030] transition-colors disabled:opacity-50"
+            className="w-full py-3 bg-[#2d8a7e] text-white font-bold rounded-xl hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
             {loading ? 'Invio codice...' : 'Invia Codice WhatsApp'}
           </button>
@@ -213,7 +213,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           <button
             onClick={handleVerifyAndRegister}
             disabled={loading || otpCode.length !== 6}
-            className="w-full py-3 bg-[#2d8a7e] text-black font-bold rounded-xl hover:bg-[#c4a030] transition-colors disabled:opacity-50"
+            className="w-full py-3 bg-[#2d8a7e] text-white font-bold rounded-xl hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
             {loading ? 'Verifica in corso...' : 'Verifica e Registrati'}
           </button>

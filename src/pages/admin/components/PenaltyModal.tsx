@@ -419,7 +419,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                             <button
                                                 type="button"
                                                 onClick={() => addToCart(penalty)}
-                                                className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-yellow-400 transition-colors rounded-r-full"
+                                                className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#247a6f] transition-colors rounded-r-full"
                                             >
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" d="M12 5v14M5 12h14" />

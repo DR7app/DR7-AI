@@ -5490,7 +5490,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
-                      className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-yellow-600/30 hover:from-red-600/50 hover:to-yellow-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                      className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-dr7-gold/30 hover:from-red-600/50 hover:to-dr7-gold/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
                     >
                       Danni & Penali
                     </button>
@@ -5644,7 +5644,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           )}
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
-                            className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-yellow-600/30 hover:from-red-600/50 hover:to-yellow-600/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
+                            className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-dr7-gold/30 hover:from-red-600/50 hover:to-dr7-gold/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
                           >
                             Danni & Penali
                           </button>
