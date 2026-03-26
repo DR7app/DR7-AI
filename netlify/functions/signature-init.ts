@@ -178,8 +178,8 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Garante (if exists and cauzione_auto is set)
-        if (booking?.booking_details?.garante_veicolo && booking?.booking_details?.cauzione_auto) {
+        // Garante (if exists)
+        if (booking?.booking_details?.garante_veicolo) {
             const g = booking.booking_details.garante_veicolo
             let gName = ''
             let gEmail = ''
