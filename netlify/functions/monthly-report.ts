@@ -424,14 +424,14 @@ async function generateVehicleReport(
       let bookingDanniFromDetails = 0
       if (Array.isArray(details.danni)) {
         details.danni.forEach((d: any) => {
-          const paid = parseFloat(d.amountPaid || d.total || 0)
-          if (paid > 0) bookingDanniFromDetails += paid
+          const amount = parseFloat(d.total || d.amountPaid || 0)
+          if (amount > 0) bookingDanniFromDetails += amount
         })
       }
       if (Array.isArray(details.penalties)) {
         details.penalties.forEach((p: any) => {
-          const paid = parseFloat(p.amountPaid || p.total || 0)
-          if (paid > 0) bookingPenaltyFromDetails += paid
+          const amount = parseFloat(p.total || p.amountPaid || 0)
+          if (amount > 0) bookingPenaltyFromDetails += amount
         })
       }
 
