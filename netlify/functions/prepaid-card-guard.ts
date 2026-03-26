@@ -38,7 +38,7 @@ export async function detectCardType(operationId: string, callbackData?: any): P
     if (operationId) {
         try {
             const controller = new AbortController()
-            const timeout = globalThis.setTimeout(() => controller.abort(), 5000)
+            const timeout = globalThis.setTimeout(() => controller.abort(), 2000)
             const opRes = await fetch(`${NEXI_BASE_URL}/operations/${operationId}`, {
                 headers: {
                     'X-Api-Key': NEXI_API_KEY,
@@ -97,7 +97,7 @@ export async function detectCardType(operationId: string, callbackData?: any): P
         if (binMatch) {
             try {
                 const controller = new AbortController()
-                const timeout = globalThis.setTimeout(() => controller.abort(), 3000)
+                const timeout = globalThis.setTimeout(() => controller.abort(), 2000)
                 const binRes = await fetch(`https://lookup.binlist.net/${binMatch[1]}`, {
                     headers: { 'Accept-Version': '3' },
                     signal: controller.signal
