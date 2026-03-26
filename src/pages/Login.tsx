@@ -87,7 +87,7 @@ export default function Login() {
 
           <div className="relative">
             <div className="flex justify-center mb-4">
-              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className={`h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain ${theme === 'dark' ? 'drop-shadow-2xl' : 'mix-blend-multiply'}`} />
+              <img src="/rentora-logo.jpeg" alt="Rentora" className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain drop-shadow-2xl" />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -130,7 +130,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-dr7-gold hover:bg-yellow-500 text-black font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm"
+                className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm"
               >
                 {loading ? 'Accesso in corso...' : 'Accedi'}
               </button>
