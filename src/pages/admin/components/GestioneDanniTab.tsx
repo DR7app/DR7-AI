@@ -186,8 +186,20 @@ export default function GestioneDanniTab() {
       }
 
       // 3b. Scan fatture for invoiced penalty/damage items
+      // Track which booking IDs already have entries from booking_details to avoid duplicates
+      const bookingIdsWithDetails = new Set<string>()
+      for (const b of (bookings || [])) {
+        const details = b.booking_details || {}
+        const hasPenalties = Array.isArray(details.penalties) && details.penalties.length > 0
+        const hasDanni = Array.isArray(details.danni) && details.danni.length > 0
+        if (hasPenalties || hasDanni) bookingIdsWithDetails.add(b.id)
+      }
+
       for (const f of (fatture || [])) {
         if (!f.items || !Array.isArray(f.items)) continue
+        // Skip if this booking's penalties/danni were already added from booking_details
+        if (f.booking_id && bookingIdsWithDetails.has(f.booking_id)) continue
+
         const hasPenalty = f.items.some((item: any) =>
           item.description && (item.description.includes('Penale prenotazione') || item.description.includes('Danno prenotazione'))
         )
