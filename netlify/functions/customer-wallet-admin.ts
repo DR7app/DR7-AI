@@ -53,34 +53,91 @@ const handler: Handler = async (event) => {
         };
       }
       case 'credit_transactions': {
-        // Return credit_transactions for a customer (by user_id from customers_extended)
-        const serviceSupabase2 = createClient(
+        // Return transactions from BOTH systems (credit_transactions + wallet_transactions)
+        const svc = createClient(
           process.env.VITE_SUPABASE_URL!,
           process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
+
+        // Find user_id and phone
         let userId = body.user_id;
-        if (!userId && body.customer_id) {
-          const { data: cust } = await serviceSupabase2
+        let custPhone = '';
+        if (body.customer_id) {
+          const { data: cust } = await svc
             .from('customers_extended')
-            .select('user_id')
+            .select('user_id, telefono')
             .eq('id', body.customer_id)
             .maybeSingle();
-          userId = cust?.user_id;
+          if (cust) {
+            userId = userId || cust.user_id;
+            custPhone = cust.telefono || '';
+          }
         }
-        if (!userId) {
-          return { statusCode: 200, headers, body: JSON.stringify({ success: true, transactions: [] }) };
+
+        const allTxns: any[] = [];
+
+        // 1. Website credit_transactions (by user_id)
+        if (userId) {
+          const { data: txns } = await svc
+            .from('credit_transactions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+          if (txns) {
+            txns.forEach(t => allTxns.push({
+              ...t,
+              source: 'credit_transactions'
+            }));
+          }
         }
-        const { data: txns, error: txnErr } = await serviceSupabase2
-          .from('credit_transactions')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(50);
-        if (txnErr) throw txnErr;
+
+        // 2. Referral wallet_transactions (by phone → participant → wallet)
+        if (custPhone) {
+          const { data: participant } = await svc
+            .from('referral_participants')
+            .select('id')
+            .eq('telefono', custPhone)
+            .maybeSingle();
+
+          if (participant) {
+            const { data: wallet } = await svc
+              .from('wallets')
+              .select('id')
+              .eq('participant_id', participant.id)
+              .maybeSingle();
+
+            if (wallet) {
+              const { data: wTxns } = await svc
+                .from('wallet_transactions')
+                .select('*')
+                .eq('wallet_id', wallet.id)
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+              if (wTxns) {
+                wTxns.forEach(t => allTxns.push({
+                  id: t.id,
+                  user_id: userId,
+                  transaction_type: t.amount_cents >= 0 ? 'credit' : 'debit',
+                  amount: Math.abs(t.amount_cents) / 100,
+                  balance_after: t.balance_after_cents / 100,
+                  description: t.description || t.type || '-',
+                  created_at: t.created_at,
+                  source: 'wallet_transactions'
+                }));
+              }
+            }
+          }
+        }
+
+        // Sort by date descending and deduplicate
+        allTxns.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify({ success: true, transactions: txns || [] })
+          body: JSON.stringify({ success: true, transactions: allTxns.slice(0, 50) })
         };
       }
       case 'search': {
