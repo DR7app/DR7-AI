@@ -202,6 +202,34 @@ async function generateVehicleReport(
 
   if (bookingsError) throw bookingsError
 
+  // Fetch penalty/danni fatture for the month (to catch penalties not saved in booking_details)
+  const { data: fatture } = await supabase
+    .from('fatture')
+    .select('id, booking_id, importo_totale, items, data_emissione, customer_name')
+    .gte('data_emissione', monthStartISO)
+    .lte('data_emissione', monthEndISO)
+
+  // Build a map: booking_id -> array of penalty fatture
+  const fatturePenaltyMap = new Map<string, any[]>()
+  const fattureDanniMap = new Map<string, any[]>()
+  ;(fatture || []).forEach(f => {
+    if (!f.booking_id) return
+    const items = f.items || []
+    // Check if any item description contains penale/penalty or danno/danni
+    const hasPenalty = items.some((i: any) => /penal/i.test(i.description || ''))
+    const hasDanni = items.some((i: any) => /dann/i.test(i.description || ''))
+    if (hasPenalty) {
+      const arr = fatturePenaltyMap.get(f.booking_id) || []
+      arr.push(f)
+      fatturePenaltyMap.set(f.booking_id, arr)
+    }
+    if (hasDanni) {
+      const arr = fattureDanniMap.get(f.booking_id) || []
+      arr.push(f)
+      fattureDanniMap.set(f.booking_id, arr)
+    }
+  })
+
   // STEP 1: Filter to ONLY real rental bookings
   const rentalBookings = (allBookings || []).filter(b => {
     // Exclude admin/test bookings
@@ -392,18 +420,36 @@ async function generateVehicleReport(
 
       // Sum danni and penalties from booking_details (amounts in EUR)
       const details = booking.booking_details || {}
+      let bookingPenaltyFromDetails = 0
+      let bookingDanniFromDetails = 0
       if (Array.isArray(details.danni)) {
         details.danni.forEach((d: any) => {
           const paid = parseFloat(d.amountPaid || d.total || 0)
-          if (paid > 0) danniRevenue += paid
+          if (paid > 0) bookingDanniFromDetails += paid
         })
       }
       if (Array.isArray(details.penalties)) {
         details.penalties.forEach((p: any) => {
           const paid = parseFloat(p.amountPaid || p.total || 0)
-          if (paid > 0) penaltyRevenue += paid
+          if (paid > 0) bookingPenaltyFromDetails += paid
         })
       }
+
+      // Also check fatture table for penalty/danni invoices not in booking_details
+      const penaltyFatture = fatturePenaltyMap.get(booking.id) || []
+      let bookingPenaltyFromFatture = 0
+      penaltyFatture.forEach((f: any) => {
+        bookingPenaltyFromFatture += parseFloat(f.importo_totale || 0)
+      })
+      // Use the higher of the two sources (avoid double-counting)
+      penaltyRevenue += Math.max(bookingPenaltyFromDetails, bookingPenaltyFromFatture)
+
+      const danniFatture = fattureDanniMap.get(booking.id) || []
+      let bookingDanniFromFatture = 0
+      danniFatture.forEach((f: any) => {
+        bookingDanniFromFatture += parseFloat(f.importo_totale || 0)
+      })
+      danniRevenue += Math.max(bookingDanniFromDetails, bookingDanniFromFatture)
 
       if (debug) {
         matchedBookingDetails.push({
