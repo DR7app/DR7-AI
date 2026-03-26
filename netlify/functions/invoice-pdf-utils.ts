@@ -215,7 +215,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
         })
 
         // Imponibile (right-aligned)
-        const priceStr = `€${item.unit_price.toFixed(2)}`
+        const priceStr = `€ ${item.unit_price.toFixed(2)}`
         const priceWidth = font.widthOfTextAtSize(priceStr, 9)
         page.drawText(priceStr, {
             x: cols[1].x + cols[1].width - priceWidth - 4,
@@ -248,7 +248,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
         })
 
         // Totale (right-aligned, bold)
-        const totalStr = `€${lineTotal.toFixed(2)}`
+        const totalStr = `€ ${lineTotal.toFixed(2)}`
         const totalWidth = fontBold.widthOfTextAtSize(totalStr, 9)
         page.drawText(totalStr, {
             x: cols[4].x + cols[4].width - totalWidth - 4,
@@ -272,21 +272,21 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
     y -= 18
 
     const summaryRows: { label: string; value: string; bold?: boolean }[] = [
-        { label: 'Imponibile', value: `€${invoice.subtotal.toFixed(2)}` },
+        { label: 'Imponibile', value: `€ ${invoice.subtotal.toFixed(2)}` },
     ]
 
     if (invoice.vat_amount > 0) {
-        summaryRows.push({ label: 'IVA 22%', value: `€${invoice.vat_amount.toFixed(2)}` })
+        summaryRows.push({ label: 'IVA 22%', value: `€ ${invoice.vat_amount.toFixed(2)}` })
     } else {
-        summaryRows.push({ label: 'IVA 0% (Esente)', value: '€0.00' })
+        summaryRows.push({ label: 'IVA 0% (Esente)', value: '€ 0.00' })
     }
 
-    summaryRows.push({ label: 'Totale fattura', value: `€${invoice.importo_totale.toFixed(2)}`, bold: true })
+    summaryRows.push({ label: 'Totale fattura', value: `€ ${invoice.importo_totale.toFixed(2)}`, bold: true })
 
     if (invoice.stato === 'paid') {
-        summaryRows.push({ label: 'Totale da pagare', value: '€0.00' })
+        summaryRows.push({ label: 'Totale da pagare', value: '€ 0.00' })
     } else {
-        summaryRows.push({ label: 'Importo dovuto', value: `€${invoice.importo_totale.toFixed(2)}` })
+        summaryRows.push({ label: 'Importo dovuto', value: `€ ${invoice.importo_totale.toFixed(2)}` })
     }
 
     summaryRows.forEach(row => {
