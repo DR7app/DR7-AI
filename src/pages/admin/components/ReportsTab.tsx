@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface BookingDetail {
   booking_id: string
@@ -136,6 +136,11 @@ export default function ReportsTab() {
   const [vehicleData, setVehicleData] = useState<VehicleReportData | null>(null)
   const [washData, setWashData] = useState<WashReportData | null>(null)
   const [cauzioniData, setCauzioniData] = useState<CauzioniReportData | null>(null)
+
+  // Auto-load report on mount and when month/report type changes
+  useEffect(() => {
+    fetchReport()
+  }, [selectedMonth, activeReport])
 
   const [plateSearch, setPlateSearch] = useState('')
   const [sortField, setSortField] = useState<keyof VehicleReport>('utilizationRate')

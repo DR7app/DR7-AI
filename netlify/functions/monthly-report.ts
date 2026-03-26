@@ -256,9 +256,8 @@ async function generateVehicleReport(
         if (detailsPlate === vPlate) return true
       }
 
-      // 2. Match by vehicle_id — but ONLY if booking has NO plate stored
-      //    (avoids cross-plate matching when vehicle_id was reused with a new plate)
-      if (b.vehicle_id === vehicle.id && !bPlate && !detailsPlate) return true
+      // 2. Match by vehicle_id — fallback for website/wallet bookings
+      if (b.vehicle_id === vehicle.id) return true
 
       return false
     })
