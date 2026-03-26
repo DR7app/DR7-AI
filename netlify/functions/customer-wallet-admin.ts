@@ -36,6 +36,22 @@ const handler: Handler = async (event) => {
     const { action, customer_id, amount, description, query } = JSON.parse(event.body || '{}');
 
     switch (action) {
+      case 'list_all_balances': {
+        // Return all user_credit_balance records (service role bypasses RLS)
+        const serviceSupabase = createClient(
+          process.env.VITE_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+        const { data: balances, error: balErr } = await serviceSupabase
+          .from('user_credit_balance')
+          .select('user_id, balance');
+        if (balErr) throw balErr;
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, balances: balances || [] })
+        };
+      }
       case 'search': {
         if (!query || query.trim().length < 2) {
           return {

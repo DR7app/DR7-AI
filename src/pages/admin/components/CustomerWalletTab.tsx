@@ -113,9 +113,25 @@ export default function CustomerWalletTab() {
       }
 
       // Also load from user_credit_balance (website wallet — stores in EUR, not cents)
-      const { data: creditBalances } = await supabase
-        .from('user_credit_balance')
-        .select('user_id, balance')
+      // Use service role via Netlify function to bypass RLS
+      let creditBalances: any[] | null = null
+      try {
+        const token = (await supabase.auth.getSession()).data.session?.access_token
+        const cbRes = await fetch('/.netlify/functions/customer-wallet-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'list_all_balances' })
+        })
+        const cbData = await cbRes.json()
+        if (cbData.success) creditBalances = cbData.balances
+      } catch (e) {
+        console.warn('Failed to load credit balances via function, trying direct:', e)
+      }
+      // Fallback: direct query
+      if (!creditBalances) {
+        const { data } = await supabase.from('user_credit_balance').select('user_id, balance')
+        creditBalances = data
+      }
 
       // Build user_id → balance map (convert EUR to cents)
       const userCreditMap = new Map<string, number>()
