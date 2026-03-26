@@ -53,6 +53,11 @@ export default function CustomerWalletTab() {
   const [allWalletCustomers, setAllWalletCustomers] = useState<CustomerResult[]>([])
   const [loadingAll, setLoadingAll] = useState(true)
 
+  // Expanded customer details
+  const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null)
+  const [expandedTransactions, setExpandedTransactions] = useState<any[]>([])
+  const [loadingTransactions, setLoadingTransactions] = useState(false)
+
   // Modal state
   const [modalCustomer, setModalCustomer] = useState<CustomerResult | null>(null)
   const [modalAction, setModalAction] = useState<'credit' | 'debit'>('credit')
@@ -194,6 +199,33 @@ export default function CustomerWalletTab() {
       data.error = `HTTP ${res.status}: ${JSON.stringify(data).substring(0, 200)}`
     }
     return data
+  }
+
+  async function toggleExpandCustomer(customer: CustomerResult) {
+    if (expandedCustomerId === customer.id) {
+      setExpandedCustomerId(null)
+      return
+    }
+    setExpandedCustomerId(customer.id)
+    setLoadingTransactions(true)
+    setExpandedTransactions([])
+    try {
+      // Load from credit_transactions (website wallet) via service role
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const res = await fetch('/.netlify/functions/customer-wallet-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'credit_transactions', customer_id: customer.id, user_id: customer.user_id })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setExpandedTransactions(data.transactions || [])
+      }
+    } catch (e) {
+      console.error('Failed to load transactions:', e)
+    } finally {
+      setLoadingTransactions(false)
+    }
   }
 
   async function openModal(customer: CustomerResult, action: 'credit' | 'debit') {
@@ -450,9 +482,14 @@ export default function CustomerWalletTab() {
                   {formatEur(customer.balance_cents || 0)}
                 </div>
 
-                {/* Ultime Transazioni placeholder */}
-                <div className="text-xs text-theme-text-muted">
-                  —
+                {/* Dettagli transazioni */}
+                <div>
+                  <button
+                    onClick={() => toggleExpandCustomer(customer)}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    {expandedCustomerId === customer.id ? 'Chiudi' : 'Dettagli'}
+                  </button>
                 </div>
 
                 {/* Azione */}
@@ -470,6 +507,33 @@ export default function CustomerWalletTab() {
                     Carica
                   </button>
                 </div>
+
+                {/* Expanded transactions */}
+                {expandedCustomerId === customer.id && (
+                  <div className="col-span-6 mt-2 bg-theme-bg-primary/50 rounded-lg border border-theme-border/50 p-3">
+                    {loadingTransactions ? (
+                      <p className="text-xs text-theme-text-muted text-center py-2">Caricamento...</p>
+                    ) : expandedTransactions.length === 0 ? (
+                      <p className="text-xs text-theme-text-muted text-center py-2">Nessuna transazione</p>
+                    ) : (
+                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {expandedTransactions.map((txn: any, i: number) => (
+                          <div key={txn.id || i} className="flex justify-between items-center text-xs py-1.5 px-2 rounded hover:bg-theme-bg-tertiary/30">
+                            <div className="flex-1 min-w-0">
+                              <span className={`font-semibold ${txn.transaction_type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
+                                {txn.transaction_type === 'credit' ? '+' : '-'}€{Math.abs(Number(txn.amount)).toFixed(2)}
+                              </span>
+                              <span className="text-theme-text-muted ml-2 truncate">{txn.description || '-'}</span>
+                            </div>
+                            <div className="text-theme-text-muted whitespace-nowrap ml-2">
+                              {new Date(txn.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

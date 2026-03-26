@@ -52,6 +52,37 @@ const handler: Handler = async (event) => {
           body: JSON.stringify({ success: true, balances: balances || [] })
         };
       }
+      case 'credit_transactions': {
+        // Return credit_transactions for a customer (by user_id from customers_extended)
+        const serviceSupabase2 = createClient(
+          process.env.VITE_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+        let userId = body.user_id;
+        if (!userId && body.customer_id) {
+          const { data: cust } = await serviceSupabase2
+            .from('customers_extended')
+            .select('user_id')
+            .eq('id', body.customer_id)
+            .maybeSingle();
+          userId = cust?.user_id;
+        }
+        if (!userId) {
+          return { statusCode: 200, headers, body: JSON.stringify({ success: true, transactions: [] }) };
+        }
+        const { data: txns, error: txnErr } = await serviceSupabase2
+          .from('credit_transactions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (txnErr) throw txnErr;
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, transactions: txns || [] })
+        };
+      }
       case 'search': {
         if (!query || query.trim().length < 2) {
           return {
