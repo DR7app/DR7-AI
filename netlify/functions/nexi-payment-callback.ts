@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, notifyPrepaidBlocked } from './prepaid-card-guard';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -571,118 +572,55 @@ const handler: Handler = async (event) => {
                     console.error('[nexi-payment-callback] Fattura generation failed:', invErr);
                 }
 
-                // ── Card type bonus (non-blocking — wrapped in try/catch) ──────
+                // ── GLOBAL PREPAID CARD GUARD + CARD BONUS ──────────────────
                 const isInitialBooking = paymentPurpose === 'booking'
                 const isEligibleService = !booking.service_type || booking.service_type === 'car_rental' || booking.service_type === 'car_wash'
                 const paidCents = transaction.amount_cents
 
-                // Only attempt bonus for eligible bookings with payment
-                if (isInitialBooking && isEligibleService && paidCents > 0) try {
-                    // PRIMARY: Detect card type from callback data keywords (fast, reliable)
-                    const rawCallback = JSON.stringify(callbackData).toLowerCase()
-                    let isPrepagata = rawCallback.includes('prepagat') || rawCallback.includes('prepaid')
-                    let isCredito = rawCallback.includes('credito') || rawCallback.includes('credit card')
-                    let isDebito = rawCallback.includes('debito') || rawCallback.includes('debit')
+                if (paidCents > 0) try {
+                    // Detect card type using shared guard (Nexi API + BIN + keywords)
+                    const opId = operationId || transactionId
+                    const cardCheck = await detectCardType(opId || '', callbackData)
 
-                    // FALLBACK: If no keywords found, try BIN lookup (with 3s timeout)
-                    if (!isPrepagata && !isCredito && !isDebito) {
-                        const opId = operationId || transactionId
-                        if (opId) {
-                            try {
-                                const controller = new AbortController()
-                                const timeout = globalThis.setTimeout(() => controller.abort(), 3000)
-                                const opRes = await fetch(`${NEXI_BASE_URL}/operations/${opId}`, {
-                                    headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': `${Date.now()}` },
-                                    signal: controller.signal
-                                })
-                                if (opRes.ok) {
-                                    const opData = await opRes.json()
-                                    const maskedPan = opData.paymentInstrumentInfo || opData.operation?.additionalData?.maskedPan || ''
-                                    const binMatch = maskedPan.match(/^(\d{6,8})/)
-                                    if (binMatch) {
-                                        const binRes = await fetch(`https://lookup.binlist.net/${binMatch[1]}`, {
-                                            headers: { 'Accept-Version': '3' },
-                                            signal: controller.signal
-                                        })
-                                        if (binRes.ok) {
-                                            const binData = await binRes.json()
-                                            const binType = (binData.type || '').toLowerCase()
-                                            if (binType === 'prepaid') isPrepagata = true
-                                            else if (binType === 'credit') isCredito = true
-                                            else if (binType === 'debit') isDebito = true
-                                        }
-                                    }
-                                }
-                                clearTimeout(timeout)
-                            } catch (e) {
-                                console.warn('[nexi-payment-callback] BIN lookup timeout/error (non-fatal):', e)
-                            }
-                        }
-                    }
+                    const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id || booking.user_id
+                    const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
 
-                    console.log(`[nexi-payment-callback] Card type: prepagata=${isPrepagata}, credito=${isCredito}, debito=${isDebito}, raw_has_keywords=${rawCallback.includes('credit') || rawCallback.includes('debit') || rawCallback.includes('prepag')}`)
+                    // Log every card check attempt
+                    await logCardAttempt({
+                        bookingId: booking.id,
+                        customerId: custId,
+                        customerName: booking.customer_name,
+                        customerEmail: booking.customer_email,
+                        cardCheck,
+                        operationType: paymentPurpose,
+                        nexiOrderId: orderId,
+                        nexiOperationId: opId
+                    })
+
+                    console.log(`[nexi-payment-callback] Card guard: type=${cardCheck.cardType}, prepaid=${cardCheck.isPrepaid}, method=${cardCheck.detectionMethod}, circuit=${cardCheck.cardCircuit}`)
+
+                    const isPrepagata = cardCheck.isPrepaid
+                    const isCredito = cardCheck.cardType === 'credit'
+                    const isDebito = cardCheck.cardType === 'debit'
 
                 if (isPrepagata) {
-                    // PREPAGATA BLOCKED: cancel booking, refund via Nexi void, notify customer
+                    // PREPAGATA BLOCKED: cancel + refund + notify (using shared guard)
                     console.log(`[nexi-payment-callback] PREPAGATA BLOCKED — cancelling booking ${booking.id}`)
 
-                    // Cancel the booking
-                    await supabase.from('bookings').update({
-                        status: 'cancelled',
-                        payment_status: 'unpaid',
-                        booking_details: {
-                            ...booking.booking_details,
-                            cancelled_reason: 'Carta prepagata non accettata',
-                            cancelled_at: new Date().toISOString()
-                        }
-                    }).eq('id', booking.id);
+                    await cancelBooking(booking.id, 'Carta prepagata non accettata')
 
-                    // Void/refund the payment via Nexi
                     const refundOpId = operationId || transactionId
-                    if (refundOpId) {
-                        try {
-                            const voidRes = await fetch(`${NEXI_BASE_URL}/operations/${refundOpId}/cancels`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-Api-Key': NEXI_API_KEY,
-                                    'Correlation-Id': `${Date.now()}`
-                                },
-                                body: JSON.stringify({ description: 'Carta prepagata non accettata — rimborso automatico' })
-                            });
-                            console.log(`[nexi-payment-callback] Void/refund result: ${voidRes.status}`);
-                        } catch (voidErr) {
-                            console.error('[nexi-payment-callback] Void/refund error:', voidErr);
-                        }
-                    }
+                    if (refundOpId) await voidNexiTransaction(refundOpId)
 
-                    // Notify customer
-                    if (custPhone) {
-                        await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                customPhone: custPhone,
-                                customMessage: `⚠️ *Pagamento rifiutato*\n\nGentile ${booking.customer_name || 'Cliente'},\n\nLe carte prepagate non sono accettate per le prenotazioni DR7.\n\nLa prenotazione #${booking.id.substring(0, 8).toUpperCase()} è stata annullata e il pagamento verrà rimborsato.\n\nLa preghiamo di riprovare con una carta di credito o debito.\n\nDR7`
-                            })
-                        });
-                    }
-
-                    // Notify admin
-                    if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                        const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
-                        await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                chatId: `${NOTIFICATION_PHONE}@c.us`,
-                                message: `🚫 *CARTA PREPAGATA BLOCCATA*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}\n\nPrenotazione annullata e rimborso avviato.`
-                            })
-                        });
-                    }
+                    await notifyPrepaidBlocked({
+                        customerPhone: custPhone,
+                        customerName: booking.customer_name,
+                        bookingRef: booking.id.substring(0, 8).toUpperCase(),
+                        amount: amountEur
+                    })
 
                     // Don't continue with bonus — booking is cancelled
-                } else if ((isCredito || isDebito) && isInitialBooking && isEligibleService && paidCents > 0) {
+                } else if ((isCredito || isDebito) && isInitialBooking && isEligibleService) {
                     // CREDIT WALLET BONUS: credito 6%, debito 3%
                     // Only for initial car rental + lavaggio bookings
                     const percentage = isCredito ? 0.06 : 0.03;
