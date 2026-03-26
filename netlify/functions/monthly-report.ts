@@ -268,8 +268,11 @@ async function generateVehicleReport(
       return false
     })
 
-    // Calculate rented days (union of all booking day ranges)
+    // Calculate rented days
+    // rentedDays Set tracks unique calendar days (for maintenance priority)
+    // rentedDaysTotal sums each booking's days independently (a day with 2 bookings = 2 days)
     const rentedDays = new Set<number>()
+    let rentedDaysTotal = 0
     let rentalRevenue = 0
     let penaltyRevenue = 0
     let danniRevenue = 0
@@ -352,13 +355,12 @@ async function generateVehicleReport(
         console.log(`  Calculated: startDay=${startDay}, endDay=${endDay}, adding days ${startDay}-${endDay}`)
       }
 
-      // Add days to the set
+      // Add days to the set (for maintenance exclusion) and sum total
+      const overlapDays = endDay - startDay + 1
+      rentedDaysTotal += overlapDays
       for (let d = startDay; d <= endDay; d++) {
         rentedDays.add(d)
       }
-
-      // Calculate overlap for revenue
-      const overlapDays = endDay - startDay + 1
 
       // Total booking days for revenue proration (shared function, UTC-safe)
       const totalBookingDays = computeBillableDays(pickupDateRaw, dropoffDateRaw)
@@ -443,9 +445,10 @@ async function generateVehicleReport(
       }
     })
 
-    const rentedCount = finalRentedDays.size
+    const rentedCount = rentedDaysTotal
     const maintenanceCount = finalMaintenanceDays.size
-    const idleCount = daysInMonth - rentedCount - maintenanceCount
+    const uniqueRentedDays = finalRentedDays.size
+    const idleCount = daysInMonth - uniqueRentedDays - maintenanceCount
 
     const report: any = {
       vehicleId: vehicle.id,
@@ -456,7 +459,7 @@ async function generateVehicleReport(
       rentedDays: rentedCount,
       maintenanceDays: maintenanceCount,
       idleDays: Math.max(0, idleCount),
-      utilizationRate: Math.round((rentedCount / daysInMonth) * 100) / 100,
+      utilizationRate: Math.round((uniqueRentedDays / daysInMonth) * 100) / 100,
       downtimeRate: Math.round((maintenanceCount / daysInMonth) * 100) / 100,
       idleRate: Math.round((Math.max(0, idleCount) / daysInMonth) * 100) / 100,
       bookingsCount: vehicleBookings.length,
