@@ -4435,7 +4435,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     label="Data Ritiro"
                     type="date"
                     required
-                    min={new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })}
+                    min={editingId ? undefined : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })}
                     value={formData.pickup_date}
                     onChange={(e) => {
                       setFormData({ ...formData, pickup_date: e.target.value })
