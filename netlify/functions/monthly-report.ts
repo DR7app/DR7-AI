@@ -256,8 +256,14 @@ async function generateVehicleReport(
         if (detailsPlate === vPlate) return true
       }
 
-      // 2. Match by vehicle_id — fallback for website/wallet bookings
+      // 2. Match by vehicle_id (top-level or inside booking_details)
       if (b.vehicle_id === vehicle.id) return true
+      if (b.booking_details?.vehicle_id === vehicle.id) return true
+
+      // 3. Match by vehicle_name (for wallet/credit bookings that have no vehicle_id or plate)
+      if (!b.vehicle_id && !bPlate && !detailsPlate && b.vehicle_name) {
+        if (vName && b.vehicle_name.trim().toLowerCase() === vName) return true
+      }
 
       return false
     })
