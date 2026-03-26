@@ -60,6 +60,7 @@ const handler: Handler = async (event) => {
             },
             paymentSession: {
                 actionType: 'PREAUTH',
+                captureType: 'EXPLICIT',
                 amount: amountCents.toString(),
                 language: 'ita',
                 resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
