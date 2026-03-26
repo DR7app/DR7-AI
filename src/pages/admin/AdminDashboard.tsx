@@ -148,7 +148,7 @@ export default function AdminDashboard() {
     'calendar': 'Calendario Noleggio',
     'cauzioni': 'Cauzioni',
     'contratto': 'Contratti',
-    'gestione-danni': 'Gestione Danni & Penali & Penali',
+    'gestione-danni': 'Gestione Danni & Penali',
     'gestione-multe': 'Gestione Multe',
     'cargos': 'Cargos',
     'trustera': 'Trustera',
@@ -196,7 +196,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 max-w-[85vw] bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo + Close */}
         <div className="px-5 py-4 bg-white flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -347,7 +347,7 @@ export default function AdminDashboard() {
                 </svg>
               </button>
             )}
-            <h2 className="text-xl font-bold text-theme-text-primary">
+            <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary truncate">
               {tabLabels[activeTab] || activeTab}
             </h2>
           </div>
