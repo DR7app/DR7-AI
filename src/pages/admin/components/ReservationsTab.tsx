@@ -2858,6 +2858,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
+      // ===== VALIDATION: Cauzione Auto — targa must be looked up =====
+      if (formData.cauzione_auto) {
+        const cauzioneMissing: string[] = []
+        if (!formData.cauzione_targa || formData.cauzione_targa.length < 5) {
+          cauzioneMissing.push('Targa Veicolo Cauzione')
+        }
+        if (!formData.cauzione_targa_brand || !formData.cauzione_targa_year) {
+          cauzioneMissing.push('Cerca targa (clicca "Cerca" per verificare il veicolo)')
+        }
+        if (cauzioneMissing.length > 0) {
+          setTimeout(() => {
+            alert(
+              'CAUZIONE AUTO - CAMPI MANCANTI\n\n' +
+              'Per utilizzare "Auto come Cauzione" devi:\n\n' +
+              '1. Inserire la targa del veicolo\n' +
+              '2. Cliccare "Cerca" per verificare che il veicolo sia dal 2020 in poi\n\n' +
+              'Campi mancanti:\n' +
+              cauzioneMissing.map(f => `- ${f}`).join('\n')
+            )
+          }, 100)
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       // ===== AVAILABILITY ENGINE VALIDATION =====
       // Check if the selected vehicle is actually available for the selected dates/times
       // SKIP this check when EDITING an existing booking - admin knows what they're doing
