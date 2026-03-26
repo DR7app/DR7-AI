@@ -91,15 +91,19 @@ const handler: Handler = async (event) => {
         };
 
         if (isSuccess) {
-            updateData.nexi_transaction_id = transactionId || operationId;
-            // Store contractId from Nexi response (or derive from orderId)
+            // Save operationId (used for capture/void) — prefer operationId over transactionId
+            updateData.nexi_transaction_id = operationId || transactionId;
+            updateData.nexi_operation_id = operationId;
+            // Store contractId from Nexi response (for future MIT charges)
             if (contractId) {
                 updateData.nexi_contract_id = contractId;
             }
-            updateData.note = `Preautorizzazione completata - Auth: ${authorizationCode || operationId}${contractId ? ` - Carta registrata (${contractId})` : ''}`;
-            // Keep stato as 'Attiva' - ready for SBLOCCA or INCASSA
+            updateData.stato = 'Attiva'; // Pre-authorized and ready for SBLOCCA or INCASSA
+            updateData.note = `Preautorizzazione completata - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'}${contractId ? ` - Carta registrata (${contractId})` : ''} - Importo: €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
+            console.log('[nexi-preauth-callback] SUCCESS — operationId:', operationId, 'transactionId:', transactionId, 'authCode:', authorizationCode);
         } else {
             updateData.note = `Preautorizzazione fallita - ${result || resultCode}`;
+            console.log('[nexi-preauth-callback] FAILED — result:', result, 'resultCode:', resultCode);
         }
 
         const { error: updateError } = await supabase

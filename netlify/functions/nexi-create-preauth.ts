@@ -5,10 +5,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Nexi XPay Configuration - only API Key needed for REST API
 const NEXI_API_KEY = process.env.NEXI_API_KEY!;
-
-// Production URL
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 const handler: Handler = async (event) => {
@@ -44,10 +41,15 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Use /orders/build (HPP) for REAL pre-authorization (paybylink always captures)
         const siteUrl = process.env.URL || 'https://admin.dr7empire.com';
+
+        // Expiration: 7 days from now
+        const expirationDate = new Date();
+        expirationDate.setDate(expirationDate.getDate() + 7);
+        const expirationDateStr = expirationDate.toISOString().split('T')[0];
+
+        // Use /orders/paybylink with actionType PREAUTH — ONLY holds funds, does NOT charge
         const payload = {
-            merchantUrl: siteUrl,
             order: {
                 orderId: orderId,
                 amount: amountCents.toString(),
@@ -59,23 +61,36 @@ const handler: Handler = async (event) => {
                 }
             },
             paymentSession: {
-                actionType: 'PREAUTH',
-                captureType: 'EXPLICIT',
+                actionType: 'PREAUTH',       // CRITICAL: PREAUTH = hold only, NOT PAY
+                captureType: 'EXPLICIT',     // EXPLICIT = must confirm manually via API
                 amount: amountCents.toString(),
                 language: 'ita',
+                expirationDate: expirationDateStr,
                 resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=cancelled`,
                 notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`
-            }
+            },
+            expirationDate: expirationDateStr
         };
 
-        console.log('[nexi-create-preauth] Creating HPP preauth:', { orderId, amountCents, cauzioneId, url: `${NEXI_BASE_URL}/orders/build` });
+        console.log('[nexi-create-preauth] === PREAUTH REQUEST ===');
+        console.log('[nexi-create-preauth] Endpoint: /v2/orders/paybylink');
+        console.log('[nexi-create-preauth] actionType:', payload.paymentSession.actionType);
+        console.log('[nexi-create-preauth] captureType:', payload.paymentSession.captureType);
+        console.log('[nexi-create-preauth] orderId:', orderId);
+        console.log('[nexi-create-preauth] amount (cents):', amountCents);
+        console.log('[nexi-create-preauth] Full payload:', JSON.stringify(payload));
 
         const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
-        const response = await fetch(`${NEXI_BASE_URL}/orders/build`, {
+
+        // Use v2 paybylink endpoint (confirmed by Nexi for pre-auth)
+        const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
+        console.log('[nexi-create-preauth] URL:', payByLinkUrl);
+
+        const response = await fetch(payByLinkUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -86,7 +101,9 @@ const handler: Handler = async (event) => {
         });
 
         const responseText = await response.text();
-        console.log('Nexi preauth response:', response.status, responseText.substring(0, 500));
+        console.log('[nexi-create-preauth] Response status:', response.status);
+        console.log('[nexi-create-preauth] Response body:', responseText.substring(0, 500));
+
         let responseData: any;
         try {
             responseData = JSON.parse(responseText);
@@ -99,7 +116,7 @@ const handler: Handler = async (event) => {
         }
 
         if (!response.ok) {
-            console.error('Nexi pre-auth error:', responseData);
+            console.error('[nexi-create-preauth] ERROR:', responseData);
             return {
                 statusCode: response.status,
                 headers,
@@ -109,7 +126,10 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // Update cauzione with order ID (transaction ID will come from callback)
+        const paymentUrl = responseData.paymentLink?.link || responseData.hostedPage;
+        console.log('[nexi-create-preauth] Payment URL:', paymentUrl);
+
+        // Update cauzione with order ID
         const { error: updateError } = await supabase
             .from('cauzioni')
             .update({
@@ -120,22 +140,43 @@ const handler: Handler = async (event) => {
             .eq('id', cauzioneId);
 
         if (updateError) {
-            console.error('Error updating cauzione:', updateError);
+            console.error('[nexi-create-preauth] Error updating cauzione:', updateError);
         }
+
+        // Also store in nexi_transactions for tracking
+        await supabase.from('nexi_transactions').insert({
+            order_id: orderId,
+            amount_cents: amountCents,
+            status: 'pending_preauth',
+            payment_link: paymentUrl,
+            description: description || `Cauzione preautorizzazione`,
+            customer_email: customerEmail || null,
+            metadata: {
+                type: 'preauth',
+                cauzione_id: cauzioneId,
+                customer_name: customerName,
+                action_type: 'PREAUTH',
+                capture_type: 'EXPLICIT',
+                nexi_response: responseData
+            },
+            created_at: new Date().toISOString()
+        }).then(r => {
+            if (r.error) console.error('[nexi-create-preauth] DB insert error:', r.error);
+        });
 
         return {
             statusCode: 200,
             headers,
             body: JSON.stringify({
                 success: true,
-                paymentUrl: responseData.paymentLink?.link || responseData.hostedPage,
+                paymentUrl: paymentUrl,
                 orderId: orderId,
-                message: 'Redirect customer to payment page'
+                message: 'Link pre-autorizzazione creato (blocco fondi, no incasso)'
             })
         };
 
     } catch (error: any) {
-        console.error('Error creating pre-authorization:', error);
+        console.error('[nexi-create-preauth] Error:', error);
         return {
             statusCode: 500,
             headers,

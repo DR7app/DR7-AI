@@ -5,10 +5,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Nexi XPay Configuration - uses API Key authentication (no MAC required)
 const NEXI_API_KEY = process.env.NEXI_API_KEY!;
-
-// Production URL
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 const handler: Handler = async (event) => {
@@ -27,38 +24,89 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        const { cauzioneId, transactionId, orderId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId, orderId } = JSON.parse(event.body || '{}');
 
-        if (!cauzioneId || !transactionId) {
+        if (!cauzioneId || !operationId) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'cauzioneId and transactionId are required' })
+                body: JSON.stringify({ error: 'cauzioneId and operationId are required' })
             };
         }
 
-        console.log('Voiding pre-authorization:', { transactionId, cauzioneId });
+        console.log('[nexi-void-preauth] === VOID/REFUND REQUEST ===');
+        console.log('[nexi-void-preauth] operationId:', operationId);
+        console.log('[nexi-void-preauth] cauzioneId:', cauzioneId);
 
-        // Nexi Void/Cancel API call
-        const voidPayload = {
+        // Try /cancels first (for pre-auths not yet captured)
+        // If that fails, try /refunds (for already captured or partial)
+        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
+
+        const cancelPayload = {
             description: `Sblocco cauzione ${cauzioneId}`
         };
 
-        const response = await fetch(`${NEXI_BASE_URL}/operations/${transactionId}/cancels`, {
+        // First attempt: cancel (void pre-auth)
+        console.log('[nexi-void-preauth] Trying /cancels...');
+        let response = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/cancels`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Api-Key': NEXI_API_KEY,
+                'Correlation-Id': correlationId
             },
-            body: JSON.stringify(voidPayload)
+            body: JSON.stringify(cancelPayload)
         });
 
-        const responseData = await response.json();
+        let responseText = await response.text();
+        let responseData: any;
+        try { responseData = JSON.parse(responseText); } catch { responseData = { raw: responseText }; }
+
+        // If cancel fails, try refund
+        if (!response.ok) {
+            console.log('[nexi-void-preauth] /cancels failed, trying /refunds...');
+            const refundCorrelationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+            })
+
+            // Get the cauzione amount for refund
+            const { data: cauzione } = await supabase
+                .from('cauzioni')
+                .select('importo')
+                .eq('id', cauzioneId)
+                .single();
+
+            const refundPayload: any = {
+                description: `Sblocco cauzione ${cauzioneId}`
+            };
+            if (cauzione?.importo) {
+                refundPayload.amount = Math.round(Number(cauzione.importo) * 100).toString();
+                refundPayload.currency = 'EUR';
+            }
+
+            response = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/refunds`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Api-Key': NEXI_API_KEY,
+                    'Correlation-Id': refundCorrelationId
+                },
+                body: JSON.stringify(refundPayload)
+            });
+
+            responseText = await response.text();
+            try { responseData = JSON.parse(responseText); } catch { responseData = { raw: responseText }; }
+        }
+
+        console.log('[nexi-void-preauth] Response:', response.status, responseText.substring(0, 500));
 
         if (!response.ok) {
-            console.error('Nexi void error:', responseData);
+            console.error('[nexi-void-preauth] ERROR:', responseData);
 
-            // Update cauzione with error
             await supabase
                 .from('cauzioni')
                 .update({
@@ -70,9 +118,11 @@ const handler: Handler = async (event) => {
             return {
                 statusCode: response.status,
                 headers,
-                body: JSON.stringify({ error: responseData.errors?.[0]?.description || 'Void failed' })
+                body: JSON.stringify({ error: responseData.errors?.[0]?.description || 'Void/refund failed' })
             };
         }
+
+        const voidOpId = responseData.operationId || operationId;
 
         // Update cauzione status
         const { error: updateError } = await supabase
@@ -80,36 +130,38 @@ const handler: Handler = async (event) => {
             .update({
                 stato: 'Sbloccata',
                 data_sblocco: new Date().toISOString(),
-                note: `Preautorizzazione sbloccata - Nexi Op: ${responseData.operationId || transactionId}`,
+                note: `Preautorizzazione sbloccata - Nexi Op: ${voidOpId}`,
                 updated_at: new Date().toISOString()
             })
             .eq('id', cauzioneId);
 
         if (updateError) throw updateError;
 
-        // Update nexi_transactions if exists
+        // Update nexi_transactions
         if (orderId) {
             await supabase
                 .from('nexi_transactions')
                 .update({
                     status: 'voided',
-                    metadata: { void_response: responseData }
+                    metadata: { void_operation_id: voidOpId, void_response: responseData }
                 })
                 .eq('order_id', orderId);
         }
+
+        console.log('[nexi-void-preauth] SUCCESS: Pre-auth voided');
 
         return {
             statusCode: 200,
             headers,
             body: JSON.stringify({
                 success: true,
-                operationId: responseData.operationId,
+                operationId: voidOpId,
                 message: 'Preautorizzazione sbloccata con successo'
             })
         };
 
     } catch (error: any) {
-        console.error('Error voiding pre-authorization:', error);
+        console.error('[nexi-void-preauth] Error:', error);
         return {
             statusCode: 500,
             headers,

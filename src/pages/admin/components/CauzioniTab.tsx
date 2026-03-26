@@ -425,7 +425,7 @@ export default function CauzioniTab() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         cauzioneId: cauzione.id,
-                        transactionId: nexiTransactionId,
+                        operationId: (cauzione as any).nexi_operation_id || nexiTransactionId,
                         orderId: (cauzione as any).nexi_order_id
                     })
                 })
@@ -473,7 +473,7 @@ export default function CauzioniTab() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         cauzioneId: cauzione.id,
-                        transactionId: nexiTransactionId,
+                        operationId: (cauzione as any).nexi_operation_id || nexiTransactionId,
                         amount: amount,
                         orderId: (cauzione as any).nexi_order_id
                     })
