@@ -33,7 +33,7 @@ const handler: Handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Token non valido' }) };
     }
 
-    const { action, customer_id, amount, description, query } = JSON.parse(event.body || '{}');
+    const { action, customer_id, user_id, amount, description, query } = JSON.parse(event.body || '{}');
 
     switch (action) {
       case 'list_all_balances': {
@@ -60,13 +60,13 @@ const handler: Handler = async (event) => {
         );
 
         // Find user_id and phone
-        let userId = body.user_id;
+        let userId = user_id;
         let custPhone = '';
-        if (body.customer_id) {
+        if (customer_id) {
           const { data: cust } = await svc
             .from('customers_extended')
             .select('user_id, telefono')
-            .eq('id', body.customer_id)
+            .eq('id', customer_id)
             .maybeSingle();
           if (cust) {
             userId = userId || cust.user_id;
