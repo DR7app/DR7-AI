@@ -44,10 +44,10 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Create pre-authorization request (same structure as working pay-by-link)
-        const expDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const expDateStr = expDate.toISOString().split('T')[0];
+        // Use /orders/build (HPP) for REAL pre-authorization (paybylink always captures)
+        const siteUrl = process.env.URL || 'https://admin.dr7empire.com';
         const payload = {
+            merchantUrl: siteUrl,
             order: {
                 orderId: orderId,
                 amount: amountCents.toString(),
@@ -62,27 +62,19 @@ const handler: Handler = async (event) => {
                 actionType: 'PREAUTH',
                 amount: amountCents.toString(),
                 language: 'ita',
-                resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=success`,
-                cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/admin?cauzione=${cauzioneId}&status=cancelled`,
-                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-preauth-callback`,
-                expirationDate: expDateStr,
-                expirationTime: expDate.toISOString()
-                // No recurrence block — CONTRACT_CREATION forces Nexi to capture instead of hold
-                // Card tokens for future MIT (danni) come from the booking payment instead
-            },
-            expirationDate: expDateStr
+                resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
+                cancelUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=cancelled`,
+                notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`
+            }
         };
 
-        const siteUrl = process.env.URL || 'https://admin.dr7empire.com';
-        console.log('[nexi-create-preauth] Creating:', { orderId, amountCents, cauzioneId, siteUrl, notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback` });
+        console.log('[nexi-create-preauth] Creating HPP preauth:', { orderId, amountCents, cauzioneId, url: `${NEXI_BASE_URL}/orders/build` });
 
         const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
-        const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
-        console.log('[nexi-create-preauth] Using URL:', payByLinkUrl);
-        const response = await fetch(payByLinkUrl, {
+        const response = await fetch(`${NEXI_BASE_URL}/orders/build`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
