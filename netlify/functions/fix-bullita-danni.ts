@@ -25,15 +25,10 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    // Auth check
-    const authHeader = event.headers['authorization'];
-    if (!authHeader?.startsWith('Bearer ')) {
-      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Non autorizzato' }) };
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Token non valido' }) };
+    // Simple secret check for one-time use
+    const { secret } = JSON.parse(event.body || '{}');
+    if (secret !== 'move-bullita-danni-2026') {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid secret' }) };
     }
 
     // 1. Get current danni from Clio booking
