@@ -160,99 +160,42 @@ const handler: Handler = async (event) => {
           };
         }
 
-        const amountCents = Math.round(amount * 100);
+        const amountEur = amount;
         const isCredit = action === 'credit';
 
-        // Find customer phone
-        const { data: customer } = await supabase
+        // Use service role for user_credit_balance (bypasses RLS)
+        const serviceSupabase = createClient(
+          process.env.VITE_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        // Find customer's user_id
+        const { data: customer } = await serviceSupabase
           .from('customers_extended')
-          .select('telefono')
+          .select('user_id, email, telefono')
           .eq('id', customer_id)
           .single();
 
-        if (!customer?.telefono) {
+        const userId = customer?.user_id;
+        if (!userId) {
           return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: 'Cliente non ha un numero di telefono' }),
+            body: JSON.stringify({ error: 'Cliente non ha un account website (user_id mancante). Credito non applicabile.' }),
           };
         }
 
-        // Find referral participant by phone
-        let { data: participant } = await supabase
-          .from('referral_participants')
-          .select('id')
-          .eq('telefono', customer.telefono)
-          .single();
+        // Get or create credit balance
+        let { data: creditBalance } = await serviceSupabase
+          .from('user_credit_balance')
+          .select('user_id, balance')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-        // Auto-create participant if crediting and doesn't exist
-        if (!participant && isCredit) {
-          const { data: custInfo } = await supabase
-            .from('customers_extended')
-            .select('nome, cognome, email, telefono')
-            .eq('id', customer_id)
-            .single();
-
-          if (custInfo) {
-            const { data: newParticipant, error: createParticipantError } = await supabase
-              .from('referral_participants')
-              .insert({
-                nome: custInfo.nome || 'Cliente',
-                cognome: custInfo.cognome || '',
-                telefono: custInfo.telefono,
-                email: custInfo.email,
-                phone_verified: true,
-              })
-              .select()
-              .single();
-
-            if (createParticipantError) throw createParticipantError;
-            participant = newParticipant;
-          }
-        }
-
-        if (!participant) {
-          return {
-            statusCode: 404,
-            headers,
-            body: JSON.stringify({ error: 'Partecipante referral non trovato. Effettua prima un credito.' }),
-          };
-        }
-
-        // Get or create wallet
-        let { data: wallet } = await supabase
-          .from('wallets')
-          .select('*')
-          .eq('participant_id', participant.id)
-          .single();
-
-        if (!wallet && isCredit) {
-          const { data: newWallet, error: createError } = await supabase
-            .from('wallets')
-            .insert({
-              participant_id: participant.id,
-              balance_cents: 0,
-              total_earned_cents: 0,
-              total_spent_cents: 0,
-              total_topped_up_cents: 0,
-            })
-            .select()
-            .single();
-
-          if (createError) throw createError;
-          wallet = newWallet;
-        }
-
-        if (!wallet) {
-          return {
-            statusCode: 404,
-            headers,
-            body: JSON.stringify({ error: 'Wallet non trovato. Effettua prima un credito.' }),
-          };
-        }
-
-        const signedAmount = isCredit ? amountCents : -amountCents;
-        const newBalance = wallet.balance_cents + signedAmount;
+        const currentBalance = creditBalance?.balance ? parseFloat(creditBalance.balance) : 0;
+        const newBalance = isCredit
+          ? Math.round((currentBalance + amountEur) * 100) / 100
+          : Math.round((currentBalance - amountEur) * 100) / 100;
 
         if (newBalance < 0) {
           return {
@@ -262,40 +205,33 @@ const handler: Handler = async (event) => {
           };
         }
 
-        // Insert transaction
-        const { error: txnError } = await supabase.from('wallet_transactions').insert({
-          wallet_id: wallet.id,
-          type: isCredit ? 'manual_credit' : 'manual_debit',
-          amount_cents: signedAmount,
-          balance_after_cents: newBalance,
-          description: description || (isCredit ? 'Credito manuale admin' : 'Addebito manuale admin'),
-          admin_user_id: user.id,
-        });
-
-        if (txnError) throw txnError;
-
-        // Update wallet balance
-        const updateData: any = {
-          balance_cents: newBalance,
-          updated_at: new Date().toISOString(),
-        };
-        if (isCredit) {
-          updateData.total_earned_cents = wallet.total_earned_cents + amountCents;
+        if (!creditBalance) {
+          await serviceSupabase.from('user_credit_balance').insert({
+            user_id: userId,
+            balance: newBalance,
+            last_updated: new Date().toISOString()
+          });
         } else {
-          updateData.total_spent_cents = wallet.total_spent_cents + amountCents;
+          await serviceSupabase.from('user_credit_balance').update({
+            balance: newBalance,
+            last_updated: new Date().toISOString()
+          }).eq('user_id', userId);
         }
 
-        const { error: updateError } = await supabase
-          .from('wallets')
-          .update(updateData)
-          .eq('id', wallet.id);
-
-        if (updateError) throw updateError;
+        // Record transaction
+        await serviceSupabase.from('credit_transactions').insert({
+          user_id: userId,
+          transaction_type: isCredit ? 'credit' : 'debit',
+          amount: amountEur,
+          balance_after: newBalance,
+          description: description || (isCredit ? 'Credito manuale admin' : 'Addebito manuale admin'),
+          reference_type: 'admin_manual'
+        });
 
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify({ success: true, new_balance_cents: newBalance }),
+          body: JSON.stringify({ success: true, new_balance_cents: Math.round(newBalance * 100) }),
         };
       }
 
