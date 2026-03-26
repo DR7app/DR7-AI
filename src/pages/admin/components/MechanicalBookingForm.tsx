@@ -546,7 +546,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 <div className="flex gap-3">
                     <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
+                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
                     >
                         Salva
                     </button>

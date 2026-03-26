@@ -933,7 +933,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     toast.error('Errore durante l\'aggiornamento')
                   }
                 }}
-                className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"
+                className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-white px-6 py-3 rounded-full font-medium transition-colors"
               >
                 Salva Modifiche
               </button>

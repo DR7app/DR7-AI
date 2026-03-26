@@ -143,11 +143,11 @@ export default function AdminDashboard() {
   const dropdownBtnClass = (isActive: boolean) =>
     `py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${isActive ? 'text-theme-text-primary' : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'}`
   const dropdownItemClass = (isActive: boolean) =>
-    `w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${isActive ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-primary'}`
+    `w-full text-left px-4 py-3 text-sm hover:bg-theme-bg-hover transition-colors rounded-full ${isActive ? 'bg-dr7-gold text-white font-semibold' : 'text-theme-text-primary'}`
   const standaloneBtnClass = (isActive: boolean) =>
     `py-4 px-3 font-medium text-sm whitespace-nowrap transition-colors ${isActive ? 'text-theme-text-primary' : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover'}`
   const mobileItemClass = (isActive: boolean) =>
-    `w-full text-left px-4 py-3 rounded-3xl transition-colors ${isActive ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`
+    `w-full text-left px-4 py-3 rounded-3xl transition-colors ${isActive ? 'bg-dr7-gold text-white font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`
 
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
@@ -231,7 +231,7 @@ export default function AdminDashboard() {
               {!alarmState.audioEnabled && (
                 <button
                   onClick={enableAudio}
-                  className="px-3 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors flex items-center gap-2 text-sm"
+                  className="px-3 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors flex items-center gap-2 text-sm"
                   title="Enable sound alerts for vehicle returns"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,7 +343,7 @@ export default function AdminDashboard() {
               >
                 <span>Compleanni</span>
                 {birthdayCount > 0 && (
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'birthdays' ? 'bg-theme-bg-primary text-dr7-gold' : 'bg-dr7-gold text-black'}`}>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'birthdays' ? 'bg-theme-bg-primary text-dr7-gold' : 'bg-dr7-gold text-white'}`}>
                     {birthdayCount}
                   </span>
                 )}
@@ -467,7 +467,7 @@ export default function AdminDashboard() {
                   <button onClick={() => setActiveTab('birthdays')} className={`${dropdownItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
                     <span>Compleanni</span>
                     {birthdayCount > 0 && (
-                      <span className="bg-dr7-gold text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
+                      <span className="bg-dr7-gold text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                         {birthdayCount}
                       </span>
                     )}
@@ -700,7 +700,7 @@ export default function AdminDashboard() {
               <button
                 type="submit"
                 disabled={passwordLoading}
-                className="w-full bg-dr7-gold hover:bg-yellow-500 text-black font-medium py-3 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
+                className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-medium py-3 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
               >
                 {passwordLoading ? 'Aggiornamento...' : 'Aggiorna Password'}
               </button>

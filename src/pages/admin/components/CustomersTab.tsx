@@ -1877,7 +1877,7 @@ export default function CustomersTab() {
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
                               </span>
@@ -1954,7 +1954,7 @@ export default function CustomersTab() {
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingId
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
                               </span>
@@ -2031,7 +2031,7 @@ export default function CustomersTab() {
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
                               </span>

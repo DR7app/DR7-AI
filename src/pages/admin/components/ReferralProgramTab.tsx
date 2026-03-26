@@ -326,7 +326,7 @@ export default function ReferralProgramTab() {
             onClick={() => setActiveSection(section)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               activeSection === section
-                ? 'bg-dr7-gold text-black'
+                ? 'bg-dr7-gold text-white'
                 : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-hover'
             }`}
           >

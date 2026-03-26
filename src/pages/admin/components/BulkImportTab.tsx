@@ -833,7 +833,7 @@ export default function BulkImportTab() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             {customer.sources.length > 1 && (
-                              <span className="bg-dr7-gold text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
+                              <span className="bg-dr7-gold text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                                 {customer.sources.length}
                               </span>
                             )}

@@ -5460,7 +5460,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <button
                         onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
                         disabled={generatingContract}
-                        className={`px-3 py-1 ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
+                        className={`px-3 py-1 ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold hover:bg-[#247a6f] text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                       >
                         {generatingContract ? 'Generazione...' : 'Contratto'}
                       </button>

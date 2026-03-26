@@ -721,7 +721,7 @@ export default function CauzioniTab() {
                     </button>
                     <button
                         onClick={() => setShowModal(true)}
-                        className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors"
+                        className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors"
                     >
                         Nuova Cauzione
                     </button>
@@ -811,7 +811,7 @@ export default function CauzioniTab() {
                                             </button>
                                             <button
                                                 onClick={() => handleSegnaDaIncassare(cauzione)}
-                                                className="px-3 py-2 bg-yellow-600 text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                className="px-3 py-2 bg-yellow-600 text-black text-xs rounded-full hover:bg-[#247a6f] transition-colors font-semibold"
                                             >
                                                 DA INCASSARE
                                             </button>
@@ -864,7 +864,7 @@ export default function CauzioniTab() {
                                             </button>
                                             <button
                                                 onClick={() => handleSegnaIncassata(cauzione)}
-                                                className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#247a6f] transition-colors font-semibold"
                                             >
                                                 INCASSA
                                             </button>
@@ -979,7 +979,7 @@ export default function CauzioniTab() {
                                             {cauzione.stato === 'Danno' && (
                                                 <button
                                                     onClick={() => handleRevertStato(cauzione, 'Incassata')}
-                                                    className="px-3 py-2 bg-dr7-gold text-black text-xs rounded-full hover:bg-yellow-500 transition-colors font-semibold"
+                                                    className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#247a6f] transition-colors font-semibold"
                                                 >
                                                     INCASSATA
                                                 </button>

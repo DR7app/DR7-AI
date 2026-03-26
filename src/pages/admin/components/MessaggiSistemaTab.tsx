@@ -481,7 +481,7 @@ export default function MessaggiSistemaTab() {
                     </div>
                     <button
                         onClick={() => setShowNewForm(!showNewForm)}
-                        className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-black hover:bg-yellow-500"
+                        className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
                     >
                         + Nuovo Messaggio
                     </button>
@@ -590,7 +590,7 @@ export default function MessaggiSistemaTab() {
                             <button
                                 onClick={handleCreateTemplate}
                                 disabled={creatingNew || !newLabel.trim() || !newBody.trim()}
-                                className="px-5 py-2 rounded-full text-sm font-semibold bg-dr7-gold text-white hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                                className="px-5 py-2 rounded-full text-sm font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50"
                             >
                                 {creatingNew ? 'Salvataggio...' : 'Crea Messaggio'}
                             </button>
@@ -645,7 +645,7 @@ export default function MessaggiSistemaTab() {
                                             <button
                                                 onClick={() => handleSaveEdit(template.id)}
                                                 disabled={saving}
-                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50"
                                             >
                                                 {saving ? 'Salvataggio...' : 'Salva'}
                                             </button>
@@ -754,7 +754,7 @@ export default function MessaggiSistemaTab() {
                         onClick={() => setSendMode('template')}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                             sendMode === 'template'
-                                ? 'bg-dr7-gold text-black'
+                                ? 'bg-dr7-gold text-white'
                                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                         }`}
                     >
@@ -764,7 +764,7 @@ export default function MessaggiSistemaTab() {
                         onClick={() => setSendMode('free')}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                             sendMode === 'free'
-                                ? 'bg-dr7-gold text-black'
+                                ? 'bg-dr7-gold text-white'
                                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                         }`}
                     >
@@ -879,7 +879,7 @@ export default function MessaggiSistemaTab() {
                     <button
                         onClick={handleSend}
                         disabled={sending || !getMessageText().trim() || selectedCustomers.length === 0}
-                        className="px-6 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-black hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {sending
                             ? `Invio ${sendProgress.current}/${sendProgress.total}...`

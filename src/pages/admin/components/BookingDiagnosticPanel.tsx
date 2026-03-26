@@ -166,7 +166,7 @@ export default function BookingDiagnosticPanel() {
                     </div>
                     <button
                         onClick={loadConsistencyReport}
-                        className="px-4 py-2 bg-dr7-gold text-black rounded-full font-semibold hover:bg-dr7-gold/90 transition-colors"
+                        className="px-4 py-2 bg-dr7-gold text-white rounded-full font-semibold hover:bg-dr7-gold/90 transition-colors"
                     >
                         🔄 Aggiorna
                     </button>

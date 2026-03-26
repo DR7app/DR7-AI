@@ -1235,7 +1235,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               if (!showForm) resetWizard()
               setShowForm(!showForm)
             }}
-            className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
+            className="px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
           >
             {showForm ? 'Chiudi' : '+ Nuova Prenotazione'}
           </button>
@@ -1293,9 +1293,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 >
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                     step === currentStep
-                      ? 'bg-dr7-gold text-black'
+                      ? 'bg-dr7-gold text-white'
                       : step < currentStep
-                        ? 'bg-dr7-gold/60 text-black'
+                        ? 'bg-dr7-gold/60 text-white'
                         : 'bg-theme-bg-tertiary text-theme-text-muted'
                   }`}>
                     {step < currentStep ? '✓' : step}
@@ -1341,7 +1341,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
                       vehiclePlate.length < 5 || lookingUpTarga
                         ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                        : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                        : 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                     }`}
                   >
                     {lookingUpTarga ? 'Ricerca...' : 'Cerca'}
@@ -1420,7 +1420,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     }}
                     className={`px-6 py-2 rounded-full font-semibold transition-colors ${
                       targaVehicleInfo
-                        ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                        ? 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                         : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                     }`}
                   >
@@ -1585,7 +1585,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     selectedService &&
                     (!selectedService.price_options?.length || selectedPriceOption) &&
                     !(selectedService.price_unit === 'custom' && (!customPrice || parseFloat(customPrice) < selectedService.price))
-                      ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                      ? 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                       : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                   }`}
                 >
@@ -1637,7 +1637,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           }`}
                         >
                           <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
-                            isToggled ? 'bg-dr7-gold border-dr7-gold text-black' : 'border-theme-text-muted'
+                            isToggled ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'
                           }`}>
                             {isToggled && '✓'}
                           </span>
@@ -1656,7 +1656,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 }}
                                 className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                                   currentExtraOption?.label === opt.label
-                                    ? 'bg-dr7-gold text-black border-dr7-gold font-bold'
+                                    ? 'bg-dr7-gold text-white border-dr7-gold font-bold'
                                     : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold'
                                 }`}
                               >
@@ -1719,7 +1719,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <button
                     type="button"
                     onClick={() => setCurrentStep(3)}
-                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-yellow-500 text-black transition-colors"
+                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-[#247a6f] text-white transition-colors"
                   >
                     Avanti
                   </button>
@@ -1938,7 +1938,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   className={`px-8 py-3 rounded-full font-bold text-base transition-colors ${
                     submitting || !formData.customer_id || !formData.appointment_time
                       ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                      : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                      : 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                   }`}
                 >
                   {submitting ? 'Creazione...' : `Conferma - EUR ${getFinalPrice().toFixed(2)}`}
@@ -2267,7 +2267,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             }`}
                           >
                             <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${
-                              isSelected ? 'bg-dr7-gold border-dr7-gold text-black' : 'border-theme-text-muted'
+                              isSelected ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'
                             }`}>
                               {isSelected && '✓'}
                             </span>
@@ -2471,7 +2471,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       toast.error('Errore durante l\'aggiornamento')
                     }
                   }}
-                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"
+                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-white px-6 py-3 rounded-full font-medium transition-colors"
                 >
                   Salva Modifiche
                 </button>

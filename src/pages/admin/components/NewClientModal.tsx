@@ -1365,7 +1365,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setDriversLicenseFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
                           hover:file:bg-yellow-500 file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
@@ -1380,7 +1380,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setDriversLicenseBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
                           hover:file:bg-yellow-500 file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
@@ -1407,7 +1407,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setIdentityFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
                           hover:file:bg-yellow-500 file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
@@ -1422,7 +1422,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setIdentityBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
                           hover:file:bg-yellow-500 file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
@@ -1449,7 +1449,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setCodiceFiscaleFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
                           hover:file:bg-yellow-500 file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
@@ -1464,7 +1464,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setCodiceFiscaleBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
                           hover:file:bg-yellow-500 file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
@@ -1501,7 +1501,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-black font-bold hover:bg-yellow-500 transition-colors shadow-lg disabled:opacity-50"
+              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-white font-bold hover:bg-[#247a6f] transition-colors shadow-lg disabled:opacity-50"
             >
               {isSaving ? 'Salvataggio...' : (initialData ? 'Aggiorna Cliente' : 'Crea Cliente')}
             </button>

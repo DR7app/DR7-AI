@@ -1337,7 +1337,7 @@ const LotteriaBoard: React.FC = () => {
             </div>
             <button
               onClick={handleSearchTickets}
-              className="px-6 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors whitespace-nowrap"
+              className="px-6 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors whitespace-nowrap"
             >
               🔍 Cerca Biglietti
             </button>
@@ -2131,7 +2131,7 @@ const LotteriaBoard: React.FC = () => {
               <button
                 onClick={handleSendEmailsFromModal}
                 disabled={savingTemplate || loadingTemplate || sendingEmails}
-                className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sendingEmails
                   ? 'Invio in corso...'

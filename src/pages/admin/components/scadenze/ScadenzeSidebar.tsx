@@ -73,7 +73,7 @@ export default function ScadenzeSidebar({ activeView, onNavigate, stats }: Scade
             onClick={() => onNavigate('panoramica')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               activeView === 'panoramica'
-                ? 'bg-dr7-gold text-black'
+                ? 'bg-dr7-gold text-white'
                 : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
             }`}
           >
@@ -97,7 +97,7 @@ export default function ScadenzeSidebar({ activeView, onNavigate, stats }: Scade
                 onClick={() => onNavigate(key)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
                   isActive
-                    ? 'bg-dr7-gold text-black'
+                    ? 'bg-dr7-gold text-white'
                     : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
               >

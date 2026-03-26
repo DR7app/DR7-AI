@@ -84,7 +84,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('marketing')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'marketing'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -94,7 +94,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('referral')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'referral'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -104,7 +104,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('wallet')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'wallet'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -114,7 +114,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('messaggi')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'messaggi'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -1086,7 +1086,7 @@ function MarketingContent() {
                                     onClick={() => setDiscountCodeFilter(f.key)}
                                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                                         discountCodeFilter === f.key
-                                            ? 'bg-dr7-gold text-black'
+                                            ? 'bg-dr7-gold text-white'
                                             : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
                                     }`}
                                 >
@@ -1273,7 +1273,7 @@ function MarketingContent() {
                                 <div className="flex gap-3 justify-center mt-6">
                                     <button
                                         onClick={() => window.print()}
-                                        className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors"
+                                        className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors"
                                     >
                                         Stampa
                                     </button>

@@ -392,7 +392,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
               onChange={(e) => setSelectedFiles({ ...selectedFiles, [type]: e.target.files?.[0] || null })}
               className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm
                 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0
-                file:text-sm file:font-semibold file:bg-dr7-gold file:text-black
+                file:text-sm file:font-semibold file:bg-dr7-gold file:text-white
                 hover:file:bg-yellow-500 file:cursor-pointer"
               accept="image/*,.pdf"
               disabled={isUploading}

@@ -43,7 +43,7 @@ function fmtDec(n: number): string {
 }
 
 // SVG circular gauge
-function CircularGauge({ value, size = 120, strokeWidth = 10, color = '#D4AF37' }: { value: number; size?: number; strokeWidth?: number; color?: string }) {
+function CircularGauge({ value, size = 120, strokeWidth = 10, color = '#2d8a7e' }: { value: number; size?: number; strokeWidth?: number; color?: string }) {
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (Math.min(value, 100) / 100) * circumference
@@ -105,7 +105,7 @@ function StatCard({ label, value, sub, trend, trendSuffix, trendInvert, accent, 
   accent?: 'gold' | 'green' | 'red' | 'orange' | 'blue' | 'default'; border?: boolean
 }) {
   const accentColors: Record<string, string> = {
-    gold: 'text-[#D4AF37]', green: 'text-emerald-400', red: 'text-red-400',
+    gold: 'text-[#2d8a7e]', green: 'text-emerald-400', red: 'text-red-400',
     orange: 'text-amber-400', blue: 'text-blue-400', default: 'text-theme-text-primary'
   }
   const valueColor = accentColors[accent || 'default']
@@ -148,7 +148,7 @@ function calcHealthScore(d: DashboardData): { score: number; label: string; colo
   let label = 'Critico'
   let color = '#ef4444'
   if (score >= 80) { label = 'Ottimo'; color = '#10b981' }
-  else if (score >= 60) { label = 'Buono'; color = '#D4AF37' }
+  else if (score >= 60) { label = 'Buono'; color = '#2d8a7e' }
   else if (score >= 40) { label = 'Attenzione'; color = '#f59e0b' }
   return { score, label, color }
 }
@@ -222,7 +222,7 @@ export default function DashboardTab() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="relative">
-          <div className="w-16 h-16 rounded-full border-4 border-theme-border animate-spin" style={{ borderTopColor: '#D4AF37' }} />
+          <div className="w-16 h-16 rounded-full border-4 border-theme-border animate-spin" style={{ borderTopColor: '#2d8a7e' }} />
         </div>
         <p className="text-theme-text-muted text-sm">Caricamento dashboard...</p>
       </div>
@@ -234,7 +234,7 @@ export default function DashboardTab() {
       <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 text-center max-w-md mx-auto mt-12">
         <p className="text-red-400 font-medium text-lg mb-2">Errore nel caricamento</p>
         <p className="text-theme-text-muted text-sm mb-4">{error}</p>
-        <button onClick={fetchDashboard} className="px-6 py-2.5 bg-[#D4AF37] text-black rounded-xl text-sm font-bold hover:bg-[#c4a030] transition-colors">
+        <button onClick={fetchDashboard} className="px-6 py-2.5 bg-[#2d8a7e] text-black rounded-xl text-sm font-bold hover:bg-[#247a6f] transition-colors">
           Riprova
         </button>
       </div>
@@ -262,7 +262,7 @@ export default function DashboardTab() {
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] outline-none"
+            className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#2d8a7e]/40 focus:border-[#2d8a7e] outline-none"
           />
           <div className="text-right hidden sm:block">
             <p className="text-[10px] text-theme-text-muted uppercase">Periodo</p>
@@ -281,7 +281,7 @@ export default function DashboardTab() {
             <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-2">Breakdown Fatturato</p>
             <div className="space-y-2">
               {[
-                { label: 'Noleggi', value: d.revenue.bySource.rental, color: 'bg-[#D4AF37]' },
+                { label: 'Noleggi', value: d.revenue.bySource.rental, color: 'bg-[#2d8a7e]' },
                 { label: 'Lavaggi', value: d.revenue.bySource.wash, color: 'bg-blue-400' },
                 { label: 'Penali', value: d.revenue.bySource.penalties, color: 'bg-amber-400' },
                 { label: 'Danni', value: d.revenue.bySource.danni, color: 'bg-red-400' },
@@ -308,7 +308,7 @@ export default function DashboardTab() {
             <div className="relative">
               <CircularGauge value={d.fleet.occupationRate} size={130} strokeWidth={12} />
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold text-[#D4AF37]">{d.fleet.occupationRate}%</span>
+                <span className="text-3xl font-bold text-[#2d8a7e]">{d.fleet.occupationRate}%</span>
                 <span className="text-[10px] text-theme-text-muted uppercase tracking-wider">Occupazione</span>
               </div>
             </div>
@@ -339,7 +339,7 @@ export default function DashboardTab() {
                 <span className="text-theme-text-primary font-medium">{d.fleet.occupationRate}%</span>
               </div>
               <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-[#D4AF37] rounded-full transition-all duration-1000" style={{ width: `${d.fleet.occupationRate}%` }} />
+                <div className="h-full bg-[#2d8a7e] rounded-full transition-all duration-1000" style={{ width: `${d.fleet.occupationRate}%` }} />
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-theme-text-muted">Mese precedente</span>
@@ -386,7 +386,7 @@ export default function DashboardTab() {
         <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-white/5">
           <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-3">Ricavo Medio per Veicolo</p>
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-3xl font-bold text-[#D4AF37]">{'\u20AC'} {fmtDec(d.revenuePerVehicle.avgPerDay)}</span>
+            <span className="text-3xl font-bold text-[#2d8a7e]">{'\u20AC'} {fmtDec(d.revenuePerVehicle.avgPerDay)}</span>
             <span className="text-sm text-theme-text-muted">/giorno</span>
           </div>
           <div className="mb-4">
@@ -401,7 +401,7 @@ export default function DashboardTab() {
                 {d.revenuePerVehicle.topPerformers.map((v, i) => (
                   <div key={i} className="flex items-center justify-between bg-white/[0.03] rounded-lg px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 0 ? 'bg-[#D4AF37] text-black' : 'bg-white/10 text-theme-text-muted'}`}>
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 0 ? 'bg-[#2d8a7e] text-black' : 'bg-white/10 text-theme-text-muted'}`}>
                         {i + 1}
                       </span>
                       <span className="text-sm text-theme-text-primary">{v.name}</span>
@@ -424,7 +424,7 @@ export default function DashboardTab() {
         <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-white/5">
           <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-3">Prenotazioni</p>
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-3xl font-bold text-[#D4AF37]">{d.bookings.total}</span>
+            <span className="text-3xl font-bold text-[#2d8a7e]">{d.bookings.total}</span>
           </div>
           <div className="mb-5">
             <Trend value={d.bookings.changePercent} />
@@ -449,7 +449,7 @@ export default function DashboardTab() {
           <div className="bg-white/[0.03] rounded-xl px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-xs text-theme-text-muted">Tasso di conversione</p>
-              <p className="text-lg font-bold text-[#D4AF37]">{d.bookings.conversionRate}% <span className="text-xs font-normal text-theme-text-muted">({conversionLabel})</span></p>
+              <p className="text-lg font-bold text-[#2d8a7e]">{d.bookings.conversionRate}% <span className="text-xs font-normal text-theme-text-muted">({conversionLabel})</span></p>
             </div>
             <div className="w-20 h-2 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${d.bookings.conversionRate}%` }} />
@@ -649,7 +649,7 @@ export default function DashboardTab() {
           <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center">
             <p className="text-red-400 font-medium text-sm mb-1">Errore caricamento fatture fornitori</p>
             <p className="text-theme-text-muted text-xs">{supplierError}</p>
-            <button onClick={() => fetchSupplierCosts(selectedMonth)} className="mt-3 px-4 py-1.5 bg-[#D4AF37] text-black rounded-lg text-xs font-bold hover:bg-[#c4a030] transition-colors">
+            <button onClick={() => fetchSupplierCosts(selectedMonth)} className="mt-3 px-4 py-1.5 bg-[#2d8a7e] text-black rounded-lg text-xs font-bold hover:bg-[#247a6f] transition-colors">
               Riprova
             </button>
           </div>

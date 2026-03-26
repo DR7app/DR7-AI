@@ -160,7 +160,7 @@ export default function ClientiTab() {
             <button
               onClick={() => setFilter('all')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'all'
-                  ? 'bg-dr7-gold text-black font-semibold'
+                  ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
@@ -169,7 +169,7 @@ export default function ClientiTab() {
             <button
               onClick={() => setFilter('azienda')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'azienda'
-                  ? 'bg-dr7-gold text-black font-semibold'
+                  ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
@@ -178,7 +178,7 @@ export default function ClientiTab() {
             <button
               onClick={() => setFilter('persona_fisica')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'persona_fisica'
-                  ? 'bg-dr7-gold text-black font-semibold'
+                  ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
@@ -187,7 +187,7 @@ export default function ClientiTab() {
             <button
               onClick={() => setFilter('pubblica_amministrazione')}
               className={`px-3 py-1 rounded-full text-sm ${filter === 'pubblica_amministrazione'
-                  ? 'bg-dr7-gold text-black font-semibold'
+                  ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
             >
@@ -283,7 +283,7 @@ export default function ClientiTab() {
                     <td className="px-4 py-3 text-sm">
                       <button
                         onClick={() => setSelectedCustomer(customer)}
-                        className="px-3 py-1.5 bg-dr7-gold hover:bg-yellow-500 text-black rounded-full text-xs font-medium transition-colors"
+                        className="px-3 py-1.5 bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full text-xs font-medium transition-colors"
                       >
                         Documenti
                       </button>

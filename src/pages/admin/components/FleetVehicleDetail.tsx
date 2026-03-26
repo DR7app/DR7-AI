@@ -269,7 +269,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
             <div className="flex gap-2 mb-6 border-b border-theme-border pb-2 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('dashboard')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'dashboard' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'dashboard' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Cruscotto
                     {alerts.length > 0 && (
@@ -278,19 +278,19 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                 </button>
                 <button
                     onClick={() => setActiveTab('maintenance')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'maintenance' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'maintenance' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Manutenzione (KM)
                 </button>
                 <button
                     onClick={() => setActiveTab('details')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'details' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'details' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Scadenze (Date)
                 </button>
                 <button
                     onClick={() => setActiveTab('history')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'history' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'history' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Storico
                 </button>

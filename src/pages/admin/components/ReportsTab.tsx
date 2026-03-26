@@ -505,7 +505,7 @@ export default function ReportsTab() {
                 onClick={() => setActiveReport('vehicles')}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                   activeReport === 'vehicles'
-                    ? 'bg-dr7-gold text-black border-dr7-gold'
+                    ? 'bg-dr7-gold text-white border-dr7-gold'
                     : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
                 }`}
               >
@@ -515,7 +515,7 @@ export default function ReportsTab() {
                 onClick={() => setActiveReport('washes')}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                   activeReport === 'washes'
-                    ? 'bg-dr7-gold text-black border-dr7-gold'
+                    ? 'bg-dr7-gold text-white border-dr7-gold'
                     : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
                 }`}
               >
@@ -525,7 +525,7 @@ export default function ReportsTab() {
                 onClick={() => setActiveReport('cauzioni')}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                   activeReport === 'cauzioni'
-                    ? 'bg-dr7-gold text-black border-dr7-gold'
+                    ? 'bg-dr7-gold text-white border-dr7-gold'
                     : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
                 }`}
               >
@@ -549,7 +549,7 @@ export default function ReportsTab() {
           <button
             onClick={fetchReport}
             disabled={loading}
-            className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
+            className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
             {loading ? 'Caricamento...' : 'Genera Report'}
           </button>

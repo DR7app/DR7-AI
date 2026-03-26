@@ -622,7 +622,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             type="button"
                             onClick={handleSubmit}
                             disabled={isGenerating || cart.length === 0}
-                            className="flex-1 py-3 bg-dr7-gold hover:bg-yellow-500 text-black text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="flex-1 py-3 bg-dr7-gold hover:bg-[#247a6f] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             {isGenerating ? (
                                 <span className="flex items-center justify-center gap-2">

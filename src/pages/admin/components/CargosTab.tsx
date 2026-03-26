@@ -853,13 +853,13 @@ export default function CargosTab() {
                         <div className="flex bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
                             <button
                                 onClick={() => setActiveSubTab('send')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'send' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'send' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                             >
                                 Invio Contratti
                             </button>
                             <button
                                 onClick={() => setActiveSubTab('export')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-black' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                                className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'export' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                             >
                                 Scarica File
                             </button>

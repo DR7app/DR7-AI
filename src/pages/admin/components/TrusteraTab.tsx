@@ -43,13 +43,13 @@ export default function TrusteraTab() {
       <div className="flex gap-2 border-b border-theme-border pb-2">
         <button
           onClick={() => setSubTab('documenti')}
-          className={`px-4 py-2 rounded-t-lg font-bold text-sm transition-colors ${subTab === 'documenti' ? 'bg-dr7-gold text-black' : 'bg-theme-bg-secondary text-theme-text-muted hover:text-theme-text-primary'}`}
+          className={`px-4 py-2 rounded-t-lg font-bold text-sm transition-colors ${subTab === 'documenti' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-secondary text-theme-text-muted hover:text-theme-text-primary'}`}
         >
           Documenti
         </button>
         <button
           onClick={() => setSubTab('marketing')}
-          className={`px-4 py-2 rounded-t-lg font-bold text-sm transition-colors ${subTab === 'marketing' ? 'bg-dr7-gold text-black' : 'bg-theme-bg-secondary text-theme-text-muted hover:text-theme-text-primary'}`}
+          className={`px-4 py-2 rounded-t-lg font-bold text-sm transition-colors ${subTab === 'marketing' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-secondary text-theme-text-muted hover:text-theme-text-primary'}`}
         >
           Marketing Consent
         </button>
@@ -290,7 +290,7 @@ function DocumentiSubTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">Trustera - Firma Documenti</h2>
         <button
           onClick={() => { setShowUpload(!showUpload); if (showUpload) resetForm() }}
-          className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-4 rounded-full transition-colors"
+          className="bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-2 px-4 rounded-full transition-colors"
         >
           {showUpload ? 'Annulla' : '+ Invia Documento'}
         </button>
@@ -309,7 +309,7 @@ function DocumentiSubTab() {
               type="file"
               accept="application/pdf"
               onChange={handleFileUpload}
-              className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:bg-dr7-gold file:text-black file:font-bold file:cursor-pointer"
+              className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:bg-dr7-gold file:text-white file:font-bold file:cursor-pointer"
             />
             {uploading && <p className="text-sm text-theme-text-muted mt-1">Caricamento in corso...</p>}
             {uploadedFileName && !uploading && (
@@ -392,7 +392,7 @@ function DocumentiSubTab() {
           <button
             onClick={handleSend}
             disabled={sending || !uploadedUrl}
-            className="w-full bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {sending ? 'Invio in corso...' : 'Invia per Firma via WhatsApp'}
           </button>
