@@ -56,7 +56,7 @@ export default function AdminDashboard() {
       _setActiveTab(prev)
     }
   }
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -117,13 +117,13 @@ export default function AdminDashboard() {
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
-    if (mobileMenuOpen) {
+    if (sidebarOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
     }
     return () => { document.body.style.overflow = '' }
-  }, [mobileMenuOpen])
+  }, [sidebarOpen])
 
   useEffect(() => {
     const handleOpenBookingForm = (event: CustomEvent) => {
@@ -141,8 +141,6 @@ export default function AdminDashboard() {
   const sidebarItemClass = (isActive: boolean) =>
     `w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044]'}`
   const sidebarSectionClass = 'px-3 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider'
-  const mobileItemClass = (isActive: boolean) =>
-    `w-full text-left px-4 py-3 rounded-3xl transition-colors ${isActive ? 'bg-dr7-gold text-white font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`
 
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
@@ -192,83 +190,96 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen flex bg-theme-bg-secondary">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 bg-[#1a2332] flex-col flex-shrink-0 fixed inset-y-0 left-0 z-40">
-        {/* Logo */}
-        <div className="px-5 py-5 border-b border-white/10">
+      {/* Sidebar Overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 lg:block" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Logo + Close */}
+        <div className="px-5 py-4 bg-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/rentora-logo.jpeg" alt="Rentora" className="h-10 w-auto" />
-            <h1 className="text-white font-medium text-sm tracking-widest">Operating Platform <span className="text-[10px]">A.I.</span></h1>
+            <div>
+              <h1 className="text-[#1a2332] font-semibold text-sm tracking-wide">Operating Platform</h1>
+              <p className="text-[#1a2332]/50 text-[10px] tracking-widest">A.I.</p>
+            </div>
           </div>
+          <button onClick={() => setSidebarOpen(false)} className="text-[#1a2332]/40 hover:text-[#1a2332] p-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto scrollbar-thin">
           <div className={sidebarSectionClass}>Noleggio</div>
-          <button onClick={() => setActiveTab('reservations')} className={sidebarItemClass(activeTab === 'reservations')}>Prenotazioni</button>
-          <button onClick={() => setActiveTab('calendar')} className={sidebarItemClass(activeTab === 'calendar')}>Calendario</button>
-          <button onClick={() => setActiveTab('cauzioni')} className={sidebarItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
-          <button onClick={() => setActiveTab('contratto')} className={sidebarItemClass(activeTab === 'contratto')}>Contratti</button>
-          <button onClick={() => setActiveTab('gestione-danni')} className={sidebarItemClass(activeTab === 'gestione-danni')}>Danni & Penali</button>
-          <button onClick={() => setActiveTab('gestione-multe')} className={sidebarItemClass(activeTab === 'gestione-multe')}>Multe</button>
-          <button onClick={() => setActiveTab('cargos')} className={sidebarItemClass(activeTab === 'cargos')}>Cargos</button>
-          <button onClick={() => setActiveTab('trustera')} className={sidebarItemClass(activeTab === 'trustera')}>Trustera</button>
+          <button onClick={() => { setActiveTab('reservations'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reservations')}>Prenotazioni</button>
+          <button onClick={() => { setActiveTab('calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'calendar')}>Calendario</button>
+          <button onClick={() => { setActiveTab('cauzioni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
+          <button onClick={() => { setActiveTab('contratto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'contratto')}>Contratti</button>
+          <button onClick={() => { setActiveTab('gestione-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-danni')}>Danni & Penali</button>
+          <button onClick={() => { setActiveTab('gestione-multe'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-multe')}>Multe</button>
+          <button onClick={() => { setActiveTab('cargos'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cargos')}>Cargos</button>
+          <button onClick={() => { setActiveTab('trustera'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'trustera')}>Trustera</button>
 
           <div className={sidebarSectionClass}>Prime Wash</div>
-          <button onClick={() => setActiveTab('carwash')} className={sidebarItemClass(activeTab === 'carwash')}>Prenotazioni</button>
-          <button onClick={() => setActiveTab('carwash-calendar')} className={sidebarItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
-          <button onClick={() => setActiveTab('carwash-catalog')} className={sidebarItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
+          <button onClick={() => { setActiveTab('carwash'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash')}>Prenotazioni</button>
+          <button onClick={() => { setActiveTab('carwash-calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
+          <button onClick={() => { setActiveTab('carwash-catalog'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
 
           <div className={sidebarSectionClass}>Flotta</div>
-          <button onClick={() => setActiveTab('vehicles')} className={sidebarItemClass(activeTab === 'vehicles')}>Veicoli</button>
-          <button onClick={() => setActiveTab('fleet')} className={sidebarItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
-          <button onClick={() => setActiveTab('gps-keyless')} className={sidebarItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
+          <button onClick={() => { setActiveTab('vehicles'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'vehicles')}>Veicoli</button>
+          <button onClick={() => { setActiveTab('fleet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
+          <button onClick={() => { setActiveTab('gps-keyless'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
 
           <div className={sidebarSectionClass}>Clienti</div>
-          <button onClick={() => setActiveTab('customers')} className={sidebarItemClass(activeTab === 'customers')}>Lead</button>
-          <button onClick={() => setActiveTab('unpaid')} className={sidebarItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
-          <button onClick={() => setActiveTab('customer-wallet')} className={sidebarItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
+          <button onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customers')}>Lead</button>
+          <button onClick={() => { setActiveTab('unpaid'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
+          <button onClick={() => { setActiveTab('customer-wallet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
 
           <div className={sidebarSectionClass}>Marketing</div>
-          <button onClick={() => setActiveTab('birthdays')} className={`${sidebarItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
+          <button onClick={() => { setActiveTab('birthdays'); setSidebarOpen(false); }} className={`${sidebarItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
             <span>Compleanni</span>
             {birthdayCount > 0 && (
               <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{birthdayCount}</span>
             )}
           </button>
-          <button onClick={() => setActiveTab('reviews')} className={sidebarItemClass(activeTab === 'reviews')}>Recensioni</button>
-          <button onClick={() => setActiveTab('marketing')} className={sidebarItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
-          <button onClick={() => setActiveTab('referral')} className={sidebarItemClass(activeTab === 'referral')}>Referral</button>
-          <button onClick={() => setActiveTab('codice-sconto')} className={sidebarItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
+          <button onClick={() => { setActiveTab('reviews'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reviews')}>Recensioni</button>
+          <button onClick={() => { setActiveTab('marketing'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
+          <button onClick={() => { setActiveTab('referral'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'referral')}>Referral</button>
+          <button onClick={() => { setActiveTab('codice-sconto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
 
           <div className={sidebarSectionClass}>Strumenti</div>
-          <button onClick={() => setActiveTab('scanner')} className={sidebarItemClass(activeTab === 'scanner')}>Scanner</button>
-          <button onClick={() => setActiveTab('bulk-import')} className={sidebarItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
-          <button onClick={() => setActiveTab('nexi')} className={sidebarItemClass(activeTab === 'nexi')}>Nexi</button>
+          <button onClick={() => { setActiveTab('scanner'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scanner')}>Scanner</button>
+          <button onClick={() => { setActiveTab('bulk-import'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
+          <button onClick={() => { setActiveTab('nexi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'nexi')}>Nexi</button>
 
           <div className={sidebarSectionClass}>Report</div>
-          <button onClick={() => setActiveTab('report-noleggio')} className={sidebarItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
-          <button onClick={() => setActiveTab('report-lavaggio')} className={sidebarItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
-          <button onClick={() => setActiveTab('report-clienti')} className={sidebarItemClass(activeTab === 'report-clienti')}>Clienti</button>
-          <button onClick={() => setActiveTab('report-penali-danni')} className={sidebarItemClass(activeTab === 'report-penali-danni')}>Penali & Danni</button>
+          <button onClick={() => { setActiveTab('report-noleggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
+          <button onClick={() => { setActiveTab('report-lavaggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
+          <button onClick={() => { setActiveTab('report-clienti'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-clienti')}>Clienti</button>
+          <button onClick={() => { setActiveTab('report-penali-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-penali-danni')}>Penali & Danni</button>
           {adminRole === 'superadmin' && (
-            <button onClick={() => setActiveTab('operatori')} className={sidebarItemClass(activeTab === 'operatori')}>Operatori</button>
+            <button onClick={() => { setActiveTab('operatori'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'operatori')}>Operatori</button>
           )}
-          <button onClick={() => setActiveTab('dashboard-kpi')} className={sidebarItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
-          <button onClick={() => setActiveTab('revenue-pricing')} className={sidebarItemClass(activeTab === 'revenue-pricing')}>Revenue Management</button>
+          <button onClick={() => { setActiveTab('dashboard-kpi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
+          <button onClick={() => { setActiveTab('revenue-pricing'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'revenue-pricing')}>Revenue Management</button>
 
           <div className={sidebarSectionClass}>Comunicazione</div>
-          <button onClick={() => setActiveTab('com-email')} className={sidebarItemClass(activeTab === 'com-email')}>E-mail</button>
-          <button onClick={() => setActiveTab('com-pec')} className={sidebarItemClass(activeTab === 'com-pec')}>PEC</button>
-          <button onClick={() => setActiveTab('com-whatsapp')} className={sidebarItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
-          <button onClick={() => setActiveTab('com-sms')} className={sidebarItemClass(activeTab === 'com-sms')}>SMS</button>
-          <button onClick={() => setActiveTab('com-chiamate')} className={sidebarItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
-          <button onClick={() => setActiveTab('com-chatgpt')} className={sidebarItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
-          <button onClick={() => setActiveTab('com-aruba')} className={sidebarItemClass(activeTab === 'com-aruba')}>Aruba</button>
+          <button onClick={() => { setActiveTab('com-email'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-email')}>E-mail</button>
+          <button onClick={() => { setActiveTab('com-pec'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-pec')}>PEC</button>
+          <button onClick={() => { setActiveTab('com-whatsapp'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
+          <button onClick={() => { setActiveTab('com-sms'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-sms')}>SMS</button>
+          <button onClick={() => { setActiveTab('com-chiamate'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
+          <button onClick={() => { setActiveTab('com-chatgpt'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
+          <button onClick={() => { setActiveTab('com-aruba'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-aruba')}>Aruba</button>
 
           <div className={sidebarSectionClass}>Altro</div>
-          <button onClick={() => setActiveTab('scadenze')} className={sidebarItemClass(activeTab === 'scadenze')}>Scadenze</button>
-          <button onClick={() => setActiveTab('fattura')} className={sidebarItemClass(activeTab === 'fattura')}>Fattura</button>
+          <button onClick={() => { setActiveTab('scadenze'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scadenze')}>Scadenze</button>
+          <button onClick={() => { setActiveTab('fattura'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fattura')}>Fattura</button>
         </nav>
 
         {/* Bottom actions */}
@@ -311,115 +322,14 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      {/* Mobile Menu */}
-      <div
-        className={`lg:hidden fixed inset-0 z-50 transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      >
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
-        <div
-          className={`relative bg-[#1a2332] w-72 h-full shadow-2xl overflow-y-auto transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-            <div className="p-4 border-b border-white/10 flex justify-between items-center">
-              <img src="/rentora-logo.jpeg" alt="Rentora" className="h-8 w-auto" />
-              <button onClick={() => setMobileMenuOpen(false)} className="text-white/40 hover:text-white min-h-[44px] min-w-[44px] flex items-center justify-center">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <nav className="p-2 space-y-1">
-              {/* NOLEGGIO */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Noleggio</div>
-              <button onClick={() => { setActiveTab('reservations'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'reservations')}>Prenotazioni</button>
-              <button onClick={() => { setActiveTab('calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'calendar')}>Calendario</button>
-              <button onClick={() => { setActiveTab('cauzioni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
-              <button onClick={() => { setActiveTab('contratto'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'contratto')}>Contratti</button>
-              <button onClick={() => { setActiveTab('gestione-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-danni')}>Danni & Penali</button>
-              <button onClick={() => { setActiveTab('gestione-multe'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gestione-multe')}>Multe</button>
-              <button onClick={() => { setActiveTab('cargos'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'cargos')}>Cargos</button>
-              <button onClick={() => { setActiveTab('trustera'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'trustera')}>Trustera</button>
-
-              {/* PRIME WASH */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Prime Wash</div>
-              <button onClick={() => { setActiveTab('carwash'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash')}>Prenotazioni</button>
-              <button onClick={() => { setActiveTab('carwash-calendar'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
-              <button onClick={() => { setActiveTab('carwash-catalog'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
-
-              {/* FLOTTA */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Flotta</div>
-              <button onClick={() => { setActiveTab('vehicles'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'vehicles')}>Veicoli</button>
-              <button onClick={() => { setActiveTab('fleet'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
-              <button onClick={() => { setActiveTab('gps-keyless'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
-
-              {/* CLIENTI */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Clienti</div>
-              <button onClick={() => { setActiveTab('customers'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'customers')}>Lead</button>
-              <button onClick={() => { setActiveTab('unpaid'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
-              <button onClick={() => { setActiveTab('customer-wallet'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
-
-              {/* MARKETING */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Marketing</div>
-              <button
-                onClick={() => { setActiveTab('birthdays'); setMobileMenuOpen(false); }}
-                className={`${mobileItemClass(activeTab === 'birthdays')} flex items-center justify-between`}
-              >
-                <span>Compleanni</span>
-                {birthdayCount > 0 && (
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'birthdays' ? 'bg-theme-bg-primary text-dr7-gold' : 'bg-dr7-gold text-white'}`}>
-                    {birthdayCount}
-                  </span>
-                )}
-              </button>
-              <button onClick={() => { setActiveTab('reviews'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'reviews')}>Recensioni</button>
-              <button onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
-              <button onClick={() => { setActiveTab('referral'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'referral')}>Referral</button>
-              <button onClick={() => { setActiveTab('codice-sconto'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
-
-              {/* STRUMENTI */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Strumenti</div>
-              <button onClick={() => { setActiveTab('scanner'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'scanner')}>Scanner</button>
-              <button onClick={() => { setActiveTab('bulk-import'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
-              <button onClick={() => { setActiveTab('nexi'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'nexi')}>Nexi</button>
-
-              {/* REPORT */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Report</div>
-              <button onClick={() => { setActiveTab('report-noleggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
-              <button onClick={() => { setActiveTab('report-lavaggio'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
-              <button onClick={() => { setActiveTab('report-clienti'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-clienti')}>Clienti</button>
-              <button onClick={() => { setActiveTab('report-penali-danni'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'report-penali-danni')}>Penali & Danni</button>
-              {adminRole === 'superadmin' && (
-                <button onClick={() => { setActiveTab('operatori'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'operatori')}>Operatori</button>
-              )}
-              <button onClick={() => { setActiveTab('dashboard-kpi'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
-              <button onClick={() => { setActiveTab('revenue-pricing'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'revenue-pricing')}>Revenue Management</button>
-
-              {/* COMUNICAZIONE */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Comunicazione</div>
-              <button onClick={() => { setActiveTab('com-email'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-email')}>E-mail</button>
-              <button onClick={() => { setActiveTab('com-pec'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-pec')}>PEC</button>
-              <button onClick={() => { setActiveTab('com-whatsapp'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
-              <button onClick={() => { setActiveTab('com-sms'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-sms')}>SMS</button>
-              <button onClick={() => { setActiveTab('com-chiamate'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
-              <button onClick={() => { setActiveTab('com-chatgpt'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
-              <button onClick={() => { setActiveTab('com-aruba'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'com-aruba')}>Aruba</button>
-
-              {/* ALTRO */}
-              <div className="px-4 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider">Altro</div>
-              <button onClick={() => { setActiveTab('scadenze'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'scadenze')}>Scadenze</button>
-              <button onClick={() => { setActiveTab('fattura'); setMobileMenuOpen(false); }} className={mobileItemClass(activeTab === 'fattura')}>Fattura</button>
-            </nav>
-        </div>
-      </div>
-
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
+      <div className="flex-1 flex flex-col min-h-screen">
         {/* Top Bar */}
         <header className="bg-theme-bg-primary border-b border-theme-border px-4 sm:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden text-theme-text-primary p-2 min-h-[44px] min-w-[44px] flex-shrink-0 flex items-center justify-center hover:bg-theme-bg-hover rounded-lg transition-colors"
+              onClick={() => setSidebarOpen(true)}
+              className="text-theme-text-primary p-2 min-h-[44px] min-w-[44px] flex-shrink-0 flex items-center justify-center hover:bg-theme-bg-hover rounded-lg transition-colors"
               aria-label="Toggle menu"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
