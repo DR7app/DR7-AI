@@ -179,25 +179,30 @@ export const handler: Handler = async (event) => {
         }
 
         // Garante (if exists)
-        if (booking?.booking_details?.garante_veicolo) {
-            const g = booking.booking_details.garante_veicolo
-            let gName = ''
-            let gEmail = ''
-            let gPhone = ''
+        const garanteData = booking?.booking_details?.garante_veicolo
+        console.log(`[signature-init] garante_veicolo data:`, JSON.stringify(garanteData || null))
+        console.log(`[signature-init] cauzione_auto:`, booking?.booking_details?.cauzione_auto)
 
-            if (g.tipo === 'guidatore') {
+        if (garanteData) {
+            if (garanteData.tipo === 'guidatore') {
                 // Garante is the main driver — skip (already signing as 1st guidatore)
                 console.log('[signature-init] Garante is the main driver — skipping separate request')
             } else {
-                gName = `${g.nome || ''} ${g.cognome || ''}`.trim()
-                gEmail = g.email || ''
-                gPhone = g.telefono || g.phone || ''
+                const gName = `${garanteData.nome || ''} ${garanteData.cognome || ''}`.trim()
+                const gEmail = garanteData.email || ''
+                const gPhone = garanteData.telefono || garanteData.phone || ''
+
+                console.log(`[signature-init] Garante parsed: name="${gName}" email="${gEmail}" phone="${gPhone}" tipo="${garanteData.tipo}"`)
 
                 if (gName && (gEmail || gPhone)) {
                     signers.push({ name: gName, email: gEmail, phone: gPhone, role: 'garante' })
-                    console.log(`[signature-init] Garante found: ${gName}`)
+                    console.log(`[signature-init] Garante added to signers: ${gName}`)
+                } else {
+                    console.warn(`[signature-init] Garante skipped — missing name or contact: name="${gName}" email="${gEmail}" phone="${gPhone}"`)
                 }
             }
+        } else {
+            console.log('[signature-init] No garante_veicolo in booking_details')
         }
 
         console.log(`[signature-init] Creating ${signers.length} signing request(s) for contract ${contract.contract_number}`)
