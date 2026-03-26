@@ -134,7 +134,7 @@ const handler: Handler = async (event) => {
         console.log('Cauzione updated successfully:', cauzione.id);
 
         // Save contractId to customer for future MIT charges
-        if (isSuccess && contractId) {
+        if ((isPreauthorized || wasCharged) && contractId) {
             try {
                 // Get booking from cauzione to find customer
                 const { data: cauzioneFull } = await supabase
