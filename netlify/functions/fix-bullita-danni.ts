@@ -9,6 +9,18 @@ const supabase = createClient(
 const RS3_BOOKING_ID = '895175f3-68d0-4729-bc36-5ef72b21545f';
 const CLIO_BOOKING_ID = 'afdfa616-61a1-4e8d-b553-0e1163c876f1';
 
+const DANNI_DATA = [{
+  date: '2026-03-23',
+  note: '',
+  label: 'Fermo veicolo + Danno carrozzeria',
+  total: 425,
+  amount: 425,
+  photos: [],
+  quantity: 1,
+  amountPaid: 425,
+  paymentStatus: 'paid'
+}];
+
 const handler: Handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -25,29 +37,51 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    // Simple secret check for one-time use
-    const { secret } = JSON.parse(event.body || '{}');
+    const { secret, action } = JSON.parse(event.body || '{}');
     if (secret !== 'move-bullita-danni-2026') {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid secret' }) };
     }
 
-    // 1. Get current danni from Clio booking
-    const { data: clioBooking, error: clioErr } = await supabase
-      .from('bookings')
-      .select('id, booking_details, vehicle_name')
-      .eq('id', CLIO_BOOKING_ID)
-      .single();
+    // Diagnostic mode: show what's in both bookings
+    if (action === 'diagnose') {
+      const { data: clio } = await supabase
+        .from('bookings')
+        .select('id, booking_details, vehicle_name, vehicle_plate')
+        .eq('id', CLIO_BOOKING_ID)
+        .single();
 
-    if (clioErr || !clioBooking) {
-      return { statusCode: 404, headers, body: JSON.stringify({ error: 'Clio booking not found', detail: clioErr }) };
+      const { data: rs3 } = await supabase
+        .from('bookings')
+        .select('id, booking_details, vehicle_name, vehicle_plate')
+        .eq('id', RS3_BOOKING_ID)
+        .single();
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          clio: {
+            id: clio?.id,
+            vehicle_name: clio?.vehicle_name,
+            vehicle_plate: clio?.vehicle_plate,
+            has_danni: !!clio?.booking_details?.danni?.length,
+            danni: clio?.booking_details?.danni || [],
+            booking_details_keys: clio?.booking_details ? Object.keys(clio.booking_details) : [],
+          },
+          rs3: {
+            id: rs3?.id,
+            vehicle_name: rs3?.vehicle_name,
+            vehicle_plate: rs3?.vehicle_plate,
+            has_danni: !!rs3?.booking_details?.danni?.length,
+            danni: rs3?.booking_details?.danni || [],
+            booking_details_keys: rs3?.booking_details ? Object.keys(rs3.booking_details) : [],
+          },
+        }, null, 2),
+      };
     }
 
-    const danniData = clioBooking.booking_details?.danni || [];
-    if (danniData.length === 0) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'No danni found on Clio booking' }) };
-    }
-
-    // 2. Get RS3 booking
+    // Execute mode: force-set danni on RS3, clear from Clio
+    // 1. Get RS3 booking
     const { data: rs3Booking, error: rs3Err } = await supabase
       .from('bookings')
       .select('id, booking_details, vehicle_name')
@@ -58,9 +92,9 @@ const handler: Handler = async (event) => {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'RS3 booking not found', detail: rs3Err }) };
     }
 
-    // 3. Move danni to RS3 booking
+    // 2. Set danni on RS3
     const rs3Details = rs3Booking.booking_details || {};
-    rs3Details.danni = danniData;
+    rs3Details.danni = DANNI_DATA;
 
     const { error: updateRs3Err } = await supabase
       .from('bookings')
@@ -68,20 +102,23 @@ const handler: Handler = async (event) => {
       .eq('id', RS3_BOOKING_ID);
 
     if (updateRs3Err) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to update RS3 booking', detail: updateRs3Err }) };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to update RS3', detail: updateRs3Err }) };
     }
 
-    // 4. Clear danni from Clio booking
-    const clioDetails = clioBooking.booking_details || {};
-    clioDetails.danni = [];
-
-    const { error: updateClioErr } = await supabase
+    // 3. Clear danni from Clio
+    const { data: clioBooking } = await supabase
       .from('bookings')
-      .update({ booking_details: clioDetails })
-      .eq('id', CLIO_BOOKING_ID);
+      .select('id, booking_details, vehicle_name')
+      .eq('id', CLIO_BOOKING_ID)
+      .single();
 
-    if (updateClioErr) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to clear Clio danni', detail: updateClioErr }) };
+    if (clioBooking) {
+      const clioDetails = clioBooking.booking_details || {};
+      clioDetails.danni = [];
+      await supabase
+        .from('bookings')
+        .update({ booking_details: clioDetails })
+        .eq('id', CLIO_BOOKING_ID);
     }
 
     return {
@@ -89,8 +126,8 @@ const handler: Handler = async (event) => {
       headers,
       body: JSON.stringify({
         success: true,
-        message: `Moved ${danniData.length} danni from ${clioBooking.vehicle_name} to ${rs3Booking.vehicle_name}`,
-        danni_moved: danniData,
+        message: `Set danni on RS3 (${rs3Booking.vehicle_name}) and cleared from Clio`,
+        danni_set: DANNI_DATA,
       }),
     };
   } catch (error: any) {
