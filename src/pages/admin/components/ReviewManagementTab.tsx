@@ -108,10 +108,13 @@ export default function ReviewManagementTab() {
 
   async function loadAll() {
     setLoading(true)
-    await Promise.all([fetchSettings(), fetchTemplates()])
-    await autoEvaluateAll()
-    await Promise.all([fetchCandidates(), fetchStats()])
+    await Promise.all([fetchSettings(), fetchTemplates(), fetchCandidates(), fetchStats()])
     setLoading(false)
+    // Evaluate new bookings in background — don't block the UI
+    autoEvaluateAll().then(() => {
+      fetchCandidates()
+      fetchStats()
+    })
   }
 
   async function autoEvaluateAll() {
