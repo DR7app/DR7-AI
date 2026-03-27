@@ -373,7 +373,9 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
             issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'error' })
         }
 
-        if (!c?.documento_numero && !bd.customer?.documentNumber) {
+        const meta = c?.metadata || (c as any)?.metadata || {}
+        const rapp = meta?.rappresentante || {}
+        if (!c?.documento_numero && !rapp.documento?.numero && !bd.customer?.documentNumber) {
             issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
         }
 
@@ -399,6 +401,7 @@ export default function CargosTab() {
     const [bookings, setBookings] = useState<BookingForCargos[]>([])
     const [loading, setLoading] = useState(false)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [viewMode, setViewMode] = useState<'all' | 'date'>('all')
 
     // Send status
     const [sending, setSending] = useState(false)
@@ -456,21 +459,27 @@ export default function CargosTab() {
         setSendResult(null)
 
         try {
-            const startOfDay = new Date(exportDate)
-            startOfDay.setHours(0, 0, 0, 0)
-            const endOfDay = new Date(exportDate)
-            endOfDay.setHours(23, 59, 59, 999)
-
-            const { data: rawBookings, error } = await supabase
+            let query = supabase
                 .from('bookings')
                 .select(`
                     id, pickup_date, dropoff_date, customer_name, customer_email,
                     customer_phone, vehicle_name, vehicle_plate, vehicle_id,
                     booking_details, user_id, status, service_type
                 `)
-                .gte('pickup_date', startOfDay.toISOString())
-                .lte('pickup_date', endOfDay.toISOString())
                 .not('status', 'in', '(cancelled,annullata)')
+                .order('pickup_date', { ascending: false })
+
+            if (viewMode === 'date') {
+                const startOfDay = new Date(exportDate)
+                startOfDay.setHours(0, 0, 0, 0)
+                const endOfDay = new Date(exportDate)
+                endOfDay.setHours(23, 59, 59, 999)
+                query = query
+                    .gte('pickup_date', startOfDay.toISOString())
+                    .lte('pickup_date', endOfDay.toISOString())
+            }
+
+            const { data: rawBookings, error } = await query
 
             if (error) throw error
 
@@ -478,7 +487,7 @@ export default function CargosTab() {
             const rentalBookings = (rawBookings || []).filter((b: any) => !b.service_type || b.service_type === '')
 
             if (rentalBookings.length === 0) {
-                toast('Nessuna prenotazione noleggio per questa data', { icon: 'ℹ️' })
+                toast(viewMode === 'date' ? 'Nessuna prenotazione noleggio per questa data' : 'Nessuna prenotazione noleggio trovata', { icon: 'ℹ️' })
                 setLoading(false)
                 return
             }
@@ -529,7 +538,7 @@ export default function CargosTab() {
         } finally {
             setLoading(false)
         }
-    }, [exportDate])
+    }, [exportDate, viewMode])
 
     // ── Send to CARGOS ───────────────────────────────────────────────────────
 
@@ -958,13 +967,23 @@ export default function CargosTab() {
             {/* ── SEND TAB ─────────────────────────────────────────────────── */}
             {activeSubTab === 'send' && (
                 <div className="space-y-4">
-                    {/* Date selector + load */}
+                    {/* View mode + Date selector + load */}
                     <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
+                        <div className="flex gap-2 mb-3">
+                            <button
+                                onClick={() => setViewMode('all')}
+                                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${viewMode === 'all' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                            >Tutte le prenotazioni</button>
+                            <button
+                                onClick={() => setViewMode('date')}
+                                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${viewMode === 'date' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                            >Per data</button>
+                        </div>
                         <div className="flex flex-col sm:flex-row items-end gap-3">
-                            <div className="flex-1">
+                            {viewMode === 'date' && <div className="flex-1">
                                 <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
                                 <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
-                            </div>
+                            </div>}
                             <Button onClick={loadBookings} disabled={loading} className="flex items-center gap-2">
                                 {loading ? (
                                     <>
