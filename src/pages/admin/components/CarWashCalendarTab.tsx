@@ -121,17 +121,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
         (payload) => {
-          console.log('🔄 CarWash Calendar: Real-time update received', payload.eventType, payload)
           // Reload data when any booking changes
           loadData()
         }
       )
       .subscribe((status) => {
-        console.log('📡 CarWash Calendar subscription status:', status)
       })
 
     return () => {
-      console.log('🔌 CarWash Calendar: Unsubscribing from real-time')
       subscription.unsubscribe()
     }
   }, [currentDate]) // Reload when month changes
@@ -181,7 +178,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         appointment_time: b.appointment_time || '09:00'
       }))
 
-      console.log('🧼 CAR WASH CALENDAR:', filteredBookings.length, 'bookings for', year, month + 1)
       setBookings(filteredBookings)
     } catch (error) {
       console.error('Failed to load car wash bookings:', error)
@@ -222,7 +218,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // Process bookings into calendar events
   // Bookings are already filtered for current month in loadData()
   const calendarEvents = useMemo(() => {
-    console.log('🗓️ Processing', bookings.length, 'bookings for calendar events')
 
     return bookings
       .map(booking => {
@@ -245,7 +240,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         const dayIndex = day - 1
         const leftPx = dayIndex * CELL_WIDTH
 
-        console.log(`  📅 ${booking.customer_name}: day ${day}, ${hours}:${minutes}`)
 
         return {
           booking,

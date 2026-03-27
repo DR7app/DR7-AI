@@ -167,7 +167,8 @@ export function createRomeDate(
     const ROME_TIMEZONE = 'Europe/Rome'
 
     // Start with a reasonable UTC guess (subtract typical offset of 1-2 hours)
-    let utcGuess = new Date(Date.UTC(year, month - 1, day, hour - 2, minute, second))
+    // Use -1 as a middle ground between UTC+1 (winter) and UTC+2 (summer)
+    let utcGuess = new Date(Date.UTC(year, month - 1, day, hour - 1, minute, second))
 
     const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: ROME_TIMEZONE,
@@ -199,13 +200,6 @@ export function createRomeDate(
         // Check if we've found the right UTC time
         if (romeYear === year && romeMonth === month && romeDay === day &&
             romeHour === hour && romeMinute === minute && romeSecond === second) {
-
-            // Debug logging (can be removed after verification)
-            console.log(`[createRomeDate] ✅ Converted Rome time to UTC:`, {
-                input: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`,
-                utc: utcGuess.toISOString(),
-                iterations: attempt + 1
-            })
 
             return utcGuess
         }

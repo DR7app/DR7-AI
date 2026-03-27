@@ -2,17 +2,36 @@ import type { Handler } from "@netlify/functions";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
-const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || "393457905205";
+const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE;
 
 /**
  * Sends WhatsApp notification using Green API
  * Used for admin panel notifications
  */
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
       body: JSON.stringify({ message: 'Method Not Allowed' }),
+    };
+  }
+
+  // Auth check
+  const authHeader = event.headers.authorization || event.headers.Authorization;
+  const token = authHeader?.replace('Bearer ', '');
+  if (!ADMIN_API_TOKEN || token !== ADMIN_API_TOKEN) {
+    return {
+      statusCode: 401,
+      body: JSON.stringify({ error: 'Unauthorized' }),
+    };
+  }
+
+  if (!NOTIFICATION_PHONE) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'NOTIFICATION_PHONE not configured' }),
     };
   }
 

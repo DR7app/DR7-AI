@@ -109,7 +109,13 @@ export function normalizeBooking(
         let effectiveEndDay = endComps.day
         if (endsAtMidnight) {
             effectiveEndDay -= 1 // Back one day
-            // Note: If ends Jan 1 00:00 -> effectiveEndDay = 0. Index = -1.
+            if (effectiveEndDay <= 0) {
+                // Ends at midnight on the 1st of this month = actually ends in previous month
+                // Check if the booking starts before this month — if so, it doesn't appear
+                if (startIndex0 < 0) return null
+                // Otherwise clamp to day 0 (first day)
+                effectiveEndDay = 1
+            }
         }
         endIndex0 = effectiveEndDay - 1
     }

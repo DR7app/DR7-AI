@@ -132,14 +132,13 @@ export default function MissingFieldsModal({
                 })
             })
 
-            const result = await response.json()
             if (!response.ok) {
-                console.error('[MissingFieldsModal] Save error:', result)
+                const result = await response.json().catch(() => ({}))
                 throw new Error(result.error || 'Errore nel salvataggio')
             }
 
+            const result = await response.json()
             const data = result.customer
-            console.log('[MissingFieldsModal] Customer saved:', data)
 
             toast.success('Dati aggiornati con successo!')
 

@@ -1,5 +1,8 @@
 /**
  * Special Pricing Rules for Specific Clients
+ *
+ * TODO: Migrate these rules to a Supabase table for runtime configuration.
+ * For now, stored as code constants.
  */
 
 export interface SpecialPricingRule {
@@ -8,21 +11,18 @@ export interface SpecialPricingRule {
     discountThreshold: number // days
     discountPercent: number
     includesUnlimitedKm: boolean
-    includesKasko: 'base' | 'gold' | 'platinum' | null // Assuming insurance options map to these IDs
+    includesKasko: 'base' | 'gold' | 'platinum' | null
 }
 
-// Check ReservationsTab.tsx or common types for precise insurance option IDs.
-// Based on previous context, IDs seem to be like 'kasko_base', 'kasko_gold' etc.
-// Let's verify standard IDs first, but for now we'll use string literal types.
-
-export const SPECIAL_PRICING_RULES: SpecialPricingRule[] = [
+// Special pricing rules — should be moved to database in future
+const SPECIAL_PRICING_RULES: SpecialPricingRule[] = [
     {
         customerName: 'massimo runchina',
-        dailyRate: 305, // €305 fixed per day
-        discountThreshold: 3, // From 3rd day (meaning 3 days or more)
-        discountPercent: 10, // 10% discount
+        dailyRate: 305,
+        discountThreshold: 3,
+        discountPercent: 10,
         includesUnlimitedKm: true,
-        includesKasko: 'base' // Maps to KASKO_BASE usually
+        includesKasko: 'base'
     }
 ]
 

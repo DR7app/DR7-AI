@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { VehicleAlarmProvider } from './contexts/VehicleAlarmContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import ErrorBoundary from './components/ErrorBoundary'
 import AlarmNotification from './components/AlarmNotification'
 import LateReturnAlarm from './components/admin/LateReturnAlarm'
 
@@ -15,6 +16,7 @@ const FirmaPage = lazy(() => import('./pages/FirmaPage'))
 
 function App() {
   return (
+    <ErrorBoundary>
     <ThemeProvider>
       <BrowserRouter>
         <Toaster
@@ -38,7 +40,10 @@ function App() {
         />
         <Suspense fallback={
           <div className="bg-theme-bg-primary text-theme-text-primary min-h-screen flex items-center justify-center">
-            <div>Loading...</div>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-600 mx-auto mb-3"></div>
+              <p className="text-sm opacity-60">Caricamento...</p>
+            </div>
           </div>
         }>
           <Routes>
@@ -63,6 +68,7 @@ function App() {
         </Suspense>
       </BrowserRouter>
     </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

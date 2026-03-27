@@ -1,12 +1,30 @@
 import type { Handler } from "@netlify/functions";
 
-const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || "6526748"; // Fallback to key found in other file
+const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY;
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
             body: JSON.stringify({ message: 'Method Not Allowed' }),
+        };
+    }
+
+    // Auth check
+    const authHeader = event.headers.authorization || event.headers.Authorization;
+    const token = authHeader?.replace('Bearer ', '');
+    if (!ADMIN_API_TOKEN || token !== ADMIN_API_TOKEN) {
+        return {
+            statusCode: 401,
+            body: JSON.stringify({ error: 'Unauthorized' }),
+        };
+    }
+
+    if (!CALLMEBOT_API_KEY) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: 'CallMeBot API key not configured' }),
         };
     }
 
