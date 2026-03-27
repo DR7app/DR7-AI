@@ -159,9 +159,13 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             return { success: true }
         }
 
-        // Skip test vehicles
+        // Skip test vehicles and Hummer experience bookings
         if ((booking.vehicle_name || '').toLowerCase() === 'test') {
             console.log('[cargos-auto-send] Test vehicle — skipping CARGOS')
+            return { success: true }
+        }
+        if ((booking.vehicle_name || '').toLowerCase().includes('hummer')) {
+            console.log('[cargos-auto-send] Hummer experience — skipping CARGOS')
             return { success: true }
         }
 

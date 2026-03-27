@@ -484,8 +484,12 @@ export default function CargosTab() {
 
             if (error) throw error
 
-            // Filter out car wash and mechanical bookings — only rental bookings go to CARGOS
-            const rentalBookings = (rawBookings || []).filter((b: any) => !b.service_type || b.service_type === '' || b.service_type === 'car_rental')
+            // Filter out car wash, mechanical, and Hummer experience bookings — only rental bookings go to CARGOS
+            const rentalBookings = (rawBookings || []).filter((b: any) => {
+                if (b.service_type && b.service_type !== '' && b.service_type !== 'car_rental') return false
+                if ((b.vehicle_name || '').toLowerCase().includes('hummer')) return false
+                return true
+            })
 
             if (rentalBookings.length === 0) {
                 toast(viewMode === 'date' ? 'Nessuna prenotazione noleggio per questa data' : 'Nessuna prenotazione noleggio trovata', { icon: 'ℹ️' })
