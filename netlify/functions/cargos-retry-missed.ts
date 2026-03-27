@@ -17,7 +17,7 @@ const retryHandler: Handler = async () => {
                 id, customer_name, vehicle_name, vehicle_plate, pickup_date, status, service_type,
                 booking_details
             `)
-            .is('service_type', null)
+            .or('service_type.is.null,service_type.eq.car_rental')
             .neq('status', 'cancelled')
             .or('booking_details->cargos_sent.is.null,booking_details->>cargos_sent.eq.false')
 

@@ -154,7 +154,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         }
 
         // Skip non-rental bookings (car wash, mechanical, etc.)
-        if (booking.service_type) {
+        if (booking.service_type && booking.service_type !== 'car_rental') {
             console.log(`[cargos-auto-send] Service booking (${booking.service_type}) — skipping CARGOS`)
             return { success: true }
         }

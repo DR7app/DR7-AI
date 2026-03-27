@@ -485,7 +485,7 @@ export default function CargosTab() {
             if (error) throw error
 
             // Filter out car wash and mechanical bookings — only rental bookings go to CARGOS
-            const rentalBookings = (rawBookings || []).filter((b: any) => !b.service_type || b.service_type === '')
+            const rentalBookings = (rawBookings || []).filter((b: any) => !b.service_type || b.service_type === '' || b.service_type === 'car_rental')
 
             if (rentalBookings.length === 0) {
                 toast(viewMode === 'date' ? 'Nessuna prenotazione noleggio per questa data' : 'Nessuna prenotazione noleggio trovata', { icon: 'ℹ️' })
