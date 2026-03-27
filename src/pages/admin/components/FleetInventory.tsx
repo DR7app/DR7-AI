@@ -171,7 +171,7 @@ export default function FleetInventory() {
 
     function formatPhoneForWhatsApp(phone: string): string {
         // Remove spaces, dashes, and + sign
-        let cleaned = phone.replace(/[\s\-\+]/g, '')
+        let cleaned = phone.replace(/[\s\-+]/g, '')
         // Add Italy prefix if starts with 0
         if (cleaned.startsWith('0')) {
             cleaned = '39' + cleaned.substring(1)

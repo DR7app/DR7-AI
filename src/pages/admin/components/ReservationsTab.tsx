@@ -37,11 +37,13 @@ import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import DanniPenaliModal from './DanniPenaliModal'
+import { logger } from '../../../utils/logger'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
 // SUPERCARS (Exotic) - KASKO options + Kasko DR7
+// eslint-disable-next-line react-refresh/only-export-components
 export const INSURANCE_OPTIONS = [
   { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 100 },
   { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 150 },
@@ -50,30 +52,35 @@ export const INSURANCE_OPTIONS = [
 ];
 
 // URBAN - Kasko Base + Kasko DR7
+// eslint-disable-next-line react-refresh/only-export-components
 export const URBAN_INSURANCE_OPTIONS = [
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
 ];
 
 // UTILITAIRE - Kasko Base + Kasko DR7 (same as Ducato/Vito)
+// eslint-disable-next-line react-refresh/only-export-components
 export const UTILITAIRE_INSURANCE_OPTIONS = [
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
 // FURGONE (Ducato/Vito/Tourer) - Kasko Base + Kasko DR7
+// eslint-disable-next-line react-refresh/only-export-components
 export const FURGONE_INSURANCE_OPTIONS = [
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
 // Deposit amounts by vehicle type
+// eslint-disable-next-line react-refresh/only-export-components
 export const DEPOSIT_AMOUNTS = {
   UTILITAIRE: 1000,
   FURGONE: 2500, // Ducato, Vito
   SUPERCAR: 10000,
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const INSURANCE_ELIGIBILITY = {
   KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
@@ -81,6 +88,7 @@ export const INSURANCE_ELIGIBILITY = {
   DR7: { minAge: 25, minLicenseYears: 3 },
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const URBAN_INSURANCE_ELIGIBILITY = {
   KASKO_BASE: { minAge: 18, minLicenseYears: 3 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
@@ -89,6 +97,7 @@ export const URBAN_INSURANCE_ELIGIBILITY = {
 };
 
 // Generate time options for 15-minute intervals
+// eslint-disable-next-line react-refresh/only-export-components
 export const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
   const hour = Math.floor(i / 4).toString().padStart(2, '0')
   const minute = ((i % 4) * 15).toString().padStart(2, '0')
@@ -275,7 +284,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   // First try vehicle_id (most reliable) - check both top-level and booking_details
   const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
   if (bookingVehicleId && bookingVehicleId === vehicle.id) {
-    console.log(`[isBookingForVehicle] MATCH by vehicle_id: ${bookingVehicleId}`)
+    logger.log(`[isBookingForVehicle] MATCH by vehicle_id: ${bookingVehicleId}`)
     return true
   }
 
@@ -285,7 +294,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
 
   if (bookingPlate && vehiclePlate) {
     if (normalizePlate(bookingPlate) === normalizePlate(vehiclePlate)) {
-      console.log(`[isBookingForVehicle] MATCH by plate: ${normalizePlate(bookingPlate)}`)
+      logger.log(`[isBookingForVehicle] MATCH by plate: ${normalizePlate(bookingPlate)}`)
       return true
     }
   }
@@ -293,7 +302,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   // NO FALLBACK TO NAME MATCHING - this is forbidden
   // Log warning if we can't match
   if (!bookingVehicleId && !bookingPlate) {
-    console.warn('[Vehicle Matching] Cannot match booking - no vehicle_id or plate:', booking.id)
+    logger.warn('[Vehicle Matching] Cannot match booking - no vehicle_id or plate:', booking.id)
   }
 
   return false
@@ -635,7 +644,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (bookingId) {
         const booking = bookings.find(b => b.id === bookingId)
         if (booking) {
-          console.log('📝 Opening booking in edit mode:', bookingId)
+          logger.log('📝 Opening booking in edit mode:', bookingId)
           handleEditBooking(booking)
           // Notify parent to clear data
           if (onDataConsumed) onDataConsumed()
@@ -652,7 +661,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const dateStr = pickupDate ? pickupDate.toISOString().split('T')[0] : ''
         const smartTime = getNext15MinuteTime()
 
-        console.log('📅 Prefilling booking form:', { vehicle: vehicle.display_name, date: dateStr })
+        logger.log('📅 Prefilling booking form:', { vehicle: vehicle.display_name, date: dateStr })
 
         setFormData(prev => ({
           ...prev,
@@ -671,6 +680,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (onDataConsumed) onDataConsumed()
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData, vehicles, bookings])
 
   const [newCustomerMode, setNewCustomerMode] = useState(false)
@@ -781,7 +791,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const availableVehicles = useMemo((): Vehicle[] => {
     // If no dates selected, show all vehicles
     if (!formData.pickup_date || !formData.return_date) {
-      console.log('[Vehicle Availability] No dates selected - showing all vehicles:', vehicles.length)
+      logger.log('[Vehicle Availability] No dates selected - showing all vehicles:', vehicles.length)
       return vehicles
     }
 
@@ -792,7 +802,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Combine all bookings for availability checking - ONLY non-cancelled bookings
     const allBookingsForCheck = [...bookings, ...carWashBookings].filter(b => b.status !== 'cancelled')
 
-    console.log('[Vehicle Availability] Checking availability for:', {
+    logger.log('[Vehicle Availability] Checking availability for:', {
       dates: `${formData.pickup_date} ${pickupTime} → ${formData.return_date} ${returnTime}`,
       totalVehicles: vehicles.length,
       totalBookings: allBookingsForCheck.length
@@ -811,16 +821,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Log which vehicles were filtered out and WHY (with actual reason from availability check)
     const filteredOut = vehicles.filter(v => !filteredVehicles.includes(v))
     if (filteredOut.length > 0) {
-      console.log('[Vehicle Availability] ===== FILTERED OUT VEHICLES =====')
+      logger.log('[Vehicle Availability] ===== FILTERED OUT VEHICLES =====')
       filteredOut.forEach(v => {
         // Get the actual reason from isVehicleAvailable
         const result = isVehicleAvailable(v, formData.pickup_date, formData.return_date, pickupTime, returnTime, allBookingsForCheck, editingId || undefined)
-        console.log(`[FILTERED OUT] ${v.display_name} (${v.plate || v.targa || 'no plate'}): ${result.reason || 'Unknown reason'}`)
+        logger.log(`[FILTERED OUT] ${v.display_name} (${v.plate || v.targa || 'no plate'}): ${result.reason || 'Unknown reason'}`)
       })
-      console.log('[Vehicle Availability] ================================')
+      logger.log('[Vehicle Availability] ================================')
     }
 
-    console.log('[Vehicle Availability] Available:', filteredVehicles.length, 'of', vehicles.length)
+    logger.log('[Vehicle Availability] Available:', filteredVehicles.length, 'of', vehicles.length)
 
     return filteredVehicles
   }, [vehicles, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, bookings, carWashBookings, editingId])
@@ -837,7 +847,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!isSelectedInResult) {
         const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
         if (selectedVehicle) {
-          console.log('[Vehicle Dropdown] Adding currently selected vehicle to dropdown:', selectedVehicle.display_name)
+          logger.log('[Vehicle Dropdown] Adding currently selected vehicle to dropdown:', selectedVehicle.display_name)
           result = [selectedVehicle, ...result]
         }
       }
@@ -894,7 +904,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const earliestAvailable = new Date(latestConflictEnd.getTime() + 75 * 60 * 1000)
         times.set(vehicle.id, earliestAvailable)
 
-        console.log(`[Earliest Time] ${vehicle.display_name}: Conflict ends at ${latestConflictEnd.toLocaleTimeString('it-IT')}, available at ${earliestAvailable.toLocaleTimeString('it-IT')} (after wash)`)
+        logger.log(`[Earliest Time] ${vehicle.display_name}: Conflict ends at ${latestConflictEnd.toLocaleTimeString('it-IT')}, available at ${earliestAvailable.toLocaleTimeString('it-IT')} (after wash)`)
       }
     })
 
@@ -906,12 +916,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
     // Admin override: show ALL vehicles if checkbox is checked
     if (showAllVehicles) {
-      console.log('[Vehicle Dropdown] ADMIN OVERRIDE: Showing all vehicles:', vehicles.length)
+      logger.log('[Vehicle Dropdown] ADMIN OVERRIDE: Showing all vehicles:', vehicles.length)
       return vehicles
     }
 
     // Start with the base vehicles (already filtered by availability engine)
-    let result = [...baseVehiclesForDropdown]
+    const result = [...baseVehiclesForDropdown]
 
     // Add vehicles with same-day returns that have an earliest available time
     // These vehicles are NOT in baseVehiclesForDropdown because they have conflicts,
@@ -932,14 +942,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (earliestDateStr === pickupDateStr && earliestHour < 19) {
               sameDayVehicleIds.add(vehicleId)
               result.push(vehicle)
-              console.log(`[Vehicle Dropdown] Adding same-day return: ${vehicle.display_name} (${vehicle.plate}) - available from ${earliestTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`)
+              logger.log(`[Vehicle Dropdown] Adding same-day return: ${vehicle.display_name} (${vehicle.plate}) - available from ${earliestTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`)
             }
           }
         }
       })
     }
 
-    console.log('[Vehicle Dropdown] Final list:', result.length, 'vehicles:', result.map(v => v.display_name))
+    logger.log('[Vehicle Dropdown] Final list:', result.length, 'vehicles:', result.map(v => v.display_name))
 
     return result
   }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes, showAllVehicles])
@@ -986,7 +996,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const specialRule = getSpecialPricing(customerName)
    
     if (specialRule) {
-      console.log('[ReservationsTab] Applying special pricing for:', customerName)
+      logger.log('[ReservationsTab] Applying special pricing for:', customerName)
    
       // Calculate special total
       const specialTotal = calculateSpecialPrice(specialRule, diffDays)
@@ -1084,7 +1094,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         b.service_type === 'mechanical'
       )
 
-      console.log('[ReservationsTab] Car wash/mechanical bookings:', carWashAndMechanicalBookings.length)
+      logger.log('[ReservationsTab] Car wash/mechanical bookings:', carWashAndMechanicalBookings.length)
       setCarWashBookings(carWashAndMechanicalBookings)
 
       // Then filter out service bookings from main bookings display
@@ -1098,11 +1108,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         contracts: contractsMap.get(b.id) || null
       }))
 
-      console.log('[ReservationsTab] Bookings fetched (raw):', allBookings?.length)
-      console.log('[ReservationsTab] Bookings after filter:', filteredBookings.length)
+      logger.log('[ReservationsTab] Bookings fetched (raw):', allBookings?.length)
+      logger.log('[ReservationsTab] Bookings after filter:', filteredBookings.length)
 
       if (filteredBookings.length > 0) {
-        console.log('[ReservationsTab] First booking sample:', filteredBookings[0])
+        logger.log('[ReservationsTab] First booking sample:', filteredBookings[0])
       }
 
       setBookings(filteredBookings)
@@ -1173,7 +1183,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
       }
 
-      console.log('[ReservationsTab] Customers from bookings:', customerMap.size)
+      logger.log('[ReservationsTab] Customers from bookings:', customerMap.size)
 
       // Also fetch from customers_extended via Netlify function (bypasses RLS, paginates beyond 1000 limit)
       let customersExtendedData: any[] | null = null
@@ -1193,7 +1203,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (customersExtendedError) {
         console.error('Failed to load customers_extended:', customersExtendedError)
       } else if (customersExtendedData) {
-        console.log('[ReservationsTab] Customers from customers_extended:', customersExtendedData.length)
+        logger.log('[ReservationsTab] Customers from customers_extended:', customersExtendedData.length)
 
         customersExtendedData.forEach((c: any) => {
           // Map to local Customer interface
@@ -1224,7 +1234,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
       }
 
-      console.log('[ReservationsTab] Total unique customers after customers_extended:', customerMap.size)
+      logger.log('[ReservationsTab] Total unique customers after customers_extended:', customerMap.size)
 
       // Also check legacy customers table if it exists (for backward compatibility)
       const { data: customersTableData, error: customersTableError } = await supabase
@@ -1243,8 +1253,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
       const customersArray = Array.from(customerMap.values())
-      console.log('✅ CUSTOMERS LOADED:', customersArray.length, customersArray)
-      console.log('📊 Customer sources breakdown:', {
+      logger.log('✅ CUSTOMERS LOADED:', customersArray.length, customersArray)
+      logger.log('📊 Customer sources breakdown:', {
         fromBookings: customerMap.size - (customersExtendedData?.length || 0),
         fromCustomersExtended: customersExtendedData?.length || 0,
         fromLegacyCustomers: customersTableData?.length || 0,
@@ -1256,10 +1266,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         c.full_name?.toLowerCase().includes('riccardo') &&
         c.full_name?.toLowerCase().includes('pilia')
       )
-      console.log('[DEBUG] Riccardo Pilia in customers array:', riccardoPilia)
+      logger.log('[DEBUG] Riccardo Pilia in customers array:', riccardoPilia)
 
       // Debug: Show first 10 customer names
-      console.log('[DEBUG] First 10 customers:', customersArray.slice(0, 10).map(c => ({
+      logger.log('[DEBUG] First 10 customers:', customersArray.slice(0, 10).map(c => ({
         id: c.id,
         name: c.full_name,
         email: c.email,
@@ -1300,8 +1310,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (vehiclesError) {
         console.error('Failed to load vehicles:', vehiclesError)
       } else {
-        console.log('[Vehicle Loading] Total vehicles loaded:', vehiclesData?.length || 0)
-        console.log('[Vehicle Loading] Vehicle details:', vehiclesData?.map(v => ({
+        logger.log('[Vehicle Loading] Total vehicles loaded:', vehiclesData?.length || 0)
+        logger.log('[Vehicle Loading] Vehicle details:', vehiclesData?.map(v => ({
           name: v.display_name,
           plate: v.plate || v.targa,
           status: v.status,
@@ -1325,7 +1335,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         setReservations(resData.data || [])
 
-        console.log('Loaded data:', {
+        logger.log('Loaded data:', {
           reservations: resData.data?.length || 0,
           customers: customersArray.length,
           vehicles: vehiclesData?.length || 0
@@ -1360,7 +1370,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
-            console.log('[validateCustomerData] ✅ Found customer by ID:', customerId)
+            logger.log('[validateCustomerData] ✅ Found customer by ID:', customerId)
             customer = result.customer
           }
         }
@@ -1379,7 +1389,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
-            console.log('[validateCustomerData] ✅ Found customer by email:', resolvedEmail)
+            logger.log('[validateCustomerData] ✅ Found customer by email:', resolvedEmail)
             customer = result.customer
           }
         }
@@ -1391,14 +1401,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Fallback: try by phone
     if (!customer && resolvedPhone) {
       try {
-        let normPhone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
+        let normPhone = resolvedPhone.replace(/[\s\-+()]/g, '')
         if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
         if (normPhone.length === 10) normPhone = '39' + normPhone
         const resp = await fetch(`/.netlify/functions/get-customer?phone=${encodeURIComponent(normPhone)}`)
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
-            console.log('[validateCustomerData] ✅ Found customer by phone:', resolvedPhone)
+            logger.log('[validateCustomerData] ✅ Found customer by phone:', resolvedPhone)
             customer = result.customer
           }
         }
@@ -1409,7 +1419,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (!customer) {
       if (resolvedEmail || resolvedPhone) {
-        console.log('[validateCustomerData] No customer record found, but booking has contact info. Backend will handle fallback.')
+        logger.log('[validateCustomerData] No customer record found, but booking has contact info. Backend will handle fallback.')
         return []
       }
       console.error('[validateCustomerData] ❌ No customer found by any method')
@@ -1492,8 +1502,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleGenerateContract(booking: Booking, _silent?: boolean) {
-    console.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
+    logger.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
       return
@@ -1502,7 +1513,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Skip contract for non-rental bookings
     const svcType = booking.service_type || (booking as any).booking_details?.service_type || ''
     if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
-      console.log(`[handleGenerateContract] Skipping — service_type=${svcType} is not a rental`)
+      logger.log(`[handleGenerateContract] Skipping — service_type=${svcType} is not a rental`)
       return
     }
 
@@ -1517,10 +1528,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
 
     if (missing.length > 0) {
-      console.warn('⚠️ Missing fields for contract:', missing)
+      logger.warn('⚠️ Missing fields for contract:', missing)
       // Don't block — generate-contract backend has extensive fallbacks
       // Just log it, contract will be generated with available data
-      console.log('[handleGenerateContract] Proceeding despite missing fields — backend handles fallbacks')
+      logger.log('[handleGenerateContract] Proceeding despite missing fields — backend handles fallbacks')
     }
 
     setGeneratingContract(true)
@@ -1569,7 +1580,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
 
     if (missing.length > 0) {
-      console.warn('⚠️ Missing fields for invoice:', missing)
+      logger.warn('⚠️ Missing fields for invoice:', missing)
 
       const customerId = booking.user_id || booking.booking_details?.customer?.id || booking.booking_details?.customer_id
       let customerData = {}
@@ -1649,7 +1660,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           window.open(url, '_blank')
         }
       } catch (err) {
-        console.warn('PDF auto-open failed, continuing flow:', err)
+        logger.warn('PDF auto-open failed, continuing flow:', err)
       }
 
       logAdminAction('generate_fattura', 'booking', booking.id)
@@ -1808,7 +1819,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             vehicleName
           })
         })
-        console.log('✅ Calendar event deleted successfully')
+        logger.log('✅ Calendar event deleted successfully')
       } catch (calendarError) {
         console.error('⚠️ Failed to delete calendar event:', calendarError)
         // Don't fail the whole deletion if calendar delete fails
@@ -1851,7 +1862,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       booking.booking_details?.customer?.email ||
       ''
 
-    console.log('[handleEditBooking] 👤 CUSTOMER DATA:', {
+    logger.log('[handleEditBooking] 👤 CUSTOMER DATA:', {
       extractedId: customerId,
       customerName,
       customerEmail,
@@ -1868,7 +1879,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         c.full_name?.toLowerCase() === customerName.toLowerCase()
       )
       if (matchedCustomer) {
-        console.log('[handleEditBooking] ✅ Found customer by name match:', matchedCustomer.full_name)
+        logger.log('[handleEditBooking] ✅ Found customer by name match:', matchedCustomer.full_name)
         customerId = matchedCustomer.id
       }
     }
@@ -1879,20 +1890,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         c.email?.toLowerCase() === customerEmail.toLowerCase()
       )
       if (matchedCustomer) {
-        console.log('[handleEditBooking] ✅ Found customer by email match:', matchedCustomer.full_name)
+        logger.log('[handleEditBooking] ✅ Found customer by email match:', matchedCustomer.full_name)
         customerId = matchedCustomer.id
       }
     }
 
     if (!matchedCustomer) {
-      console.warn('[handleEditBooking] ⚠️ Customer NOT found in customers array!', {
+      logger.warn('[handleEditBooking] ⚠️ Customer NOT found in customers array!', {
         searchedId: customerId,
         searchedName: customerName,
         searchedEmail: customerEmail,
         totalCustomers: customers.length
       })
     } else {
-      console.log('[handleEditBooking] ✅ Customer found:', matchedCustomer.full_name, matchedCustomer.id)
+      logger.log('[handleEditBooking] ✅ Customer found:', matchedCustomer.full_name, matchedCustomer.id)
     }
 
     // Populate rental data
@@ -1900,8 +1911,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const dropoffDate = booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date) : null
 
     // COMPREHENSIVE VEHICLE MATCHING LOGIC
-    console.log('[handleEditBooking] 🔍 VEHICLE SEARCH INITIATED')
-    console.log('[handleEditBooking] Booking data:', {
+    logger.log('[handleEditBooking] 🔍 VEHICLE SEARCH INITIATED')
+    logger.log('[handleEditBooking] Booking data:', {
       id: booking.id,
       vehicle_id: booking.vehicle_id,
       vehicle_plate: booking.vehicle_plate,
@@ -1910,8 +1921,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       booking_details_vehicle_name: booking.booking_details?.vehicle_name,
       booking_details_vehicle_plate: booking.booking_details?.vehicle_plate
     })
-    console.log('[handleEditBooking] Available vehicles:', vehicles.length)
-    console.log('[handleEditBooking] Vehicles list:', vehicles.map(v => ({
+    logger.log('[handleEditBooking] Available vehicles:', vehicles.length)
+    logger.log('[handleEditBooking] Vehicles list:', vehicles.map(v => ({
       id: v.id,
       name: v.display_name,
       plate: v.plate || v.targa
@@ -1925,7 +1936,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       vehicle = vehicles.find(v => v.id === booking.vehicle_id)
       if (vehicle) {
         matchMethod = 'vehicle_id (top-level)'
-        console.log('[handleEditBooking] ✅ Found by vehicle_id:', vehicle.display_name)
+        logger.log('[handleEditBooking] ✅ Found by vehicle_id:', vehicle.display_name)
       }
     }
 
@@ -1934,7 +1945,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       vehicle = vehicles.find(v => v.id === (booking.booking_details?.vehicle_id || ''))
       if (vehicle) {
         matchMethod = 'booking_details.vehicle_id'
-        console.log('[handleEditBooking] ✅ Found by booking_details.vehicle_id:', vehicle.display_name)
+        logger.log('[handleEditBooking] ✅ Found by booking_details.vehicle_id:', vehicle.display_name)
       }
     }
 
@@ -1947,7 +1958,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       })
       if (vehicle) {
         matchMethod = 'vehicle_plate (top-level)'
-        console.log('[handleEditBooking] ✅ Found by plate:', vehicle.display_name)
+        logger.log('[handleEditBooking] ✅ Found by plate:', vehicle.display_name)
       }
     }
 
@@ -1960,7 +1971,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       })
       if (vehicle) {
         matchMethod = 'booking_details.vehicle_plate'
-        console.log('[handleEditBooking] ✅ Found by booking_details.vehicle_plate:', vehicle.display_name)
+        logger.log('[handleEditBooking] ✅ Found by booking_details.vehicle_plate:', vehicle.display_name)
       }
     }
 
@@ -1972,7 +1983,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (!vehicle) {
       console.error('[handleEditBooking] ❌ WARNING: VEHICLE NOT FOUND AFTER ALL METHODS!')
       console.error('[handleEditBooking] Booking will open with vehicle_id preserved, but vehicle may not be in dropdown.')
-      console.warn('[handleEditBooking] Vehicle data from booking:', {
+      logger.warn('[handleEditBooking] Vehicle data from booking:', {
         vehicle_id: booking.vehicle_id,
         vehicle_plate: booking.vehicle_plate,
         vehicle_name: booking.vehicle_name,
@@ -1993,7 +2004,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         'Puoi comunque modificare la prenotazione selezionando un nuovo veicolo.'
       )
     } else {
-      console.log(`[handleEditBooking] ✅ VEHICLE MATCHED: ${vehicle.display_name} (via ${matchMethod})`)
+      logger.log(`[handleEditBooking] ✅ VEHICLE MATCHED: ${vehicle.display_name} (via ${matchMethod})`)
     }
 
 
@@ -2115,7 +2126,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // ===== SIMPLE EXTEND BOOKING FUNCTION =====
   function handleExtendBooking(booking: Booking) {
-    console.log('[handleExtendBooking] Opening extend modal for booking:', booking.id)
+    logger.log('[handleExtendBooking] Opening extend modal for booking:', booking.id)
 
     // Pre-populate with current return date in Rome timezone
     const currentReturnDate = new Date(booking.dropoff_date)
@@ -2233,7 +2244,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
-      console.log('[handleConfirmExtend] ✅ Booking extended successfully')
+      logger.log('[handleConfirmExtend] ✅ Booking extended successfully')
       logAdminAction('extend_booking', 'booking', extendingBooking.id, { new_dropoff: newDropoffDateTime.toISOString() })
 
       // Send WhatsApp notification for extension
@@ -2272,7 +2283,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customMessage: extensionMsg })
         })
-        console.log('[handleConfirmExtend] ✅ WhatsApp admin notification sent')
+        logger.log('[handleConfirmExtend] ✅ WhatsApp admin notification sent')
 
         // Send to customer phone — resolve from multiple sources
         let customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
@@ -2302,7 +2313,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             ? 'Nexi Pay by Link'
             : 'Da saldare'
 
-          let customerMsg = `Salve ${customerFirstName},\n\n`
+          const customerMsg = `Salve ${customerFirstName},\n\n`
             + `Confermiamo l'estensione della sua prenotazione.\n\n`
             + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
             + `*ID:* DR7-${bookingIdShort}\n`
@@ -2321,9 +2332,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customMessage: customerMsg, customPhone: customerPhone })
           })
-          console.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
+          logger.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
         } else {
-          console.warn('[handleConfirmExtend] ⚠️ No customer phone — skipped customer notification')
+          logger.warn('[handleConfirmExtend] ⚠️ No customer phone — skipped customer notification')
         }
       } catch (whatsappError) {
         console.error('[handleConfirmExtend] ⚠️ WhatsApp notification failed:', whatsappError)
@@ -2346,7 +2357,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             depositStatus: extendingBooking.booking_details?.deposit_status || 'da_incassare'
           })
         })
-        console.log('[handleConfirmExtend] ✅ Cauzione synced with new return date')
+        logger.log('[handleConfirmExtend] ✅ Cauzione synced with new return date')
       } catch (cauzioneError) {
         console.error('[handleConfirmExtend] ⚠️ Cauzione sync failed:', cauzioneError)
       }
@@ -2354,18 +2365,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Auto-generate fattura for extension when paid
       if (extendData.extension_payment_status === 'paid' && additionalAmount > 0) {
         try {
-          console.log('[handleConfirmExtend] Generating extension fattura for €' + additionalAmount.toFixed(2))
+          logger.log('[handleConfirmExtend] Generating extension fattura for €' + additionalAmount.toFixed(2))
           const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: extendingBooking.id, includeIVA: true, extensionAmount: additionalAmount })
           })
           if (invoiceRes.ok) {
-            console.log('[handleConfirmExtend] ✅ Extension fattura generated and sent to SDI')
+            logger.log('[handleConfirmExtend] ✅ Extension fattura generated and sent to SDI')
           } else {
             const errData = await invoiceRes.json()
             const errMsg = errData.message || errData.error || 'Errore sconosciuto'
-            console.warn('[handleConfirmExtend] ⚠️ Extension fattura failed:', errMsg)
+            logger.warn('[handleConfirmExtend] ⚠️ Extension fattura failed:', errMsg)
             toast.error(`Fattura estensione non generata: ${errMsg}`, { duration: 8000 })
           }
         } catch (invoiceError) {
@@ -2426,7 +2437,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               })
             }
 
-            try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+            try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
             toast.success(`Pay by Link estensione inviato! €${additionalAmount.toFixed(2)} (validità ${expirationHours}h)`)
           } else {
             toast.error('Errore Pay by Link: ' + (linkData.error || 'Errore'))
@@ -2455,7 +2466,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
-    console.log('[processBookingSubmission] 🚀 STARTING SUBMISSION PROCESS', { skipValidation, overrideCustomerId })
+    logger.log('[processBookingSubmission] 🚀 STARTING SUBMISSION PROCESS', { skipValidation, overrideCustomerId })
 
     if (isSubmitting) return
 
@@ -2492,7 +2503,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // CRITICAL FIX: Generate UUID for new customer to ensure modal has valid ID
         // This prevents "ID cliente mancante" error in MissingFieldsModal
         const newCustomerId = crypto.randomUUID()
-        console.log('[processBookingSubmission] Generated new customer ID:', newCustomerId)
+        logger.log('[processBookingSubmission] Generated new customer ID:', newCustomerId)
 
         tempCustData = {
           ...newCustomerData,
@@ -2511,23 +2522,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         targetCustomerId = targetId
 
         // Fetch fresh customer data - try multiple methods
-        console.log('[processBookingSubmission] Looking up customer:', targetCustomerId)
+        logger.log('[processBookingSubmission] Looking up customer:', targetCustomerId)
 
         // First, try to find in local customers array (includes customers from bookings)
         const localCustomer = customers.find(c => c.id === targetCustomerId)
-        console.log('[processBookingSubmission] Local customer found:', localCustomer?.full_name || 'NOT FOUND')
+        logger.log('[processBookingSubmission] Local customer found:', localCustomer?.full_name || 'NOT FOUND')
 
         // Then try database lookup
-        console.log('[processBookingSubmission] 🔍 Querying customers_extended for ID:', targetCustomerId)
-        let { data: customerData, error: customerError } = await supabase
+        logger.log('[processBookingSubmission] 🔍 Querying customers_extended for ID:', targetCustomerId)
+        const queryResult = await supabase
           .from('customers_extended')
           .select('*')
           .eq('id', targetCustomerId)
           .limit(1)
+        let customerData = queryResult.data
+        const customerError = queryResult.error
 
         // Track if we found customer directly in DB
         let foundDirectlyInDB = customerData && customerData.length > 0
-        console.log('[processBookingSubmission] Direct DB lookup result:', {
+        logger.log('[processBookingSubmission] Direct DB lookup result:', {
           found: foundDirectlyInDB,
           dataLength: customerData?.length || 0,
           error: customerError?.message || 'none'
@@ -2535,7 +2548,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         // If not found by ID, try by email from local customer
         if ((!customerData || customerData.length === 0) && localCustomer?.email) {
-          console.log('[processBookingSubmission] Trying lookup by email:', localCustomer.email)
+          logger.log('[processBookingSubmission] Trying lookup by email:', localCustomer.email)
           const { data: emailData } = await supabase
             .from('customers_extended')
             .select('*')
@@ -2544,16 +2557,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (emailData && emailData.length > 0) {
             customerData = emailData
             foundDirectlyInDB = true
-            console.log('[processBookingSubmission] ✅ Found by email:', emailData[0].id)
+            logger.log('[processBookingSubmission] ✅ Found by email:', emailData[0].id)
           }
         }
 
         // If not found by email, try by phone
         if ((!customerData || customerData.length === 0) && localCustomer?.phone) {
-          let normPhone = localCustomer.phone.replace(/[\s\-\+\(\)]/g, '')
+          let normPhone = localCustomer.phone.replace(/[\s\-+()]/g, '')
           if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
           if (normPhone.length === 10) normPhone = '39' + normPhone
-          console.log('[processBookingSubmission] Trying lookup by phone:', normPhone)
+          logger.log('[processBookingSubmission] Trying lookup by phone:', normPhone)
           const { data: phoneData } = await supabase
             .from('customers_extended')
             .select('*')
@@ -2562,7 +2575,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (phoneData && phoneData.length > 0) {
             customerData = phoneData
             foundDirectlyInDB = true
-            console.log('[processBookingSubmission] ✅ Found by phone:', phoneData[0].id)
+            logger.log('[processBookingSubmission] ✅ Found by phone:', phoneData[0].id)
           }
         }
 
@@ -2581,7 +2594,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         // If still not found in DB but we have local data, use that with a warning
         if (!customer && localCustomer) {
-          console.log('[processBookingSubmission] ⚠️ Customer not in DB, using local data from autocomplete')
+          logger.log('[processBookingSubmission] ⚠️ Customer not in DB, using local data from autocomplete')
           customer = {
             id: localCustomer.id,
             full_name: localCustomer.full_name,
@@ -2594,7 +2607,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
 
         if (customer) {
-          console.log('[processBookingSubmission] ✅ Customer resolved:', {
+          logger.log('[processBookingSubmission] ✅ Customer resolved:', {
             id: customer.id,
             nome: customer.nome,
             cognome: customer.cognome,
@@ -2622,9 +2635,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           if (missing.length > 0) {
-            console.log('[processBookingSubmission] ⚠️ Missing fields for contract/fattura:', missing)
+            logger.log('[processBookingSubmission] ⚠️ Missing fields for contract/fattura:', missing)
           } else {
-            console.log('[processBookingSubmission] ✅ All required fields present')
+            logger.log('[processBookingSubmission] ✅ All required fields present')
           }
         } else {
           // Customer not found in customers_extended, but exists in autocomplete (from bookings)
@@ -2643,7 +2656,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             let safeId = targetCustomerId
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
             if (!uuidRegex.test(safeId)) {
-              console.warn('[processBookingSubmission] Detected non-UUID ID:', safeId, 'Generating new valid UUID.')
+              logger.warn('[processBookingSubmission] Detected non-UUID ID:', safeId, 'Generating new valid UUID.')
               safeId = crypto.randomUUID()
             }
 
@@ -2666,7 +2679,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (!tempCustData.email) missing.push('email')
             if (!tempCustData.telefono) missing.push('telefono')
 
-            console.log('[processBookingSubmission] Customer exists in bookings but not in customers_extended. Will create new profile with missing fields:', missing)
+            logger.log('[processBookingSubmission] Customer exists in bookings but not in customers_extended. Will create new profile with missing fields:', missing)
           } else {
             alert(
               'Cliente non trovato nel database.\n\n' +
@@ -2679,7 +2692,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       if (missing.length > 0) {
-        console.log('[processBookingSubmission] 🚨 Missing data detected! Opening NewClientModal for fields:', missing)
+        logger.log('[processBookingSubmission] 🚨 Missing data detected! Opening NewClientModal for fields:', missing)
 
         // CRITICAL VALIDATION: Ensure tempCustData has a valid ID before opening modal
         if (!tempCustData || !tempCustData.id) {
@@ -2706,8 +2719,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           return
         }
 
-        console.log('[processBookingSubmission] ✅ Customer ID validated:', tempCustData.id)
-        console.log('[processBookingSubmission] 🛑 BLOCKING booking creation - opening NewClientModal for completion')
+        logger.log('[processBookingSubmission] ✅ Customer ID validated:', tempCustData.id)
+        logger.log('[processBookingSubmission] 🛑 BLOCKING booking creation - opening NewClientModal for completion')
 
         // NEW LOGIC: Use NewClientModal
         // Pass the partial/missing data as initialData so the user can fill it
@@ -2724,14 +2737,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // DEFENSIVE CHECK: Ensure we don't proceed if validation triggered the modal
     // This prevents race conditions where state updates haven't propagated yet
     if (showMissingDataModal) {
-      console.log('[processBookingSubmission] ⚠️ Modal is open, aborting booking creation')
+      logger.log('[processBookingSubmission] ⚠️ Modal is open, aborting booking creation')
       setIsSubmitting(false)
       return
     }
 
     // ===== VALIDATION PASSED - PROCEEDING WITH BOOKING CREATION =====
-    console.log('[processBookingSubmission] ✅ All validation passed, proceeding with booking creation')
-    console.log('[processBookingSubmission] Customer ID:', formData.customer_id || 'new customer')
+    logger.log('[processBookingSubmission] ✅ All validation passed, proceeding with booking creation')
+    logger.log('[processBookingSubmission] Customer ID:', formData.customer_id || 'new customer')
 
     // Call the original submit logic (embedded here or separate)
 
@@ -2881,7 +2894,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (selectedVehicle) {
           const allBookingsForCheck = [...bookings, ...carWashBookings]
 
-          console.log('[AVAILABILITY DEBUG] Checking for new booking, vehicle:', selectedVehicle.display_name)
+          logger.log('[AVAILABILITY DEBUG] Checking for new booking, vehicle:', selectedVehicle.display_name)
 
           const availabilityResult = isVehicleAvailable(
             selectedVehicle,
@@ -2894,13 +2907,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           )
 
           if (!availabilityResult.available) {
-            console.warn('⚠️ Vehicle availability warning:', availabilityResult.reason)
+            logger.warn('⚠️ Vehicle availability warning:', availabilityResult.reason)
           }
 
-          console.log('✅ Vehicle availability check passed')
+          logger.log('✅ Vehicle availability check passed')
         }
       } else if (editingId) {
-        console.log('✅ Skipping availability check for booking extension (editingId:', editingId, ')')
+        logger.log('✅ Skipping availability check for booking extension (editingId:', editingId, ')')
       }
 
       // ===== SCHEDULING RULES VALIDATION =====
@@ -2909,10 +2922,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const vehicle = vehicles.find(v => v.id === formData.vehicle_id)
 
       if (vehicle && !editingId) {
-        console.log('🔍 Validating scheduling rules for NEW rental booking...')
-        console.log(`  Vehicle: ${vehicle.display_name}`)
-        console.log(`  Pickup (DEPARTURE): ${testPickupDate.toISOString()}`)
-        console.log(`  Dropoff (RETURN): ${testReturnDate.toISOString()}`)
+        logger.log('🔍 Validating scheduling rules for NEW rental booking...')
+        logger.log(`  Vehicle: ${vehicle.display_name}`)
+        logger.log(`  Pickup (DEPARTURE): ${testPickupDate.toISOString()}`)
+        logger.log(`  Dropoff (RETURN): ${testReturnDate.toISOString()}`)
 
         const schedulingValidation = await validateRentalBooking(
           testPickupDate,
@@ -2924,12 +2937,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )
 
         if (!schedulingValidation.isValid) {
-          console.warn('⚠️ Scheduling validation warning:', schedulingValidation.errors)
+          logger.warn('⚠️ Scheduling validation warning:', schedulingValidation.errors)
         }
 
-        console.log('✅ Scheduling validation passed')
+        logger.log('✅ Scheduling validation passed')
       } else if (editingId) {
-        console.log('✅ Skipping scheduling validation for booking extension (editingId:', editingId, ')')
+        logger.log('✅ Skipping scheduling validation for booking extension (editingId:', editingId, ')')
       }
 
       // Check for existing bookings on the same vehicle and dates (only for new bookings, not edits)
@@ -2969,7 +2982,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             // Check if pickup time conflicts with car wash
             if (pickupDateTime >= carWashStart && pickupDateTime < carWashEnd) {
-              console.log('⚠️ Car wash conflict detected, proceeding anyway')
+              logger.log('⚠️ Car wash conflict detected, proceeding anyway')
             }
           }
         }
@@ -3009,9 +3022,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const isBufferViolation = timeDiff > 0 && (timeDiff / (1000 * 60)) < BUFFER_MINUTES
 
             if (isOverlap) {
-              console.log(`⚠️ Double booking conflict with DR7-${bookingId}, proceeding anyway`)
+              logger.log(`⚠️ Double booking conflict with DR7-${bookingId}, proceeding anyway`)
             } else if (isBufferViolation) {
-              console.log(`⚠️ Buffer violation with DR7-${bookingId}, proceeding anyway`)
+              logger.log(`⚠️ Buffer violation with DR7-${bookingId}, proceeding anyway`)
             }
           }
         }
@@ -3023,7 +3036,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // If creating new second driver, create them in customers_extended table first
       // BUT FIRST check if an identical second driver already exists (prevent duplicates)
       if (formData.has_second_driver && newSecondDriverMode) {
-        console.log('[processBookingSubmission] Creating new customer for second driver...')
+        logger.log('[processBookingSubmission] Creating new customer for second driver...')
         try {
           // DEDUP CHECK for second driver: codice_fiscale, then email, then telefono (with phone normalization)
           let existingSecondDriver: { id: string } | null = null
@@ -3045,7 +3058,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
           if (!existingSecondDriver && formData.second_driver_phone?.trim()) {
             // Normalize phone before dedup lookup (same logic as save-customer)
-            let normSDPhone = formData.second_driver_phone.replace(/[\s\-\+\(\)]/g, '')
+            let normSDPhone = formData.second_driver_phone.replace(/[\s\-+()]/g, '')
             if (normSDPhone.startsWith('00')) normSDPhone = normSDPhone.substring(2)
             if (normSDPhone.length === 10) normSDPhone = '39' + normSDPhone
             const { data } = await supabase
@@ -3058,7 +3071,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           if (existingSecondDriver) {
             secondDriverId = existingSecondDriver.id
-            console.log('✅ Existing second driver found (dedup), reusing ID:', existingSecondDriver.id)
+            logger.log('✅ Existing second driver found (dedup), reusing ID:', existingSecondDriver.id)
           } else {
             const secondDriverData = {
               tipo_cliente: 'persona_fisica',
@@ -3092,7 +3105,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }
 
             secondDriverId = newSecondDriver.id
-            console.log('✅ New second driver created:', newSecondDriver)
+            logger.log('✅ New second driver created:', newSecondDriver)
           }
         } catch (error) {
           console.error('Error creating second driver:', error)
@@ -3140,7 +3153,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
           if (!existingCustomer && newCustomerData.telefono?.trim()) {
             // Normalize phone before dedup lookup (same logic as save-customer)
-            let normNewPhone = newCustomerData.telefono.replace(/[\s\-\+\(\)]/g, '')
+            let normNewPhone = newCustomerData.telefono.replace(/[\s\-+()]/g, '')
             if (normNewPhone.startsWith('00')) normNewPhone = normNewPhone.substring(2)
             if (normNewPhone.length === 10) normNewPhone = '39' + normNewPhone
             const { data } = await supabase
@@ -3164,7 +3177,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (existingCustomer) {
             // Customer already exists -- reuse their ID instead of creating a duplicate
             customerId = existingCustomer.id
-            console.log('✅ Existing customer found (dedup), reusing ID:', existingCustomer.id)
+            logger.log('✅ Existing customer found (dedup), reusing ID:', existingCustomer.id)
           } else {
             // No existing customer found -- create new one
             const customerData: any = {
@@ -3216,7 +3229,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }
 
             customerId = newCustomer.id
-            console.log('✅ New customer created in customers_extended table:', newCustomer)
+            logger.log('✅ New customer created in customers_extended table:', newCustomer)
           }
         } catch (error) {
           console.error('Error creating customer:', error)
@@ -3285,16 +3298,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const plateChanged = existingBooking.vehicle_plate !== vehicle.plate
 
           if (vehicleChanged) {
-            console.log(`Vehicle change: ${existingBooking.vehicle_name} -> ${vehicle.display_name}`)
+            logger.log(`Vehicle change: ${existingBooking.vehicle_name} -> ${vehicle.display_name}`)
           } else if (plateChanged && existingBooking.vehicle_plate) {
-            console.log(`✅ Plate change: ${existingBooking.vehicle_plate} -> ${vehicle.plate || 'N/A'}`)
+            logger.log(`✅ Plate change: ${existingBooking.vehicle_plate} -> ${vehicle.plate || 'N/A'}`)
           }
         }
       }
 
       // Validate that vehicle still exists and has consistent data
       if (vehicle) {
-        console.log('🔍 Vehicle consistency check:', {
+        logger.log('🔍 Vehicle consistency check:', {
           vehicle_id: vehicle.id,
           vehicle_plate: vehicle.plate,
           vehicle_name: vehicle.display_name,
@@ -3344,7 +3357,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const returnDate = new Date(returnDateTime)
 
       // Debug logging to verify correct conversion
-      console.log('[Admin Booking] Timezone conversion:', {
+      logger.log('[Admin Booking] Timezone conversion:', {
         pickup: {
           input: `${formData.pickup_date} ${formData.pickup_time}`,
           offset: pickupOffset,
@@ -3548,8 +3561,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      console.log(editingId ? 'Updating rental booking' : 'Creating rental booking', 'with data:', bookingData)
-      console.log('💰 PRICE DEBUG: formData.total_amount =', JSON.stringify(formData.total_amount),
+      logger.log(editingId ? 'Updating rental booking' : 'Creating rental booking', 'with data:', bookingData)
+      logger.log('💰 PRICE DEBUG: formData.total_amount =', JSON.stringify(formData.total_amount),
         '→ eurToCents =', eurToCents(formData.total_amount),
         '→ EUR =', (eurToCents(formData.total_amount) / 100).toFixed(2),
         '| price_total (with fees) =', bookingData.price_total,
@@ -3571,11 +3584,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           throw new Error(`Failed to update booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
         }
         insertedBooking = data
-        console.log('Booking updated successfully:', insertedBooking)
+        logger.log('Booking updated successfully:', insertedBooking)
         logAdminAction('edit_booking', 'booking', editingId, { customer: customerInfo?.full_name })
       } else {
         // Create new booking - direct insert
-        console.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
+        logger.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
         const { data, error: bookingError } = await supabase
           .from('bookings')
           .insert([bookingData])
@@ -3588,7 +3601,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           throw new Error(`Failed to create booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
         }
         insertedBooking = data
-        console.log('Booking created successfully:', insertedBooking)
+        logger.log('Booking created successfully:', insertedBooking)
         logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: customerInfo?.full_name })
       }
 
@@ -3637,7 +3650,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }
 
             toast.success(`Pay by Link generato e inviato al cliente!`)
-            console.log('✅ Nexi Pay by Link created:', linkData.paymentUrl)
+            logger.log('✅ Nexi Pay by Link created:', linkData.paymentUrl)
           } else {
             toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
           }
@@ -3667,7 +3680,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             bookingId: insertedBooking?.id?.substring(0, 8)
           })
         })
-        console.log('✅ Calendar event created successfully')
+        logger.log('✅ Calendar event created successfully')
       } catch (calendarError) {
         console.error('⚠️ Failed to create calendar event:', calendarError)
         // Don't fail the whole booking if calendar fails
@@ -3718,7 +3731,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               notes: `Ritiro: ${pickupLocationLabel}\nRiconsegna: ${dropoffLocationLabel}`
             })
           })
-          console.log('✅ Invoice generated successfully')
+          logger.log('✅ Invoice generated successfully')
         } catch (invoiceError) {
           console.error('⚠️ Failed to generate invoice:', invoiceError)
           // Don't fail the whole booking if invoice generation fails
@@ -3783,7 +3796,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }
           })
         })
-        console.log('✅ WhatsApp admin notification sent')
+        logger.log('✅ WhatsApp admin notification sent')
 
         // Send customer confirmation message (skip for unpaid Nexi Pay by Link — link message is sent separately)
         const custPhone = customerInfo?.phone
@@ -3838,7 +3851,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
           })
-          console.log('✅ WhatsApp customer confirmation sent to', custPhone)
+          logger.log('✅ WhatsApp customer confirmation sent to', custPhone)
         }
       } catch (whatsappError) {
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
@@ -3847,7 +3860,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Sync cauzione (security deposit) record
       try {
-        console.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
+        logger.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
 
         const depositAmount = parseFloat(formData.deposit) || 0
         const depositPaid = formData.deposit_status === 'incassata'
@@ -3875,9 +3888,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             .from('cauzioni')
             .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
             .eq('riferimento_contratto_id', insertedBooking.id)
-          console.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
+          logger.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
         }
-        console.log('✅ Cauzione synced successfully')
+        logger.log('✅ Cauzione synced successfully')
       } catch (cauzioneError) {
         console.error('⚠️ Failed to sync cauzione:', cauzioneError)
         // Don't fail the whole booking if cauzione sync fails
@@ -3885,9 +3898,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Generate Contract PDF automatically (for new bookings and edits)
       try {
-        console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)', new Date().toISOString())
+        logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)', new Date().toISOString())
         await handleGenerateContract(insertedBooking, false)
-        console.log('[Auto-Gen] ✅ Contract generated successfully')
+        logger.log('[Auto-Gen] ✅ Contract generated successfully')
       } catch (contractError) {
         console.error('[Auto-Gen] ⚠️ Failed to generate contract:', contractError)
         // Don't alert here to avoid confusion, just log it
@@ -3896,18 +3909,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Auto-generate fattura and send to SDI when payment status is "paid"
       if (formData.payment_status === 'paid' && insertedBooking?.id) {
         try {
-          console.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
+          logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
           const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
           })
           if (invoiceRes.ok) {
-            console.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+            logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
           } else {
             const errData = await invoiceRes.json()
             const errMsg = errData.message || errData.error || 'Errore sconosciuto'
-            console.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
+            logger.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
             toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
           }
         } catch (invoiceError) {
@@ -3928,23 +3941,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             .maybeSingle()
 
           if (contractForSig?.id && contractForSig?.pdf_url) {
-            console.log('[Auto-Gen] Sending contract for signature via WhatsApp:', contractForSig.id)
+            logger.log('[Auto-Gen] Sending contract for signature via WhatsApp:', contractForSig.id)
             const sigRes = await fetch('/.netlify/functions/signature-init', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ contractId: contractForSig.id, bookingId: insertedBooking.id })
             })
             if (sigRes.ok) {
-              console.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
+              logger.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
 
               // Garante signing link is now handled by signature-init (multi-signer support)
             } else {
               const sigErr = await sigRes.json()
-              console.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
+              logger.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
               toast.error(`Link firma non inviato: ${sigErr.error || 'Errore sconosciuto'}`, { duration: 8000 })
             }
           } else {
-            console.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init')
+            logger.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init')
           }
         } catch (sigError) {
           console.error('[Auto-Gen] ⚠️ Failed to send signing link:', sigError)
@@ -4123,7 +4136,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             // NEW: Resume booking creation flow if context is 'booking'
             if (validationContext === 'booking' && newClientId) {
-              console.log('[ReservationsTab] NewClientModal finished. Resuming booking with:', newClientId)
+              logger.log('[ReservationsTab] NewClientModal finished. Resuming booking with:', newClientId)
               setFormData(prev => ({ ...prev, customer_id: newClientId }))
               // Small delay to ensure state updates
               setTimeout(() => {
@@ -4368,7 +4381,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               }
                             }
                           } catch (e) {
-                            console.warn('Patente check failed:', e)
+                            logger.warn('Patente check failed:', e)
                           }
                         }
                       }}
@@ -5600,7 +5613,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           {booking.status !== 'cancelled' && (
                             <>
                               <button
-                                onClick={(e) => { e.stopPropagation(); booking.contract_url ? window.open(booking.contract_url, '_blank') : handleGenerateContract(booking) }}
+                                onClick={(e) => { e.stopPropagation(); if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } }}
                                 disabled={!booking.contract_url && generatingContract}
                                 className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap disabled:opacity-50"
                               >
@@ -5762,9 +5775,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <div className="mt-2 pt-2 border-t border-theme-border/30">
                             <span className="text-theme-text-muted">Consegna a domicilio:</span>
                             <span className="text-theme-text-primary ml-1">
-                              {(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address)
-                                ? `${(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address).street}, ${(selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address).city}`
-                                : 'Si'}
+                              {(() => { const addr = selectedBooking.delivery_address || selectedBooking.booking_details?.delivery_address; return addr ? `${addr.street}, ${addr.city}` : 'Si' })()}
                               {' '}(€{((selectedBooking.delivery_fee || 0) / 100).toFixed(2)})
                             </span>
                           </div>
@@ -5773,9 +5784,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <div>
                             <span className="text-theme-text-muted">Ritiro a domicilio:</span>
                             <span className="text-theme-text-primary ml-1">
-                              {(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address)
-                                ? `${(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address).street}, ${(selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address).city}`
-                                : 'Si'}
+                              {(() => { const addr = selectedBooking.pickup_address || selectedBooking.booking_details?.pickup_address; return addr ? `${addr.street}, ${addr.city}` : 'Si' })()}
                               {' '}(€{((selectedBooking.pickup_fee || 0) / 100).toFixed(2)})
                             </span>
                           </div>
@@ -5884,13 +5893,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             onClose={() => setShowMissingDataModal(false)}
             onSave={async (updatedData: any) => {
               try {
-                console.log('[ReservationsTab] Missing fields saved:', updatedData)
+                logger.log('[ReservationsTab] Missing fields saved:', updatedData)
 
                 const resolvedCustomerId = updatedData.id
 
                 // If in booking context, update form to use this customer
                 if (validationContext === 'booking') {
-                  console.log('[ReservationsTab] Resuming booking with customer:', resolvedCustomerId)
+                  logger.log('[ReservationsTab] Resuming booking with customer:', resolvedCustomerId)
                   setFormData(prev => ({ ...prev, customer_id: resolvedCustomerId }))
                   setNewCustomerMode(false)
                 }
@@ -5901,7 +5910,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                 // If in booking context, automatically continue with booking submission
                 if (validationContext === 'booking') {
-                  console.log('[ReservationsTab] Auto-resuming booking submission...')
+                  logger.log('[ReservationsTab] Auto-resuming booking submission...')
                   // Use setTimeout to ensure state updates have propagated
                   setTimeout(() => {
                     processBookingSubmission(true, resolvedCustomerId)
@@ -5909,12 +5918,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }
                 // If in contract/invoice context, retry generation
                 else if (validationContext === 'contract' && currentValidationBooking) {
-                  console.log('[ReservationsTab] Retrying contract generation...')
+                  logger.log('[ReservationsTab] Retrying contract generation...')
                   setTimeout(() => {
                     handleGenerateContract(currentValidationBooking, true)
                   }, 100)
                 } else if (validationContext === 'invoice' && currentValidationBooking) {
-                  console.log('[ReservationsTab] Retrying invoice generation...')
+                  logger.log('[ReservationsTab] Retrying invoice generation...')
                   setTimeout(() => {
                     handleGenerateInvoice(currentValidationBooking)
                   }, 100)

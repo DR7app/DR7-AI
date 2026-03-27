@@ -140,6 +140,7 @@ export default function ReportsTab() {
   // Auto-load report on mount and when month/report type changes
   useEffect(() => {
     fetchReport()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, activeReport])
 
   const [plateSearch, setPlateSearch] = useState('')

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../supabaseClient'
 import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
+import { logger } from '../utils/logger'
 
 interface AlarmBooking {
     bookingId: string
@@ -33,6 +34,7 @@ interface VehicleAlarmContextType {
 
 const VehicleAlarmContext = createContext<VehicleAlarmContextType | undefined>(undefined)
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useVehicleAlarm() {
     const context = useContext(VehicleAlarmContext)
     if (!context) {
@@ -169,7 +171,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             try {
                 // Create or reuse audio element
                 if (!audioRef.current) {
-                    console.log('Creating new Audio element for alarm')
+                    logger.log('Creating new Audio element for alarm')
                     audioRef.current = new Audio('/alarm.mp3')
                     audioRef.current.loop = true
                     audioRef.current.volume = 0.8 // Set volume to 80%
@@ -193,7 +195,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                             })
                         }
                     })
-            } catch (error) {
+            } catch {
                 // Error setting up alarm audio
             }
         }
@@ -723,6 +725,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             stopPolling()
             document.removeEventListener('visibilitychange', handleVisibilityChange)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session])
 
     // Cleanup audio on unmount

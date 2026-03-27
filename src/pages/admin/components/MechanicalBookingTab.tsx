@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import NewClientModal from './NewClientModal'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
   id: string
@@ -121,9 +122,9 @@ export default function MechanicalBookingTab() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId: id }),
         })
-        console.log('Google Calendar event deletion requested for booking:', id)
+        logger.log('Google Calendar event deletion requested for booking:', id)
       } catch (calError) {
-        console.warn('Failed to request deletion from Google Calendar:', calError)
+        logger.warn('Failed to request deletion from Google Calendar:', calError)
         // Continue with database deletion even if Google Calendar deletion fails
       }
 

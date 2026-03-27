@@ -40,6 +40,7 @@ export default function FirmaPage() {
         return () => {
             if (cooldownRef.current) clearInterval(cooldownRef.current)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token])
 
     async function loadSigningData() {

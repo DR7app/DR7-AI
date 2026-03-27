@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import { logger } from '../../../utils/logger'
 
 export default function GestioneMulteTab() {
     const [activeSubTab, setActiveSubTab] = useState<'history' | 'upload'>('history')
@@ -34,9 +35,9 @@ export default function GestioneMulteTab() {
                 .order('created_at', { ascending: false })
                 .limit(50)
             if (!error && data) setPecHistory(data)
-        } catch (e) {
+        } catch {
             // Table might not exist yet — that's fine
-            console.warn('[GestioneMulte] multe_pec_log table not found, skipping history')
+            logger.warn('[GestioneMulte] multe_pec_log table not found, skipping history')
         } finally {
             setLoadingHistory(false)
         }

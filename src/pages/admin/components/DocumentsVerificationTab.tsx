@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
 
 interface UserDocument {
   id: string
@@ -75,7 +76,7 @@ export default function DocumentsVerificationTab() {
   async function loadDocuments() {
     setLoading(true)
     try {
-      console.log('[DocumentsVerificationTab] Loading documents via Netlify function...')
+      logger.log('[DocumentsVerificationTab] Loading documents via Netlify function...')
 
       let useClientFallback = false
 
@@ -86,7 +87,7 @@ export default function DocumentsVerificationTab() {
           const result = await response.json()
 
           if (result.success && result.documents) {
-            console.log('[DocumentsVerificationTab] Documents loaded via Netlify function:', result.documents.length)
+            logger.log('[DocumentsVerificationTab] Documents loaded via Netlify function:', result.documents.length)
             setDocuments(result.documents)
             return
           }
@@ -96,7 +97,7 @@ export default function DocumentsVerificationTab() {
         useClientFallback = true
       } catch (fetchError) {
         // Netlify function not available or returned invalid response
-        console.log('[DocumentsVerificationTab] Netlify function error:', fetchError)
+        logger.log('[DocumentsVerificationTab] Netlify function error:', fetchError)
         useClientFallback = true
       }
 
@@ -107,7 +108,7 @@ export default function DocumentsVerificationTab() {
 
       // Fallback: Netlify function not available (e.g., running with npm run dev)
       // Fetch data directly from Supabase
-      console.log('[DocumentsVerificationTab] Using client-side fallback...')
+      logger.log('[DocumentsVerificationTab] Using client-side fallback...')
 
       // 1. Fetch all documents
       const { data: docs, error: docsError } = await supabase
@@ -118,7 +119,7 @@ export default function DocumentsVerificationTab() {
       if (docsError) throw docsError
 
       if (!docs || docs.length === 0) {
-        console.log('[DocumentsVerificationTab] No documents found')
+        logger.log('[DocumentsVerificationTab] No documents found')
         setDocuments([])
         return
       }
@@ -201,7 +202,7 @@ export default function DocumentsVerificationTab() {
         }
       })
 
-      console.log('[DocumentsVerificationTab] Documents loaded via client-side fallback:', enrichedDocuments.length)
+      logger.log('[DocumentsVerificationTab] Documents loaded via client-side fallback:', enrichedDocuments.length)
       setDocuments(enrichedDocuments)
 
     } catch (error) {

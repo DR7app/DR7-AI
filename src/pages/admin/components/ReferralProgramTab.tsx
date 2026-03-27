@@ -117,6 +117,7 @@ export default function ReferralProgramTab() {
     if (activeSection === 'buoni' && allDiscountCodes.length === 0) {
       loadAllDiscountCodes()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection])
 
   async function loadStats() {

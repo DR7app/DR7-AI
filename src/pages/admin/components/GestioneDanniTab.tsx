@@ -310,7 +310,7 @@ export default function GestioneDanniTab() {
       const data = await res.json()
       if (res.ok && data.paymentUrl) {
         // Try clipboard, but don't fail if blocked
-        try { await navigator.clipboard.writeText(data.paymentUrl) } catch {}
+        try { await navigator.clipboard.writeText(data.paymentUrl) } catch { /* clipboard not available */ }
         toast.success(`Pay by Link creato! €${totalEur.toFixed(2)}\n${data.paymentUrl}`, { duration: 8000 })
       } else {
         toast.error(data.error || 'Errore creazione link')

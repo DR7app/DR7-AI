@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import ReferralProgramTab from './ReferralProgramTab'
 import CustomerWalletTab from './CustomerWalletTab'
 import MessaggiSistemaTab from './MessaggiSistemaTab'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
     id: string
@@ -186,6 +187,7 @@ function MarketingContent() {
         if (activeSection === 'marketing_consent' && marketingConsentCustomers.length === 0 && !marketingConsentLoading) {
             loadMarketingConsentCustomers()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeSection])
 
     useEffect(() => {
@@ -618,7 +620,7 @@ function MarketingContent() {
                 if (result.success) {
                     toast.success(`Messaggi WhatsApp inviati a ${result.sent} clienti!`)
                     if (result.errors) {
-                        console.warn('WhatsApp errors:', result.errors)
+                        logger.warn('WhatsApp errors:', result.errors)
                         toast.error(`Alcuni messaggi non inviati: ${result.errors.length}`)
                     }
                     setSelectedCustomerIds(new Set())

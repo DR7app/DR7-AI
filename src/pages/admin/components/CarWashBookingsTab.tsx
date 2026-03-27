@@ -7,6 +7,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
   id: string
@@ -447,14 +448,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
         (payload) => {
-          console.log('🔄 CarWashBookingsTab: Real-time update received', payload)
+          logger.log('🔄 CarWashBookingsTab: Real-time update received', payload)
           loadData()
         }
       )
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'car_wash_services' },
         (payload) => {
-          console.log('🔄 CarWashBookingsTab: Catalog price update received', payload)
+          logger.log('🔄 CarWashBookingsTab: Catalog price update received', payload)
           loadData()
         }
       )
@@ -584,9 +585,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             vehicleName: 'Car Wash'
           }),
         })
-        console.log('Google Calendar event deletion requested for booking:', bookingId)
+        logger.log('Google Calendar event deletion requested for booking:', bookingId)
       } catch (calError) {
-        console.warn('Failed to delete from Google Calendar:', calError)
+        logger.warn('Failed to delete from Google Calendar:', calError)
       }
 
       // Delete dependent records first (FK constraints)
@@ -754,7 +755,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }
       }
     } catch (e) {
-      console.warn('Customer validation failed:', e)
+      logger.warn('Customer validation failed:', e)
     }
 
     const customerName = customer.full_name
@@ -844,7 +845,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       booking_details: bookingDetails
     }
 
-    console.log('📤 Attempting to insert car wash booking:', JSON.stringify(bookingPayload, null, 2))
+    logger.log('📤 Attempting to insert car wash booking:', JSON.stringify(bookingPayload, null, 2))
 
     const { data, error } = await supabase
       .from('bookings')
@@ -857,7 +858,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       throw error
     }
 
-    console.log('✅ Booking created successfully:', data)
+    logger.log('✅ Booking created successfully:', data)
     logAdminAction('create_carwash', 'carwash_booking', data.id, { customer: customerName, service: serviceNames })
 
     // Generate fattura ONLY if paid — never for unpaid bookings
@@ -871,11 +872,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
         if (invoiceResponse.ok) {
           const invoiceData = await invoiceResponse.json()
-          console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
+          logger.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
         } else {
           const errData = await invoiceResponse.json().catch(() => ({}))
           const errMsg = errData.message || errData.error || invoiceResponse.statusText
-          console.warn('⚠️ Fattura generation failed:', errMsg)
+          logger.warn('⚠️ Fattura generation failed:', errMsg)
           // Open customer edit modal if missing data (address/codice fiscale)
           if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
             toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
@@ -997,7 +998,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customMessage: custMsg, customPhone: customerPhone })
         })
-        console.log('✅ WhatsApp customer confirmation sent to', customerPhone)
+        logger.log('✅ WhatsApp customer confirmation sent to', customerPhone)
       }
     } catch (whatsappError) {
       console.error('⚠️ WhatsApp notification failed:', whatsappError)
@@ -1084,11 +1085,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // ===== SCHEDULING RULES VALIDATION =====
       // Enforce non-negotiable scheduling rules for WASH events
-      console.log('🔍 Validating scheduling rules for wash booking...')
-      console.log(`  Services: ${serviceNames}`)
-      console.log(`  Date: ${formData.appointment_date}`)
-      console.log(`  Time: ${formData.appointment_time}`)
-      console.log(`  Total Duration: ${totalDuration} min`)
+      logger.log('🔍 Validating scheduling rules for wash booking...')
+      logger.log(`  Services: ${serviceNames}`)
+      logger.log(`  Date: ${formData.appointment_date}`)
+      logger.log(`  Time: ${formData.appointment_time}`)
+      logger.log(`  Total Duration: ${totalDuration} min`)
 
       // Create wash event datetime
       const [year, month, day] = formData.appointment_date.split('-').map(Number)
@@ -1139,10 +1140,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         return
       }
 
-      console.log('✅ Scheduling validation passed')
+      logger.log('✅ Scheduling validation passed')
 
       // ADMIN PANEL: Always allow bookings, just show warning if there's a conflict
-      console.log('🔧 ADMIN PANEL: Checking for conflicts (informational only)')
+      logger.log('🔧 ADMIN PANEL: Checking for conflicts (informational only)')
 
       const newBookingDuration = totalDuration
 
@@ -1188,11 +1189,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Log overlap info but don't block the admin
       if (hasConflict && conflictingBooking) {
-        console.log('ℹ️ Overlap with existing booking:', conflictingBooking.customer_name, conflictDetails)
+        logger.log('ℹ️ Overlap with existing booking:', conflictingBooking.customer_name, conflictDetails)
       }
 
       // Admin panel: ALWAYS create as forced booking (bypass all backend checks)
-      console.log('🔧 ADMIN PANEL: Creating booking with admin override')
+      logger.log('🔧 ADMIN PANEL: Creating booking with admin override')
       await createBooking(true)
     } catch (error: any) {
       console.error('Failed to create booking:', error)
@@ -2400,18 +2401,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             .maybeSingle()
 
                           if (!existingFattura) {
-                            console.log('[Auto-Gen] Generating fattura for paid car wash:', editingBooking.id)
+                            logger.log('[Auto-Gen] Generating fattura for paid car wash:', editingBooking.id)
                             const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ bookingId: editingBooking.id, includeIVA: true })
                             })
                             if (invoiceRes.ok) {
-                              console.log('[Auto-Gen] ✅ Fattura generated')
+                              logger.log('[Auto-Gen] ✅ Fattura generated')
                             } else {
                               const errData = await invoiceRes.json()
                               const errMsg = errData.message || errData.error || 'Errore sconosciuto'
-                              console.warn('[Auto-Gen] ⚠️ Fattura failed:', errMsg)
+                              logger.warn('[Auto-Gen] ⚠️ Fattura failed:', errMsg)
                               // Open customer edit modal if missing data
                               if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
                                 toast.error(`Dati cliente incompleti per la fattura: ${errMsg}`, { duration: 8000 })

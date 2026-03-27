@@ -4,6 +4,7 @@ import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
+import { logger } from '../../../utils/logger'
 
 interface MechanicalBooking {
   id: string
@@ -118,7 +119,7 @@ export default function MechanicalCalendarTab() {
 
       if (bookingsError) throw bookingsError
 
-      console.log('🔧 MECHANICAL CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0)
+      logger.log('🔧 MECHANICAL CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0)
 
       setBookings(bookingsData || [])
     } catch (error) {

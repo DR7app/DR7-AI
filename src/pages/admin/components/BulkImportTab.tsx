@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { logger } from '../../../utils/logger'
 
 interface ExtractedData {
   nome?: string
@@ -168,6 +169,7 @@ export default function BulkImportTab() {
     if (collectedTracked.length > 0) {
       setTrackedFiles(prev => [...prev, ...collectedTracked])
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -570,7 +572,7 @@ export default function BulkImportTab() {
                 })
 
               if (uploadError) {
-                console.warn('Document upload error (non-fatal):', uploadError)
+                logger.warn('Document upload error (non-fatal):', uploadError)
               } else {
                 await supabase.from('customer_documents').insert({
                   customer_id: createdClientId,
@@ -584,7 +586,7 @@ export default function BulkImportTab() {
                 })
               }
             } catch (uploadErr) {
-              console.warn('Document upload failed (non-fatal):', uploadErr)
+              logger.warn('Document upload failed (non-fatal):', uploadErr)
             }
           }
         }
@@ -661,13 +663,10 @@ export default function BulkImportTab() {
             onChange={handleFileSelect}
             className="hidden"
           />
-          {/* @ts-ignore - webkitdirectory is non-standard but widely supported */}
           <input
             ref={folderInputRef}
             type="file"
-            // @ts-ignore
-            webkitdirectory=""
-            directory=""
+            {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>}
             multiple
             onChange={handleFileSelect}
             className="hidden"

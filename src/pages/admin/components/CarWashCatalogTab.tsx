@@ -89,7 +89,7 @@ export default function CarWashCatalogTab() {
   async function saveEditing(service: CarWashService) {
     setSaving(true)
     try {
-      const updates: any = {
+      const updates: Record<string, unknown> = {
         price: parseFloat(editPrice) || service.price,
         name: editName.trim() || service.name,
         duration: editDuration.trim() || service.duration,
@@ -110,8 +110,8 @@ export default function CarWashCatalogTab() {
 
       cancelEditing()
       await loadServices()
-    } catch (err: any) {
-      alert('Errore nel salvataggio: ' + err.message)
+    } catch (err: unknown) {
+      alert('Errore nel salvataggio: ' + (err as Error).message)
     } finally {
       setSaving(false)
     }

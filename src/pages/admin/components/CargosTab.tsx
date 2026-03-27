@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import Input from './Input'
+import { logger } from '../../../utils/logger'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ const AGENCY = {
 
 // Sanitize strings for CARGOS: only allow letters, accented chars, numbers, space, . , '
 function sanitizeCargos(value: string): string {
-    return (value || '').replace(/[^a-zA-Z0-9àèìòùäöüßÀÈÌÒÙÄÖÜ \.,'/]/g, ' ').replace(/\s+/g, ' ').trim()
+    return (value || '').replace(/[^a-zA-Z0-9àèìòùäöüßÀÈÌÒÙÄÖÜ .,'/]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function formatDateCargos(isoDate: string): string {
@@ -271,7 +272,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
                 birthDate = birthDateFromCF(cfToTry)
             }
         }
-        console.log(`[CARGOS-DEBUG] Azienda birthDate: "${birthDate}", data_nascita_rapp="${c?.data_nascita_rappresentante}", rapp.data_nascita="${rapp.data_nascita}", cf_rapp="${c?.cf_rappresentante}", rapp.cf="${rapp.codice_fiscale}", codice_fiscale="${c?.codice_fiscale}"`)
+        logger.log(`[CARGOS-DEBUG] Azienda birthDate: "${birthDate}", data_nascita_rapp="${c?.data_nascita_rappresentante}", rapp.data_nascita="${rapp.data_nascita}", cf_rapp="${c?.cf_rappresentante}", rapp.cf="${rapp.codice_fiscale}", codice_fiscale="${c?.codice_fiscale}"`)
     } else {
         birthDate = c?.data_nascita || bd.customer?.birthDate || ''
     }
@@ -542,7 +543,7 @@ export default function CargosTab() {
                         if (veh?.plate) resolvedPlate = veh.plate
                     }
 
-                    console.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, plate=${resolvedPlate || 'MISSING'}`)
+                    logger.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, plate=${resolvedPlate || 'MISSING'}`)
                     const alreadySent = b.booking_details?.cargos_sent === true
                     return { ...b, vehicle_plate: resolvedPlate || b.vehicle_plate, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
                 })
@@ -606,7 +607,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const checkData = await checkRes.json()
-            console.log('[CARGOS] Check response:', JSON.stringify(checkData))
+            logger.log('[CARGOS] Check response:', JSON.stringify(checkData))
 
             // Top-level error (auth failure, etc.)
             if (checkData.error) {
@@ -647,7 +648,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'send', records, password }),
             })
             const sendData = await sendRes.json()
-            console.log('[CARGOS] Send response:', JSON.stringify(sendData))
+            logger.log('[CARGOS] Send response:', JSON.stringify(sendData))
 
             // Top-level error
             if (sendData.error) {
@@ -726,7 +727,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const data = await res.json()
-            console.log('[CARGOS] Check response:', JSON.stringify(data))
+            logger.log('[CARGOS] Check response:', JSON.stringify(data))
 
             if (data.error) {
                 toast.error('Errori validazione: ' + data.error)

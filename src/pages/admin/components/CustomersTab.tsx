@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
   id: string
@@ -145,7 +146,7 @@ export default function CustomersTab() {
 
   // Handle filtering and pagination locally
   useEffect(() => {
-    console.log('[useEffect] allCustomers changed, count:', allCustomers.length)
+    logger.log('[useEffect] allCustomers changed, count:', allCustomers.length)
 
     if (!allCustomers.length) {
       setCustomers([])
@@ -194,7 +195,7 @@ export default function CustomersTab() {
 
     // Only log if we have data to avoid spamming console on initial render
     if (paginatedCustomers.length > 0) {
-      console.log('[CustomersTab] Updated view:', {
+      logger.log('[CustomersTab] Updated view:', {
         total: result.length,
         page: currentPage,
         displayed: paginatedCustomers.length
@@ -359,7 +360,7 @@ export default function CustomersTab() {
 
         // Normalize phone
         if (customerData.telefono) {
-          let phone = customerData.telefono.replace(/[\s\-\+\(\)]/g, '')
+          let phone = customerData.telefono.replace(/[\s\-+()]/g, '')
           if (phone.startsWith('00')) phone = phone.substring(2)
           if (phone.length === 10) phone = '39' + phone
           customerData.telefono = phone
@@ -392,7 +393,7 @@ export default function CustomersTab() {
       }
 
       if (errors.length > 0) {
-        console.warn('Import errors:', errors)
+        logger.warn('Import errors:', errors)
       }
     } catch (err: any) {
       console.error('Import error:', err)
@@ -406,17 +407,17 @@ export default function CustomersTab() {
   async function loadCustomers() {
     setLoading(true)
     try {
-      console.log('[CustomersTab] Loading customers from DB...')
+      logger.log('[CustomersTab] Loading customers from DB...')
 
       // Check current user
       const { data: { user } } = await supabase.auth.getUser()
-      console.log('[CustomersTab] Current user:', user?.email)
+      logger.log('[CustomersTab] Current user:', user?.email)
 
       // Use customers_extended as the SINGLE source of truth (no more bookings merge = no duplicates)
       const customerMap = new Map<string, Customer>()
 
       // Get customers from customers_extended table via Netlify function (bypasses RLS)
-      console.log('[CustomersTab] Fetching customers_extended via Netlify function...')
+      logger.log('[CustomersTab] Fetching customers_extended via Netlify function...')
 
       let customersExtendedData: any[] | null = null
       let customersExtendedError: any = null
@@ -429,7 +430,7 @@ export default function CustomersTab() {
           console.error('[CustomersTab] ❌ ERROR loading customers_extended:', customersExtendedError)
         } else {
           customersExtendedData = result.customers
-          console.log('[CustomersTab] ✅ Successfully loaded customers_extended:', customersExtendedData?.length)
+          logger.log('[CustomersTab] ✅ Successfully loaded customers_extended:', customersExtendedData?.length)
         }
       } catch (e: any) {
         customersExtendedError = { code: 'FETCH_ERROR', message: e.message }
@@ -437,14 +438,14 @@ export default function CustomersTab() {
       }
 
       // DEBUG: Log counts
-      console.log('STATS:', {
+      logger.log('STATS:', {
         bookings: 0,
         customers_extended: customersExtendedData?.length || 0,
         unique_map_size: customerMap.size
       })
 
       if (!customersExtendedError && customersExtendedData) {
-        console.log('[CustomersTab] Customers from customers_extended:', customersExtendedData.length)
+        logger.log('[CustomersTab] Customers from customers_extended:', customersExtendedData.length)
 
         customersExtendedData.forEach((customer: any) => {
           // Use customer ID as unique key — no duplicates possible
@@ -564,7 +565,7 @@ export default function CustomersTab() {
       */
 
       // [NEW] Fetch Customer Memberships
-      console.log('[CustomersTab] Fetching customer_memberships...')
+      logger.log('[CustomersTab] Fetching customer_memberships...')
       const { data: membershipsData, error: membershipsError } = await supabase
         .from('customer_memberships')
         .select('*')
@@ -573,7 +574,7 @@ export default function CustomersTab() {
       // Ideally we fetch all and sort by date, but specifically we want the *active* one.
 
       if (!membershipsError && membershipsData) {
-        console.log('[CustomersTab] Memberships found:', membershipsData.length)
+        logger.log('[CustomersTab] Memberships found:', membershipsData.length)
 
         // Map memberships to customers
         const membershipMap = new Map()
@@ -604,7 +605,7 @@ export default function CustomersTab() {
         if (membershipsError.code !== '42P01') {
           console.error('Error fetching memberships:', membershipsError)
         } else {
-          console.warn('customer_memberships table missing, skipping.')
+          logger.warn('customer_memberships table missing, skipping.')
         }
       }
 
@@ -771,7 +772,7 @@ export default function CustomersTab() {
   }
 
   async function handleDelete(id: string) {
-    console.log('[handleDelete] Starting delete for ID:', id)
+    logger.log('[handleDelete] Starting delete for ID:', id)
 
     try {
       const response = await fetch('/.netlify/functions/manage-customer', {
@@ -781,7 +782,7 @@ export default function CustomersTab() {
       })
 
       const result = await response.json()
-      console.log('[handleDelete] API response:', result)
+      logger.log('[handleDelete] API response:', result)
 
       if (!response.ok) {
         throw new Error(result.error || 'Errore durante l\'eliminazione')
@@ -791,12 +792,12 @@ export default function CustomersTab() {
         throw new Error(result.error || result.message || 'Eliminazione fallita')
       }
 
-      console.log('[handleDelete] Success! Removing from state. Current allCustomers count:', allCustomers.length)
+      logger.log('[handleDelete] Success! Removing from state. Current allCustomers count:', allCustomers.length)
 
       // Remove from allCustomers - the useEffect will update customers automatically
       setAllCustomers(prevAll => {
         const newAll = prevAll.filter(c => c.id !== id)
-        console.log('[handleDelete] New allCustomers count:', newAll.length)
+        logger.log('[handleDelete] New allCustomers count:', newAll.length)
         return newAll
       })
 
@@ -810,15 +811,15 @@ export default function CustomersTab() {
 
 
   async function handleEdit(customer: Customer) {
-    console.log('[handleEdit] Customer object:', customer)
-    console.log('[handleEdit] Customer ID:', customer.id)
-    console.log('[handleEdit] Customer keys:', Object.keys(customer))
+    logger.log('[handleEdit] Customer object:', customer)
+    logger.log('[handleEdit] Customer ID:', customer.id)
+    logger.log('[handleEdit] Customer keys:', Object.keys(customer))
 
     // CRITICAL FIX: Fetch fresh data from database before opening edit modal
     // This ensures ALL fields are populated, not just the cached/merged data
     if (customer.id && customer.id.length > 10) {
       try {
-        console.log('[handleEdit] 🔄 Fetching fresh data from customers_extended for ID:', customer.id)
+        logger.log('[handleEdit] 🔄 Fetching fresh data from customers_extended for ID:', customer.id)
         const { data: freshCustomerData, error } = await supabase
           .from('customers_extended')
           .select('*')
@@ -830,8 +831,8 @@ export default function CustomersTab() {
           // Fallback to cached data if fetch fails
           setSelectedCustomer(customer)
         } else if (freshCustomerData) {
-          console.log('[handleEdit] ✅ Fresh data loaded from DB:', freshCustomerData)
-          console.log('[handleEdit] 📊 Fields in fresh data:', Object.keys(freshCustomerData))
+          logger.log('[handleEdit] ✅ Fresh data loaded from DB:', freshCustomerData)
+          logger.log('[handleEdit] 📊 Fields in fresh data:', Object.keys(freshCustomerData))
 
           // Apply the same mapping logic as handleViewCustomerDetails to ensure consistent display
           const raw = freshCustomerData;
@@ -938,7 +939,7 @@ export default function CustomersTab() {
             }
           }
 
-          console.log('[handleEdit] 🎯 Passing fresh customer to modal:', freshCustomer)
+          logger.log('[handleEdit] 🎯 Passing fresh customer to modal:', freshCustomer)
           setSelectedCustomer(freshCustomer)
         }
       } catch (err) {
@@ -948,7 +949,7 @@ export default function CustomersTab() {
       }
     } else {
       // No valid ID, use cached data (shouldn't happen for real customers)
-      console.warn('[handleEdit] ⚠️ No valid customer ID, using cached data')
+      logger.warn('[handleEdit] ⚠️ No valid customer ID, using cached data')
       setSelectedCustomer(customer)
     }
 
@@ -960,7 +961,7 @@ export default function CustomersTab() {
     setDocumentsUrls({ licenses: [], ids: [], codiceFiscale: [] })
 
     try {
-      console.log('[CustomersTab] Fetching documents via Netlify function for:', userId)
+      logger.log('[CustomersTab] Fetching documents via Netlify function for:', userId)
       const response = await fetch('/.netlify/functions/get-customer-documents', {
         method: 'POST',
         body: JSON.stringify({ userId }),
@@ -974,7 +975,7 @@ export default function CustomersTab() {
       const result = await response.json()
 
       if (result.success && result.documents) {
-        console.log('[CustomersTab] Documents loaded:', result.documents)
+        logger.log('[CustomersTab] Documents loaded:', result.documents)
         setDocumentsUrls(result.documents)
       } else {
         console.error('[CustomersTab] Failed to load documents:', result.error)
@@ -1008,9 +1009,9 @@ export default function CustomersTab() {
           // Fallback to cached data if fetch fails
           setViewingCustomerDetails(customer)
         } else if (freshCustomerData) {
-          console.log('[handleViewCustomerDetails] Raw DB Fetch:', freshCustomerData)
-          console.log('[handleViewCustomerDetails] CF from DB:', freshCustomerData.codice_fiscale)
-          console.log('[handleViewCustomerDetails] Indirizzo from DB:', freshCustomerData.indirizzo)
+          logger.log('[handleViewCustomerDetails] Raw DB Fetch:', freshCustomerData)
+          logger.log('[handleViewCustomerDetails] CF from DB:', freshCustomerData.codice_fiscale)
+          logger.log('[handleViewCustomerDetails] Indirizzo from DB:', freshCustomerData.indirizzo)
 
           // Apply the same mapping logic as loadCustomers to ensure consistent display
           const raw = freshCustomerData;
@@ -2548,7 +2549,7 @@ export default function CustomersTab() {
           setTimeout(() => setSelectedCustomer(null), 100)
         }}
         onClientCreated={(clientId: string, customerData?: any) => {
-          console.log('[onClientCreated] called with:', { clientId, hasData: !!customerData })
+          logger.log('[onClientCreated] called with:', { clientId, hasData: !!customerData })
           setShowNewClientModal(false)
           setSelectedCustomer(null)
           // Don't update state manually — just reload from DB for consistency

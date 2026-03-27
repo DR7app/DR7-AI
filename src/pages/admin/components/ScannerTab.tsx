@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import NewClientModal from './NewClientModal';
+import { logger } from '../../../utils/logger'
 
 interface ExtractedData {
     // Personal Info
@@ -94,7 +95,7 @@ const compressImage = (file: File, maxSizeMB: number = 4): Promise<string> => {
                     base64 = canvas.toDataURL('image/jpeg', quality);
                 }
 
-                console.log(`Image compressed: ${width}x${height}, quality: ${quality.toFixed(2)}`);
+                logger.log(`Image compressed: ${width}x${height}, quality: ${quality.toFixed(2)}`);
                 resolve(base64);
             };
             img.onerror = () => reject(new Error('Failed to load image'));
@@ -222,7 +223,7 @@ export default function ScannerTab() {
         setError(null);
         setSuccess(null);
 
-        const slotsWithImages = Object.entries(documents).filter(([_, slot]) => slot.base64);
+        const slotsWithImages = Object.entries(documents).filter(([, slot]) => slot.base64);
 
         if (slotsWithImages.length === 0) {
             setError('Carica almeno un documento');
@@ -231,7 +232,7 @@ export default function ScannerTab() {
 
         // Extract each document
         const results: ExtractedData[] = [];
-        for (const [key, _] of slotsWithImages) {
+        for (const [key] of slotsWithImages) {
             const data = await extractDocument(key);
             if (data) results.push(data);
         }
@@ -625,7 +626,7 @@ export default function ScannerTab() {
                     resetAll();
                 }}
                 onClientCreated={(clientId) => {
-                    console.log('Client created:', clientId);
+                    logger.log('Client created:', clientId);
                     setShowNewClientModal(false);
                     resetAll();
                     setSuccess('Cliente creato con successo!');

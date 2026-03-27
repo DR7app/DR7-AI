@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { logger } from '../utils/logger'
 
 interface MissingFieldsModalProps {
     isOpen: boolean
@@ -52,7 +53,7 @@ export default function MissingFieldsModal({
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [isSaving, setIsSaving] = useState(false)
 
-    console.log('[MissingFieldsModal] 🟢 RENDERED', { isOpen, customerId, missingFieldsCount: missingFields?.length })
+    logger.log('[MissingFieldsModal] 🟢 RENDERED', { isOpen, customerId, missingFieldsCount: missingFields?.length })
 
 
     // Initialize form data with existing customer data
@@ -114,7 +115,7 @@ export default function MissingFieldsModal({
 
         setIsSaving(true)
         try {
-            console.log('[MissingFieldsModal] Saving missing fields:', formData)
+            logger.log('[MissingFieldsModal] Saving missing fields:', formData)
 
             // Build the payload: merge existing customer data with new form values
             const savePayload: any = { ...customerData, ...formData }
@@ -135,7 +136,7 @@ export default function MissingFieldsModal({
             delete savePayload.booking_details
             delete savePayload.full_name
 
-            console.log('[MissingFieldsModal] Saving via save-customer:', customerId, savePayload)
+            logger.log('[MissingFieldsModal] Saving via save-customer:', customerId, savePayload)
 
             // Use save-customer Netlify function (bypasses RLS, handles update-or-insert)
             const response = await fetch('/.netlify/functions/save-customer', {

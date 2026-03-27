@@ -29,6 +29,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
     useEffect(() => {
         loadVehicle()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [vehicleId])
 
     async function loadVehicle() {
@@ -469,7 +470,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                     <h4 className="text-lg font-bold text-theme-text-primary">Gomme</h4>
                                     <button
                                         onClick={() => {
-                                            const tireInfo = editedVehicle.metadata?.tire_specs || {}
+                                            const tireInfo = (editedVehicle.metadata?.tire_specs || {}) as Record<string, string>
                                             const subject = encodeURIComponent(`Ordine Gomme - ${editedVehicle.display_name} (${editedVehicle.plate})`)
                                             const body = encodeURIComponent(
                                                 `Buongiorno,\n\n` +

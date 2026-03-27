@@ -194,6 +194,7 @@ export default function DashboardTab() {
   useEffect(() => {
     fetchDashboard()
     fetchSupplierCosts(selectedMonth)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth])
 
   const fetchDashboard = async () => {

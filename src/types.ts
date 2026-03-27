@@ -41,6 +41,7 @@ export interface Vehicle {
   price_resident_daily?: number | null
   price_nonresident_daily?: number | null
   category: 'exotic' | 'urban' | 'aziendali' | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -109,7 +110,7 @@ export interface Reservation {
   source: string | null
   total_amount: number
   currency: string
-  addons: Record<string, any> | null
+  addons: Record<string, unknown> | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -123,6 +124,6 @@ export interface AuditLog {
   action: string
   entity_type: string
   entity_id: string | null
-  diff: Record<string, any> | null
+  diff: Record<string, unknown> | null
   created_at: string
 }

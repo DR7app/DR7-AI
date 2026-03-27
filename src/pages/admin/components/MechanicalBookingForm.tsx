@@ -9,6 +9,7 @@ import {
     findNextAvailableSlots,
     formatTimeSlotWithDuration
 } from '../../../utils/bookingConflictUtils'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
     id: string
@@ -242,7 +243,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             notes: formData.notes || ''
                         })
                     })
-                    console.log('✅ Invoice generated successfully')
+                    logger.log('✅ Invoice generated successfully')
                 } catch (invoiceError) {
                     console.error('⚠️ Failed to generate invoice:', invoiceError)
                     // Don't fail the whole booking if invoice generation fails
@@ -272,7 +273,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             bookingId: insertedBooking.id
                         })
                     })
-                    console.log('✅ Calendar event created')
+                    logger.log('✅ Calendar event created')
                 } catch (calendarError) {
                     console.error('⚠️ Failed to create calendar event:', calendarError)
                 }
@@ -302,7 +303,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
                         })
-                        console.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
+                        logger.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
                     } catch (waError) {
                         console.error('⚠️ Failed to send WhatsApp:', waError)
                     }

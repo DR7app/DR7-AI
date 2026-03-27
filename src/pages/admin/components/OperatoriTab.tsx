@@ -81,6 +81,7 @@ export default function OperatoriTab() {
       setPage(0)
       loadLogs(selectedAdmin, 0)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAdmin, dateFrom, dateTo, actionFilter])
 
   async function loadAdmins() {

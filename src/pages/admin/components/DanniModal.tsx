@@ -242,7 +242,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         }
 
                         // Copy link to clipboard
-                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
 
                         toast.success(`Pay by Link inviato al cliente! €${cartTotal.toFixed(2)}`)
                     } else {

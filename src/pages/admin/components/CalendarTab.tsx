@@ -248,7 +248,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       const maxLane = laningResults.reduce((max, e) => Math.max(max, e.laneIndex), -1)
 
       // Filter by search query if needed
-      let displayEvents = laningResults
+      const displayEvents = laningResults
       if (searchQuery) {
         // If filtering, we still might want to show the row,
         // but maybe dim non-matching? Or just filter the VEHICLES list?
@@ -285,6 +285,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     }
 
     return rows
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicles, bookings, currentRomeComponents, daysInMonth])
 
   // Filter Rows for Display

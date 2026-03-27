@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NuovaCauzioneModal from './NuovaCauzioneModal'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
 
 interface Cauzione {
     id: string
@@ -56,6 +57,7 @@ export default function CauzioniTab() {
 
     useEffect(() => {
         calculateStats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cauzioni])
 
     const fetchCauzioni = async () => {
@@ -77,7 +79,7 @@ export default function CauzioniTab() {
                 data = joinData
             } else {
                 // FK join failed — fetch cauzioni plain, then enrich with separate queries
-                console.warn('FK join failed, using fallback:', joinError?.message)
+                logger.warn('FK join failed, using fallback:', joinError?.message)
                 const { data: plainData, error: plainError } = await supabase
                     .from('cauzioni')
                     .select('*')

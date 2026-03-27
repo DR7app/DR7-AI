@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../../../data/sardegnaProvince'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -137,12 +138,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        console.log('[NewClientModal] Populating modal with data:', initialData)
-        console.log('[NewClientModal] Setting editingId to:', initialData.id)
+        logger.log('[NewClientModal] Populating modal with data:', initialData)
+        logger.log('[NewClientModal] Setting editingId to:', initialData.id)
         setEditingId(initialData.id || null)
 
         // Determine type
-        let type: ClientType = initialData.tipo_cliente || 'persona_fisica'
+        const type: ClientType = initialData.tipo_cliente || 'persona_fisica'
 
         // Parse metadata safely
         const metadata = initialData.metadata || {}
@@ -231,7 +232,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         })
       } else {
         // Reset if opening in new mode
-        console.log('[NewClientModal] Opening in NEW mode - resetting form')
+        logger.log('[NewClientModal] Opening in NEW mode - resetting form')
         setEditingId(null)
         setFormData({
           tipo_cliente: 'persona_fisica',
@@ -307,7 +308,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   useEffect(() => {
     if (isOpen && initialData?.scannedFiles) {
       const files = initialData.scannedFiles
-      console.log('[NewClientModal] Loading scanned files:', Object.keys(files))
+      logger.log('[NewClientModal] Loading scanned files:', Object.keys(files))
 
       if (files.identityFront) {
         setIdentityFront(files.identityFront)
@@ -462,22 +463,22 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.pec_pa) customerData.pec = formData.pec_pa
       }
 
-      console.log('Saving customer data:', customerData)
+      logger.log('Saving customer data:', customerData)
 
       let resultData;
       let createdClientId: string | null = null;
 
-      console.log('🔍 DEBUG: initialData:', initialData)
-      console.log('🔍 DEBUG: initialData?.id:', initialData?.id)
-      console.log('🔍 DEBUG: editingId state:', editingId)
-      console.log('🔍 DEBUG: Will UPDATE?', !!editingId)
+      logger.log('🔍 DEBUG: initialData:', initialData)
+      logger.log('🔍 DEBUG: initialData?.id:', initialData?.id)
+      logger.log('🔍 DEBUG: editingId state:', editingId)
+      logger.log('🔍 DEBUG: Will UPDATE?', !!editingId)
 
       if (editingId) {
-        console.log('🔄 Updating existing customer:', initialData.id)
-        console.log('📝 Customer data to save:', customerData)
+        logger.log('🔄 Updating existing customer:', initialData.id)
+        logger.log('📝 Customer data to save:', customerData)
 
         // 1. Update customers_extended via Netlify function (bypasses RLS)
-        console.log('[NewClientModal] Updating customer via Netlify function with ID:', initialData.id)
+        logger.log('[NewClientModal] Updating customer via Netlify function with ID:', initialData.id)
         const updateResponse = await fetch('/.netlify/functions/save-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -493,7 +494,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           throw { message: updateResult.error, code: updateResult.code }
         }
 
-        console.log('✅ customers_extended updated successfully:', updateResult.customer)
+        logger.log('✅ customers_extended updated successfully:', updateResult.customer)
         resultData = updateResult.customer
         createdClientId = editingId
 
@@ -509,16 +510,16 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           updated_at: new Date().toISOString()
         }
 
-        console.log('📝 Updating basic customers table with:', basicData)
+        logger.log('📝 Updating basic customers table with:', basicData)
         const { error: basicError } = await supabase
           .from('customers')
           .update(basicData)
           .eq('id', editingId)
 
         if (basicError) {
-          console.warn('⚠️ Could not update basic customers table:', basicError)
+          logger.warn('⚠️ Could not update basic customers table:', basicError)
         } else {
-          console.log('✅ Basic customers table updated successfully')
+          logger.log('✅ Basic customers table updated successfully')
         }
 
         toast.success('Cliente aggiornato con successo!')
@@ -533,7 +534,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // CREATE NEW CUSTOMER
       if (!editingId) {
         // CREATE New via Netlify function (bypasses RLS)
-        console.log('[NewClientModal] Creating customer via Netlify function')
+        logger.log('[NewClientModal] Creating customer via Netlify function')
         const createResponse = await fetch('/.netlify/functions/save-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -568,9 +569,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             .from('customers')
             .insert([basicData])
 
-          if (basicError) console.warn('Could not insert into basic customers table (non-fatal):', basicError)
+          if (basicError) logger.warn('Could not insert into basic customers table (non-fatal):', basicError)
         } catch (legacyError) {
-          console.warn('Silent error saving to legacy customers table:', legacyError)
+          logger.warn('Silent error saving to legacy customers table:', legacyError)
         }
 
         toast.success('Cliente creato con successo!')
@@ -580,11 +581,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       const hasAnyFile = driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack
 
       if (createdClientId && hasAnyFile) {
-        console.log('Uploading documents for client:', createdClientId)
+        logger.log('Uploading documents for client:', createdClientId)
 
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (!user || authError) {
-          console.warn('Cannot upload documents: user not authenticated')
+          logger.warn('Cannot upload documents: user not authenticated')
         } else {
           // Helper function to upload a single file
           const uploadFile = async (file: File, bucketParams: string, docType: string, suffix: string = '') => {
@@ -615,7 +616,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   uploaded_by: user.id
                 })
 
-              console.log(`✅ ${docType}${suffix} uploaded successfully`)
+              logger.log(`✅ ${docType}${suffix} uploaded successfully`)
               return true
             } catch (error: any) {
               console.error(`Error uploading ${docType}${suffix}:`, error)
@@ -643,7 +644,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // with this customer's email (or phone) and update their user_id to this UUID.
       // This ensures the "temp" customer merges into this real one in the UI.
       if (createdClientId && (formData.email || formData.telefono)) {
-        console.log('Linking bookings to customer:', createdClientId)
+        logger.log('Linking bookings to customer:', createdClientId)
         const conditions = []
         if (formData.email) conditions.push(`customer_email.eq.${formData.email}`)
         // Optional: also link by phone if email is missing in booking, but email is safer
@@ -660,7 +661,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           // if (linkError) {
           //   console.error('Error linking bookings:', linkError)
           // } else {
-          //   console.log('✅ Bookings successfully linked to', createdClientId)
+          //   logger.log('✅ Bookings successfully linked to', createdClientId)
           // }
         }
       }

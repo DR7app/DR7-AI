@@ -78,6 +78,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
 
   useEffect(() => {
     loadDashboard()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participantId])
 
   async function loadDashboard() {

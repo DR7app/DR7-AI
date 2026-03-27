@@ -306,7 +306,7 @@ export default function MessaggiSistemaTab() {
                 .limit(20)
 
             // Search by phone
-            const cleanQ = query.replace(/[\s\-\+\(\)]/g, '')
+            const cleanQ = query.replace(/[\s\-+()]/g, '')
             const { data: byPhone } = await supabase
                 .from('customers_extended')
                 .select('id, nome, cognome, telefono')
@@ -367,7 +367,7 @@ export default function MessaggiSistemaTab() {
     }
 
     function cleanPhone(phone: string): string {
-        let cleaned = phone.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+        let cleaned = phone.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
         if (cleaned.startsWith('00')) {
             cleaned = cleaned.substring(2)
         }

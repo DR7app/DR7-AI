@@ -140,6 +140,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         return () => {
             document.body.style.overflow = 'unset'
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, selectedDate])
 
     useEffect(() => {
@@ -156,6 +157,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         return () => {
             subscription.unsubscribe()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, selectedDate])
 
     useEffect(() => {

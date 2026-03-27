@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
 
 interface CustomerDocumentsProps {
   customerId: string
@@ -88,6 +89,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
   useEffect(() => {
     loadCustomerData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId])
 
   async function loadCustomerData() {
@@ -194,7 +196,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
           upsert: true
         })
 
-      console.log('Upload result:', uploadData)
+      logger.log('Upload result:', uploadData)
       if (uploadError) throw uploadError
 
       // Check if document already exists for this type

@@ -74,8 +74,8 @@ export default function ReviewManagementTab() {
   // Data state
   const [candidates, setCandidates] = useState<ReviewCandidate[]>([])
   const [stats, setStats] = useState<DashboardStats>({ eligible: 0, to_review: 0, excluded: 0, to_send: 0, sent: 0, failed: 0 })
-  const [_settings, setSettings] = useState<ReviewSettings>(DEFAULT_SETTINGS)
-  const [_templates, setTemplates] = useState<ReviewTemplate[]>([])
+  const [, setSettings] = useState<ReviewSettings>(DEFAULT_SETTINGS)
+  const [, setTemplates] = useState<ReviewTemplate[]>([])
 
   // UI state
   const [loading, setLoading] = useState(true)
@@ -98,10 +98,12 @@ export default function ReviewManagementTab() {
 
   useEffect(() => {
     loadAll()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     fetchCandidates()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, filterServiceType])
 
   async function loadAll() {

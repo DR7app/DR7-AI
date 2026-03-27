@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
+import { logger } from '../../../utils/logger'
 
 interface BookingDetailsPanelProps {
   booking: any
@@ -42,6 +43,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           }
         })
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id])
   // MONETARY UNIT CONTRACT: All price fields are stored in CENTS (integer)
   // Example: price_total = 60000 means €600.00
@@ -70,12 +72,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
 
   // DEBUG: Always log monetary values to verify correct conversion
   console.group(`💰 Payment Debug: Booking ${booking.id}`)
-  console.log('Raw total (cents):', totalCents, '→', formatEUR(totalCents))
-  console.log('Raw paid (cents):', paidCents, '→', formatEUR(paidCents))
-  console.log('Converted total (EUR):', totalEur.toFixed(2))
-  console.log('Converted paid (EUR):', paidEur.toFixed(2))
-  console.log('Remaining (EUR):', remainingEur.toFixed(2))
-  console.log('Payment status:', isPaid ? 'PAID' : 'UNPAID')
+  logger.log('Raw total (cents):', totalCents, '→', formatEUR(totalCents))
+  logger.log('Raw paid (cents):', paidCents, '→', formatEUR(paidCents))
+  logger.log('Converted total (EUR):', totalEur.toFixed(2))
+  logger.log('Converted paid (EUR):', paidEur.toFixed(2))
+  logger.log('Remaining (EUR):', remainingEur.toFixed(2))
+  logger.log('Payment status:', isPaid ? 'PAID' : 'UNPAID')
   console.groupEnd()
 
   // Delivery & Pickup fees (in cents)
@@ -199,7 +201,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                           } else {
                             toast.error('Errore: ' + (data.error || 'Errore sconosciuto'));
                           }
-                        } catch (e) {
+                        } catch {
                           toast.error('Errore invio link di pagamento');
                         } finally {
                           setGeneratingLink(false)

@@ -153,6 +153,7 @@ export default function PdfViewer({ url, className }: PdfViewerProps) {
         return () => {
             cancelled = true
             pdfRef.current = null
+            // eslint-disable-next-line react-hooks/exhaustive-deps
             renderedPagesRef.current.clear()
         }
     }, [url, clearContainer, renderPage])

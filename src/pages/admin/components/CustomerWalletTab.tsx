@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
 
 interface CustomerResult {
   id: string
@@ -130,7 +131,7 @@ export default function CustomerWalletTab() {
         const cbData = await cbRes.json()
         if (cbData.success) creditBalances = cbData.balances
       } catch (e) {
-        console.warn('Failed to load credit balances via function, trying direct:', e)
+        logger.warn('Failed to load credit balances via function, trying direct:', e)
       }
       // Fallback: direct query
       if (!creditBalances) {

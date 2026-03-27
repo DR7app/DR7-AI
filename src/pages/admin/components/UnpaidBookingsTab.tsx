@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { logger } from '../../../utils/logger'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -370,7 +371,7 @@ export default function UnpaidBookingsTab() {
             }
           }
         } catch (invoiceErr) {
-          console.warn('Auto-invoice generation failed:', invoiceErr)
+          logger.warn('Auto-invoice generation failed:', invoiceErr)
         }
       }
 
@@ -584,7 +585,7 @@ export default function UnpaidBookingsTab() {
             }),
           })
         } catch (calError) {
-          console.warn('Failed to delete from Google Calendar:', calError)
+          logger.warn('Failed to delete from Google Calendar:', calError)
         }
       }
 
@@ -1505,6 +1506,7 @@ export default function UnpaidBookingsTab() {
     })
 
     return groups
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookings, fatturaItemsMap, mitChargedMap, filterService, searchQuery, sortBy, sortDir])
 
   // ── Stats ──────────────────────────────────────────────────────────────────

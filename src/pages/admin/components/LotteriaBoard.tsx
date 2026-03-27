@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../supabaseClient';
 import { useAdminRole } from '../../../hooks/useAdminRole';
 import NewClientModal from './NewClientModal';
+import { logger } from '../../../utils/logger'
 
 // Generate UUID for ticket
 function generateTicketUuid(ticketNumber: number): string {
@@ -15,7 +16,7 @@ async function sendWhatsAppNotification(ticketNumbers: number[], fullName: strin
   try {
     const ticketList = ticketNumbers.map(n => `#${String(n).padStart(4, '0')}`).join(', ');
 
-    console.log('[WhatsApp] Sending notification for tickets:', ticketList);
+    logger.log('[WhatsApp] Sending notification for tickets:', ticketList);
 
     const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
       method: 'POST',
@@ -27,7 +28,7 @@ async function sendWhatsAppNotification(ticketNumbers: number[], fullName: strin
       })
     });
 
-    console.log('[WhatsApp] Response status:', response.status);
+    logger.log('[WhatsApp] Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -36,7 +37,7 @@ async function sendWhatsAppNotification(ticketNumbers: number[], fullName: strin
     }
 
     const result = await response.json();
-    console.log('[WhatsApp] Success:', result);
+    logger.log('[WhatsApp] Success:', result);
 
     if (result.success) {
       return { success: true };
@@ -208,7 +209,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
   // Load customers on mount - same logic as CustomersTab
   useEffect(() => {
     const loadCustomers = async () => {
-      console.log('[ManualSaleModal] Loading customers...');
+      logger.log('[ManualSaleModal] Loading customers...');
 
       const customerMap = new Map<string, Customer>();
 
@@ -223,7 +224,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
       }
 
       if (bookingsData) {
-        console.log('[ManualSaleModal] Bookings found:', bookingsData.length);
+        logger.log('[ManualSaleModal] Bookings found:', bookingsData.length);
         bookingsData.forEach((booking: any) => {
           const details = booking.booking_details?.customer || {};
           const customerName = booking.customer_name || details.fullName || 'Cliente';
@@ -247,7 +248,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
             }
           }
         });
-        console.log('[ManualSaleModal] Unique customers from bookings:', customerMap.size);
+        logger.log('[ManualSaleModal] Unique customers from bookings:', customerMap.size);
       }
 
       // Get customers from customers table
@@ -257,7 +258,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
         .order('created_at', { ascending: false });
 
       if (!customersError && customersData) {
-        console.log('[ManualSaleModal] Customers from customers table:', customersData.length);
+        logger.log('[ManualSaleModal] Customers from customers table:', customersData.length);
         customersData.forEach((c: any) => {
           const key = c.email || c.phone || c.id;
           if (key && !customerMap.has(key)) {
@@ -282,7 +283,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
       }
 
       if (!customersExtendedError && customersExtendedData) {
-        console.log('[ManualSaleModal] Extended customers found:', customersExtendedData.length);
+        logger.log('[ManualSaleModal] Extended customers found:', customersExtendedData.length);
         customersExtendedData.forEach((customer: any) => {
           const key = customer.email || customer.telefono || customer.id;
 
@@ -322,7 +323,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
       }
 
       const mergedCustomers = Array.from(customerMap.values());
-      console.log('[ManualSaleModal] Total customers:', mergedCustomers.length);
+      logger.log('[ManualSaleModal] Total customers:', mergedCustomers.length);
 
       setCustomers(mergedCustomers);
       setFilteredCustomers(mergedCustomers);
@@ -687,7 +688,7 @@ const LotteriaBoard: React.FC = () => {
     try {
       setGeneratingPdf(true);
       let successCount = 0;
-      let failedTickets: number[] = [];
+      const failedTickets: number[] = [];
 
       // Calculate total discounted price for all tickets
       const totalPrice = calculateTotalPrice(ticketNumbers.length);
@@ -784,7 +785,7 @@ const LotteriaBoard: React.FC = () => {
         const soldTicketNumbers = ticketNumbers.filter(n => !failedTickets.includes(n));
         whatsappResult = await sendWhatsAppNotification(soldTicketNumbers, fullName, email, phone);
         if (!whatsappResult.success) {
-          console.warn('[WhatsApp] Failed to send notification:', whatsappResult.error);
+          logger.warn('[WhatsApp] Failed to send notification:', whatsappResult.error);
         }
       }
 
@@ -819,15 +820,15 @@ const LotteriaBoard: React.FC = () => {
 
   const handleManualSale = async (ticketNumber: number, email: string, fullName: string, phone: string, paymentMethod: string = 'Contanti') => {
     try {
-      console.log('[handleManualSale] ========== STARTING SALE ==========');
-      console.log('[handleManualSale] Ticket:', ticketNumber);
-      console.log('[handleManualSale] Email:', email);
-      console.log('[handleManualSale] Name:', fullName);
-      console.log('[handleManualSale] Phone:', phone);
-      console.log('[handleManualSale] Payment:', paymentMethod);
+      logger.log('[handleManualSale] ========== STARTING SALE ==========');
+      logger.log('[handleManualSale] Ticket:', ticketNumber);
+      logger.log('[handleManualSale] Email:', email);
+      logger.log('[handleManualSale] Name:', fullName);
+      logger.log('[handleManualSale] Phone:', phone);
+      logger.log('[handleManualSale] Payment:', paymentMethod);
 
       // Double-check ticket is still available before attempted sale
-      console.log('[handleManualSale] Checking if ticket is already sold...');
+      logger.log('[handleManualSale] Checking if ticket is already sold...');
       const { data: existingTicket } = await supabase
         .from('commercial_operation_tickets')
         .select('ticket_number')
@@ -835,14 +836,14 @@ const LotteriaBoard: React.FC = () => {
         .single();
 
       if (existingTicket) {
-        console.log('[handleManualSale] Ticket already sold, aborting');
+        logger.log('[handleManualSale] Ticket already sold, aborting');
         alert(`Biglietto #${String(ticketNumber).padStart(4, '0')} è già stato venduto!`);
         await fetchSoldTickets(); // Refresh to show current state
         setSelectedTicket(null);
         return;
       }
 
-      console.log('[handleManualSale] Ticket is available, proceeding with sale');
+      logger.log('[handleManualSale] Ticket is available, proceeding with sale');
 
       const uuid = generateTicketUuid(ticketNumber);
 
@@ -859,23 +860,23 @@ const LotteriaBoard: React.FC = () => {
         quantity: 1
       };
 
-      console.log('[handleManualSale] Attempting to insert ticket with data:', ticketData);
+      logger.log('[handleManualSale] Attempting to insert ticket with data:', ticketData);
 
       // Try with payment_method first
-      console.log('[handleManualSale] Inserting into database with payment_method...');
+      logger.log('[handleManualSale] Inserting into database with payment_method...');
       let insertResult = await supabase
         .from('commercial_operation_tickets')
         .insert([{ ...ticketData, payment_method: paymentMethod }]);
 
-      console.log('[handleManualSale] Insert result:', insertResult);
+      logger.log('[handleManualSale] Insert result:', insertResult);
 
       // If payment_method column doesn't exist, try without it
       if (insertResult.error && insertResult.error.code === '42703') {
-        console.warn('[handleManualSale] payment_method column not found, retrying without it');
+        logger.warn('[handleManualSale] payment_method column not found, retrying without it');
         insertResult = await supabase
           .from('commercial_operation_tickets')
           .insert([ticketData]);
-        console.log('[handleManualSale] Retry insert result:', insertResult);
+        logger.log('[handleManualSale] Retry insert result:', insertResult);
       }
 
       const { error } = insertResult;
@@ -895,17 +896,17 @@ const LotteriaBoard: React.FC = () => {
         }
       } else {
         // Successfully inserted ticket, now generate and send PDF
-        console.log(`[Lottery] Ticket ${ticketNumber} inserted, generating PDF...`);
+        logger.log(`[Lottery] Ticket ${ticketNumber} inserted, generating PDF...`);
         setGeneratingPdf(true);
 
         // Send WhatsApp notification to admin
         const whatsappResult = await sendWhatsAppNotification([ticketNumber], fullName, email, phone);
         if (!whatsappResult.success) {
-          console.warn('[WhatsApp] Failed to send notification:', whatsappResult.error);
+          logger.warn('[WhatsApp] Failed to send notification:', whatsappResult.error);
         }
 
         try {
-          console.log('[Lottery] Fetching full customer data from database...');
+          logger.log('[Lottery] Fetching full customer data from database...');
           // Fetch full customer data from database
           const { data: customerData } = await supabase
             .from('customers_extended')
@@ -913,9 +914,9 @@ const LotteriaBoard: React.FC = () => {
             .eq('email', email)
             .single();
 
-          console.log('[Lottery] Customer data fetched:', customerData);
+          logger.log('[Lottery] Customer data fetched:', customerData);
 
-          console.log('[Lottery] Calling PDF generation function...');
+          logger.log('[Lottery] Calling PDF generation function...');
           const pdfResponse = await fetch('https://dr7empire.com/.netlify/functions/send-manual-ticket-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -928,9 +929,9 @@ const LotteriaBoard: React.FC = () => {
             })
           });
 
-          console.log('[Lottery] PDF function response status:', pdfResponse.status);
+          logger.log('[Lottery] PDF function response status:', pdfResponse.status);
           const pdfResult = await pdfResponse.json();
-          console.log('[Lottery] PDF function result:', pdfResult);
+          logger.log('[Lottery] PDF function result:', pdfResult);
 
           setGeneratingPdf(false);
 
@@ -974,10 +975,10 @@ const LotteriaBoard: React.FC = () => {
   };
 
   const handleTicketClick = (ticketNumber: number) => {
-    console.log('[TicketClick] Clicked ticket:', ticketNumber);
+    logger.log('[TicketClick] Clicked ticket:', ticketNumber);
 
     if (soldTickets.has(ticketNumber)) {
-      console.log('[TicketClick] Ticket already sold, showing details modal');
+      logger.log('[TicketClick] Ticket already sold, showing details modal');
       // Show ticket details modal
       const ticket = soldTickets.get(ticketNumber);
       if (ticket) {
@@ -988,7 +989,7 @@ const LotteriaBoard: React.FC = () => {
     }
 
     if (multiSelectMode) {
-      console.log('[TicketClick] Multi-select mode');
+      logger.log('[TicketClick] Multi-select mode');
       // Toggle selection in multi-select mode
       setSelectedTickets(prev => {
         if (prev.includes(ticketNumber)) {
@@ -999,7 +1000,7 @@ const LotteriaBoard: React.FC = () => {
       });
     } else {
       // Single ticket sale - Open ManualSaleModal directly
-      console.log('[TicketClick] Opening ManualSaleModal for ticket:', ticketNumber);
+      logger.log('[TicketClick] Opening ManualSaleModal for ticket:', ticketNumber);
       setSelectedTicket(ticketNumber);
     }
   };
@@ -1035,6 +1036,7 @@ const LotteriaBoard: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleCancelTicket = async (ticketNumber: number, email: string, _fullName: string) => {
     try {
       const { error } = await supabase
@@ -1117,7 +1119,7 @@ const LotteriaBoard: React.FC = () => {
     setSendingEmails(true);
     try {
       // First, auto-save the template
-      console.log('[LotteriaBoard] Auto-saving template before sending...');
+      logger.log('[LotteriaBoard] Auto-saving template before sending...');
 
       // Auto-generate HTML from text content
       const textLines = emailTextContent.split('\n');
@@ -1168,7 +1170,7 @@ const LotteriaBoard: React.FC = () => {
       });
 
       // Then send emails
-      console.log('[LotteriaBoard] Sending emails...');
+      logger.log('[LotteriaBoard] Sending emails...');
 
       const requestBody: any = {};
       if (!sendToAll) {
@@ -1192,7 +1194,7 @@ const LotteriaBoard: React.FC = () => {
       }
     } catch (error: any) {
       console.error('[LotteriaBoard] Error sending emails:', error);
-      alert(`❌ Errore nell\'invio delle email:\n${error.message}`);
+      alert(`❌ Errore nell'invio delle email:\n${error.message}`);
     } finally {
       setSendingEmails(false);
     }
@@ -1503,7 +1505,7 @@ const LotteriaBoard: React.FC = () => {
           }}
           onOpenNewClientModal={() => {
             // Store current ticket number before opening NewClientModal
-            console.log('[ManualSaleModal] Opening NewClientModal for single ticket:', selectedTicket);
+            logger.log('[ManualSaleModal] Opening NewClientModal for single ticket:', selectedTicket);
             setPendingTicketNumbers([selectedTicket]);
             setIsBulkSale(false);
             setShowNewClientModal(true);
@@ -1539,11 +1541,11 @@ const LotteriaBoard: React.FC = () => {
           setPendingClientData(null);
         }}
         onConfirm={async (paymentMethod) => {
-          console.log('[PaymentModal] ========== CONFIRM BUTTON CLICKED ==========');
-          console.log('[PaymentModal] Payment method:', paymentMethod);
-          console.log('[PaymentModal] Pending tickets:', pendingTicketNumbers);
-          console.log('[PaymentModal] Client data:', pendingClientData);
-          console.log('[PaymentModal] Is bulk sale:', isBulkSale);
+          logger.log('[PaymentModal] ========== CONFIRM BUTTON CLICKED ==========');
+          logger.log('[PaymentModal] Payment method:', paymentMethod);
+          logger.log('[PaymentModal] Pending tickets:', pendingTicketNumbers);
+          logger.log('[PaymentModal] Client data:', pendingClientData);
+          logger.log('[PaymentModal] Is bulk sale:', isBulkSale);
 
           setShowPaymentModal(false);
 
@@ -1551,7 +1553,7 @@ const LotteriaBoard: React.FC = () => {
           if (pendingTicketNumbers && pendingTicketNumbers.length > 0 && pendingClientData) {
             try {
               if (isBulkSale && pendingTicketNumbers.length > 1) {
-                console.log('[PaymentModal] Starting BULK sale for', pendingTicketNumbers.length, 'tickets...');
+                logger.log('[PaymentModal] Starting BULK sale for', pendingTicketNumbers.length, 'tickets...');
                 await handleBulkManualSale(
                   pendingTicketNumbers,
                   pendingClientData.email,
@@ -1559,9 +1561,9 @@ const LotteriaBoard: React.FC = () => {
                   pendingClientData.phone,
                   paymentMethod
                 );
-                console.log('[PaymentModal] Bulk sale completed');
+                logger.log('[PaymentModal] Bulk sale completed');
               } else {
-                console.log('[PaymentModal] Starting SINGLE sale for ticket', pendingTicketNumbers[0], '...');
+                logger.log('[PaymentModal] Starting SINGLE sale for ticket', pendingTicketNumbers[0], '...');
                 await handleManualSale(
                   pendingTicketNumbers[0],
                   pendingClientData.email,
@@ -1569,9 +1571,9 @@ const LotteriaBoard: React.FC = () => {
                   pendingClientData.phone,
                   paymentMethod
                 );
-                console.log('[PaymentModal] Single sale completed');
+                logger.log('[PaymentModal] Single sale completed');
               }
-              console.log('[PaymentModal] Sale process finished successfully');
+              logger.log('[PaymentModal] Sale process finished successfully');
             } catch (error) {
               console.error('[PaymentModal] Error during sale:', error);
               alert(`Errore durante la vendita: ${error}`);
@@ -1584,7 +1586,7 @@ const LotteriaBoard: React.FC = () => {
           }
 
           // Reset state
-          console.log('[PaymentModal] Resetting state...');
+          logger.log('[PaymentModal] Resetting state...');
           setPendingTicketNumbers(null);
           setPendingClientData(null);
         }}
@@ -1594,23 +1596,23 @@ const LotteriaBoard: React.FC = () => {
       <NewClientModal
         isOpen={showNewClientModal}
         onClose={() => {
-          console.log('[NewClientModal] onClose called');
-          console.log('[NewClientModal] isCreatingClient.current:', isCreatingClient.current);
+          logger.log('[NewClientModal] onClose called');
+          logger.log('[NewClientModal] isCreatingClient.current:', isCreatingClient.current);
           setShowNewClientModal(false);
           // Only reset state if user cancelled (not in the middle of creating a client)
           if (!isCreatingClient.current) {
-            console.log('[NewClientModal] User cancelled, resetting state');
+            logger.log('[NewClientModal] User cancelled, resetting state');
             setPendingTicketNumbers(null);
             setPendingClientData(null);
           } else {
-            console.log('[NewClientModal] Client creation in progress, keeping state');
+            logger.log('[NewClientModal] Client creation in progress, keeping state');
           }
         }}
         onClientCreated={async (clientId) => {
-          console.log('[NewClientModal] ===== CLIENT CREATED =====');
-          console.log('[NewClientModal] Client ID:', clientId);
-          console.log('[NewClientModal] pendingTicketNumbers:', pendingTicketNumbers);
-          console.log('[NewClientModal] isBulkSale:', isBulkSale);
+          logger.log('[NewClientModal] ===== CLIENT CREATED =====');
+          logger.log('[NewClientModal] Client ID:', clientId);
+          logger.log('[NewClientModal] pendingTicketNumbers:', pendingTicketNumbers);
+          logger.log('[NewClientModal] isBulkSale:', isBulkSale);
 
           // Set flag to prevent onClose from resetting state
           isCreatingClient.current = true;
@@ -1645,8 +1647,8 @@ const LotteriaBoard: React.FC = () => {
                 fullName = data.ente_ufficio || '';
               }
 
-              console.log('[NewClientModal] Extracted client data:', { email, fullName, phone });
-              console.log('[NewClientModal] Pending ticket numbers:', pendingTicketNumbers);
+              logger.log('[NewClientModal] Extracted client data:', { email, fullName, phone });
+              logger.log('[NewClientModal] Pending ticket numbers:', pendingTicketNumbers);
 
               // Store client data and verify pendingTicketNumbers is still set
               if (!pendingTicketNumbers || pendingTicketNumbers.length === 0) {
@@ -1670,7 +1672,7 @@ const LotteriaBoard: React.FC = () => {
               // Open PaymentModal immediately after closing
               // Use setTimeout to ensure modal transition completes
               setTimeout(() => {
-                console.log('[NewClientModal] Opening PaymentMethodModal');
+                logger.log('[NewClientModal] Opening PaymentMethodModal');
                 setShowPaymentModal(true);
               }, 50);
             }

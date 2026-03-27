@@ -24,15 +24,14 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
 
     useEffect(() => {
         if (isOpen && scan) {
+            async function loadFileUrl() {
+                const { data } = await supabase.storage.from('scans').createSignedUrl(scan.file_path, 3600);
+                if (data) setFileUrl(data.signedUrl);
+            }
             loadFileUrl();
             if (!scan.customer_id) searchCustomers('');
         }
     }, [isOpen, scan]);
-
-    async function loadFileUrl() {
-        const { data } = await supabase.storage.from('scans').createSignedUrl(scan.file_path, 3600);
-        if (data) setFileUrl(data.signedUrl);
-    }
 
     async function searchCustomers(query: string) {
         let q = supabase.from('customers_extended').select('id, nome, cognome, email').limit(10);
@@ -54,7 +53,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
             // Parse birth date to ISO format
             let birthDate = null;
             if (extractedData.data_nascita) {
-                const parts = extractedData.data_nascita.split(/[\/\-\.]/);
+                const parts = extractedData.data_nascita.split(/[/\-.]/);
                 if (parts.length === 3) {
                     birthDate = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
                 }

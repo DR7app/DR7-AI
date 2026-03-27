@@ -1,10 +1,12 @@
+import { logger } from '../../../utils/logger'
+
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string
   options: { value: string; label: string }[]
 }
 
 export default function Select({ label, options, className = '', ...props }: SelectProps) {
-  console.log('Select component rendering with options:', options.length)
+  logger.log('Select component rendering with options:', options.length)
   return (
     <div>
       {label && (

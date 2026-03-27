@@ -13,6 +13,7 @@
  */
 
 import { createRomeDate, getRomeDateComponents } from './timezoneUtils'
+import { logger } from '../utils/logger'
 
 // Configuration constants
 const BUFFER_MINUTES = 75 // 30min gap + 45min wash
@@ -70,7 +71,7 @@ export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean
     // First try vehicle_id (most reliable) - check both top-level and booking_details
     const bookingVehicleId = booking.vehicle_id || (booking as any).booking_details?.vehicle_id
     if (bookingVehicleId && bookingVehicleId === vehicle.id) {
-        console.log(`[matchVehicleByPlate] MATCH by vehicle_id: ${bookingVehicleId} === ${vehicle.id}`)
+        logger.log(`[matchVehicleByPlate] MATCH by vehicle_id: ${bookingVehicleId} === ${vehicle.id}`)
         return true
     }
 
@@ -79,13 +80,13 @@ export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean
     const vehiclePlate = normalizePlate(vehicle.plate || vehicle.targa)
 
     if (bookingPlate && vehiclePlate && bookingPlate === vehiclePlate) {
-        console.log(`[matchVehicleByPlate] MATCH by plate: ${bookingPlate} === ${vehiclePlate}`)
+        logger.log(`[matchVehicleByPlate] MATCH by plate: ${bookingPlate} === ${vehiclePlate}`)
         return true
     }
 
     // Debug: log when no match found
     if (booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate) {
-        console.log(`[matchVehicleByPlate] NO MATCH: booking plate=${bookingPlate}, vehicle plate=${vehiclePlate}, booking_id=${booking.id?.substring(0,8)}`)
+        logger.log(`[matchVehicleByPlate] NO MATCH: booking plate=${bookingPlate}, vehicle plate=${vehiclePlate}, booking_id=${booking.id?.substring(0,8)}`)
     }
 
     // NO fallback to name matching - this is forbidden
@@ -299,8 +300,8 @@ export function isVehicleAvailable(
 
     // Check for booking conflicts
     // CRITICAL: Only check bookings that can be definitively matched to this specific vehicle
-    console.log(`[AVAILABILITY CHECK] Starting filter for vehicle ${vehicle.display_name}, excludeBookingId:`, excludeBookingId)
-    console.log(`[AVAILABILITY CHECK] Total bookings to check:`, existingBookings.length)
+    logger.log(`[AVAILABILITY CHECK] Starting filter for vehicle ${vehicle.display_name}, excludeBookingId:`, excludeBookingId)
+    logger.log(`[AVAILABILITY CHECK] Total bookings to check:`, existingBookings.length)
 
     const vehicleBookings = existingBookings.filter(booking => {
         // Skip the booking we're editing
@@ -316,10 +317,10 @@ export function isVehicleAvailable(
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions
         if (excludeBookingId && booking.service_type === 'car_wash') {
-            console.log('[CAR WASH CHECK] Found car wash booking:', booking.id, 'customer:', booking.customer_name)
+            logger.log('[CAR WASH CHECK] Found car wash booking:', booking.id, 'customer:', booking.customer_name)
             // Find the booking being extended to check if this car wash is linked to it
             const editingBooking = existingBookings.find(b => b.id === excludeBookingId)
-            console.log('[CAR WASH CHECK] Editing booking:', editingBooking?.id, 'customer:', editingBooking?.customer_name)
+            logger.log('[CAR WASH CHECK] Editing booking:', editingBooking?.id, 'customer:', editingBooking?.customer_name)
 
             // Check if this car wash is for the same vehicle (by plate or vehicle_id only, NEVER by name)
             const bPlate = normalizePlate(booking.vehicle_plate)
@@ -338,13 +339,13 @@ export function isVehicleAvailable(
         return matchVehicleByPlate(booking, vehicle)
     })
 
-    console.log(`[AVAILABILITY CHECK] After filtering: ${vehicleBookings.length} bookings to check for conflicts`)
+    logger.log(`[AVAILABILITY CHECK] After filtering: ${vehicleBookings.length} bookings to check for conflicts`)
 
     // Log ALL matched bookings for this vehicle to help debug
     if (vehicleBookings.length > 0) {
-        console.log(`[AVAILABILITY CHECK] Bookings matched to ${vehicle.display_name} (${vehiclePlate}):`)
+        logger.log(`[AVAILABILITY CHECK] Bookings matched to ${vehicle.display_name} (${vehiclePlate}):`)
         vehicleBookings.forEach((b, i) => {
-            console.log(`  ${i + 1}. ID: ${b.id?.substring(0, 8)} | ${new Date(b.pickup_date).toLocaleDateString('it-IT')} → ${new Date(b.dropoff_date).toLocaleDateString('it-IT')} | Customer: ${b.customer_name} | Status: ${b.status} | Plate: ${b.vehicle_plate || 'N/A'}`)
+            logger.log(`  ${i + 1}. ID: ${b.id?.substring(0, 8)} | ${new Date(b.pickup_date).toLocaleDateString('it-IT')} → ${new Date(b.dropoff_date).toLocaleDateString('it-IT')} | Customer: ${b.customer_name} | Status: ${b.status} | Plate: ${b.vehicle_plate || 'N/A'}`)
         })
     }
 

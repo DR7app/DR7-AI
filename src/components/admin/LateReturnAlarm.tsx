@@ -144,11 +144,13 @@ const LateReturnAlarm: React.FC = () => {
             pulseIntervalRef.current = null;
         }
         if (oscillatorRef.current) {
-            try { oscillatorRef.current.stop(); oscillatorRef.current.disconnect(); } catch (e) { }
+            try { oscillatorRef.current.stop(); oscillatorRef.current.disconnect(); } catch { // intentionally empty
+            }
             oscillatorRef.current = null;
         }
         if (audioContextRef.current) {
-            try { audioContextRef.current.close(); } catch (e) { }
+            try { audioContextRef.current.close(); } catch { // intentionally empty
+            }
             audioContextRef.current = null;
         }
         gainNodeRef.current = null;

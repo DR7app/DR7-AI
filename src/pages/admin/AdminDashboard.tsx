@@ -116,8 +116,8 @@ export default function AdminDashboard() {
       setNewPassword('')
       setConfirmPassword('')
       setTimeout(() => setShowPasswordModal(false), 1500)
-    } catch (err: any) {
-      setPasswordMsg({ type: 'error', text: err.message || 'Errore durante l\'aggiornamento.' })
+    } catch (err: unknown) {
+      setPasswordMsg({ type: 'error', text: (err as Error).message || 'Errore durante l\'aggiornamento.' })
     } finally {
       setPasswordLoading(false)
     }
@@ -153,6 +153,7 @@ export default function AdminDashboard() {
     return () => {
       window.removeEventListener('openBookingForm', handleOpenBookingForm as EventListener)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Reusable style helpers for nav

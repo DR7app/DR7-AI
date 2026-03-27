@@ -4,6 +4,7 @@ import Input from './Input'
 import Select from './Select'
 import Button from './Button'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import { logger } from '../../../utils/logger'
 
 interface Vehicle {
   id: string
@@ -122,7 +123,7 @@ export default function VehiclesTab() {
           .select()
 
         if (error) throw error
-        console.log('Vehicle updated:', data)
+        logger.log('Vehicle updated:', data)
       } else {
         const { data, error } = await supabase
           .from('vehicles')
@@ -130,7 +131,7 @@ export default function VehiclesTab() {
           .select()
 
         if (error) throw error
-        console.log('Vehicle created:', data)
+        logger.log('Vehicle created:', data)
       }
 
       // Sync with Google Calendar if vehicle is marked unavailable with dates
@@ -158,7 +159,7 @@ export default function VehiclesTab() {
             const errorText = await response.text();
             console.error('Failed to create calendar event:', errorText);
           } else {
-            console.log('Calendar event created successfully');
+            logger.log('Calendar event created successfully');
           }
         } catch (calendarError) {
           console.error('Error syncing with calendar:', calendarError);
@@ -176,10 +177,10 @@ export default function VehiclesTab() {
   }
 
   async function deleteVehicleLogic(id: string, vehicleName: string) {
-    console.log(`Starting deletion for vehicle: ${vehicleName} (ID: ${id})`)
+    logger.log(`Starting deletion for vehicle: ${vehicleName} (ID: ${id})`)
 
     // Delete from reservations
-    console.log('  Deleting reservations...')
+    logger.log('  Deleting reservations...')
     const { data: deletedReservations, error: resError } = await supabase
       .from('reservations')
       .delete()
@@ -190,10 +191,10 @@ export default function VehiclesTab() {
       console.error('  Error deleting reservations:', resError)
       throw new Error(`Failed to delete reservations: ${resError.message}`)
     }
-    console.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
+    logger.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
 
     // Get booking IDs first so we can delete dependent records
-    console.log('  Fetching booking IDs...')
+    logger.log('  Fetching booking IDs...')
     const { data: bookingsToDelete, error: fetchError } = await supabase
       .from('bookings')
       .select('id')
@@ -205,11 +206,11 @@ export default function VehiclesTab() {
     }
 
     const bookingIds = (bookingsToDelete || []).map(b => b.id)
-    console.log(`  Found ${bookingIds.length} bookings to delete`)
+    logger.log(`  Found ${bookingIds.length} bookings to delete`)
 
     if (bookingIds.length > 0) {
       // Delete contracts referencing these bookings (FK: contracts_booking_id_fkey)
-      console.log('  Deleting contracts...')
+      logger.log('  Deleting contracts...')
       const { error: contractError } = await supabase
         .from('contracts')
         .delete()
@@ -221,7 +222,7 @@ export default function VehiclesTab() {
       }
 
       // Delete fatture (invoices) referencing these bookings
-      console.log('  Deleting fatture...')
+      logger.log('  Deleting fatture...')
       const { error: fattureError } = await supabase
         .from('fatture')
         .delete()
@@ -234,7 +235,7 @@ export default function VehiclesTab() {
     }
 
     // Delete from bookings
-    console.log('  Deleting bookings...')
+    logger.log('  Deleting bookings...')
     const { data: deletedBookings, error: bookError } = await supabase
       .from('bookings')
       .delete()
@@ -245,10 +246,10 @@ export default function VehiclesTab() {
       console.error('  Error deleting bookings:', bookError)
       throw new Error(`Failed to delete bookings: ${bookError.message}`)
     }
-    console.log(`  Deleted ${deletedBookings?.length || 0} bookings`)
+    logger.log(`  Deleted ${deletedBookings?.length || 0} bookings`)
 
     // Delete cauzioni (security deposits) referencing this vehicle
-    console.log('  Deleting cauzioni...')
+    logger.log('  Deleting cauzioni...')
     const { error: cauzioniError } = await supabase
       .from('cauzioni')
       .delete()
@@ -260,7 +261,7 @@ export default function VehiclesTab() {
     }
 
     // Finally, delete the vehicle itself
-    console.log('  Deleting vehicle record...')
+    logger.log('  Deleting vehicle record...')
     const { data: deletedVehicle, error: vehicleError } = await supabase
       .from('vehicles')
       .delete()
@@ -277,7 +278,7 @@ export default function VehiclesTab() {
       throw new Error('Vehicle deletion failed: No rows were deleted. The vehicle may not exist or you may not have permission to delete it.')
     }
 
-    console.log('  Vehicle deleted successfully')
+    logger.log('  Vehicle deleted successfully')
   }
 
   async function handleDelete(id: string) {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince'
 import toast from 'react-hot-toast'
+import { logger } from '../utils/logger'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -125,27 +126,27 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   // Load initial data when editing
   useEffect(() => {
     if (isOpen) {
-      console.log('[NewClientModal] Modal opened. initialData:', initialData)
+      logger.log('[NewClientModal] Modal opened. initialData:', initialData)
       if (initialData) {
-        console.log('[NewClientModal] Populating modal with data:', initialData)
-        console.log('[NewClientModal] initialData.id:', initialData.id)
+        logger.log('[NewClientModal] Populating modal with data:', initialData)
+        logger.log('[NewClientModal] initialData.id:', initialData.id)
 
         // CRITICAL: Check if this is a "new" customer placeholder from booking
         // If so, we want to CREATE a new record, not update the temp ID
         if ((initialData as any)._isNew) {
-          console.log('[NewClientModal] _isNew flag detected -> Force CREATE mode')
+          logger.log('[NewClientModal] _isNew flag detected -> Force CREATE mode')
           setEditingId(null) // Force create mode
         } else {
           // If ID is a temp placeholder (starts with "temp-"), treat as CREATE 
           // so we get a real UUID from DB. 
           // The dedupe logic in CustomersTab will then hide the temp one.
           if (initialData.id && String(initialData.id).startsWith('temp-')) {
-            console.log('[NewClientModal] Temp ID detected -> Force CREATE mode to generate real UUID')
+            logger.log('[NewClientModal] Temp ID detected -> Force CREATE mode to generate real UUID')
             setEditingId(null)
           } else {
             // Real UUID -> UPDATE mode
             setEditingId(initialData.id || null)
-            console.log('[NewClientModal] Setting editingId to:', initialData.id)
+            logger.log('[NewClientModal] Setting editingId to:', initialData.id)
           }
         }
 
@@ -363,9 +364,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   }
 
   const handleSave = async () => {
-    console.log('[NewClientModal] HandleSave triggered. FormData:', formData)
+    logger.log('[NewClientModal] HandleSave triggered. FormData:', formData)
     if (!validateForm()) {
-      console.log('[NewClientModal] Validation failed. Errors:', errors)
+      logger.log('[NewClientModal] Validation failed. Errors:', errors)
       return
     }
 
@@ -447,8 +448,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.pec_pa) customerData.pec = formData.pec_pa
       }
 
-      console.log('[NewClientModal] Saving customer. editingId:', editingId)
-      console.log('[NewClientModal] Customer data to save:', customerData)
+      logger.log('[NewClientModal] Saving customer. editingId:', editingId)
+      logger.log('[NewClientModal] Customer data to save:', customerData)
 
       let result
       if (editingId) {
@@ -554,11 +555,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
     // Check global fields
     if (!formData.email || !formData.telefono || !formData.nazione) {
-      console.log('[NewClientModal] Save disabled: Missing global fields', validationStatus)
+      logger.log('[NewClientModal] Save disabled: Missing global fields', validationStatus)
       return true
     }
     if (!validateEmail(formData.email) || !validateItalianPhone(formData.telefono)) {
-      console.log('[NewClientModal] Save disabled: Invalid email or phone', validationStatus)
+      logger.log('[NewClientModal] Save disabled: Invalid email or phone', validationStatus)
       return true
     }
 
@@ -575,7 +576,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       // RELAXED VALIDATION: Address fields are now optional for saving
       if (!formData.nome || !formData.cognome || cfRequired) {
-        console.log('[NewClientModal] Save disabled: Missing persona_fisica fields', validationStatus)
+        logger.log('[NewClientModal] Save disabled: Missing persona_fisica fields', validationStatus)
         return true
       }
     }
@@ -588,7 +589,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       // RELAXED VALIDATION: Only Require Denominazione and P.IVA
       if (!formData.denominazione || !formData.partita_iva) {
-        console.log('[NewClientModal] Save disabled: Missing azienda fields', validationStatus)
+        logger.log('[NewClientModal] Save disabled: Missing azienda fields', validationStatus)
         return true
       }
     }

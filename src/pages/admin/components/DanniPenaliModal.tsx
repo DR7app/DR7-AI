@@ -366,7 +366,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                 })
                             })
                         }
-                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
                         toast.success(`Pay by Link ${purposeLabel} inviato! €${cartTotal.toFixed(2)}`)
                     } else {
                         toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import { logger } from '../../../utils/logger'
 
 interface CustomerBirthday {
     id: string
@@ -104,6 +105,7 @@ export default function BirthdaysTab() {
 
     useEffect(() => {
         loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     async function loadData() {
@@ -136,7 +138,7 @@ export default function BirthdaysTab() {
                 .eq('year', currentYear)
 
             if (sentError && sentError.code !== '42P01') {
-                console.warn('birthday_messages table may not exist:', sentError)
+                logger.warn('birthday_messages table may not exist:', sentError)
             }
 
             const sentSet = new Set((sentData || []).map(s => s.customer_id))
@@ -197,7 +199,7 @@ export default function BirthdaysTab() {
 
         // Try different formats
         // Format: DD/MM/YYYY or DD-MM-YYYY
-        const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+        const ddmmyyyy = dateStr.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
         if (ddmmyyyy) {
             return new Date(parseInt(ddmmyyyy[3]), parseInt(ddmmyyyy[2]) - 1, parseInt(ddmmyyyy[1]))
         }
@@ -328,7 +330,7 @@ export default function BirthdaysTab() {
                     .replace('{nome}', firstName)
                     .replace('{codice}', discountCode)
 
-                let cleanPhone = customer.phone!.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+                let cleanPhone = customer.phone!.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
                 if (cleanPhone.startsWith('00')) {
                     cleanPhone = cleanPhone.substring(2)
                 }
@@ -431,7 +433,7 @@ export default function BirthdaysTab() {
                 .replace('{codice}', discountCode)
 
             // Clean phone number
-            let cleanPhone = customer.phone.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+            let cleanPhone = customer.phone.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
             if (cleanPhone.startsWith('00')) {
                 cleanPhone = cleanPhone.substring(2)
             }
@@ -807,6 +809,7 @@ export default function BirthdaysTab() {
 }
 
 // Export birthday count for badge in navigation
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBirthdayCount() {
     const [count, setCount] = useState(0)
 
@@ -859,7 +862,7 @@ export function useBirthdayCount() {
 
 function parseBirthdayForHook(dateStr: string): Date | null {
     if (!dateStr) return null
-    const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    const ddmmyyyy = dateStr.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
     if (ddmmyyyy) {
         return new Date(parseInt(ddmmyyyy[3]), parseInt(ddmmyyyy[2]) - 1, parseInt(ddmmyyyy[1]))
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
+import { logger } from '../../../utils/logger'
 
 interface Booking {
     id: string
@@ -55,6 +56,7 @@ export default function DailyCalendarTab() {
         return () => {
             subscription.unsubscribe()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate])
 
     // Scroll to current time on mount
@@ -69,7 +71,7 @@ export default function DailyCalendarTab() {
     async function loadDayBookings() {
         setLoading(true)
         try {
-            console.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
+            logger.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
 
             // Fetch ALL bookings via Netlify function (bypasses RLS)
             let bookingsToProcess: any[] = []
@@ -92,7 +94,7 @@ export default function DailyCalendarTab() {
                 if (error) throw error
                 bookingsToProcess = data || []
             }
-            console.log('📋 Daily Calendar loaded:', bookingsToProcess.length, 'bookings')
+            logger.log('📋 Daily Calendar loaded:', bookingsToProcess.length, 'bookings')
 
             const categorized: Booking[] = []
 
@@ -168,7 +170,7 @@ export default function DailyCalendarTab() {
                 (booking.pickup_date ? new Date(booking.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null)
 
             if (!time) {
-                console.warn('⚠️ Missing pickup time for booking:', booking.id, booking)
+                logger.warn('⚠️ Missing pickup time for booking:', booking.id, booking)
                 return '09:00' // Default fallback
             }
             return time
@@ -180,7 +182,7 @@ export default function DailyCalendarTab() {
                 (booking.dropoff_date ? new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null)
 
             if (!time) {
-                console.warn('⚠️ Missing return time for booking:', booking.id, booking)
+                logger.warn('⚠️ Missing return time for booking:', booking.id, booking)
                 return '18:00' // Default fallback
             }
             return time

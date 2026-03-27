@@ -32,8 +32,8 @@ export default function Login() {
         logAdminAction('login', 'session', undefined, { email })
         navigate('/admin')
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in')
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to sign in')
     } finally {
       setLoading(false)
     }
@@ -51,8 +51,8 @@ export default function Login() {
       })
       if (error) throw error
       setForgotMessage('Email di recupero inviata. Controlla la tua casella di posta.')
-    } catch (err: any) {
-      setForgotError(err.message || 'Errore durante l\'invio dell\'email di recupero')
+    } catch (err: unknown) {
+      setForgotError((err as Error).message || 'Errore durante l\'invio dell\'email di recupero')
     } finally {
       setForgotLoading(false)
     }
