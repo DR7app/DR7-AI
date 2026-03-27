@@ -218,9 +218,12 @@ const handler: Handler = async (event) => {
       const amountPaidEuros = (amountPaid / 100).toFixed(2);
       const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
 
+      const isNexiPayByLink = (booking.payment_method || '').includes('Nexi Pay by Link');
       let paymentInfo = '';
       if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
         paymentInfo = `Pagato`;
+      } else if (isNexiPayByLink) {
+        paymentInfo = `In attesa di pagamento (Nexi Pay by Link) - se non pagato entro 1 ora, la prenotazione verrà annullata`;
       } else if (amountPaid > 0) {
         paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
       } else {
@@ -228,12 +231,14 @@ const handler: Handler = async (event) => {
       }
 
       const isEdit = booking.isEdit;
-      message = isEdit ? `*MODIFICA PRENOTAZIONE NOLEGGIO*\n\n` : `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
+      const headerLabel = isNexiPayByLink ? `*PRENOTAZIONE IN ATTESA DI PAGAMENTO*` : (isEdit ? `*MODIFICA PRENOTAZIONE NOLEGGIO*` : `*NUOVA PRENOTAZIONE NOLEGGIO*`);
+      message = `${headerLabel}\n\n`;
       message += `*ID:* DR7-${bookingId}\n`;
       message += `*Cliente:* ${customerName}\n`;
       message += `*Email:* ${customerEmail}\n`;
       message += `*Telefono:* ${customerPhone}\n`;
-      message += `*Veicolo:* ${vehicleName}\n`;
+      const vehiclePlate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '';
+      message += `*Veicolo:* ${vehicleName}${vehiclePlate ? ` (${vehiclePlate})` : ''}\n`;
       message += `*Ritiro:* ${pickupDateFormatted} alle ${pickupTimeFormatted}\n`;
       message += `*Riconsegna:* ${dropoffDateFormatted} alle ${dropoffTimeFormatted}\n`;
 
@@ -288,7 +293,8 @@ const handler: Handler = async (event) => {
       }
 
       const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}`;
+      // Don't append payment method again if already included in paymentInfo (e.g. Nexi Pay by Link)
+      message += `*Pagamento:* ${paymentInfo}${!isNexiPayByLink && paymentMethod ? ` (${paymentMethod})` : ''}`;
     }
   } else {
     return {
@@ -308,7 +314,7 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         chatId: `${targetPhone}@c.us`,
-        message: message,
+        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
       }),
     });
 

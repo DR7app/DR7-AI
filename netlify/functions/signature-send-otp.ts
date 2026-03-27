@@ -94,7 +94,7 @@ export const handler: Handler = async (event) => {
         }
 
         // If no phone from booking, try contract
-        if (!customerPhone) {
+        if (!customerPhone && sigRequest.contract_id) {
             const { data: contract } = await supabase
                 .from('contracts')
                 .select('customer_phone')
@@ -105,6 +105,19 @@ export const handler: Handler = async (event) => {
                 console.log(`[signature-send-otp] Contract phone: "${contract.customer_phone}"`)
             } else {
                 console.log(`[signature-send-otp] No contract found for contract_id=${sigRequest.contract_id}`)
+            }
+        }
+
+        // If still no phone, try customers_extended by email (for standalone documents)
+        if (!customerPhone && sigRequest.signer_email) {
+            const { data: customer } = await supabase
+                .from('customers_extended')
+                .select('telefono')
+                .eq('email', sigRequest.signer_email)
+                .maybeSingle()
+            if (customer?.telefono) {
+                customerPhone = customer.telefono
+                console.log(`[signature-send-otp] Customer phone from email lookup: "${customerPhone}"`)
             }
         }
 
@@ -125,7 +138,7 @@ export const handler: Handler = async (event) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chatId: `${cleanPhone}@c.us`,
-                        message: `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto e:\n\n*${otp}*\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questo messaggio.\n\n_Messaggio automatico di sistema._`
+                        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto e:\n\n*${otp}*\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questo messaggio.\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
                     })
                 })
 

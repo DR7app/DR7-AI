@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import { useTheme } from '../contexts/ThemeContext'
+import { logAdminAction } from '../utils/logAdminAction'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -14,7 +14,6 @@ export default function Login() {
   const [forgotMessage, setForgotMessage] = useState('')
   const [forgotError, setForgotError] = useState('')
   const navigate = useNavigate()
-  const { theme, toggleTheme } = useTheme()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -30,6 +29,7 @@ export default function Login() {
       if (error) throw error
 
       if (data.session) {
+        logAdminAction('login', 'session', undefined, { email })
         navigate('/admin')
       }
     } catch (err: any) {
@@ -61,31 +61,13 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden bg-theme-bg-primary">
 
-      {/* Theme toggle - top right */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-6 right-6 z-20 p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
-        title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        aria-label="Toggle theme"
-      >
-        {theme === 'dark' ? (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        ) : (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        )}
-      </button>
-
       <div className="w-full max-w-xl relative z-10">
         {/* Main Card */}
-        <div className={`bg-theme-bg-primary rounded-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border relative ${theme === 'dark' ? 'shadow-2xl' : ''}`}>
+        <div className="bg-theme-bg-primary rounded-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border relative">
 
           <div className="relative">
             <div className="flex justify-center mb-4">
-              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7 Empire" className={`h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain ${theme === 'dark' ? 'drop-shadow-2xl' : 'mix-blend-multiply'}`} />
+              <img src="/rentora-logo.jpeg" alt="Rentora" className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain" />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -128,7 +110,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-dr7-gold hover:bg-yellow-500 text-black font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm"
+                className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm"
               >
                 {loading ? 'Accesso in corso...' : 'Accedi'}
               </button>

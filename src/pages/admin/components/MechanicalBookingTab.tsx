@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import NewClientModal from './NewClientModal'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface Customer {
   id: string
@@ -138,6 +139,7 @@ export default function MechanicalBookingTab() {
         .eq('id', id)
 
       if (error) throw error
+      logAdminAction('delete_mechanical', 'mechanical_booking', id)
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
@@ -148,6 +150,13 @@ export default function MechanicalBookingTab() {
 
   async function handleGenerateInvoice(booking: MechanicalBooking) {
     if (!booking.id) return
+
+    // Never generate fattura for unpaid bookings
+    const ps = booking.payment_status
+    if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
+      alert('Impossibile generare fattura: la prenotazione non è stata pagata')
+      return
+    }
 
     // Include IVA (22%) in invoice breakdown
     const includeIVA = true
@@ -198,6 +207,7 @@ export default function MechanicalBookingTab() {
         alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
+      logAdminAction('generate_mechanical_fattura', 'mechanical_booking', booking.id)
       loadData()
     } catch (error: any) {
       console.error('Error generating invoice:', error)
@@ -234,7 +244,7 @@ export default function MechanicalBookingTab() {
         <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Meccanica</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
+          className="px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
         >
           + Nuova Prenotazione
         </button>

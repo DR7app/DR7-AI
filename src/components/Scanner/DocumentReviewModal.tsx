@@ -303,7 +303,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                             <button
                                 onClick={handleConfirm}
                                 disabled={loading || !customerId}
-                                className="flex-1 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? 'Salvataggio...' : customerId ? 'Conferma e Salva' : 'Seleziona Cliente'}
                             </button>

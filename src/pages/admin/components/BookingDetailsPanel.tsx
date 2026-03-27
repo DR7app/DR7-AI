@@ -26,13 +26,13 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
     if (custId && (needsName || needsPhone || needsEmail)) {
       supabase
         .from('customers_extended')
-        .select('nome, cognome, telefono, email, denominazione, tipo_cliente')
+        .select('nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
         .eq('id', custId)
         .single()
         .then(({ data }) => {
           if (data) {
             const fullName = data.tipo_cliente === 'azienda'
-              ? data.denominazione
+              ? (data.ragione_sociale || data.denominazione)
               : `${data.nome || ''} ${data.cognome || ''}`.trim()
             setResolvedCustomer({
               name: fullName || undefined,

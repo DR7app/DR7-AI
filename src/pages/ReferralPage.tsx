@@ -34,7 +34,7 @@ export default function ReferralPage() {
     <div className="min-h-screen bg-[#0d0d1a]">
       {/* Background */}
       <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#16213e]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0f1a27] via-[#1a2332] to-[#162e3e]" />
         <div className="absolute inset-0 opacity-5" style={{
           backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
           backgroundSize: '40px 40px',
@@ -80,7 +80,7 @@ export default function ReferralPage() {
             {/* Hero */}
             <div className="text-center space-y-4">
               <h1 className="text-4xl sm:text-5xl font-black text-white leading-tight">
-                DR7 <span className="text-[#d4af37]">PAGA</span> I SUOI UTENTI
+                DR7 <span className="text-[#2d8a7e]">PAGA</span> I SUOI UTENTI
               </h1>
               <p className="text-gray-400 text-lg max-w-xl mx-auto">
                 Registrati gratis, ricevi credito immediato e guadagna invitando i tuoi amici!

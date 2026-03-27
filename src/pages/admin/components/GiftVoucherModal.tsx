@@ -188,7 +188,7 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
                                         />
                                         <label
                                             htmlFor="voucher-image"
-                                            className="cursor-pointer inline-block px-4 py-2 bg-dr7-gold text-black rounded-full hover:bg-dr7-gold/90"
+                                            className="cursor-pointer inline-block px-4 py-2 bg-dr7-gold text-white rounded-full hover:bg-dr7-gold/90"
                                         >
                                             Carica Immagini Multiple (JPEG/PNG)
                                         </label>

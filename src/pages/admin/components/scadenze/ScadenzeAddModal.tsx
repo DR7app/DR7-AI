@@ -172,7 +172,7 @@ export default function ScadenzeAddModal({ initialCategory, onAdd, onClose }: Sc
           <button
             onClick={handleSubmit}
             disabled={!form.item_type || !form.due_date || submitting}
-            className="px-4 py-2 bg-dr7-gold text-black rounded-lg font-medium hover:bg-dr7-gold/90 disabled:opacity-50"
+            className="px-4 py-2 bg-dr7-gold text-white rounded-lg font-medium hover:bg-dr7-gold/90 disabled:opacity-50"
           >
             {submitting ? 'Aggiunta...' : 'Aggiungi'}
           </button>

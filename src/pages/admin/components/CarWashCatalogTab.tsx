@@ -344,7 +344,7 @@ function ServiceCard({
           <button
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-1.5 bg-dr7-gold text-black text-sm font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
             {saving ? 'Salvataggio...' : 'Salva'}
           </button>

@@ -221,7 +221,7 @@ export default function ReportClientiTab() {
         <button
           onClick={fetchClienti}
           disabled={loading}
-          className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
+          className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
         >
           {loading ? 'Caricamento...' : 'Genera Report'}
         </button>

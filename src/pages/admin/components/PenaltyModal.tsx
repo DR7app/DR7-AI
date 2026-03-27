@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface PenaltyModalProps {
     isOpen: boolean
@@ -83,7 +84,8 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const [customAmount, setCustomAmount] = useState('')
     const [customLabel, setCustomLabel] = useState('')
     const [note, setNote] = useState('')
-    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending')
+    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
+    const [paymentMethod, setPaymentMethod] = useState('Contanti')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
 
@@ -176,7 +178,103 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     }
                 }
 
+                // Also save to booking_details with paymentMethod
+                const { data: currentBookingPaid, error: fetchErrPaid } = await supabase
+                    .from('bookings')
+                    .select('booking_details')
+                    .eq('id', booking.id)
+                    .single()
+
+                if (!fetchErrPaid && currentBookingPaid) {
+                    const detailsPaid = currentBookingPaid.booking_details || {}
+                    const existingPenaltiesPaid = detailsPaid.penalties || []
+                    const italyDatePaid = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                    const paidEntries = cart.map(c => ({
+                        label: c.label,
+                        amount: c.unitPrice,
+                        quantity: c.quantity,
+                        total: Math.round(c.unitPrice * c.quantity * 100) / 100,
+                        note: note || '',
+                        date: italyDatePaid,
+                        paymentStatus: 'paid',
+                        paymentMethod,
+                    }))
+                    await supabase.from('bookings').update({
+                        booking_details: { ...detailsPaid, penalties: [...existingPenaltiesPaid, ...paidEntries] }
+                    }).eq('id', booking.id)
+                }
+
                 toast.success(`Fattura penale generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
+                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: paymentStatus, paymentMethod })
+            } else if (paymentStatus === 'nexi_pay_by_link') {
+                // NEXI PAY BY LINK: save to booking_details + generate link + WhatsApp
+                const { data: currentBookingNexi, error: fetchErrNexi } = await supabase
+                    .from('bookings')
+                    .select('booking_details, customer_phone, customer_email, customer_name')
+                    .eq('id', booking.id)
+                    .single()
+
+                if (fetchErrNexi) throw new Error('Errore nel recupero della prenotazione.')
+
+                const detailsNexi = currentBookingNexi?.booking_details || {}
+                const existingPenaltiesNexi = detailsNexi.penalties || []
+                const italyDateNexi = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+
+                const nexiEntries = cart.map(c => ({
+                    label: c.label,
+                    amount: c.unitPrice,
+                    quantity: c.quantity,
+                    total: Math.round(c.unitPrice * c.quantity * 100) / 100,
+                    note: note || '',
+                    date: italyDateNexi,
+                    paymentStatus: 'nexi_pay_by_link',
+                }))
+
+                await supabase.from('bookings').update({
+                    booking_details: { ...detailsNexi, penalties: [...existingPenaltiesNexi, ...nexiEntries] }
+                }).eq('id', booking.id)
+
+                // Generate Pay by Link
+                try {
+                    const custPhone = currentBookingNexi?.customer_phone || booking.booking_details?.customer?.phone
+                    const custEmail = currentBookingNexi?.customer_email || booking.booking_details?.customer?.email
+                    const custName = currentBookingNexi?.customer_name || booking.customer_name
+
+                    const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bookingId: booking.id,
+                            amount: cartTotal,
+                            customerEmail: custEmail || '',
+                            customerName: custName || 'Cliente',
+                            description: `Penali — ${custName}`,
+                            expirationHours: 1,
+                            paymentPurpose: 'penali',
+                        }),
+                    })
+                    const linkData = await linkRes.json()
+
+                    if (linkRes.ok && linkData.paymentUrl) {
+                        if (custPhone) {
+                            await fetch('/.netlify/functions/send-whatsapp-notification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    customPhone: custPhone,
+                                    customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nIn riferimento al contratto di noleggio, sono state rilevate penali per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
+                                })
+                            })
+                        }
+                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+                        toast.success(`Pay by Link penali inviato! €${cartTotal.toFixed(2)}`)
+                    } else {
+                        toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
+                    }
+                } catch (linkErr: any) {
+                    toast.error('Errore Pay by Link: ' + linkErr.message)
+                }
+                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
             } else {
                 // DA SALDARE: save to booking_details.penalties[] (no fattura)
                 const { data: currentBooking, error: fetchErr } = await supabase
@@ -214,6 +312,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 if (updateErr) throw new Error('Errore nel salvataggio della penale.')
 
                 toast.success(`Penale registrata (Da Saldare) — €${cartTotal.toFixed(2)}`)
+                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
             }
 
             setCart([]); setNote(''); onSuccess(); onClose()
@@ -227,7 +326,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     const handleClose = () => {
         if (isGenerating) return
-        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setError(''); onClose()
+        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setPaymentMethod('Contanti'); setError(''); onClose()
     }
 
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
@@ -320,7 +419,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                             <button
                                                 type="button"
                                                 onClick={() => addToCart(penalty)}
-                                                className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-yellow-400 transition-colors rounded-r-full"
+                                                className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#247a6f] transition-colors rounded-r-full"
                                             >
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" d="M12 5v14M5 12h14" />
@@ -460,14 +559,54 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select
                             value={paymentStatus}
-                            onChange={e => setPaymentStatus(e.target.value as 'paid' | 'pending')}
+                            onChange={e => setPaymentStatus(e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link')}
                             disabled={isGenerating}
                             className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                         >
                             <option value="pending">Da Saldare</option>
+                            <option value="nexi_pay_by_link">Nexi Pay by Link</option>
                             <option value="paid">Pagato</option>
                         </select>
                     </div>
+
+                    {/* Payment method - shown when Pagato */}
+                    {paymentStatus === 'paid' && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-[13px] text-theme-text-muted">Metodo</span>
+                            <select
+                                value={paymentMethod}
+                                onChange={e => setPaymentMethod(e.target.value)}
+                                disabled={isGenerating}
+                                className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                            >
+                                <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
+                                <option value="Bonifico">Bonifico</option>
+                                <option value="Contanti">Contanti</option>
+                                <option value="Credit Wallet">Credit Wallet</option>
+                                <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
+                                <option value="Paypal">Paypal</option>
+                                <option value="RIBA">RIBA</option>
+                                <option value="RID">RID</option>
+                                <option value="Bollettino postale">Bollettino postale</option>
+                                <option value="Assegno">Assegno</option>
+                                <option value="Assegno circolare">Assegno circolare</option>
+                                <option value="PagoPA">PagoPA</option>
+                                <option value="RID utenze">RID utenze</option>
+                                <option value="RIB veloce">RIB veloce</option>
+                                <option value="SEPA Direct Debit">SEPA Direct Debit</option>
+                                <option value="SEPA Direct Debit CORE">SEPA Direct Debit CORE</option>
+                                <option value="SEPA Direct Debit B2B">SEPA Direct Debit B2B</option>
+                                <option value="Domiciliazione bancaria">Domiciliazione bancaria</option>
+                                <option value="Domiciliazione postale">Domiciliazione postale</option>
+                                <option value="Trattenuta su somme già riscosse">Trattenuta su somme già riscosse</option>
+                                <option value="Bollettino bancario">Bollettino bancario</option>
+                                <option value="Contanti presso tesoreria">Contanti presso tesoreria</option>
+                                <option value="Vaglia cambiario">Vaglia cambiario</option>
+                                <option value="Quietanza erario">Quietanza erario</option>
+                                <option value="Giroconto su conti di contabilità">Giroconto su conti di contabilità</option>
+                            </select>
+                        </div>
+                    )}
 
                     {/* CTA buttons */}
                     <div className="flex gap-3 pt-1">
@@ -482,8 +621,9 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                         <button
                             type="button"
                             onClick={handleSubmit}
-                            disabled={isGenerating || cart.length === 0}
-                            className="flex-1 py-3 bg-dr7-gold hover:bg-yellow-500 text-black text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            disabled={isGenerating || cart.length === 0 || cartTotal < 10}
+                            className="flex-1 py-3 bg-dr7-gold hover:bg-[#247a6f] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={cartTotal > 0 && cartTotal < 10 ? 'Importo minimo: €10.00' : undefined}
                         >
                             {isGenerating ? (
                                 <span className="flex items-center justify-center gap-2">
@@ -493,7 +633,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                     </svg>
                                     Generazione...
                                 </span>
-                            ) : `Conferma`}
+                            ) : cartTotal > 0 && cartTotal < 10 ? `Minimo €10.00` : `Conferma`}
                         </button>
                     </div>
                 </div>

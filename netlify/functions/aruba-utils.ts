@@ -148,3 +148,85 @@ export async function checkArubaStatus(filename: string): Promise<any> {
     console.log('[Aruba] Status check result:', JSON.stringify(result).substring(0, 500))
     return result
 }
+
+/**
+ * Search incoming (passive) invoices from Aruba
+ * Based on official docs: POST /services/invoice/in/findByUsername
+ */
+export async function searchIncomingInvoices(params: {
+    startDate?: string  // dd/MM/yyyy
+    endDate?: string    // dd/MM/yyyy
+    page?: number
+    pageSize?: number
+    senderDescription?: string
+}): Promise<any> {
+    const token = await getArubaToken()
+
+    const payload: Record<string, any> = {
+        username: USERNAME,
+        page: params.page ?? 0,
+        pageSize: params.pageSize ?? 100,
+        startDate: params.startDate || undefined,
+        endDate: params.endDate || undefined,
+    }
+    if (params.senderDescription) {
+        payload.senderDescription = params.senderDescription
+    }
+
+    console.log('[Aruba] Searching incoming invoices:', payload)
+
+    const response = await fetch(`${ARUBA_API_URL}/services/invoice/in/findByUsername`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json;charset=UTF-8',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`Aruba Incoming Search Failed: ${response.status} ${text}`)
+    }
+
+    const result = await response.json()
+
+    if (result.errorCode && result.errorCode !== '0000') {
+        throw new Error(`Aruba Error ${result.errorCode}: ${result.errorDescription}`)
+    }
+
+    console.log('[Aruba] Incoming invoices found:', result.totalItems ?? result.invoices?.length ?? 0)
+    return result
+}
+
+/**
+ * Get a single incoming invoice with full details (XML/PDF)
+ * Based on official docs: GET /services/invoice/in/getByFilename
+ */
+export async function getIncomingInvoice(filename: string, includePdf = true): Promise<any> {
+    const token = await getArubaToken()
+
+    const response = await fetch(
+        `${ARUBA_API_URL}/services/invoice/in/getByFilename?filename=${encodeURIComponent(filename)}&includePdf=${includePdf}&includeFile=true`,
+        {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            }
+        }
+    )
+
+    if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`Aruba Incoming Invoice Fetch Failed: ${response.status} ${text}`)
+    }
+
+    const result = await response.json()
+    if (result.errorCode && result.errorCode !== '0000') {
+        throw new Error(`Aruba Error ${result.errorCode}: ${result.errorDescription}`)
+    }
+
+    return result
+}

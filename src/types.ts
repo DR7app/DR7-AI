@@ -38,6 +38,8 @@ export interface Vehicle {
   chassis_number?: string | null  // Numero di Telaio (VIN)
   status: 'available' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
+  price_resident_daily?: number | null
+  price_nonresident_daily?: number | null
   category: 'exotic' | 'urban' | 'aziendali' | null
   metadata: Record<string, any> | null
   created_at: string

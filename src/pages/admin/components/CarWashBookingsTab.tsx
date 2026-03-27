@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import toast from 'react-hot-toast'
+import { logAdminAction } from '../../../utils/logAdminAction'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
@@ -20,6 +21,7 @@ interface CarWashBooking {
   customer_name: string
   customer_email: string
   customer_phone: string
+  user_id?: string
   customer_codice_fiscale?: string
   customer_indirizzo?: string
   customer_numero_civico?: string
@@ -181,7 +183,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     appointment_date: todayStr,
     appointment_time: '',
     price_total: 0,
-    payment_status: 'paid',
+    payment_status: 'nexi_pay_by_link',
     amount_paid: '0',
     notes: ''
   })
@@ -297,7 +299,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       appointment_date: todayStr,
       appointment_time: '',
       price_total: 0,
-      payment_status: 'paid',
+      payment_status: 'nexi_pay_by_link',
       amount_paid: '0',
       notes: ''
     })
@@ -313,11 +315,46 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     tech: 'PRIME TECH SERVICE'
   }
 
+  // Fixed service numbers matching the flyer/marketing material
+  const SERVICE_NUMBER: Record<string, number> = {
+    'interior clean': 1, 'exterior clean': 2, 'full clean': 3, 'full clean n2': 4,
+    'top shine': 5, 'vip experience': 6, 'luxury detail': 7, 'absolute detail': 8,
+    'child care': 9, 'engine clean': 10, 'glass care': 11, 'odor control': 12,
+    'pet clean': 13, 'plastic refresh': 14, 'quick shine': 15, 'rim care': 16,
+    'seat clean': 17, 'seat protect': 18, 'moto essential': 19, 'courtesy drive': 20,
+    'supercar experience': 21, 'icon experience': 22, 'brake service': 23,
+    'battery swap': 24, 'wiper service': 25, 'headlight restore': 26,
+  }
+  const getServiceNum = (name: string) => {
+    const lower = name.toLowerCase()
+    // Try exact match first, then strip "prime " prefix
+    return SERVICE_NUMBER[lower] || SERVICE_NUMBER[lower.replace('prime ', '')] || ''
+  }
+
+  // Test vehicles that skip API targa lookup (no credits needed)
+  const TEST_VEHICLES: Record<string, { brand: string; model: string; year: string; fuel: string; powerCV: string; makeModel: string; category: VehicleCategory }> = {
+    'TEST000': { brand: 'Fiat', model: 'Panda', year: '2023', fuel: 'Benzina', powerCV: '70', makeModel: 'Fiat Panda', category: 'urban' as VehicleCategory },
+    'TEST002': { brand: 'BMW', model: 'X5', year: '2024', fuel: 'Diesel', powerCV: '286', makeModel: 'BMW X5', category: 'maxi' as VehicleCategory },
+  }
+
   // Targa lookup handler
   async function handleTargaLookup() {
     if (vehiclePlate.length < 5 || lookingUpTarga) return
     setLookingUpTarga(true)
     setTargaVehicleInfo(null)
+
+    // Check test vehicles first (no API call)
+    const upperPlate = vehiclePlate.toUpperCase().trim()
+    const testVehicle = TEST_VEHICLES[upperPlate]
+    if (testVehicle) {
+      setTargaVehicleInfo({ brand: testVehicle.brand, model: testVehicle.model, year: testVehicle.year, fuel: testVehicle.fuel, powerCV: testVehicle.powerCV })
+      setVehicleMakeModel(testVehicle.makeModel)
+      setVehicleCategory(testVehicle.category)
+      setClassificationSource('local')
+      setLookingUpTarga(false)
+      return
+    }
+
     try {
       const response = await fetch('/.netlify/functions/lookup-targa', {
         method: 'POST',
@@ -404,7 +441,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   useEffect(() => {
     loadData()
 
-    // Real-time subscription for new bookings AND catalog price changes
+    // Real-time subscription for new bookings, catalog price changes, AND new customers
     const subscription = supabase
       .channel('carwash-bookings-updates')
       .on('postgres_changes',
@@ -420,6 +457,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           console.log('🔄 CarWashBookingsTab: Catalog price update received', payload)
           loadData()
         }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'customers_extended' },
+        () => loadData()
       )
       .subscribe()
 
@@ -480,13 +521,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       if (bookingsError) throw bookingsError
 
-      // Load customers from customers_extended (includes all customers from all sources)
-      const { data: customersData, error: customersError } = await supabase
-        .from('customers_extended')
-        .select('id, nome, cognome, ragione_sociale, email, telefono')
-        .order('cognome')
-
-      if (customersError) throw customersError
+      // Load customers via Netlify function (bypasses RLS, paginates beyond 1000 limit)
+      let customersData: any[] = []
+      try {
+        const custResponse = await fetch('/.netlify/functions/list-customers')
+        const custResult = await custResponse.json()
+        if (custResponse.ok && custResult.customers) {
+          customersData = custResult.customers
+        }
+      } catch (custErr) {
+        console.error('Failed to load customers via function:', custErr)
+      }
 
       // Load car wash services from database
       const { data: servicesData, error: servicesError } = await supabase
@@ -505,12 +550,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }))
 
       // Map customers_extended to Customer interface
-      const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
-        id: c.id,
-        full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),
-        email: c.email,
-        phone: c.telefono
-      }))
+      const mappedCustomers: Customer[] = (customersData || []).map((c: any) => {
+        const fullName = `${c.nome || ''} ${c.cognome || ''}`.trim()
+          || c.ragione_sociale || c.denominazione || c.ente_ufficio || 'N/A'
+        return {
+          id: c.id,
+          full_name: fullName,
+          email: c.email,
+          phone: c.telefono
+        }
+      })
 
       setBookings(bookingsData || [])
       setCustomers(mappedCustomers)
@@ -554,6 +603,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (error) throw error
 
       toast.success('Prenotazione eliminata')
+      logAdminAction('delete_carwash', 'carwash_booking', bookingId)
       loadData()
     } catch (error: any) {
       console.error('Failed to delete booking:', error)
@@ -564,12 +614,28 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
 
   async function handleGenerateInvoice(booking: CarWashBooking) {
-    if (!booking.id) return
+    if (!booking.id) {
+      toast.error('ID prenotazione mancante')
+      return
+    }
+
+    // Never generate fattura for unpaid bookings
+    const ps = booking.payment_status
+    if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
+      toast.error(`Impossibile generare fattura: il lavaggio non è stato pagato (stato: ${ps || 'N/A'})`)
+      return
+    }
+
+    if (generatingInvoice) {
+      toast.error('Generazione fattura già in corso...')
+      return
+    }
 
     // Include IVA (22%) in invoice breakdown
     const includeIVA = true
 
     setGeneratingInvoice(true)
+    toast.loading('Generazione fattura in corso...', { id: 'gen-invoice' })
     try {
       const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
@@ -577,8 +643,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         body: JSON.stringify({ bookingId: booking.id, includeIVA })
       })
 
-      const data = await response.json()
+      let data: any
+      try {
+        data = await response.json()
+      } catch {
+        toast.dismiss('gen-invoice')
+        throw new Error(`Server ha risposto con status ${response.status} (risposta non valida)`)
+      }
+
       if (!response.ok) {
+        toast.dismiss('gen-invoice')
         if (data.invoiceNumber) {
           toast.error(`Fattura già esistente: ${data.invoiceNumber}. Vai alla tab "Fatture" per visualizzarla.`)
         } else {
@@ -590,6 +664,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         return
       }
 
+      toast.dismiss('gen-invoice')
       // Generate and open the invoice PDF
       const invoiceId = data.invoice.id
       const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
@@ -614,14 +689,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
       }
 
+      logAdminAction('generate_carwash_fattura', 'carwash_booking', booking.id)
       loadData()
     } catch (error: any) {
+      toast.dismiss('gen-invoice')
       console.error('Error generating invoice:', error)
       const errorMessage = error.message || ''
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
-        openEditCustomer(booking.booking_details?.customer?.customerId || booking.customer_id)
+        toast.error(`Dati cliente incompleti per la fattura: ${errorMessage}`, { duration: 8000 })
+        let custId = booking.customer_id || booking.booking_details?.customer?.customerId || booking.user_id
+        // Fallback: find customer by name/email
+        if (!custId && booking.customer_name) {
+          const match = customers.find(c =>
+            (c.email && booking.customer_email && c.email === booking.customer_email) ||
+            ((c.full_name || '').toLowerCase() === booking.customer_name.toLowerCase())
+          )
+          if (match) custId = match.id
+        }
+        if (custId) {
+          openEditCustomer(custId)
+        } else {
+          toast.error('Cliente non trovato. Completa i dati manualmente dalla tab Clienti.', { duration: 8000 })
+        }
         return
       }
       toast.error('Errore nella generazione della fattura: ' + errorMessage)
@@ -635,6 +726,37 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const customer = customers.find(c => c.id === formData.customer_id)
     if (!customer) throw new Error('Cliente non trovato')
 
+    // Validate customer has all required fields for fattura
+    try {
+      const custResp = await fetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
+      if (custResp.ok) {
+        const { customer: custData } = await custResp.json()
+        if (custData) {
+          const missing: string[] = []
+          const isAzienda = custData.tipo_cliente === 'azienda'
+
+          if (!custData.indirizzo) missing.push('Indirizzo')
+          if (!custData.citta_residenza && !custData.citta) missing.push('Città')
+          if (!custData.codice_postale) missing.push('CAP')
+
+          if (isAzienda) {
+            if (!custData.partita_iva && !custData.codice_fiscale) missing.push('Partita IVA')
+          } else {
+            if (!custData.nome) missing.push('Nome')
+            if (!custData.cognome) missing.push('Cognome')
+            if (!custData.codice_fiscale) missing.push('Codice Fiscale')
+          }
+
+          if (missing.length > 0) {
+            toast.error(`Dati cliente incompleti per la fatturazione:\n${missing.join(', ')}\n\nCompletare il profilo cliente prima di prenotare.`)
+            return
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Customer validation failed:', e)
+    }
+
     const customerName = customer.full_name
     const customerEmail = customer.email || ''
     const customerPhone = customer.phone || ''
@@ -643,6 +765,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const [year, month, day] = formData.appointment_date.split('-').map(Number)
     const [hours, minutes] = formData.appointment_time.split(':').map(Number)
     const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0)
+
+    // Validate appointment is not in the past
+    if (appointmentDate < new Date()) {
+      toast.error('La data e ora dell\'appuntamento non può essere nel passato.')
+      return
+    }
     const appointmentDateTime = appointmentDate.toISOString()
 
     // Total price: manual override or wizard selections
@@ -730,36 +858,83 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     console.log('✅ Booking created successfully:', data)
+    logAdminAction('create_carwash', 'carwash_booking', data.id, { customer: customerName, service: serviceNames })
 
-    // Generate fattura for car wash booking (also sends to SDI if customer has codice fiscale)
-    try {
-      const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: data.id, includeIVA: true })
-      })
-      if (invoiceResponse.ok) {
-        const invoiceData = await invoiceResponse.json()
-        console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
-      } else {
-        const errData = await invoiceResponse.json().catch(() => ({}))
-        const errMsg = errData.message || errData.error || invoiceResponse.statusText
-        console.warn('⚠️ Fattura generation failed:', errMsg)
-        // Open customer edit modal if missing data (address/codice fiscale)
-        if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
-          toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
-          openEditCustomer(formData.customer_id)
+    // Generate fattura ONLY if paid — never for unpaid bookings
+    const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
+    if (isPaid) {
+      try {
+        const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: data.id, includeIVA: true })
+        })
+        if (invoiceResponse.ok) {
+          const invoiceData = await invoiceResponse.json()
+          console.log('✅ Fattura created:', invoiceData.invoice?.numero_fattura)
         } else {
-          toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+          const errData = await invoiceResponse.json().catch(() => ({}))
+          const errMsg = errData.message || errData.error || invoiceResponse.statusText
+          console.warn('⚠️ Fattura generation failed:', errMsg)
+          // Open customer edit modal if missing data (address/codice fiscale)
+          if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
+            toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
+            openEditCustomer(formData.customer_id)
+          } else {
+            toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+          }
         }
+      } catch (invoiceError) {
+        console.error('⚠️ Failed to generate fattura:', invoiceError)
       }
-    } catch (invoiceError) {
-      console.error('⚠️ Failed to generate fattura:', invoiceError)
+    }
+
+    // Handle Nexi Pay by Link
+    const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
+    if (isNexiPayByLink && data) {
+      // Update booking to pending with Nexi payment method
+      await supabase.from('bookings').update({
+        payment_status: 'pending',
+        payment_method: 'Nexi Pay by Link'
+      }).eq('id', data.id)
+
+      try {
+        const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: data.id,
+            amount: totalPrice,
+            customerEmail: customerEmail || '',
+            customerName: customerName || 'Cliente',
+            description: `Lavaggio DR7 - ${serviceNames}`,
+            expirationDays: 1
+          })
+        })
+        const linkData = await linkRes.json()
+        if (linkRes.ok && linkData.paymentUrl) {
+          if (customerPhone) {
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: customerPhone,
+                customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\nGentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
+              })
+            })
+          }
+          toast.success('Pay by Link generato e inviato al cliente!')
+        } else {
+          toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
+        }
+      } catch (linkErr: any) {
+        toast.error('Errore Pay by Link: ' + linkErr.message)
+      }
     }
 
     // Send WhatsApp notification
     try {
-      const paymentStatus = formData.payment_status || 'pending'
+      const paymentStatus = isNexiPayByLink ? 'pending' : (formData.payment_status || 'pending')
       const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
 
       // Send admin notification (detailed internal format)
@@ -787,8 +962,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
       })
 
-      // Send customer confirmation message
-      if (customerPhone) {
+      // Send customer confirmation message (skip for Nexi — link message sent separately)
+      if (customerPhone && !isNexiPayByLink) {
         const custFirstName = customerName?.split(' ')[0] || 'Cliente'
         const apptDt = new Date(appointmentDateTime)
         const fmtDate = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
@@ -805,15 +980,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           paymentLabel = 'Da saldare'
         }
 
-        let custMsg = `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
+        let custMsg = `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n`
+        custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
         custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`
         custMsg += `*ID:* DR7-${bookingIdShort}\n`
         custMsg += `*Servizio:* ${serviceNames}\n`
+        if (vehiclePlate) custMsg += `*Targa:* ${vehiclePlate}\n`
         custMsg += `*Data e Ora:* ${fmtDate} alle ${fmtTime}\n`
-        if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
         custMsg += `*Totale:* €${totalEur}\n`
         custMsg += `*Pagamento:* ${paymentLabel}\n`
-        custMsg += `\nCordiali Saluti,\nDR7`
+        if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
+        custMsg += `\nCordiali Saluti,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
 
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
@@ -1058,7 +1235,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               if (!showForm) resetWizard()
               setShowForm(!showForm)
             }}
-            className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
+            className="px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
           >
             {showForm ? 'Chiudi' : '+ Nuova Prenotazione'}
           </button>
@@ -1116,9 +1293,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 >
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                     step === currentStep
-                      ? 'bg-dr7-gold text-black'
+                      ? 'bg-dr7-gold text-white'
                       : step < currentStep
-                        ? 'bg-dr7-gold/60 text-black'
+                        ? 'bg-dr7-gold/60 text-white'
                         : 'bg-theme-bg-tertiary text-theme-text-muted'
                   }`}>
                     {step < currentStep ? '✓' : step}
@@ -1164,7 +1341,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
                       vehiclePlate.length < 5 || lookingUpTarga
                         ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                        : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                        : 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                     }`}
                   >
                     {lookingUpTarga ? 'Ricerca...' : 'Cerca'}
@@ -1243,7 +1420,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     }}
                     className={`px-6 py-2 rounded-full font-semibold transition-colors ${
                       targaVehicleInfo
-                        ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                        ? 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                         : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                     }`}
                   >
@@ -1316,11 +1493,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <option value="">Seleziona servizio...</option>
                   {Object.entries(servicesByCategory).map(([category, services]) => (
                     <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
-                      {services.map(service => (
-                        <option key={service.id} value={service.id}>
-                          {service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
-                        </option>
-                      ))}
+                      {services.map(service => {
+                        const sn = getServiceNum(service.name)
+                        return (
+                          <option key={service.id} value={service.id}>
+                            {sn ? `${sn}. ` : ''}{service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
+                          </option>
+                        )
+                      })}
                     </optgroup>
                   ))}
                 </select>
@@ -1405,7 +1585,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     selectedService &&
                     (!selectedService.price_options?.length || selectedPriceOption) &&
                     !(selectedService.price_unit === 'custom' && (!customPrice || parseFloat(customPrice) < selectedService.price))
-                      ? 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                      ? 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                       : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                   }`}
                 >
@@ -1457,7 +1637,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           }`}
                         >
                           <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
-                            isToggled ? 'bg-dr7-gold border-dr7-gold text-black' : 'border-theme-text-muted'
+                            isToggled ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'
                           }`}>
                             {isToggled && '✓'}
                           </span>
@@ -1476,7 +1656,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 }}
                                 className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                                   currentExtraOption?.label === opt.label
-                                    ? 'bg-dr7-gold text-black border-dr7-gold font-bold'
+                                    ? 'bg-dr7-gold text-white border-dr7-gold font-bold'
                                     : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold'
                                 }`}
                               >
@@ -1539,7 +1719,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <button
                     type="button"
                     onClick={() => setCurrentStep(3)}
-                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-yellow-500 text-black transition-colors"
+                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-[#247a6f] text-white transition-colors"
                   >
                     Avanti
                   </button>
@@ -1664,6 +1844,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data *</label>
                   <input
                     type="date"
+                    min={todayStr}
                     value={formData.appointment_date}
                     onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
@@ -1723,8 +1904,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
-                    <option value="paid">Pagato</option>
                     <option value="pending">Da Saldare</option>
+                    <option value="nexi_pay_by_link">Nexi - Pay by Link</option>
+                    <option value="paid">Pagato</option>
                     <option value="unpaid">Non Pagato</option>
                   </select>
                 </div>
@@ -1756,7 +1938,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   className={`px-8 py-3 rounded-full font-bold text-base transition-colors ${
                     submitting || !formData.customer_id || !formData.appointment_time
                       ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                      : 'bg-dr7-gold hover:bg-yellow-500 text-black'
+                      : 'bg-dr7-gold hover:bg-[#247a6f] text-white'
                   }`}
                 >
                   {submitting ? 'Creazione...' : `Conferma - EUR ${getFinalPrice().toFixed(2)}`}
@@ -2046,11 +2228,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         }, {})
                     ).map(([category, services]) => (
                       <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
-                        {services.map(service => (
-                          <option key={service.id} value={service.id}>
-                            {service.name} - EUR {service.price.toFixed(2)} ({service.duration})
-                          </option>
-                        ))}
+                        {services.map(service => {
+                          const sn = getServiceNum(service.name)
+                          return (
+                            <option key={service.id} value={service.id}>
+                              {sn ? `${sn}. ` : ''}{service.name} - EUR {service.price.toFixed(2)} ({service.duration})
+                            </option>
+                          )
+                        })}
                       </optgroup>
                     ))}
                   </select>
@@ -2082,7 +2267,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             }`}
                           >
                             <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${
-                              isSelected ? 'bg-dr7-gold border-dr7-gold text-black' : 'border-theme-text-muted'
+                              isSelected ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'
                             }`}>
                               {isSelected && '✓'}
                             </span>
@@ -2205,7 +2390,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       if (error) throw error
 
                       // Auto-generate fattura if payment changed to paid
-                      if (editingBooking.payment_status === 'paid') {
+                      if (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded') {
                         try {
                           // Check if fattura already exists for this booking
                           const { data: existingFattura } = await supabase
@@ -2229,8 +2414,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               console.warn('[Auto-Gen] ⚠️ Fattura failed:', errMsg)
                               // Open customer edit modal if missing data
                               if (errMsg.includes('obbligatorio') || errMsg.includes('incomplete') || errMsg.includes('missing')) {
-                                toast.error(`Dati cliente incompleti per la fattura. Completa i dati.`, { duration: 8000 })
-                                openEditCustomer(editingBooking.booking_details?.customer?.customerId || editingBooking.customer_id)
+                                toast.error(`Dati cliente incompleti per la fattura: ${errMsg}`, { duration: 8000 })
+                                let custId = editingBooking.customer_id || editingBooking.booking_details?.customer?.customerId || editingBooking.user_id
+                                if (!custId && editingBooking.customer_name) {
+                                  const match = customers.find(c =>
+                                    (c.email && editingBooking.customer_email && c.email === editingBooking.customer_email) ||
+                                    ((c.full_name || '').toLowerCase() === editingBooking.customer_name.toLowerCase())
+                                  )
+                                  if (match) custId = match.id
+                                }
+                                if (custId) openEditCustomer(custId)
                               } else {
                                 toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
                               }
@@ -2278,7 +2471,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       toast.error('Errore durante l\'aggiornamento')
                     }
                   }}
-                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-black px-6 py-3 rounded-full font-medium transition-colors"
+                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-white px-6 py-3 rounded-full font-medium transition-colors"
                 >
                   Salva Modifiche
                 </button>

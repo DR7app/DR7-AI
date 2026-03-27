@@ -73,7 +73,8 @@ export const handler: Handler = async (event) => {
 
         // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
         const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
-        const isTestVehicle = vehicleName === 'test'
+        const vehiclePlate = (booking.vehicle_plate || booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '').toUpperCase()
+        const isTestVehicle = vehicleName === 'test' || vehiclePlate.startsWith('TEST')
 
         // Fetch customer data
         const bookingDetails = booking.booking_details || {}
@@ -206,12 +207,14 @@ export const handler: Handler = async (event) => {
             const description = rawDescriptions
                 ? (item.label || 'Servizio')
                 : (item.label ? `${bookingPrefix} - ${item.label}` : bookingPrefix)
+            const itemTotal = Math.round(item.amount * item.quantity * 100) / 100
             return {
                 description,
                 unit_price: item.amount,
                 quantity: item.quantity,
                 vat_rate: 0,
-                total: Math.round(item.amount * item.quantity * 100) / 100
+                total: itemTotal,
+                ...(paymentStatus === 'paid' ? { paymentStatus: 'paid', amountPaid: itemTotal } : {})
             }
         })
 
@@ -220,6 +223,15 @@ export const handler: Handler = async (event) => {
         const vatAmount = 0
         const exemptAmount = totalAmount
         const total = totalAmount
+
+        // Skip fattura if total is 0
+        if (total <= 0) {
+            console.log('[Penalty Invoice] Total is €0 — skipping fattura generation')
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Importo totale €0 — fattura non generata', skipped: true })
+            }
+        }
 
         // Create invoice
         const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })

@@ -39,7 +39,7 @@ export default function ScanJobCreator() {
                     <button
                         onClick={createNewJob}
                         disabled={loading}
-                        className="px-8 py-4 bg-dr7-gold text-black text-xl font-bold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
+                        className="px-8 py-4 bg-dr7-gold text-white text-xl font-bold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
                     >
                         {loading ? 'Generazione...' : 'Genera Cover Sheet QR'}
                     </button>

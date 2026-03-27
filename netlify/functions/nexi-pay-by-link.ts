@@ -31,7 +31,9 @@ const handler: Handler = async (event) => {
             customerEmail,
             customerName,
             description,
-            expirationDays = 7 // Link valid for 7 days by default
+            expirationDays = 7, // Link valid for 7 days by default
+            expirationHours, // Optional: override with hours (e.g. 1 = 1 hour)
+            paymentPurpose, // 'booking' | 'danni' | 'penali' | 'danni_penali' — used by callback
         } = JSON.parse(event.body || '{}');
 
         if (!NEXI_API_KEY) {
@@ -51,19 +53,26 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // Generate unique order ID
+        // Generate unique order ID (max 18 chars for Nexi)
+        const ts = Date.now().toString(36)
         const orderId = bookingId
-            ? `PAY-${bookingId.slice(0, 8)}-${Date.now()}`
-            : `PAY-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+            ? `P${bookingId.slice(0, 8)}${ts}`.slice(0, 18)
+            : `P${ts}${Math.floor(Math.random() * 1000)}`.slice(0, 18);
 
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Calculate expiration date
+        // Calculate expiration: use hours if specified, otherwise days
         const expirationDate = new Date();
-        expirationDate.setDate(expirationDate.getDate() + expirationDays);
+        if (expirationHours) {
+            expirationDate.setTime(expirationDate.getTime() + expirationHours * 60 * 60 * 1000);
+        } else {
+            expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 1));
+        }
+        const expirationDateStr = expirationDate.toISOString().split('T')[0];
+        console.log('[nexi-pay-by-link] Expiration:', expirationDate.toISOString());
 
-        // Create payment link request
+        // Create payment link request (using /v2/orders/paybylink endpoint)
         const payload = {
             order: {
                 orderId: orderId,
@@ -76,28 +85,42 @@ const handler: Handler = async (event) => {
                 }
             },
             paymentSession: {
-                actionType: 'PAY',  // PAY = direct payment (not pre-auth)
+                actionType: 'PAY',
                 amount: amountCents.toString(),
                 language: 'ita',
-                resultUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-success?order=${orderId}`,
-                cancelUrl: `${process.env.URL || 'https://dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/nexi-payment-callback`
-            }
+                expirationDate: expirationDateStr,
+                expirationTime: expirationDate.toISOString(),
+                resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
+                cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
+                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`
+            },
+            expirationDate: expirationDateStr
         };
 
-        console.log('Creating Nexi Pay by Link:', { orderId, amountCents, bookingId });
+        console.log('[nexi-pay-by-link] Request:', JSON.stringify(payload));
 
-        const response = await fetch(`${NEXI_BASE_URL}/orders/build`, {
+        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
+        // Use v2 paybylink endpoint (base URL has /v1, replace with /v2)
+        const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
+        console.log('[nexi-pay-by-link] URL:', payByLinkUrl);
+        const response = await fetch(payByLinkUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Api-Key': NEXI_API_KEY,
+                'Correlation-Id': correlationId
             },
             body: JSON.stringify(payload)
         });
 
         const responseText = await response.text();
-        console.log('Nexi response status:', response.status, 'body:', responseText.substring(0, 1000));
+        console.log('Nexi response status:', response.status);
+        console.log('Nexi response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+        console.log('Nexi response body:', responseText || '(empty)');
+        console.log('API key first/last 4:', NEXI_API_KEY?.slice(0, 4) + '...' + NEXI_API_KEY?.slice(-4));
 
         let responseData: any;
         try {
@@ -122,7 +145,9 @@ const handler: Handler = async (event) => {
             };
         }
 
-        const paymentUrl = responseData.hostedPage;
+        // paybylink returns paymentLink.link, build returns hostedPage
+        const paymentUrl = responseData.paymentLink?.link || responseData.hostedPage;
+        console.log('[nexi-pay-by-link] Payment URL:', paymentUrl);
 
         // Store in database
         const { error: dbError } = await supabase
@@ -135,8 +160,10 @@ const handler: Handler = async (event) => {
                 payment_link: paymentUrl,
                 description: description || `Pagamento DR7 Empire`,
                 customer_email: customerEmail || null,
+                contract_id: orderId.slice(0, 18),
                 metadata: {
                     type: 'pay_by_link',
+                    payment_purpose: paymentPurpose || 'booking',
                     customer_name: customerName,
                     expiration_date: expirationDate.toISOString(),
                     nexi_response: responseData

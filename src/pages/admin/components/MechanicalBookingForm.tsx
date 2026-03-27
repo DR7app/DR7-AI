@@ -345,7 +345,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             type="button"
                             onClick={() => setIsNewClientModalOpen(false)}
                             className={`px-4 py-2 rounded-full ${!isNewClientModalOpen
-                                ? 'bg-theme-text-primary text-black font-semibold'
+                                ? 'bg-dr7-gold text-white font-semibold'
                                 : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                                 }`}
                         >
@@ -355,7 +355,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             type="button"
                             onClick={() => setIsNewClientModalOpen(true)}
                             className={`px-4 py-2 rounded-full ${isNewClientModalOpen
-                                ? 'bg-theme-text-primary text-black font-semibold'
+                                ? 'bg-dr7-gold text-white font-semibold'
                                 : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                                 }`}
                         >
@@ -546,7 +546,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 <div className="flex gap-3">
                     <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
+                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
                     >
                         Salva
                     </button>

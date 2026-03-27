@@ -174,7 +174,9 @@ export const handler: Handler = async (event) => {
     })
 
     // Also scan bookings.booking_details for pending penalties/danni (Da Saldare, no fattura)
+    // Skip bookings that already have a matching fattura to avoid double-counting
     {
+      const bookingIdsWithFattura = new Set(bookingIds)
       const detailsKey = reportType === 'danni' ? 'danni' : 'penalties'
       const { data: allBookings } = await supabase
         .from('bookings')
@@ -182,6 +184,9 @@ export const handler: Handler = async (event) => {
 
       if (allBookings) {
         for (const b of allBookings) {
+          // Skip if this booking already has a fattura counted above
+          if (bookingIdsWithFattura.has(b.id)) continue
+
           const entries = b.booking_details?.[detailsKey]
           if (!Array.isArray(entries) || entries.length === 0) continue
 
@@ -189,10 +194,8 @@ export const handler: Handler = async (event) => {
           const name = b.vehicle_name || 'Sconosciuto'
 
           for (const entry of entries) {
-            // Skip paid entries — they're already counted via fatture
-            if (entry.paymentStatus === 'paid') continue
-
             const entryTotal = entry.total || (entry.amount || 0) * (entry.quantity || 1)
+            if (entryTotal <= 0) continue
 
             if (!vehicleMap[plate]) {
               vehicleMap[plate] = {

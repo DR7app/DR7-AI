@@ -20,13 +20,14 @@ export default function FirmaPage() {
     const [signerName, setSignerName] = useState('')
     const [signerEmail, setSignerEmail] = useState('')
     const [contract, setContract] = useState<ContractInfo | null>(null)
-    const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null)
+    const [, setSignedPdfUrl] = useState<string | null>(null)
     const [signedAt, setSignedAt] = useState<string | null>(null)
     const [otp, setOtp] = useState(['', '', '', '', '', ''])
     const [error, setError] = useState('')
     const [remainingAttempts, setRemainingAttempts] = useState(5)
     const [acceptedTerms, setAcceptedTerms] = useState(false)
     const [acceptedMarketing, setAcceptedMarketing] = useState<boolean | null>(null)
+    const [existingMarketingConsent, setExistingMarketingConsent] = useState<boolean | null>(null)
     const [showMarketingInfo, setShowMarketingInfo] = useState(false)
     const [otpChannel, setOtpChannel] = useState<'whatsapp' | 'email' | null>(null)
     const [otpCooldown, setOtpCooldown] = useState(0)
@@ -62,6 +63,14 @@ export default function FirmaPage() {
             setSignerEmail(data.signerEmail)
             setContract(data.contract)
             if (data.otpChannel) setOtpChannel(data.otpChannel)
+
+            // If customer already consented to marketing, pre-fill and skip the question
+            if (data.existingMarketingConsent === true) {
+                setExistingMarketingConsent(true)
+                setAcceptedMarketing(true)
+            } else {
+                setExistingMarketingConsent(data.existingMarketingConsent ?? null)
+            }
 
             if (data.status === 'signed') {
                 setSignedPdfUrl(data.signedPdfUrl)
@@ -156,7 +165,8 @@ export default function FirmaPage() {
             return
         }
 
-        if (acceptedMarketing === null) {
+        // Only require a marketing answer if the customer hasn't already answered
+        if (acceptedMarketing === null && existingMarketingConsent === null) {
             setError('Seleziona Si o No per le offerte Trustera')
             return
         }
@@ -216,7 +226,7 @@ export default function FirmaPage() {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2d8a7e] mx-auto mb-4"></div>
                     <p className="text-gray-600">Caricamento contratto...</p>
                 </div>
             </div>
@@ -260,38 +270,52 @@ export default function FirmaPage() {
                 {contract && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                         <h1 className="text-xl font-bold text-gray-800 mb-1">
-                            Contratto {contract.contractNumber}
+                            {contract.vehicleName ? `Contratto ${contract.contractNumber}` : contract.contractNumber || 'Documento'}
                         </h1>
                         <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
                             <div>
                                 <span className="text-gray-500 block">Cliente</span>
                                 <span className="font-semibold">{signerName}</span>
                             </div>
-                            <div>
-                                <span className="text-gray-500 block">Veicolo</span>
-                                <span className="font-semibold">{contract.vehicleName}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 block">Ritiro</span>
-                                <span className="font-semibold">
-                                    {contract.rentalStartDate ? new Date(contract.rentalStartDate).toLocaleDateString('it-IT') : 'N/A'}
-                                </span>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 block">Riconsegna</span>
-                                <span className="font-semibold">
-                                    {contract.rentalEndDate ? new Date(contract.rentalEndDate).toLocaleDateString('it-IT') : 'N/A'}
-                                </span>
-                            </div>
+                            {contract.vehicleName && (
+                                <div>
+                                    <span className="text-gray-500 block">Veicolo</span>
+                                    <span className="font-semibold">{contract.vehicleName}</span>
+                                </div>
+                            )}
+                            {contract.rentalStartDate && (
+                                <div>
+                                    <span className="text-gray-500 block">Ritiro</span>
+                                    <span className="font-semibold">
+                                        {new Date(contract.rentalStartDate).toLocaleDateString('it-IT')}
+                                    </span>
+                                </div>
+                            )}
+                            {contract.rentalEndDate && (
+                                <div>
+                                    <span className="text-gray-500 block">Riconsegna</span>
+                                    <span className="font-semibold">
+                                        {new Date(contract.rentalEndDate).toLocaleDateString('it-IT')}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
 
-                {/* PDF Viewer */}
+                {/* PDF Download Link */}
                 {contract?.pdfUrl && status !== 'signed' && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-                        <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 font-medium border-b">
-                            Documento da firmare
+                        <div className="px-4 py-4 flex items-center justify-between">
+                            <span className="text-sm text-gray-600 font-medium">Documento da firmare</span>
+                            <a
+                                href={contract.pdfUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-[#2d8a7e] hover:text-[#247a6f] transition-colors"
+                            >
+                                Scarica PDF
+                            </a>
                         </div>
                         <PdfViewer url={contract.pdfUrl} />
                     </div>
@@ -313,7 +337,7 @@ export default function FirmaPage() {
                         </p>
                         <button
                             onClick={handleRequestOtp}
-                            className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg"
+                            className="bg-[#2d8a7e] hover:bg-[#247a6f] text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg"
                         >
                             Invia Codice di Verifica
                         </button>
@@ -322,7 +346,7 @@ export default function FirmaPage() {
 
                 {status === 'otp_sending' && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 mx-auto mb-4"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2d8a7e] mx-auto mb-4"></div>
                         <p className="text-gray-600">Invio codice di verifica...</p>
                     </div>
                 )}
@@ -348,7 +372,7 @@ export default function FirmaPage() {
                                     value={digit}
                                     onChange={e => handleOtpChange(i, e.target.value)}
                                     onKeyDown={e => handleOtpKeyDown(i, e)}
-                                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-yellow-500 focus:outline-none transition-colors"
+                                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2d8a7e] focus:outline-none transition-colors"
                                     disabled={status === 'otp_verifying'}
                                 />
                             ))}
@@ -364,7 +388,7 @@ export default function FirmaPage() {
                             <button
                                 onClick={handleVerifyOtp}
                                 disabled={otp.join('').length !== 6 || status === 'otp_verifying'}
-                                className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full max-w-xs"
+                                className="bg-[#2d8a7e] hover:bg-[#247a6f] disabled:bg-gray-300 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full max-w-xs"
                             >
                                 {status === 'otp_verifying' ? 'Verifica in corso...' : 'Verifica Codice'}
                             </button>
@@ -392,7 +416,7 @@ export default function FirmaPage() {
 
                         <div className="bg-gray-50 rounded-lg p-4 mb-6 text-sm text-gray-700">
                             <p className="mb-2">
-                                Io, <strong>{signerName}</strong>, dichiaro di aver preso visione del contratto
+                                Io, <strong>{signerName}</strong>, dichiaro di aver preso visione del documento
                                 {contract?.contractNumber ? ` n. ${contract.contractNumber}` : ''} e di approvarne
                                 integralmente il contenuto.
                             </p>
@@ -407,51 +431,53 @@ export default function FirmaPage() {
                                 type="checkbox"
                                 checked={acceptedTerms}
                                 onChange={e => setAcceptedTerms(e.target.checked)}
-                                className="mt-1 h-5 w-5 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
+                                className="mt-1 h-5 w-5 rounded border-gray-300 text-[#2d8a7e] focus:ring-[#2d8a7e]"
                             />
                             <span className="text-sm text-gray-700">
                                 Confermo che i dati inseriti sono corretti e accetto i termini e le condizioni del contratto.
                             </span>
                         </label>
 
-                        <div className="mb-6">
-                            <p className="text-sm text-gray-700 mb-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowMarketingInfo(true)}
-                                    className="underline text-yellow-700 hover:text-yellow-800 transition-colors"
-                                >
-                                    Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
-                                </button>
-                            </p>
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="marketing"
-                                        checked={acceptedMarketing === true}
-                                        onChange={() => setAcceptedMarketing(true)}
-                                        className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Si</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="marketing"
-                                        checked={acceptedMarketing === false}
-                                        onChange={() => setAcceptedMarketing(false)}
-                                        className="h-5 w-5 text-yellow-600 focus:ring-yellow-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">No</span>
-                                </label>
+                        {existingMarketingConsent !== true && (
+                            <div className="mb-6">
+                                <p className="text-sm text-gray-700 mb-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMarketingInfo(true)}
+                                        className="underline text-[#247a6f] hover:text-[#1a6b62] transition-colors"
+                                    >
+                                        Accetto vantaggi, offerte e sconti dedicati da Trustera e partner.
+                                    </button>
+                                </p>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="marketing"
+                                            checked={acceptedMarketing === true}
+                                            onChange={() => setAcceptedMarketing(true)}
+                                            className="h-5 w-5 text-[#2d8a7e] focus:ring-[#2d8a7e]"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">Si</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="marketing"
+                                            checked={acceptedMarketing === false}
+                                            onChange={() => setAcceptedMarketing(false)}
+                                            className="h-5 w-5 text-[#2d8a7e] focus:ring-[#2d8a7e]"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">No</span>
+                                    </label>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <button
                             onClick={handleSign}
-                            disabled={!acceptedTerms || acceptedMarketing === null}
-                            className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-lg transition-colors text-lg"
+                            disabled={!acceptedTerms || (existingMarketingConsent !== true && acceptedMarketing === null)}
+                            className="w-full bg-[#2d8a7e] hover:bg-[#247a6f] disabled:bg-gray-300 text-white font-bold py-4 rounded-lg transition-colors text-lg"
                         >
                             Firma il Documento
                         </button>
@@ -470,16 +496,6 @@ export default function FirmaPage() {
                         <p className="text-gray-500 text-sm mb-6">
                             Riceverai una copia del contratto firmato via WhatsApp.
                         </p>
-                        {signedPdfUrl && (
-                            <a
-                                href={signedPdfUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition-colors"
-                            >
-                                Scarica Contratto Firmato
-                            </a>
-                        )}
                     </div>
                 )}
             </div>
@@ -510,7 +526,7 @@ export default function FirmaPage() {
                         </div>
                         <button
                             onClick={() => setShowMarketingInfo(false)}
-                            className="mt-6 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg transition-colors"
+                            className="mt-6 w-full bg-[#2d8a7e] hover:bg-[#247a6f] text-white font-bold py-3 rounded-lg transition-colors"
                         >
                             Chiudi
                         </button>

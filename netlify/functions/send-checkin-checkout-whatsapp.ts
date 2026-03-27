@@ -142,7 +142,7 @@ const handler: Handler = async (event) => {
       message += `*Luogo:* ${pickupLocation}\n`;
       if (cauzioneText) message += `*Cauzione:* ${cauzioneText}\n`;
       message += `\nTi aspettiamo! Per qualsiasi necessita non esitare a contattarci.\n\n`;
-      message += `_DR7 Empire_\n\n_Messaggio automatico di sistema._`;
+      message += `_DR7 Empire_`;
     } else {
       const dropoffDate = new Date(booking.dropoff_date);
       const returnTime =
@@ -169,7 +169,7 @@ const handler: Handler = async (event) => {
         }
       }
       message += `\nTi preghiamo di riconsegnare il veicolo nelle stesse condizioni in cui lo hai ritirato.\n\n`;
-      message += `Grazie per aver scelto DR7 Empire!\n\n_Messaggio automatico di sistema._`;
+      message += `Grazie per aver scelto DR7 Empire!`;
     }
 
     try {
@@ -180,7 +180,7 @@ const handler: Handler = async (event) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chatId: `${cleanPhone}@c.us`,
-          message,
+          message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
         }),
       });
 

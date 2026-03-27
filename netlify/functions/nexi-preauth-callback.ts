@@ -17,31 +17,47 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        console.log('Nexi pre-auth callback received:', event.body);
+        console.log('[nexi-preauth-callback] Method:', event.httpMethod);
+        console.log('[nexi-preauth-callback] Body:', event.body);
+        console.log('[nexi-preauth-callback] Query:', JSON.stringify(event.queryStringParameters));
+        console.log('[nexi-preauth-callback] Headers content-type:', event.headers['content-type']);
 
-        // Parse callback data (Nexi sends as form-urlencoded or JSON)
+        // Parse callback data — Nexi may send as POST JSON, POST form-urlencoded, or GET with query params
         let callbackData: any;
 
-        if (event.headers['content-type']?.includes('application/json')) {
+        if (event.queryStringParameters && Object.keys(event.queryStringParameters).length > 0) {
+            // GET request with query params
+            callbackData = event.queryStringParameters;
+        } else if (event.headers['content-type']?.includes('application/json')) {
             callbackData = JSON.parse(event.body || '{}');
+        } else if (event.body) {
+            // Try JSON first, then URL-encoded
+            try {
+                callbackData = JSON.parse(event.body);
+            } catch {
+                const params = new URLSearchParams(event.body);
+                callbackData = Object.fromEntries(params.entries());
+            }
         } else {
-            // Parse URL-encoded form data
-            const params = new URLSearchParams(event.body || '');
-            callbackData = Object.fromEntries(params.entries());
+            callbackData = {};
         }
 
-        const {
-            orderId,
-            operationId,
-            transactionId,
-            result,
-            resultCode,
-            authorizationCode,
-            amount,
-            currency
-        } = callbackData;
+        console.log('[nexi-preauth-callback] Parsed callbackData keys:', Object.keys(callbackData));
 
-        console.log('Parsed callback data:', { orderId, operationId, result, authorizationCode });
+        // Nexi Pay-by-Link v2 sends nested format: { operation: { orderId, operationResult, ... } }
+        // Nexi hosted payment sends flat format: { orderId, result, resultCode, ... }
+        const op = callbackData.operation || {};
+        const orderId = callbackData.orderId || op.orderId;
+        const operationId = callbackData.operationId || op.operationId;
+        const transactionId = callbackData.transactionId || op.paymentEndToEndId;
+        const result = callbackData.result || op.operationResult;
+        const resultCode = callbackData.resultCode;
+        const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
+        const contractId = callbackData.contractId || op.additionalData?.contractId;
+        const amount = callbackData.amount || op.operationAmount;
+        const currency = callbackData.currency || op.operationCurrency;
+
+        console.log('[nexi-preauth-callback] Parsed:', { orderId, operationId, result, resultCode, authorizationCode, contractId, raw_keys: Object.keys(callbackData), raw_op_keys: Object.keys(op) });
 
         if (!orderId) {
             return {
@@ -68,18 +84,37 @@ const handler: Handler = async (event) => {
         }
 
         // Update cauzione based on result
-        const isSuccess = result === 'OK' || result === 'AUTHORIZED' || resultCode === '00';
+        // AUTHORIZED = funds held (correct for preauth), EXECUTED = funds charged (wrong for preauth)
+        const isPreauthorized = result === 'AUTHORIZED' || (resultCode === '00' && result !== 'EXECUTED');
+        const wasCharged = result === 'EXECUTED' || result === 'OK';
 
         const updateData: any = {
             updated_at: new Date().toISOString()
         };
 
-        if (isSuccess) {
-            updateData.nexi_transaction_id = transactionId || operationId;
-            updateData.note = `Preautorizzazione completata - Auth: ${authorizationCode || operationId}`;
-            // Keep stato as 'Attiva' - ready for SBLOCCA or INCASSA
+        if (isPreauthorized) {
+            // Correct: funds are HELD, not charged
+            updateData.nexi_transaction_id = operationId || transactionId;
+            updateData.nexi_operation_id = operationId;
+            if (contractId) {
+                updateData.nexi_contract_id = contractId;
+            }
+            updateData.stato = 'Attiva'; // Pre-authorized and ready for SBLOCCA or INCASSA
+            updateData.note = `Preautorizzazione completata (fondi bloccati) - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'}${contractId ? ` - Carta registrata (${contractId})` : ''} - Importo: €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
+            console.log('[nexi-preauth-callback] PREAUTH SUCCESS — operationId:', operationId, 'transactionId:', transactionId, 'authCode:', authorizationCode);
+        } else if (wasCharged) {
+            // WARNING: funds were CHARGED instead of held — this means the endpoint did PAY not PREAUTH
+            updateData.nexi_transaction_id = operationId || transactionId;
+            updateData.nexi_operation_id = operationId;
+            if (contractId) {
+                updateData.nexi_contract_id = contractId;
+            }
+            updateData.stato = 'Incassata'; // Mark as charged since money was taken
+            updateData.note = `ATTENZIONE: Importo INCASSATO (non bloccato) - Result: ${result} - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'} - €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
+            console.log('[nexi-preauth-callback] WARNING: CHARGED instead of PREAUTH — result:', result, 'operationId:', operationId);
         } else {
             updateData.note = `Preautorizzazione fallita - ${result || resultCode}`;
+            console.log('[nexi-preauth-callback] FAILED — result:', result, 'resultCode:', resultCode);
         }
 
         const { error: updateError } = await supabase
@@ -97,6 +132,56 @@ const handler: Handler = async (event) => {
         }
 
         console.log('Cauzione updated successfully:', cauzione.id);
+
+        // Save contractId to customer for future MIT charges
+        if ((isPreauthorized || wasCharged) && contractId) {
+            try {
+                // Get booking from cauzione to find customer
+                const { data: cauzioneFull } = await supabase
+                    .from('cauzioni')
+                    .select('riferimento_contratto_id')
+                    .eq('id', cauzione.id)
+                    .single();
+
+                if (cauzioneFull?.riferimento_contratto_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_email, booking_details')
+                        .eq('id', cauzioneFull.riferimento_contratto_id)
+                        .single();
+
+                    if (booking) {
+                        const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
+                        const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase().trim();
+
+                        let saved = false;
+                        if (custId) {
+                            const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
+                            if (cust) {
+                                await supabase.from('customers_extended').update({
+                                    metadata: { ...(cust.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                    updated_at: new Date().toISOString()
+                                }).eq('id', cust.id);
+                                saved = true;
+                                console.log(`[nexi-preauth-callback] Saved contractId ${contractId} on customer ${cust.id}`);
+                            }
+                        }
+                        if (!saved && custEmail) {
+                            const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
+                            if (custByEmail) {
+                                await supabase.from('customers_extended').update({
+                                    metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                    updated_at: new Date().toISOString()
+                                }).eq('id', custByEmail.id);
+                                console.log(`[nexi-preauth-callback] Saved contractId ${contractId} on customer ${custByEmail.id} (by email)`);
+                            }
+                        }
+                    }
+                }
+            } catch (custErr) {
+                console.error('[nexi-preauth-callback] Error saving contractId to customer:', custErr);
+            }
+        }
 
         return {
             statusCode: 200,

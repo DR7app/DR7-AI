@@ -32,7 +32,12 @@ const FIELD_LABELS: Record<string, string> = {
     codice_univoco: 'Codice Univoco',
     cf_pa: 'Codice Fiscale',
     ente_ufficio: 'Ente/Ufficio',
-    citta: 'Città'
+    citta: 'Città',
+    documento_numero: 'Numero Documento Identità',
+    documento_tipo: 'Tipo Documento',
+    emessa_da: 'Patente Emessa Da',
+    data_rilascio_patente: 'Data Rilascio Patente',
+    scadenza_patente: 'Scadenza Patente'
 }
 
 export default function MissingFieldsModal({
@@ -81,6 +86,16 @@ export default function MissingFieldsModal({
                 newErrors[field] = `${FIELD_LABELS[field] || field} è obbligatorio`
             }
         })
+
+        // Block if patente issued less than 2 years ago
+        if (formData.data_rilascio_patente) {
+            const issueDate = new Date(formData.data_rilascio_patente)
+            const twoYearsAgo = new Date()
+            twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+            if (issueDate > twoYearsAgo) {
+                newErrors.data_rilascio_patente = 'Patente rilasciata da meno di 2 anni — noleggio non consentito'
+            }
+        }
 
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
@@ -180,7 +195,38 @@ export default function MissingFieldsModal({
             )
         }
 
-        if (field === 'data_nascita' || field.includes('data_')) {
+        if (field === 'documento_tipo') {
+            return (
+                <div key={field} className="mb-4">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                        {label} *
+                    </label>
+                    <select
+                        value={value}
+                        onChange={(e) => handleChange(field, e.target.value)}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    >
+                        <option value="">Seleziona...</option>
+                        <option value="carta_identita">Carta d'Identità</option>
+                        <option value="passaporto">Passaporto</option>
+                        <option value="patente">Patente di Guida</option>
+                    </select>
+                    {errors[field] && (
+                        <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
+                    )}
+                </div>
+            )
+        }
+
+        if (field === 'data_nascita' || field.includes('data_') || field === 'scadenza_patente') {
+            // Check if data_rilascio_patente is less than 2 years ago
+            const showPatenteWarning = field === 'data_rilascio_patente' && value && (() => {
+                const issueDate = new Date(value)
+                const twoYearsAgo = new Date()
+                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+                return issueDate > twoYearsAgo
+            })()
+
             return (
                 <div key={field} className="mb-4">
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">
@@ -190,8 +236,11 @@ export default function MissingFieldsModal({
                         type="date"
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className={`w-full bg-theme-bg-tertiary border rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${showPatenteWarning ? 'border-red-500' : 'border-theme-border-light'}`}
                     />
+                    {showPatenteWarning && (
+                        <p className="text-red-500 text-sm font-semibold mt-2">Patente rilasciata da meno di 2 anni — noleggio non consentito</p>
+                    )}
                     {errors[field] && (
                         <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
                     )}

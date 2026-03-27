@@ -22,6 +22,7 @@ function eurToCents(eur: string): number {
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
 import { validateRentalBooking } from '../../../utils/schedulingRules'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 import {
   getAvailableVehicles,
@@ -35,6 +36,7 @@ import NewClientModal from './NewClientModal'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
+import DanniPenaliModal from './DanniPenaliModal'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -144,6 +146,7 @@ interface Customer {
   notes: string | null
   created_at: string
   updated_at: string
+  scadenza_patente?: string | null
 }
 
 interface Vehicle {
@@ -215,6 +218,7 @@ interface Booking {
   pickup_enabled?: boolean
   pickup_address?: { street: string; city: string; zip: string; province: string; notes: string } | null
   pickup_fee?: number
+  notes?: string | null
   contracts?: {
     yousign_status: string | null
     signed_pdf_url: string | null
@@ -326,6 +330,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const isInitialEditLoad = useRef(false)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [newSecondDriverMode, setNewSecondDriverMode] = useState(false)
+  const [newGaranteMode, setNewGaranteMode] = useState(false)
+  const [targaLoading, setTargaLoading] = useState(false)
 
   // Extend Booking Modal State
   const [showExtendModal, setShowExtendModal] = useState(false)
@@ -334,9 +340,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     new_return_date: '',
     new_return_time: '10:00',
     additional_amount: '0',
-    extension_payment_status: 'pending' as 'paid' | 'pending',
+    extension_payment_status: 'pending' as 'paid' | 'pending' | 'nexi_pay_by_link',
     extension_payment_method: '',
-    notes: ''
+    link_expiration_hours: '1',
+    notes: '',
+    change_vehicle: false,
+    new_vehicle_id: '',
+    show_all_vehicles: false
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -373,8 +383,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     source: 'admin',
     total_amount: '0',
     amount_paid: '0',
-    payment_status: 'paid',
-    payment_method: 'Contanti',
+    payment_status: 'pending',
+    payment_method: 'Nexi Pay by Link',
     currency: 'EUR',
     // 2nd Driver - Required fields for contract generation validation
     has_second_driver: false,
@@ -404,7 +414,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // KM Overage Fee
     km_overage_fee: '1.80',
     unlimited_km: false,
-    km_limit: '0', // Default KM limit when not unlimited
+    km_limit: '50/giorno', // Default KM limit when not unlimited
     // Home Delivery & Pickup
     delivery_enabled: false,
     delivery_street: '',
@@ -420,7 +430,69 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     pickup_province: '',
     pickup_notes: '',
     pickup_fee: '0',
+    notes: '',
+    // Cauzione Auto (Vehicle as Security Deposit)
+    cauzione_auto: false,
+    cauzione_targa: '',
+    cauzione_targa_year: '',
+    cauzione_targa_brand: '',
+    cauzione_targa_model: '',
+    cauzione_proprietario_tipo: 'guidatore' as 'guidatore' | 'diverso',
+    garante_customer_id: '',
+    garante_nome: '',
+    garante_cognome: '',
+    garante_codice_fiscale: '',
+    garante_sesso: '',
+    garante_indirizzo: '',
+    garante_cap: '',
+    garante_citta: '',
+    garante_provincia: '',
+    garante_birth_date: '',
+    garante_birth_place: '',
+    garante_birth_provincia: '',
+    garante_phone: '',
+    garante_email: '',
   })
+
+  // Revenue Management — dynamic price suggestion
+  const [revenueSuggestion, setRevenueSuggestion] = useState<{
+    suggestedPrice: number; dailyRate: number; rentalDays: number; basePrice: number
+    breakdown: { label: string; coeff: number; description: string }[]
+    occupationPct: number; daysAhead: number
+    limits: { minHit: boolean; maxHit: boolean }
+  } | null>(null)
+  const [revenueLoading, setRevenueLoading] = useState(false)
+  const [revenueExpanded, setRevenueExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
+      setRevenueSuggestion(null)
+      return
+    }
+    const pickup = `${formData.pickup_date}T${formData.pickup_time || '10:00'}`
+    const dropoff = `${formData.return_date}T${formData.return_time || '10:00'}`
+
+    let cancelled = false
+    setRevenueLoading(true)
+    fetch('/.netlify/functions/calculate-dynamic-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vehicle_id: formData.vehicle_id, pickup_date: pickup, dropoff_date: dropoff })
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.enabled && data.suggestedPrice) {
+          setRevenueSuggestion(data)
+        } else {
+          setRevenueSuggestion(null)
+        }
+      })
+      .catch(() => { if (!cancelled) setRevenueSuggestion(null) })
+      .finally(() => { if (!cancelled) setRevenueLoading(false) })
+
+    return () => { cancelled = true }
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -480,6 +552,79 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
     }
   }, [formData.second_driver_id, newSecondDriverMode, customers])
+
+  // Auto-populate garante fields when customer is selected
+  useEffect(() => {
+    if (formData.garante_customer_id && !newGaranteMode) {
+      const fetchGaranteData = async () => {
+        const { data: fullCustomer, error } = await supabase
+          .from('customers_extended')
+          .select('*')
+          .eq('id', formData.garante_customer_id)
+          .single()
+
+        if (error || !fullCustomer) {
+          console.error('Error fetching garante customer data:', error)
+          return
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          garante_nome: fullCustomer.nome || '',
+          garante_cognome: fullCustomer.cognome || '',
+          garante_codice_fiscale: fullCustomer.codice_fiscale || '',
+          garante_sesso: fullCustomer.sesso || '',
+          garante_indirizzo: fullCustomer.indirizzo || '',
+          garante_cap: fullCustomer.codice_postale || fullCustomer.cap || '',
+          garante_citta: fullCustomer.citta_residenza || fullCustomer.citta || '',
+          garante_provincia: fullCustomer.provincia_residenza || fullCustomer.provincia || '',
+          garante_birth_date: fullCustomer.data_nascita || '',
+          garante_birth_place: fullCustomer.luogo_nascita || '',
+          garante_birth_provincia: fullCustomer.provincia_nascita || '',
+          garante_phone: fullCustomer.telefono || '',
+          garante_email: fullCustomer.email || '',
+        }))
+      }
+      fetchGaranteData()
+    }
+  }, [formData.garante_customer_id, newGaranteMode])
+
+  async function handleLookupCauzioneTarga() {
+    if (!formData.cauzione_targa || formData.cauzione_targa.length < 5) {
+      toast.error('Inserisci una targa valida')
+      return
+    }
+    setTargaLoading(true)
+    try {
+      const resp = await fetch('/.netlify/functions/lookup-targa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targa: formData.cauzione_targa }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        toast.error(data.error || 'Errore nella ricerca della targa')
+        return
+      }
+      const year = parseInt(data.year)
+      if (isNaN(year) || year < 2020) {
+        toast.error('Veicolo deve essere immatricolato dal 2020 in poi')
+        setFormData(prev => ({ ...prev, cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '' }))
+        return
+      }
+      setFormData(prev => ({
+        ...prev,
+        cauzione_targa_brand: data.brand || '',
+        cauzione_targa_model: data.model || '',
+        cauzione_targa_year: data.year || '',
+      }))
+      toast.success(`${data.brand} ${data.model} (${data.year}) trovato`)
+    } catch (err: any) {
+      toast.error('Errore: ' + err.message)
+    } finally {
+      setTargaLoading(false)
+    }
+  }
 
   // Handle initial data from Calendar click
   useEffect(() => {
@@ -573,6 +718,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Danni Modal State
   const [danniModalOpen, setDanniModalOpen] = useState(false)
   const [selectedBookingForDanni, setSelectedBookingForDanni] = useState<Booking | null>(null)
+
+  // Combined Danni & Penali Modal State
+  const [danniPenaliModalOpen, setDanniPenaliModalOpen] = useState(false)
+  const [selectedBookingForDanniPenali, setSelectedBookingForDanniPenali] = useState<Booking | null>(null)
+  const [danniPenaliInitialTab, setDanniPenaliInitialTab] = useState<'danni' | 'penali'>('danni')
 
   // Confirmation Modal State (commented out - unused, causing build errors)
   // const [confirmationModalOpen, setConfirmationModalOpen] = useState(false)
@@ -939,6 +1089,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Then filter out service bookings from main bookings display
       const filteredBookings = (allBookings || []).filter(b =>
+        b.status !== 'deleted' &&
         b.service_type !== 'car_wash' &&
         b.service_type !== 'mechanical_service' &&
         b.service_type !== 'mechanical_service' &&
@@ -1025,11 +1176,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       console.log('[ReservationsTab] Customers from bookings:', customerMap.size)
 
-      // Also fetch from customers_extended (the main source of truth)
-      const { data: customersExtendedData, error: customersExtendedError } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // Also fetch from customers_extended via Netlify function (bypasses RLS, paginates beyond 1000 limit)
+      let customersExtendedData: any[] | null = null
+      let customersExtendedError: any = null
+      try {
+        const custResponse = await fetch('/.netlify/functions/list-customers')
+        const custResult = await custResponse.json()
+        if (custResponse.ok && custResult.customers) {
+          customersExtendedData = custResult.customers
+        } else {
+          customersExtendedError = { message: custResult.error }
+        }
+      } catch (e: any) {
+        customersExtendedError = { message: e.message }
+      }
 
       if (customersExtendedError) {
         console.error('Failed to load customers_extended:', customersExtendedError)
@@ -1055,7 +1215,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             driver_license_number: c.numero_patente || null,
             notes: c.note || null,
             created_at: c.created_at,
-            updated_at: c.updated_at || c.created_at
+            updated_at: c.updated_at || c.created_at,
+            scadenza_patente: c.scadenza_patente || c.data_scadenza_patente || c.metadata?.patente?.scadenza || null
           }
 
           // ✅ FIX: ALWAYS use customer ID as the Map key
@@ -1260,7 +1421,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const missing: string[] = []
 
     // Common fields
-    if (!customer.codice_fiscale) missing.push('codice_fiscale')
     if (!customer.indirizzo) missing.push('indirizzo')
     if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
     if (!customer.provincia_residenza) missing.push('provincia_residenza')
@@ -1268,25 +1428,82 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     // Persona Fisica specific
     if (customer.tipo_cliente === 'persona_fisica' || !customer.tipo_cliente) {
+      if (!customer.codice_fiscale) missing.push('codice_fiscale')
       if (!customer.nome) missing.push('nome')
       if (!customer.cognome) missing.push('cognome')
       if (!customer.data_nascita) missing.push('data_nascita')
       if (!customer.luogo_nascita) missing.push('luogo_nascita')
-      if (!customer.patente && !customer.numero_patente) missing.push('patente')
+      if (!customer.sesso && !customer.metadata?.sesso) missing.push('sesso')
+      if (!customer.patente && !customer.numero_patente && !customer.metadata?.patente?.numero) missing.push('numero_patente')
+      if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
+      if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
+      if (!customer.scadenza_patente && !customer.metadata?.patente?.scadenza) missing.push('scadenza_patente')
+      // Check patente is at least 2 years old
+      const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
+      if (patenteDate) {
+        const issueDate = new Date(patenteDate)
+        const twoYearsAgo = new Date()
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+        if (issueDate > twoYearsAgo) {
+          throw new Error('Patente rilasciata da meno di 2 anni. Il cliente non può noleggiare.')
+        }
+      }
+
+      if (!customer.documento_numero) missing.push('documento_numero')
+      if (!customer.documento_tipo) missing.push('documento_tipo')
     }
 
-    // Azienda specific
-    if (customer.tipo_cliente === 'azienda' && !customer.partita_iva) {
-      missing.push('partita_iva')
+    // Azienda specific — partita_iva is enough, codice_fiscale not required
+    if (customer.tipo_cliente === 'azienda') {
+      if (!customer.partita_iva && !customer.codice_fiscale) missing.push('partita_iva')
     }
 
     return missing
+  }
+
+  async function handleResendPaymentLink(booking: Booking) {
+    const paymentLink = booking.booking_details?.nexi_payment_link
+    if (!paymentLink) {
+      toast.error('Nessun link di pagamento trovato per questa prenotazione')
+      return
+    }
+    const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+    if (!custPhone) {
+      // Fallback: copy to clipboard
+      navigator.clipboard.writeText(paymentLink)
+      toast.success('Link copiato! Nessun telefono trovato per inviare WhatsApp.')
+      return
+    }
+    const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
+    const bookingRef = booking.id.substring(0, 8).toUpperCase()
+    const totalEur = (booking.price_total / 100).toFixed(2)
+    try {
+      await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: custPhone,
+          customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\nSi informano i clienti che non è possibile effettuare pagamenti con carte prepagate.\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${paymentLink}\n\nIl link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe il messaggio non è destinato a lei o ha già provveduto, può ignorarlo.`
+        })
+      })
+      toast.success('Link di pagamento rinviato via WhatsApp!')
+    } catch (err: any) {
+      console.error('Error resending payment link:', err)
+      toast.error('Errore invio WhatsApp: ' + err.message)
+    }
   }
 
   async function handleGenerateContract(booking: Booking, _silent?: boolean) {
     console.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
+      return
+    }
+
+    // Skip contract for non-rental bookings
+    const svcType = booking.service_type || (booking as any).booking_details?.service_type || ''
+    if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
+      console.log(`[handleGenerateContract] Skipping — service_type=${svcType} is not a rental`)
       return
     }
 
@@ -1302,42 +1519,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (missing.length > 0) {
       console.warn('⚠️ Missing fields for contract:', missing)
-
-      // Fetch full customer data to populate modal
-      const customerId = booking.user_id || booking.booking_details?.customer?.id || booking.booking_details?.customer_id
-      let customerData = {}
-
-      if (customerId) {
-        try {
-          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
-          if (resp.ok) {
-            const result = await resp.json()
-            customerData = result.customer || { id: customerId }
-          } else {
-            customerData = { id: customerId }
-          }
-        } catch (e) {
-          console.error('[handleGenerateContract] get-customer error:', e)
-          customerData = { id: customerId }
-        }
-        console.log('[handleGenerateContract] Fetched customer for ID:', customerId, customerData)
-      } else {
-        // No customer ID, but we might have data from booking
-        const nameParts = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
-        customerData = {
-          nome: nameParts[0] || '',
-          cognome: nameParts.slice(1).join(' ') || '',
-          email: booking.customer_email || '',
-          telefono: booking.customer_phone || ''
-        }
-      }
-
-      setMissingFields(missing)
-      setTempCustomerData(customerData)
-      setCurrentValidationBooking(booking)
-      setValidationContext('contract')
-      setShowMissingDataModal(true)
-      return
+      // Don't block — generate-contract backend has extensive fallbacks
+      // Just log it, contract will be generated with available data
+      console.log('[handleGenerateContract] Proceeding despite missing fields — backend handles fallbacks')
     }
 
     setGeneratingContract(true)
@@ -1359,6 +1543,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (data.url) {
         window.open(data.url, '_blank')
       }
+
+      logAdminAction('generate_contract', 'booking', booking.id)
 
       // Reload data to show the contract link and Yousign button in the UI
       await loadData()
@@ -1466,6 +1652,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       } catch (err) {
         console.warn('PDF auto-open failed, continuing flow:', err)
       }
+
+      logAdminAction('generate_fattura', 'booking', booking.id)
 
       // SDI send is now handled automatically by the backend
       loadData()
@@ -1581,59 +1769,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customerName = booking?.customer_name || ''
         vehicleName = booking?.vehicle_name || ''
 
-        // First, delete any related contracts to avoid foreign key constraint
-        const { error: contractDeleteError } = await supabase
-          .from('contracts')
-          .delete()
-          .eq('booking_id', bookingId)
+        // SOFT DELETE via Netlify function (uses service role key to bypass RLS)
+        const deleteRes = await fetch('/.netlify/functions/delete-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId })
+        })
 
-        if (contractDeleteError) {
-          console.warn('Failed to delete related contracts:', contractDeleteError)
-          // Don't fail the whole operation, just log it
-        }
-
-        // Try server-side deletion first (bypasses RLS)
-        try {
-          const response = await fetch('/.netlify/functions/delete-booking', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId })
-          })
-
-          const data = await response.json()
-
-          if (!response.ok) {
-            console.warn('Server-side deletion failed, attempting client-side fallback...', data.error)
-            throw new Error(data.error || 'Failed to delete booking')
-          }
-        } catch (serverError) {
-          // Fallback to client-side deletion (requires RLS fix)
-          console.log('Attempting client-side deletion fallback...')
-
-          // Try to cancel first to bypass constraints
-          await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
-
-          // Manually delete related records if server-side failed (Cascade emulation)
-          console.log('Client-side cascade: Deleting related records...')
-          await supabase.from('fatture').delete().eq('booking_id', bookingId)
-          await supabase.from('contracts').delete().eq('booking_id', bookingId)
-          await supabase.from('cauzioni').delete().eq('riferimento_contratto_id', bookingId)
-
-          const { error: clientError } = await supabase
-            .from('bookings')
-            .delete()
-            .eq('id', bookingId)
-
-          if (clientError) {
-            console.error('Client-side deletion also failed:', clientError)
-            // Throw the original server error if client error is about permissions, 
-            // otherwise throw client error
-            throw new Error(
-              clientError.code === '42501'
-                ? 'Permission denied. Please run the fix_bookings_rls.sql script in Supabase.'
-                : clientError.message
-            )
-          }
+        if (!deleteRes.ok) {
+          const errData = await deleteRes.json().catch(() => ({}))
+          throw new Error(errData.error || 'Errore durante l\'eliminazione')
         }
       } else {
         const reservation = reservations.find(r => r.id === bookingId)
@@ -1670,6 +1815,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole deletion if calendar delete fails
       }
 
+      logAdminAction('delete_booking', 'booking', bookingId, { customer: customerName })
       alert('Prenotazione eliminata definitivamente')
       loadData()
     } catch (error) {
@@ -1922,9 +2068,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
       deposit: booking.booking_details?.deposit || '0',
       deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
+      // Cauzione Auto
+      cauzione_auto: !!booking.booking_details?.cauzione_auto,
+      cauzione_targa: booking.booking_details?.cauzione_targa || '',
+      cauzione_targa_year: booking.booking_details?.cauzione_veicolo?.year || '',
+      cauzione_targa_brand: booking.booking_details?.cauzione_veicolo?.brand || '',
+      cauzione_targa_model: booking.booking_details?.cauzione_veicolo?.model || '',
+      cauzione_proprietario_tipo: booking.booking_details?.garante_veicolo?.tipo || 'guidatore',
+      garante_customer_id: booking.booking_details?.garante_veicolo?.customer_id || '',
+      garante_nome: booking.booking_details?.garante_veicolo?.nome || '',
+      garante_cognome: booking.booking_details?.garante_veicolo?.cognome || '',
+      garante_codice_fiscale: booking.booking_details?.garante_veicolo?.codice_fiscale || '',
+      garante_sesso: booking.booking_details?.garante_veicolo?.sesso || '',
+      garante_indirizzo: booking.booking_details?.garante_veicolo?.indirizzo || '',
+      garante_cap: booking.booking_details?.garante_veicolo?.cap || '',
+      garante_citta: booking.booking_details?.garante_veicolo?.citta || '',
+      garante_provincia: booking.booking_details?.garante_veicolo?.provincia || '',
+      garante_birth_date: booking.booking_details?.garante_veicolo?.birth_date || '',
+      garante_birth_place: booking.booking_details?.garante_veicolo?.birth_place || '',
+      garante_birth_provincia: booking.booking_details?.garante_veicolo?.birth_provincia || '',
+      garante_phone: booking.booking_details?.garante_veicolo?.phone || '',
+      garante_email: booking.booking_details?.garante_veicolo?.email || '',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '1.80',
       unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
-      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '0'),
+      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '50/giorno'),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
@@ -1940,6 +2107,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
       pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
+      notes: booking.booking_details?.notes || booking.notes || '',
     })
 
     setEditingId(booking.id)
@@ -1962,7 +2130,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       additional_amount: '0',
       extension_payment_status: 'pending',
       extension_payment_method: '',
-      notes: ''
+      link_expiration_hours: '1',
+      notes: '',
+      change_vehicle: false,
+      new_vehicle_id: '',
+      show_all_vehicles: false
     })
     setShowExtendModal(true)
   }
@@ -1991,6 +2163,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const additionalAmount = parseFloat(extendData.additional_amount) || 0
       const newTotal = extendingBooking.price_total + (additionalAmount * 100) // price_total is in cents
 
+      // Resolve new vehicle if car change requested
+      let newVehicle: Vehicle | null = null
+      if (extendData.change_vehicle && extendData.new_vehicle_id) {
+        newVehicle = vehicles.find(v => v.id === extendData.new_vehicle_id) || null
+      }
+
       // Update booking_details with extension info
       // Reset deposit_reminder_sent so IBAN message re-sends 60 min after the NEW dropoff
       const updatedBookingDetails = {
@@ -2000,6 +2178,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         iban_request_sent: false,
         day_before_reminder_sent: false,
         day_before_reminder_sent_at: null,
+        // Update vehicle info in booking_details if car changed
+        ...(newVehicle ? {
+          vehicle: {
+            ...extendingBooking.booking_details?.vehicle,
+            id: newVehicle.id,
+            name: newVehicle.display_name,
+            plate: newVehicle.plate || newVehicle.targa || '',
+          },
+          vehicle_id: newVehicle.id,
+        } : {}),
         extension_history: [
           ...(extendingBooking.booking_details?.extension_history || []),
           {
@@ -2008,20 +2196,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             new_dropoff: newDropoffDateTime.toISOString(),
             additional_amount: additionalAmount,
             payment_status: extendData.extension_payment_status, // 'paid' or 'pending'
-            notes: extendData.notes
+            notes: extendData.notes,
+            ...(newVehicle ? {
+              previous_vehicle_id: extendingBooking.vehicle_id,
+              previous_vehicle_name: extendingBooking.vehicle_name,
+              new_vehicle_id: newVehicle.id,
+              new_vehicle_name: newVehicle.display_name,
+            } : {})
           }
         ]
+      }
+
+      // Build update payload
+      const bookingUpdate: Record<string, any> = {
+        dropoff_date: newDropoffDateTime.toISOString(),
+        price_total: newTotal,
+        booking_details: updatedBookingDetails,
+        updated_at: new Date().toISOString()
+      }
+
+      // If car changed, update vehicle fields on the booking
+      if (newVehicle) {
+        bookingUpdate.vehicle_id = newVehicle.id
+        bookingUpdate.vehicle_name = newVehicle.display_name
+        bookingUpdate.vehicle_plate = newVehicle.plate || newVehicle.targa || ''
       }
 
       // Update the booking directly - NO validation checks
       const { error: updateError } = await supabase
         .from('bookings')
-        .update({
-          dropoff_date: newDropoffDateTime.toISOString(),
-          price_total: newTotal,
-          booking_details: updatedBookingDetails,
-          updated_at: new Date().toISOString()
-        })
+        .update(bookingUpdate)
         .eq('id', extendingBooking.id)
 
       if (updateError) {
@@ -2031,6 +2235,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       console.log('[handleConfirmExtend] ✅ Booking extended successfully')
+      logAdminAction('extend_booking', 'booking', extendingBooking.id, { new_dropoff: newDropoffDateTime.toISOString() })
 
       // Send WhatsApp notification for extension
       try {
@@ -2043,12 +2248,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         const adminExtPayLabel = extendData.extension_payment_status === 'paid'
           ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
+          : extendData.extension_payment_status === 'nexi_pay_by_link'
+          ? 'Nexi Pay by Link'
           : 'Da saldare'
 
         let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
         extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
         extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
-        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        if (newVehicle) {
+          extensionMsg += `*Veicolo precedente:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+          extensionMsg += `*Nuovo veicolo:* ${newVehicle.display_name} (${newVehicle.plate || newVehicle.targa || ''})\n`
+        } else {
+          extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+        }
         extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
@@ -2087,13 +2299,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           const custExtPayLabel = extendData.extension_payment_status === 'paid'
             ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
+            : extendData.extension_payment_status === 'nexi_pay_by_link'
+            ? 'Nexi Pay by Link'
             : 'Da saldare'
 
           let customerMsg = `Salve ${customerFirstName},\n\n`
             + `Confermiamo l'estensione della sua prenotazione.\n\n`
             + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
             + `*ID:* DR7-${bookingIdShort}\n`
-            + `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
+            + (newVehicle
+              ? `*Nuovo veicolo:* ${newVehicle.display_name}\n`
+              : `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`)
             + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
             + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
             + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
@@ -2123,7 +2339,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           body: JSON.stringify({
             bookingId: extendingBooking.id,
             customerId: extendingBooking.user_id,
-            vehicleId: extendingBooking.vehicle_id,
+            vehicleId: newVehicle ? newVehicle.id : extendingBooking.vehicle_id,
             returnDate: newDropoffDateTime.toISOString(),
             depositAmount: depositAmount,
             paymentMethod: extendingBooking.payment_method || 'carta',
@@ -2158,45 +2374,76 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Close modal
-      const bookingId = extendingBooking.id
-      setShowExtendModal(false)
-      setExtendingBooking(null)
-
-      // Refresh data to get the updated booking
-      await loadData()
-
-      // Automatically generate extension contract
-      {
-        console.log('[handleConfirmExtend] Generating extension addendum contract...')
+      // Generate Nexi Pay by Link for extension
+      if (extendData.extension_payment_status === 'nexi_pay_by_link' && additionalAmount > 0) {
         try {
-          const response = await fetch('/.netlify/functions/generate-extension-contract', {
+          let customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
+          const custEmail = extendingBooking.customer_email || extendingBooking.booking_details?.customer?.email
+          const custName = extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'Cliente'
+
+          if (!customerPhone) {
+            const custId = extendingBooking.booking_details?.customer?.customerId || extendingBooking.booking_details?.customer_id
+            if (custId) {
+              const { data: cust } = await supabase.from('customers_extended').select('telefono').eq('id', custId).maybeSingle()
+              if (cust?.telefono) customerPhone = cust.telefono
+            }
+          }
+
+          const expirationHours = parseInt(extendData.link_expiration_hours) || 1
+          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              bookingId,
-              extensionData: {
-                previous_dropoff: extendingBooking.dropoff_date,
-                new_dropoff: newDropoffDateTime.toISOString(),
-                additional_amount: additionalAmount,
-                notes: extendData.notes
-              }
-            })
+              bookingId: extendingBooking.id,
+              amount: additionalAmount,
+              customerEmail: custEmail || '',
+              customerName: custName,
+              description: `Estensione noleggio — ${custName}`,
+              expirationHours,
+              paymentPurpose: 'extension',
+            }),
           })
+          const linkData = await linkRes.json()
 
-          const result = await response.json()
-          if (result.success && result.url) {
-            alert('Contratto generato!')
-            window.open(result.url, '_blank')
+          if (linkRes.ok && linkData.paymentUrl) {
+            // Store link on booking
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...updatedBookingDetails,
+                nexi_payment_link: linkData.paymentUrl,
+                nexi_order_id: linkData.orderId,
+              }
+            }).eq('id', extendingBooking.id)
+
+            if (customerPhone) {
+              const bookingRef = extendingBooking.id.substring(0, 8).toUpperCase()
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: customerPhone,
+                  customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nLa sua prenotazione #${bookingRef} è stata estesa.\n\n*Modalità di pagamento (leggere prima di procedere):*\nSi informano i clienti che non è possibile effettuare pagamenti con carte prepagate.\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nPer completare il pagamento dell'estensione di €${additionalAmount.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità di ${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}.\n\nIl pagamento implica accettazione delle condizioni contrattuali DR7.\n\nGrazie per la collaborazione.\n\nDR7`
+                })
+              })
+            }
+
+            try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+            toast.success(`Pay by Link estensione inviato! €${additionalAmount.toFixed(2)} (validità ${expirationHours}h)`)
           } else {
-            console.error('[handleConfirmExtend] Extension contract error:', result.error)
-            alert('Errore: ' + (result.error || 'Errore sconosciuto'))
+            toast.error('Errore Pay by Link: ' + (linkData.error || 'Errore'))
           }
-        } catch (contractError: any) {
-          console.error('[handleConfirmExtend] Contract generation failed:', contractError)
-          alert('Errore: ' + contractError.message)
+        } catch (linkErr: any) {
+          console.error('[handleConfirmExtend] Pay by Link error:', linkErr)
+          toast.error('Errore Pay by Link: ' + linkErr.message)
         }
       }
+
+      // Close modal
+      setShowExtendModal(false)
+      setExtendingBooking(null)
+
+      // Refresh data
+      await loadData()
 
     } catch (error: any) {
       console.error('[handleConfirmExtend] Error:', error)
@@ -2363,20 +2610,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             id: customer.id || targetCustomerId
           }
 
-          // CRITICAL: If customer was found directly in database, SKIP ALL VALIDATION
-          // The data is already in customers_extended, so no need to validate or show modal
-          if (foundDirectlyInDB) {
-            console.log('[processBookingSubmission] ✅✅ Customer found in customers_extended - SKIPPING ALL VALIDATION')
-            // No missing fields - customer exists in DB
-            missing = []
+          // Validate only essential fields for booking creation
+          // Contract/fattura generation will handle its own validation when needed
+          const isAzienda = customer.tipo_cliente === 'azienda'
+
+          if (isAzienda) {
+            if (!customer.partita_iva && !customer.codice_fiscale) missing.push('partita_iva')
+            if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
           } else {
-            // Customer only exists in local autocomplete, not in DB - do basic validation
-            console.log('[processBookingSubmission] ⚠️ Customer not in DB, doing basic validation')
-            const hasName = customer.nome || customer.cognome || customer.denominazione || customer.ragione_sociale || customer.full_name
-            if (!hasName) {
-              console.log('❌ Missing name/identification')
-              missing.push('nome')
-            }
+            if (!customer.nome) missing.push('nome')
+            if (!customer.cognome) missing.push('cognome')
+          }
+
+          if (missing.length > 0) {
+            console.log('[processBookingSubmission] ⚠️ Missing fields for contract/fattura:', missing)
+          } else {
+            console.log('[processBookingSubmission] ✅ All required fields present')
           }
         } else {
           // Customer not found in customers_extended, but exists in autocomplete (from bookings)
@@ -2412,7 +2661,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }
 
             // Mark ALL required fields as missing since this is a new customer
-            missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza', 'patente']
+            // Patente not required for azienda
+            missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza']
+            if (tempCustData.tipo_cliente !== 'azienda') missing.push('patente')
             if (!tempCustData.email) missing.push('email')
             if (!tempCustData.telefono) missing.push('telefono')
 
@@ -2509,6 +2760,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
+      // ===== VALIDATION: Check pickup is not in the past (only for NEW bookings) =====
+      if (!editingId) {
+        const nowRome = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
+        const pickupCheck = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
+        if (pickupCheck < nowRome) {
+          alert('DATA RITIRO NEL PASSATO\n\nLa data e ora di ritiro non può essere nel passato.')
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       // ===== VALIDATION: Check dates are valid before parsing =====
       // Test parse the dates first to ensure they're valid
       const testPickupDate = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
@@ -2578,6 +2840,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               'RITIRO A DOMICILIO - CAMPI MANCANTI\n\n' +
               'Compila i seguenti campi:\n\n' +
               pickupMissing.map(f => `- ${f}`).join('\n')
+            )
+          }, 100)
+          setIsSubmitting(false)
+          return
+        }
+      }
+
+      // ===== VALIDATION: Cauzione Auto — targa must be looked up =====
+      if (formData.cauzione_auto) {
+        const cauzioneMissing: string[] = []
+        if (!formData.cauzione_targa || formData.cauzione_targa.length < 5) {
+          cauzioneMissing.push('Targa Veicolo Cauzione')
+        }
+        if (!formData.cauzione_targa_brand || !formData.cauzione_targa_year) {
+          cauzioneMissing.push('Cerca targa (clicca "Cerca" per verificare il veicolo)')
+        }
+        if (cauzioneMissing.length > 0) {
+          setTimeout(() => {
+            alert(
+              'CAUZIONE AUTO - CAMPI MANCANTI\n\n' +
+              'Per utilizzare "Auto come Cauzione" devi:\n\n' +
+              '1. Inserire la targa del veicolo\n' +
+              '2. Cliccare "Cerca" per verificare che il veicolo sia dal 2020 in poi\n\n' +
+              'Campi mancanti:\n' +
+              cauzioneMissing.map(f => `- ${f}`).join('\n')
             )
           }, 100)
           setIsSubmitting(false)
@@ -2848,7 +3135,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const { data } = await supabase
               .from('customers_extended')
               .select('id')
-              .eq('email', newCustomerData.email.trim().toLowerCase())
+              .ilike('email', newCustomerData.email.trim())
               .maybeSingle()
             existingCustomer = data
           }
@@ -2861,6 +3148,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               .from('customers_extended')
               .select('id')
               .eq('telefono', normNewPhone)
+              .maybeSingle()
+            existingCustomer = data
+          }
+          // Last resort: check by nome + cognome (persona fisica only)
+          if (!existingCustomer && newCustomerData.tipo_cliente === 'persona_fisica' && newCustomerData.nome?.trim() && newCustomerData.cognome?.trim()) {
+            const { data } = await supabase
+              .from('customers_extended')
+              .select('id')
+              .ilike('nome', newCustomerData.nome.trim())
+              .ilike('cognome', newCustomerData.cognome.trim())
               .maybeSingle()
             existingCustomer = data
           }
@@ -3114,12 +3411,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // (extension history, contracts, deposit options, etc.)
           ...(editingId ? (() => {
             const existingBooking = bookings.find(b => b.id === editingId)
-            return existingBooking?.booking_details ? {
-              extension_history: existingBooking.booking_details.extension_history,
-              extension_contracts: existingBooking.booking_details.extension_contracts,
-              contract_generated_at: existingBooking.booking_details.contract_generated_at,
-              depositOption: existingBooking.booking_details.depositOption,
-              noDepositSurcharge: existingBooking.booking_details.noDepositSurcharge,
+            const bd = existingBooking?.booking_details
+            return bd ? {
+              extension_history: bd.extension_history,
+              extension_contracts: bd.extension_contracts,
+              contract_generated_at: bd.contract_generated_at,
+              depositOption: bd.depositOption,
+              noDepositSurcharge: bd.noDepositSurcharge,
+              // Preserve Nexi payment data
+              nexi_payment_link: bd.nexi_payment_link,
+              nexi_order_id: bd.nexi_order_id,
+              nexi_transaction_id: bd.nexi_transaction_id,
+              nexi_contract_id: bd.nexi_contract_id,
+              nexi_paid_at: bd.nexi_paid_at,
+              nexi_extension_paid_at: bd.nexi_extension_paid_at,
+              paymentStatus: bd.paymentStatus,
+              // Preserve danni & penali
+              danni: bd.danni,
+              penalties: bd.penalties,
+              // Preserve reminder flags (set by trigger-reminders)
+              deposit_reminder_sent: bd.deposit_reminder_sent,
+              deposit_reminder_sent_at: bd.deposit_reminder_sent_at,
+              day_before_reminder_sent: bd.day_before_reminder_sent,
+              day_before_reminder_sent_at: bd.day_before_reminder_sent_at,
+              pre_rental_offer_sent: bd.pre_rental_offer_sent,
+              iban_request_sent: bd.iban_request_sent,
+              // Preserve insurance field (read by invoice generator)
+              insurance: bd.insurance,
             } : {}
           })() : {}),
           customer: {
@@ -3141,6 +3459,44 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
+          // Cauzione Auto
+          cauzione_auto: formData.cauzione_auto,
+          cauzione_targa: formData.cauzione_auto ? formData.cauzione_targa : null,
+          cauzione_veicolo: formData.cauzione_auto ? {
+            targa: formData.cauzione_targa,
+            brand: formData.cauzione_targa_brand,
+            model: formData.cauzione_targa_model,
+            year: formData.cauzione_targa_year,
+          } : null,
+          garante_veicolo: formData.cauzione_auto ? (() => {
+            if (formData.cauzione_proprietario_tipo === 'guidatore') {
+              // Duplicate from booking customer
+              const cust = customers.find(c => c.id === formData.customer_id)
+              return {
+                tipo: 'guidatore',
+                customer_id: formData.customer_id || null,
+                nome: cust?.full_name?.split(' ').slice(0, -1).join(' ') || '',
+                cognome: cust?.full_name?.split(' ').pop() || '',
+              }
+            }
+            return {
+              tipo: 'diverso',
+              customer_id: formData.garante_customer_id || null,
+              nome: formData.garante_nome,
+              cognome: formData.garante_cognome,
+              codice_fiscale: formData.garante_codice_fiscale,
+              sesso: formData.garante_sesso,
+              indirizzo: formData.garante_indirizzo,
+              cap: formData.garante_cap,
+              citta: formData.garante_citta,
+              provincia: formData.garante_provincia,
+              birth_date: formData.garante_birth_date,
+              birth_place: formData.garante_birth_place,
+              birth_provincia: formData.garante_birth_provincia,
+              phone: formData.garante_phone,
+              email: formData.garante_email,
+            }
+          })() : null,
           second_driver: formData.has_second_driver ? {
             customer_id: secondDriverId || null,
             name: formData.second_driver_name,
@@ -3180,7 +3536,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             province: formData.pickup_province,
             notes: formData.pickup_notes
           } : null,
-          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0'
+          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+          notes: formData.notes || null,
+          // Revenue Management tracking
+          ...(revenueSuggestion ? {
+            revenue_suggested_price: revenueSuggestion.suggestedPrice,
+            revenue_breakdown: revenueSuggestion.breakdown,
+            revenue_daily_rate: revenueSuggestion.dailyRate,
+            revenue_base_price: revenueSuggestion.basePrice,
+            operator_override: Math.abs(parseFloat(formData.total_amount || '0') - revenueSuggestion.suggestedPrice) > 0.01
+          } : {})
         }
       }
 
@@ -3208,6 +3573,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         console.log('Booking updated successfully:', insertedBooking)
+        logAdminAction('edit_booking', 'booking', editingId, { customer: customerInfo?.full_name })
       } else {
         // Create new booking - direct insert
         console.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
@@ -3224,6 +3590,62 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         console.log('Booking created successfully:', insertedBooking)
+        logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: customerInfo?.full_name })
+      }
+
+      // Generate Nexi Pay by Link if payment method is Nexi AND not already paid
+      if (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid' && insertedBooking) {
+        try {
+          const totalEur = parseFloat(formData.total_amount || '0')
+            + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+            + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+
+          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: insertedBooking.id,
+              amount: totalEur,
+              customerEmail: customerInfo?.email || '',
+              customerName: customerInfo?.full_name || 'Cliente',
+              description: `Noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
+              expirationDays: 1
+            })
+          })
+          const linkData = await linkRes.json()
+
+          if (linkRes.ok && linkData.paymentUrl) {
+            // Store link on booking
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...insertedBooking.booking_details,
+                nexi_payment_link: linkData.paymentUrl,
+                nexi_order_id: linkData.orderId
+              }
+            }).eq('id', insertedBooking.id)
+
+            // Send payment link to customer via WhatsApp
+            const custPhone = customerInfo?.phone
+            if (custPhone) {
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: custPhone,
+                  customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${customerInfo?.full_name},\n\nLa sua prenotazione #${insertedBooking.id.substring(0, 8).toUpperCase()} è stata registrata.\n\n*Modalità di pagamento (leggere prima di procedere):*\nSi informano i clienti che non è possibile effettuare pagamenti con carte prepagate.\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer confermare la richiesta, è necessario completare il pagamento di €${totalEur.toFixed(2)} al seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità limitata di 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe il messaggio non è destinato a lei o ha già provveduto, può ignorarlo.`
+                })
+              })
+            }
+
+            toast.success(`Pay by Link generato e inviato al cliente!`)
+            console.log('✅ Nexi Pay by Link created:', linkData.paymentUrl)
+          } else {
+            toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
+          }
+        } catch (linkErr: any) {
+          console.error('⚠️ Nexi Pay by Link error:', linkErr)
+          toast.error('Errore Pay by Link: ' + linkErr.message)
+        }
       }
 
       // Create Google Calendar event
@@ -3355,6 +3777,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   province: formData.pickup_province
                 } : null,
                 pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+                notes: formData.notes || null,
                 depositOption: insertedBooking?.booking_details?.depositOption,
                 noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
               }
@@ -3363,9 +3786,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         console.log('✅ WhatsApp admin notification sent')
 
-        // Send customer confirmation message
+        // Send customer confirmation message (skip for unpaid Nexi Pay by Link — link message is sent separately)
         const custPhone = customerInfo?.phone
-        if (custPhone) {
+        if (custPhone && !(formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')) {
           const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
           const pickupDt = new Date(pickupDateTime)
           const dropoffDt = new Date(returnDateTime)
@@ -3373,14 +3796,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
           const depositEur = parseFloat(formData.deposit) || 0
           const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
-          const kmLabel = formData.unlimited_km ? 'Illimitati' : (formData.km_limit ? `${formData.km_limit} km` : '-')
+          let kmLabel = '-'
+          if (formData.unlimited_km) {
+            kmLabel = 'Illimitati'
+          } else if (formData.km_limit === '50/giorno') {
+            const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
+            const dropoff = new Date(formData.return_date + 'T' + formData.return_time)
+            const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
+            kmLabel = `${50 * days} Km (50/g x ${days}gg)`
+          } else if (formData.km_limit) {
+            kmLabel = `${formData.km_limit} km`
+          }
           const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
             : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
             : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
             : formData.insurance_option === 'DR7' ? 'Kasko DR7'
             : formData.insurance_option || '-'
           const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
-          const bookingNotes = insertedBooking?.booking_details?.notes || ''
+          const bookingNotes = formData.notes || insertedBooking?.booking_details?.notes || ''
 
           const totalEur = insertedBooking?.price_total ? (insertedBooking.price_total / 100).toFixed(2) : parseFloat(formData.total_amount).toFixed(2)
 
@@ -3451,16 +3884,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole booking if cauzione sync fails
       }
 
-      // Generate Contract PDF automatically (only for new bookings)
-      if (!editingId) {
-        try {
-          console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, new Date().toISOString())
-          await handleGenerateContract(insertedBooking, false)
-          console.log('[Auto-Gen] ✅ Contract generated successfully')
-        } catch (contractError) {
-          console.error('[Auto-Gen] ⚠️ Failed to generate contract:', contractError)
-          // Don't alert here to avoid confusion, just log it
-        }
+      // Generate Contract PDF automatically (for new bookings and edits)
+      try {
+        console.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)', new Date().toISOString())
+        await handleGenerateContract(insertedBooking, false)
+        console.log('[Auto-Gen] ✅ Contract generated successfully')
+      } catch (contractError) {
+        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', contractError)
+        // Don't alert here to avoid confusion, just log it
       }
 
       // Auto-generate fattura and send to SDI when payment status is "paid"
@@ -3506,6 +3937,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             })
             if (sigRes.ok) {
               console.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
+
+              // Garante signing link is now handled by signature-init (multi-signer support)
             } else {
               const sigErr = await sigRes.json()
               console.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
@@ -3525,12 +3958,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       resetForm()
       await loadData()
 
-      // Show success message AFTER reload to ensure it's visible
-      const successMessage = editingId
-        ? 'Prenotazione aggiornata con successo!\n\nLa prenotazione è stata modificata e salvata nel database.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
-        : 'Prenotazione creata con successo!\n\nLa nuova prenotazione è stata salvata nel database.\n\nIl cliente riceverà una conferma via email.\n\nPuoi visualizzarla nella lista delle prenotazioni.'
-
-      alert(successMessage)
+      toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
     } catch (error) {
       console.error('Failed to save reservation:', error)
       alert('Failed to save reservation: ' + (error as Error).message)
@@ -3561,8 +3989,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       total_amount: '0',
       amount_paid: '0',
       km_overage_fee: '1.80',
-      payment_status: 'paid',
-      payment_method: 'Contanti',
+      payment_status: 'pending',
+      payment_method: 'Nexi Pay by Link',
       currency: 'EUR',
       has_second_driver: false,
       second_driver_id: '',
@@ -3589,7 +4017,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
       unlimited_km: false,
-      km_limit: '0',
+      km_limit: '50/giorno',
       // Home Delivery & Pickup
       delivery_enabled: false,
       delivery_street: '',
@@ -3605,6 +4033,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_province: '',
       pickup_notes: '',
       pickup_fee: '0',
+      notes: '',
+      // Cauzione Auto (Vehicle as Security Deposit)
+      cauzione_auto: false,
+      cauzione_targa: '',
+      cauzione_targa_year: '',
+      cauzione_targa_brand: '',
+      cauzione_targa_model: '',
+      cauzione_proprietario_tipo: 'guidatore' as 'guidatore' | 'diverso',
+      garante_customer_id: '',
+      garante_nome: '',
+      garante_cognome: '',
+      garante_codice_fiscale: '',
+      garante_sesso: '',
+      garante_indirizzo: '',
+      garante_cap: '',
+      garante_citta: '',
+      garante_provincia: '',
+      garante_birth_date: '',
+      garante_birth_place: '',
+      garante_birth_provincia: '',
+      garante_phone: '',
+      garante_email: '',
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',
@@ -3741,8 +4191,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             booking={{
               id: selectedBookingForDanni.id,
               customer_name: selectedBookingForDanni.customer_name || 'Cliente',
-              customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || undefined,
-              user_id: selectedBookingForDanni.user_id || undefined
+              customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || selectedBookingForDanni.booking_details?.customer_id || undefined,
+              user_id: selectedBookingForDanni.user_id || undefined,
+              customer_email: selectedBookingForDanni.customer_email || selectedBookingForDanni.booking_details?.customer?.email || undefined,
+              customer_phone: selectedBookingForDanni.customer_phone || selectedBookingForDanni.booking_details?.customer?.phone || undefined
             }}
             onClose={() => {
               setDanniModalOpen(false)
@@ -3754,6 +4206,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             onEditCustomer={(customerId) => {
               openEditCustomer(customerId)
               setDanniModalOpen(false)
+            }}
+          />
+        )}
+
+        {/* Combined Danni & Penali Modal */}
+        {selectedBookingForDanniPenali && (
+          <DanniPenaliModal
+            isOpen={danniPenaliModalOpen}
+            initialTab={danniPenaliInitialTab}
+            booking={{
+              id: selectedBookingForDanniPenali.id,
+              customer_name: selectedBookingForDanniPenali.customer_name || 'Cliente',
+              customer_id: selectedBookingForDanniPenali.booking_details?.customer?.customerId || selectedBookingForDanniPenali.booking_details?.customer_id || undefined,
+              user_id: selectedBookingForDanniPenali.user_id || undefined,
+              customer_email: selectedBookingForDanniPenali.customer_email || selectedBookingForDanniPenali.booking_details?.customer?.email || undefined,
+              customer_phone: selectedBookingForDanniPenali.customer_phone || selectedBookingForDanniPenali.booking_details?.customer?.phone || undefined,
+              vehicle_name: selectedBookingForDanniPenali.vehicle_name || undefined,
+              booking_details: selectedBookingForDanniPenali.booking_details || undefined,
+            }}
+            onClose={() => {
+              setDanniPenaliModalOpen(false)
+              setSelectedBookingForDanniPenali(null)
+            }}
+            onSuccess={() => {
+              loadData()
+            }}
+            onEditCustomer={(customerId) => {
+              openEditCustomer(customerId)
+              setDanniPenaliModalOpen(false)
             }}
           />
         )}
@@ -3772,14 +4253,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(false)}
-                    className={`px-4 py-2 rounded-full ${!newCustomerMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                    className={`px-4 py-2 rounded-full ${!newCustomerMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                   >
                     Seleziona Cliente
                   </button>
                   <button
                     type="button"
                     onClick={() => setNewCustomerMode(true)}
-                    className={`px-4 py-2 rounded-full ${newCustomerMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                    className={`px-4 py-2 rounded-full ${newCustomerMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                   >
                     Nuovo Cliente
                   </button>
@@ -3867,7 +4348,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <CustomerAutocomplete
                       customers={customers}
                       selectedCustomerId={formData.customer_id}
-                      onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, customer_id: customerId }))}
+                      onSelectCustomer={async (customerId) => {
+                        setFormData(prev => ({ ...prev, customer_id: customerId }))
+                        // Check patente age
+                        if (customerId) {
+                          try {
+                            const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+                            if (resp.ok) {
+                              const { customer: cust } = await resp.json()
+                              const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
+                              if (patenteDate) {
+                                const issueDate = new Date(patenteDate)
+                                const twoYearsAgo = new Date()
+                                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+                                if (issueDate > twoYearsAgo) {
+                                  alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 2 anni.\n\nNon è possibile procedere con il noleggio.')
+                                  setFormData(prev => ({ ...prev, customer_id: '' }))
+                                  return
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            console.warn('Patente check failed:', e)
+                          }
+                        }
+                      }}
                       placeholder="Inizia a scrivere nome, email o telefono..."
                       required={true}
                     />
@@ -3877,11 +4382,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const selectedCustomer = customers.find(c => c.id === formData.customer_id)
                       if (selectedCustomer) {
                         return (
-                          <div className="mt-3 p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
-                            <p className="text-green-400 font-medium mb-1">Cliente selezionato:</p>
+                          <div className={`mt-3 p-3 rounded-lg ${selectedCustomer.scadenza_patente && new Date(selectedCustomer.scadenza_patente) < new Date() ? 'bg-red-900/40 border border-red-500/70' : 'bg-green-900/30 border border-green-600/50'}`}>
+                            <p className={`font-medium mb-1 ${selectedCustomer.scadenza_patente && new Date(selectedCustomer.scadenza_patente) < new Date() ? 'text-red-400' : 'text-green-400'}`}>Cliente selezionato:</p>
                             <p className="text-theme-text-primary font-bold">{selectedCustomer.full_name}</p>
                             {selectedCustomer.email && <p className="text-theme-text-secondary text-sm">{selectedCustomer.email}</p>}
                             {selectedCustomer.phone && <p className="text-theme-text-secondary text-sm">{selectedCustomer.phone}</p>}
+                            {selectedCustomer.scadenza_patente && new Date(selectedCustomer.scadenza_patente) < new Date() && (
+                              <div className="mt-2 px-3 py-2 bg-red-500/20 border border-red-500/40 rounded-lg flex items-center gap-2">
+                                <span className="text-red-400 text-lg">&#9888;</span>
+                                <div>
+                                  <p className="text-red-400 font-bold text-sm">PATENTE SCADUTA</p>
+                                  <p className="text-red-300 text-xs">Scaduta il {new Date(selectedCustomer.scadenza_patente).toLocaleDateString('it-IT')}</p>
+                                </div>
+                              </div>
+                            )}
+                            {selectedCustomer.scadenza_patente && (() => {
+                              const exp = new Date(selectedCustomer.scadenza_patente)
+                              const now = new Date()
+                              const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                              if (diffDays > 0 && diffDays <= 30) {
+                                return (
+                                  <div className="mt-2 px-3 py-2 bg-amber-500/20 border border-amber-500/40 rounded-lg flex items-center gap-2">
+                                    <span className="text-amber-400 text-lg">&#9888;</span>
+                                    <p className="text-amber-400 font-medium text-sm">Patente scade tra {diffDays} giorni ({new Date(selectedCustomer.scadenza_patente).toLocaleDateString('it-IT')})</p>
+                                  </div>
+                                )
+                              }
+                              return null
+                            })()}
                           </div>
                         )
                       }
@@ -3907,6 +4435,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     label="Data Ritiro"
                     type="date"
                     required
+                    min={editingId ? undefined : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })}
                     value={formData.pickup_date}
                     onChange={(e) => {
                       setFormData({ ...formData, pickup_date: e.target.value })
@@ -4030,14 +4559,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(false)}
-                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                     >
                       Seleziona Cliente
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewSecondDriverMode(true)}
-                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-theme-text-primary text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                     >
                       Nuovo Guidatore
                     </button>
@@ -4203,21 +4732,167 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     Kasko (inclusa)
                   </div>
                 </div>
-                <Input
-                  label="Cauzione (€)"
-                  type="number"
-                  value={formData.deposit}
-                  onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
-                />
-                <Select
-                  label="Stato Cauzione"
-                  value={formData.deposit_status}
-                  onChange={(e) => setFormData({ ...formData, deposit_status: e.target.value as 'da_incassare' | 'incassata' })}
-                  options={[
-                    { value: 'da_incassare', label: 'Da incassare' },
-                    { value: 'incassata', label: 'Incassata' },
-                  ]}
-                />
+                {!formData.cauzione_auto && (
+                  <>
+                    <Input
+                      label="Cauzione (€)"
+                      type="number"
+                      value={formData.deposit}
+                      onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
+                    />
+                    <Select
+                      label="Stato Cauzione"
+                      value={formData.deposit_status}
+                      onChange={(e) => setFormData({ ...formData, deposit_status: e.target.value as 'da_incassare' | 'incassata' })}
+                      options={[
+                        { value: 'da_incassare', label: 'Da incassare' },
+                        { value: 'incassata', label: 'Incassata' },
+                      ]}
+                    />
+                  </>
+                )}
+              </div>
+
+              {/* Cauzione Auto Toggle */}
+              <div className="mt-4">
+                <div className="flex items-center mb-3">
+                  <input
+                    type="checkbox"
+                    id="cauzione_auto"
+                    checked={formData.cauzione_auto}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setFormData(prev => ({
+                        ...prev,
+                        cauzione_auto: checked,
+                        ...(!checked && {
+                          cauzione_targa: '', cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '',
+                          cauzione_proprietario_tipo: 'guidatore' as const,
+                          garante_customer_id: '', garante_nome: '', garante_cognome: '', garante_codice_fiscale: '',
+                          garante_sesso: '', garante_indirizzo: '', garante_cap: '', garante_citta: '', garante_provincia: '',
+                          garante_birth_date: '', garante_birth_place: '', garante_birth_provincia: '', garante_phone: '', garante_email: '',
+                        })
+                      }))
+                    }}
+                    className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                  />
+                  <label htmlFor="cauzione_auto" className="ml-2 text-sm font-medium text-theme-text-secondary">
+                    Auto come Cauzione
+                  </label>
+                </div>
+
+                {formData.cauzione_auto && (
+                  <div className="space-y-4 animate-fadeIn">
+                    {/* Targa Lookup */}
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Input
+                          label="Targa Veicolo Cauzione *"
+                          value={formData.cauzione_targa}
+                          onChange={(e) => setFormData({ ...formData, cauzione_targa: e.target.value.toUpperCase() })}
+                          placeholder="es. AB123CD"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLookupCauzioneTarga}
+                        disabled={targaLoading}
+                        className="px-4 py-2 bg-dr7-gold text-white rounded-lg hover:bg-dr7-gold/80 disabled:opacity-50 mb-[2px]"
+                      >
+                        {targaLoading ? 'Cerca...' : 'Cerca'}
+                      </button>
+                    </div>
+
+                    {/* Vehicle Info Display */}
+                    {formData.cauzione_targa_brand && (
+                      <div className="p-3 bg-green-900/20 border border-green-700 rounded-lg text-sm text-theme-text-primary">
+                        <strong>{formData.cauzione_targa_brand} {formData.cauzione_targa_model}</strong> — Anno: {formData.cauzione_targa_year}
+                      </div>
+                    )}
+
+                    {/* Proprietario Tipo */}
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Proprietario del veicolo</label>
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="cauzione_proprietario_tipo"
+                            value="guidatore"
+                            checked={formData.cauzione_proprietario_tipo === 'guidatore'}
+                            onChange={() => setFormData(prev => ({ ...prev, cauzione_proprietario_tipo: 'guidatore' }))}
+                            className="text-dr7-gold focus:ring-dr7-gold"
+                          />
+                          <span className="text-sm text-theme-text-primary">Proprietario = 1° Guidatore</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="cauzione_proprietario_tipo"
+                            value="diverso"
+                            checked={formData.cauzione_proprietario_tipo === 'diverso'}
+                            onChange={() => setFormData(prev => ({ ...prev, cauzione_proprietario_tipo: 'diverso' }))}
+                            className="text-dr7-gold focus:ring-dr7-gold"
+                          />
+                          <span className="text-sm text-theme-text-primary">Proprietario Diverso</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Garante Form (only when diverso) */}
+                    {formData.cauzione_proprietario_tipo === 'diverso' && (
+                      <div className="space-y-4 p-4 border border-theme-border rounded-lg">
+                        <h5 className="text-theme-text-primary font-semibold">Dati Proprietario / Garante</h5>
+                        {/* Toggle between Select Customer and New */}
+                        <div className="flex items-center gap-4 mb-4">
+                          <button
+                            type="button"
+                            onClick={() => setNewGaranteMode(false)}
+                            className={`px-4 py-2 rounded-full ${!newGaranteMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                          >
+                            Seleziona Cliente
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewGaranteMode(true)}
+                            className={`px-4 py-2 rounded-full ${newGaranteMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                          >
+                            Nuovo
+                          </button>
+                        </div>
+
+                        {newGaranteMode ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData({ ...formData, garante_nome: e.target.value })} />
+                            <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData({ ...formData, garante_cognome: e.target.value })} />
+                            <Input label="Codice Fiscale *" required value={formData.garante_codice_fiscale} onChange={(e) => setFormData({ ...formData, garante_codice_fiscale: e.target.value.toUpperCase() })} />
+                            <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData({ ...formData, garante_sesso: e.target.value })} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
+                            <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData({ ...formData, garante_indirizzo: e.target.value })} />
+                            <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData({ ...formData, garante_cap: e.target.value })} maxLength={5} />
+                            <Input label="Città" value={formData.garante_citta} onChange={(e) => setFormData({ ...formData, garante_citta: e.target.value })} />
+                            <Input label="Provincia" value={formData.garante_provincia} onChange={(e) => setFormData({ ...formData, garante_provincia: e.target.value.toUpperCase() })} maxLength={2} />
+                            <Input label="Data di Nascita" type="date" value={formData.garante_birth_date} onChange={(e) => setFormData({ ...formData, garante_birth_date: e.target.value })} />
+                            <Input label="Luogo di Nascita" value={formData.garante_birth_place} onChange={(e) => setFormData({ ...formData, garante_birth_place: e.target.value })} />
+                            <Input label="Provincia di Nascita" value={formData.garante_birth_provincia} onChange={(e) => setFormData({ ...formData, garante_birth_provincia: e.target.value.toUpperCase() })} maxLength={2} />
+                            <Input label="Telefono" value={formData.garante_phone} onChange={(e) => setFormData({ ...formData, garante_phone: e.target.value })} />
+                            <Input label="Email" type="email" value={formData.garante_email} onChange={(e) => setFormData({ ...formData, garante_email: e.target.value })} />
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente per Garante</label>
+                            <CustomerAutocomplete
+                              customers={customers}
+                              selectedCustomerId={formData.garante_customer_id}
+                              onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, garante_customer_id: customerId }))}
+                              placeholder="Inizia a scrivere nome, email o telefono..."
+                              required={false}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4424,8 +5099,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Metodo di Pagamento"
                   required
                   value={formData.payment_method}
-                  onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                  onChange={(e) => {
+                    const method = e.target.value
+                    const updates: any = { payment_method: method }
+                    // Nexi Pay by Link = always pending until customer pays
+                    if (method === 'Nexi Pay by Link') {
+                      updates.payment_status = 'pending'
+                      updates.status = 'pending'
+                      updates.amount_paid = '0'
+                    }
+                    setFormData(prev => ({ ...prev, ...updates }))
+                  }}
                   options={[
+                    { value: 'Nexi Pay by Link', label: 'Nexi - Pay by Link' },
                     { value: 'Bonifico', label: 'Bonifico' },
                     { value: 'Contanti', label: 'Contanti' },
                     { value: 'Credit Wallet', label: 'Credit Wallet' },
@@ -4452,6 +5138,67 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     { value: 'Giroconto su conti di contabilità', label: 'Giroconto su conti di contabilità' }
                   ]}
                 />
+              )}
+              {/* Revenue Management — Prezzo Suggerito */}
+              {(revenueSuggestion || revenueLoading) && (
+                <div className="border border-amber-500/40 bg-amber-500/5 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-amber-400">
+                      {revenueLoading ? 'Calcolo prezzo...' : 'Prezzo Suggerito'}
+                    </span>
+                    {revenueSuggestion && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-amber-400">
+                          €{revenueSuggestion.suggestedPrice.toFixed(2)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              total_amount: revenueSuggestion.suggestedPrice.toFixed(2)
+                            }))
+                          }}
+                          className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
+                        >
+                          Applica
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {revenueSuggestion && (
+                    <>
+                      <div className="text-xs text-theme-text-muted">
+                        €{revenueSuggestion.dailyRate.toFixed(2)}/giorno × {revenueSuggestion.rentalDays} giorni
+                        {revenueSuggestion.limits.minHit && ' (min raggiunto)'}
+                        {revenueSuggestion.limits.maxHit && ' (max raggiunto)'}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRevenueExpanded(!revenueExpanded)}
+                        className="text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        {revenueExpanded ? 'Nascondi dettagli' : 'Mostra dettagli'}
+                      </button>
+                      {revenueExpanded && (
+                        <div className="space-y-1 pt-1 border-t border-theme-border">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-theme-text-muted">Base</span>
+                            <span className="text-theme-text-primary">€{revenueSuggestion.basePrice.toFixed(2)}/g</span>
+                          </div>
+                          {revenueSuggestion.breakdown.map((item, i) => (
+                            <div key={i} className="flex justify-between text-xs">
+                              <span className="text-theme-text-muted">{item.label} ({item.description})</span>
+                              <span className={`font-mono ${item.coeff > 1 ? 'text-red-400' : item.coeff < 1 ? 'text-green-400' : 'text-theme-text-primary'}`}>
+                                ×{item.coeff.toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
               <Input
                 label="Importo Totale (€)"
@@ -4481,20 +5228,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 disabled={formData.unlimited_km}
               />
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM (Da inserire):</h4>
-                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                  {[100, 180, 240, 280, 300].map((kmLimit) => (
-                    <div
-                      key={kmLimit}
-                      className={`p-2 rounded-md border cursor-pointer transition-all flex flex-col items-center justify-center text-center ${parseInt(formData.km_limit) === kmLimit && !formData.unlimited_km
-                        ? 'border-theme-text-primary bg-theme-text-primary/5'
-                        : 'border-theme-border hover:border-theme-border'
-                        } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: kmLimit.toString() }))}
-                    >
-                      <span className="text-theme-text-primary font-bold text-xs">{kmLimit} km</span>
-                    </div>
-                  ))}
+                <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
+                <div
+                  className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === '50/giorno' && !formData.unlimited_km
+                    ? 'border-theme-text-primary bg-theme-text-primary/5'
+                    : 'border-theme-border hover:border-theme-border'
+                    } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: '50/giorno' }))}
+                >
+                  <span className="text-theme-text-primary font-bold text-sm">50 Km / Giorno</span>
                 </div>
               </div>
 
@@ -4541,6 +5283,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 label="Valuta"
                 value={formData.currency}
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+              />
+            </div>
+
+            {/* Note */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Note interne sulla prenotazione..."
+                rows={2}
+                className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold text-sm resize-none"
               />
             </div>
 
@@ -4720,12 +5474,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <button
                         onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
                         disabled={generatingContract}
-                        className={`px-3 py-1 ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold hover:bg-yellow-600 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
+                        className={`px-3 py-1 ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold hover:bg-[#247a6f] text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
                       >
                         {generatingContract ? 'Generazione...' : 'Contratto'}
                       </button>
                     )}
 
+
+                    {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
+                        className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                      >
+                        Rinvia Link
+                      </button>
+                    )}
+
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
+                      className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-dr7-gold/30 hover:from-red-600/50 hover:to-dr7-gold/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                    >
+                      Danni & Penali
+                    </button>
 
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
@@ -4741,7 +5511,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden lg:block  rounded-lg overflow-hidden">
+        <div className="hidden lg:block rounded-lg overflow-x-auto">
           <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
             <table className="w-full min-w-max">
               <thead className="sticky top-0 z-10">
@@ -4771,7 +5541,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
                     <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
+                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px] truncate" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
                         {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
@@ -4826,16 +5596,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                       </td>
-                      <td className="px-3 py-3 text-sm whitespace-nowrap">
-                        <div className="flex gap-2 items-center">
+                      <td className="px-3 py-3 text-sm">
+                        <div className="flex flex-wrap gap-2 items-center">
                           {booking.status !== 'cancelled' && (
                             <>
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
-                                disabled={generatingContract}
-                                className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap disabled:opacity-50"
+                                onClick={(e) => { e.stopPropagation(); booking.contract_url ? window.open(booking.contract_url, '_blank') : handleGenerateContract(booking) }}
+                                disabled={!booking.contract_url && generatingContract}
+                                className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap disabled:opacity-50"
                               >
-                                {generatingContract ? '...' : 'Contratto'}
+                                {!booking.contract_url && generatingContract ? '...' : 'Contratto'}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
@@ -4864,19 +5634,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               >
                                 Cancella
                               </button>
+                              {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
+                                  className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
+                                >
+                                  Rinvia Link
+                                </button>
+                              )}
                             </>
                           )}
                           <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForPenalty(booking); setPenaltyModalOpen(true) }}
-                            className="px-3 py-1 bg-yellow-600/30 hover:bg-yellow-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
+                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
+                            className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-dr7-gold/30 hover:from-red-600/50 hover:to-dr7-gold/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
                           >
-                            Penali
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanni(booking); setDanniModalOpen(true) }}
-                            className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
-                          >
-                            Danni
+                            Danni & Penali
                           </button>
                         </div>
                       </td>
@@ -4978,7 +5750,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               ? `€${selectedBooking.deposit_amount || selectedBooking.booking_details?.deposit}`
                               : 'N/A'
                         }</span></div>
-                        <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{selectedBooking.booking_details?.km_limit ? `${selectedBooking.booking_details.km_limit} km` : 'KM Illimitati'}</span></div>
+                        <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{(() => {
+                          const bd = selectedBooking.booking_details;
+                          if (bd?.unlimited_km || bd?.km_limit === 'Illimitati') return 'KM Illimitati';
+                          if (bd?.km_limit === '50/giorno' && selectedBooking.pickup_date && selectedBooking.dropoff_date) {
+                            const days = Math.ceil((new Date(selectedBooking.dropoff_date).getTime() - new Date(selectedBooking.pickup_date).getTime()) / (1000 * 60 * 60 * 24));
+                            return `${50 * days} Km (50/g x ${days}gg)`;
+                          }
+                          return bd?.km_limit ? `${bd.km_limit} km` : 'KM Illimitati';
+                        })()}</span></div>
                         {(selectedBooking.delivery_enabled || selectedBooking.booking_details?.delivery_enabled) && (
                           <div className="mt-2 pt-2 border-t border-theme-border/30">
                             <span className="text-theme-text-muted">Consegna a domicilio:</span>
@@ -5056,11 +5836,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
                   {selectedBooking.status !== 'cancelled' && (
                     <button
-                      onClick={() => handleGenerateContract(selectedBooking)}
-                      disabled={generatingContract}
-                      className="flex-1 px-4 py-3 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary rounded-full transition-colors font-medium disabled:opacity-50"
+                      onClick={() => selectedBooking.contract_url ? window.open(selectedBooking.contract_url, '_blank') : handleGenerateContract(selectedBooking)}
+                      disabled={!selectedBooking.contract_url && generatingContract}
+                      className="flex-1 px-4 py-3 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary transition-colors font-medium disabled:opacity-50"
                     >
-                      {generatingContract ? 'Generazione in corso...' : 'Scarica Contratto'}
+                      {!selectedBooking.contract_url && generatingContract ? 'Generazione in corso...' : selectedBooking.contract_url ? 'Scarica Contratto' : 'Genera Contratto'}
                     </button>
                   )}
                   {selectedBooking.status !== 'cancelled' && selectedBooking.booking_details?.deposit && selectedBooking.booking_details.deposit > 0 && (
@@ -5201,6 +5981,47 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   </select>
                 </div>
 
+                {/* Vehicle Change Toggle */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={extendData.change_vehicle}
+                      onChange={(e) => setExtendData({ ...extendData, change_vehicle: e.target.checked, new_vehicle_id: '' })}
+                      className="w-4 h-4 accent-purple-500"
+                    />
+                    <span className="text-sm font-medium text-theme-text-secondary">Cambio Veicolo</span>
+                  </label>
+                </div>
+
+                {extendData.change_vehicle && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-theme-text-secondary">Nuovo Veicolo</label>
+                      <button
+                        type="button"
+                        onClick={() => setExtendData({ ...extendData, show_all_vehicles: !extendData.show_all_vehicles })}
+                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        {extendData.show_all_vehicles ? 'Nascondi ritirati' : 'Mostra tutti i veicoli'}
+                      </button>
+                    </div>
+                    <select
+                      value={extendData.new_vehicle_id}
+                      onChange={(e) => setExtendData({ ...extendData, new_vehicle_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">-- Seleziona veicolo --</option>
+                      {vehicles
+                        .filter(v => (extendData.show_all_vehicles || v.status !== 'retired') && v.id !== extendingBooking?.vehicle_id)
+                        .map(v => (
+                          <option key={v.id} value={v.id}>{v.display_name} ({v.plate || v.targa || 'N/A'}){v.status === 'retired' ? ' [Ritirato]' : ''}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo Aggiuntivo (€)</label>
                   <input
@@ -5218,10 +6039,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Pagamento Estensione</label>
                   <select
                     value={extendData.extension_payment_status}
-                    onChange={(e) => setExtendData({ ...extendData, extension_payment_status: e.target.value as 'paid' | 'pending' })}
+                    onChange={(e) => setExtendData({ ...extendData, extension_payment_status: e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link' })}
                     className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                   >
                     <option value="pending">Da Saldare</option>
+                    <option value="nexi_pay_by_link">Nexi Pay by Link</option>
                     <option value="paid">Pagato</option>
                   </select>
                 </div>
@@ -5240,6 +6062,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
                       <option value="Credit Wallet">Credit Wallet</option>
                       <option value="Paypal">Paypal</option>
+                    </select>
+                  </div>
+                )}
+
+                {extendData.extension_payment_status === 'nexi_pay_by_link' && (
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Validità Link</label>
+                    <select
+                      value={extendData.link_expiration_hours}
+                      onChange={(e) => setExtendData({ ...extendData, link_expiration_hours: e.target.value })}
+                      className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="1">1 ora</option>
+                      <option value="12">12 ore</option>
+                      <option value="24">24 ore</option>
                     </select>
                   </div>
                 )}

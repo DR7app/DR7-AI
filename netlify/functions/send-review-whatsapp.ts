@@ -18,9 +18,7 @@ Clicca qui per lasciare la recensione 👇🏻
 https://g.page/r/CQwgJt7OYpsfEBM/review
 
 Grazie mille!
-Dubai Rent 7.0 S.p.A.
-
-_Messaggio automatico di sistema._`;
+Dubai Rent 7.0 S.p.A.`;
 
 const reviewHandler: Handler = async (event) => {
   console.log('[Review WhatsApp] Starting automatic review message sender...');
@@ -157,7 +155,7 @@ const reviewHandler: Handler = async (event) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chatId: `${cleanPhone}@c.us`,
-            message: personalizedMessage
+            message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
           })
         });
 

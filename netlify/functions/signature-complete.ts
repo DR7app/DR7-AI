@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { sendToCargos } from './cargos-auto-send'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -50,19 +51,32 @@ export const handler: Handler = async (event) => {
             return { statusCode: 410, body: JSON.stringify({ error: 'Il link di firma e scaduto' }) }
         }
 
-        // Fetch original contract
-        const { data: contract } = await supabase
-            .from('contracts')
-            .select('*')
-            .eq('id', sigRequest.contract_id)
-            .single()
+        // Fetch original document — either from contract or standalone document
+        let contract: any = null
+        let pdfUrl: string | null = null
+        let docIdentifier: string = sigRequest.id
 
-        if (!contract || !contract.pdf_url) {
-            return { statusCode: 404, body: JSON.stringify({ error: 'Contratto o PDF non trovato' }) }
+        if (sigRequest.contract_id) {
+            const { data: contractData } = await supabase
+                .from('contracts')
+                .select('*')
+                .eq('id', sigRequest.contract_id)
+                .single()
+            contract = contractData
+            pdfUrl = contract?.pdf_url
+            docIdentifier = contract?.contract_number || sigRequest.contract_id
+        } else {
+            // Standalone document
+            pdfUrl = sigRequest.document_url
+            docIdentifier = sigRequest.document_name || 'documento'
+        }
+
+        if (!pdfUrl) {
+            return { statusCode: 404, body: JSON.stringify({ error: 'Documento PDF non trovato' }) }
         }
 
         // Download original PDF
-        const pdfResponse = await fetch(contract.pdf_url)
+        const pdfResponse = await fetch(pdfUrl)
         if (!pdfResponse.ok) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Impossibile scaricare il PDF' }) }
         }
@@ -187,7 +201,7 @@ export const handler: Handler = async (event) => {
         y -= 20
 
         const infoLines = [
-            ['Contratto:', contract.contract_number || 'N/A'],
+            ['Documento:', contract ? (contract.contract_number || 'N/A') : (sigRequest.document_name || 'Documento')],
             ['Cliente:', sigRequest.signer_name],
             ['Email:', sigRequest.signer_email],
             ['Data firma:', signedAtRome],
@@ -267,7 +281,7 @@ export const handler: Handler = async (event) => {
         const signedPdfHash = crypto.createHash('sha256').update(Buffer.from(signedPdfBytes)).digest('hex')
 
         // Upload signed PDF to Supabase storage
-        const fileName = `signed/${contract.contract_number || sigRequest.contract_id}_firmato_${Date.now()}.pdf`
+        const fileName = `signed/${docIdentifier}_firmato_${Date.now()}.pdf`
         const { error: uploadError } = await supabase
             .storage
             .from('contracts')
@@ -297,14 +311,16 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', sigRequest.id)
 
-        // Update contract record
-        await supabase
-            .from('contracts')
-            .update({
-                signed_pdf_url: signedPdfUrl,
-                updated_at: signedAt.toISOString()
-            })
-            .eq('id', sigRequest.contract_id)
+        // Update contract record (only if this is a contract-based signature)
+        if (sigRequest.contract_id) {
+            await supabase
+                .from('contracts')
+                .update({
+                    signed_pdf_url: signedPdfUrl,
+                    updated_at: signedAt.toISOString()
+                })
+                .eq('id', sigRequest.contract_id)
+        }
 
         // Log final audit event
         await supabase.from('signature_audit_trail').insert({
@@ -319,48 +335,85 @@ export const handler: Handler = async (event) => {
                 original_pdf_hash: currentHash,
                 signed_pdf_hash: signedPdfHash,
                 signed_pdf_url: signedPdfUrl,
-                contract_number: contract.contract_number,
+                document_identifier: docIdentifier,
                 marketing_consent: !!marketingConsent
             }
         })
 
-        // Save marketing consent on customer record if provided
-        if (marketingConsent !== undefined && contract.booking_id) {
+        // Save marketing consent on customer record — NEVER overwrite true with false (GDPR: consent once given is kept)
+        if (marketingConsent !== undefined) {
             try {
-                const { data: booking } = await supabase
-                    .from('bookings')
-                    .select('customer_email, booking_details')
-                    .eq('id', contract.booking_id)
-                    .single()
+                // Determine customer email — from booking (contract) or signer email (standalone doc)
+                let customerEmail = sigRequest.signer_email || ''
 
-                const customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email
+                if (contract?.booking_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_email, booking_details')
+                        .eq('id', contract.booking_id)
+                        .single()
+                    customerEmail = booking?.customer_email || booking?.booking_details?.customer?.email || customerEmail
+                }
+
                 if (customerEmail) {
-                    await supabase
+                    // Case-insensitive lookup
+                    const { data: existingCustomer } = await supabase
                         .from('customers_extended')
-                        .update({
-                            marketing_consent: !!marketingConsent,
-                            marketing_consent_date: signedAt.toISOString()
-                        })
-                        .eq('email', customerEmail)
-                    console.log(`[signature-complete] Marketing consent (${marketingConsent}) saved for ${customerEmail}`)
+                        .select('marketing_consent, email')
+                        .ilike('email', customerEmail)
+                        .maybeSingle()
+
+                    const currentConsent = existingCustomer?.marketing_consent ?? null
+
+                    // Only update if:
+                    // - New consent is true (always record a yes)
+                    // - OR current consent is null (no record yet — record even a no)
+                    // NEVER overwrite true with false
+                    if (existingCustomer && (currentConsent !== true || !!marketingConsent === true)) {
+                        await supabase
+                            .from('customers_extended')
+                            .update({
+                                marketing_consent: !!marketingConsent,
+                                marketing_consent_date: signedAt.toISOString()
+                            })
+                            .ilike('email', customerEmail)
+                        console.log(`[signature-complete] Marketing consent (${marketingConsent}) saved for ${customerEmail}`)
+                    } else if (!existingCustomer) {
+                        console.log(`[signature-complete] No customer_extended record for ${customerEmail} — consent not saved`)
+                    } else {
+                        console.log(`[signature-complete] Skipping consent update for ${customerEmail}: existing=true, new=false — kept as true`)
+                    }
                 }
             } catch (mcErr: any) {
                 console.error('[signature-complete] Failed to save marketing consent:', mcErr.message)
             }
         }
 
-        // Send signed contract via WhatsApp
+        // Send signed document via WhatsApp
         const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
         const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
         if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && signedPdfUrl) {
             try {
-                const { data: booking } = await supabase
-                    .from('bookings')
-                    .select('customer_phone, booking_details')
-                    .eq('id', contract.booking_id)
-                    .single()
+                let customerPhone = ''
 
-                const customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
+                if (contract?.booking_id) {
+                    const { data: booking } = await supabase
+                        .from('bookings')
+                        .select('customer_phone, booking_details')
+                        .eq('id', contract.booking_id)
+                        .single()
+                    customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
+                }
+
+                // For standalone documents, look up phone from customers_extended
+                if (!customerPhone && sigRequest.signer_email) {
+                    const { data: cust } = await supabase
+                        .from('customers_extended')
+                        .select('telefono')
+                        .eq('email', sigRequest.signer_email)
+                        .maybeSingle()
+                    customerPhone = cust?.telefono || ''
+                }
                 if (customerPhone) {
                     let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
@@ -373,8 +426,8 @@ export const handler: Handler = async (event) => {
                         body: JSON.stringify({
                             chatId: `${cleanPhone}@c.us`,
                             urlFile: signedPdfUrl,
-                            fileName: `Contratto_Firmato_${contract.contract_number || ''}.pdf`,
-                            caption: `Contratto ${contract.contract_number || ''} firmato - DR7 Empire`
+                            fileName: `${docIdentifier}_firmato.pdf`,
+                            caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato - DR7 Empire`
                         })
                     })
 
@@ -389,6 +442,33 @@ export const handler: Handler = async (event) => {
                 }
             } catch (waErr: any) {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
+            }
+
+            // Send signed contract notification to admin via CallMeBot
+            // (Green API can't send to its own number, so we use CallMeBot for text notification)
+            try {
+                const ADMIN_PHONE = '393457905205'
+                const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || '6526748'
+                const adminMsg = `✅ CONTRATTO FIRMATO\n\n${docIdentifier} firmato da ${sigRequest.signer_name || 'cliente'}\n\nScarica PDF:\n${signedPdfUrl}`
+                const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${ADMIN_PHONE}&text=${encodeURIComponent(adminMsg)}&apikey=${CALLMEBOT_API_KEY}`
+                const adminRes = await fetch(callmebotUrl)
+                console.log('[signature-complete] Admin CallMeBot notification status:', adminRes.status)
+            } catch (adminErr: any) {
+                console.error('[signature-complete] Failed to send to admin:', adminErr.message)
+            }
+        }
+
+        // Auto-send to CARGOS (Polizia di Stato) after WhatsApp delivery (only for rental contracts)
+        if (contract?.booking_id) {
+            try {
+                const cargosResult = await sendToCargos(contract.booking_id)
+                if (cargosResult.success) {
+                    console.log('[signature-complete] ✅ Contract auto-sent to CARGOS')
+                } else {
+                    console.warn('[signature-complete] ⚠️ CARGOS auto-send failed:', cargosResult.error)
+                }
+            } catch (cargosErr: any) {
+                console.error('[signature-complete] ⚠️ CARGOS auto-send error:', cargosErr.message)
             }
         }
 

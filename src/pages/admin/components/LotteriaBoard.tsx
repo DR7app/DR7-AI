@@ -1337,7 +1337,7 @@ const LotteriaBoard: React.FC = () => {
             </div>
             <button
               onClick={handleSearchTickets}
-              className="px-6 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors whitespace-nowrap"
+              className="px-6 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors whitespace-nowrap"
             >
               🔍 Cerca Biglietti
             </button>
@@ -1390,7 +1390,7 @@ const LotteriaBoard: React.FC = () => {
                 onClick={() => setHideFinancials(!hideFinancials)}
                 className={`px-4 py-2 rounded-full font-semibold transition-colors ${hideFinancials
                   ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                  : 'bg-dr7-gold text-white hover:bg-[#247a6f]'
                   }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -1435,7 +1435,7 @@ const LotteriaBoard: React.FC = () => {
             <button
               onClick={handleOpenEmailEditor}
               disabled={sendingEmails}
-              className="px-4 py-2 bg-yellow-600 text-black rounded-full hover:bg-yellow-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-dr7-gold text-white rounded-full hover:bg-[#247a6f] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sendingEmails ? 'Invio in corso...' : 'Manda Email'}
             </button>
@@ -2070,7 +2070,7 @@ const LotteriaBoard: React.FC = () => {
                         {selectedRecipients.length > 0 && (
                           <button
                             onClick={() => setSelectedRecipients([])}
-                            className="text-dr7-gold hover:text-yellow-500 font-medium"
+                            className="text-dr7-gold hover:text-[#247a6f] font-medium"
                           >
                             Deseleziona Tutti
                           </button>
@@ -2131,7 +2131,7 @@ const LotteriaBoard: React.FC = () => {
               <button
                 onClick={handleSendEmailsFromModal}
                 disabled={savingTemplate || loadingTemplate || sendingEmails}
-                className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sendingEmails
                   ? 'Invio in corso...'

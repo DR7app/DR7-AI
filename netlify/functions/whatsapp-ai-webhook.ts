@@ -187,7 +187,7 @@ async function sendWhatsAppMessage(chatId: string, message: string): Promise<boo
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chatId: chatId,
-        message: message,
+        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
       }),
     });
 

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface DanniModalProps {
     isOpen: boolean
@@ -9,6 +10,8 @@ interface DanniModalProps {
         customer_name: string
         customer_id?: string
         user_id?: string
+        customer_email?: string
+        customer_phone?: string
     }
     onClose: () => void
     onSuccess: () => void
@@ -27,11 +30,43 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     const [customAmount, setCustomAmount] = useState('')
     const [customLabel, setCustomLabel] = useState('')
     const [note, setNote] = useState('')
-    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending')
+    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
+    const [paymentMethod, setPaymentMethod] = useState('Contanti')
+    const [amountPaid, setAmountPaid] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
+    const [photos, setPhotos] = useState<File[]>([])
+    const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([])
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     if (!isOpen) return null
+
+    function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = Array.from(e.target.files || [])
+        setPhotos(prev => [...prev, ...files])
+        setPhotoPreviewUrls(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    function removePhoto(index: number) {
+        URL.revokeObjectURL(photoPreviewUrls[index])
+        setPhotos(prev => prev.filter((_, i) => i !== index))
+        setPhotoPreviewUrls(prev => prev.filter((_, i) => i !== index))
+    }
+
+    async function uploadDanniPhotos(): Promise<string[]> {
+        const urls: string[] = []
+        for (const file of photos) {
+            const ext = file.name.split('.').pop() || 'jpg'
+            const path = `danni/${booking.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+            const { error } = await supabase.storage.from('contracts').upload(path, file)
+            if (!error) {
+                const { data: publicUrl } = supabase.storage.from('contracts').getPublicUrl(path)
+                urls.push(publicUrl.publicUrl)
+            }
+        }
+        return urls
+    }
 
     function addToCart() {
         const amt = parseFloat(customAmount)
@@ -69,8 +104,74 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
         setIsGenerating(true)
         try {
-            if (paymentStatus === 'paid') {
-                // PAGATO: generate fattura + send to SDI
+            // Upload photos if any
+            let photoUrls: string[] = []
+            if (photos.length > 0) {
+                photoUrls = await uploadDanniPhotos()
+            }
+
+            // Always save danni to booking_details first (prevents data loss if fattura fails)
+            const { data: currentBooking, error: fetchErr } = await supabase
+                .from('bookings')
+                .select('booking_details')
+                .eq('id', booking.id)
+                .single()
+
+            if (fetchErr) throw new Error('Errore nel recupero della prenotazione.')
+
+            const details = currentBooking?.booking_details || {}
+            const existingDanni = details.danni || []
+            const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+
+            const paidAmount = amountPaid ? parseFloat(amountPaid) : cartTotal
+            const isPartial = paymentStatus === 'paid' && paidAmount < cartTotal
+
+            // For partial payments, distribute paid amount proportionally across items
+            const newEntries = cart.map(c => {
+                const itemTotal = Math.round(c.unitPrice * c.quantity * 100) / 100
+                let itemPaid = 0
+                if (paymentStatus === 'paid') {
+                    if (isPartial) {
+                        // Proportional: each item gets (its share / total) * amountPaid
+                        itemPaid = Math.round((itemTotal / cartTotal) * paidAmount * 100) / 100
+                    } else {
+                        itemPaid = itemTotal
+                    }
+                }
+                return {
+                    label: c.label,
+                    amount: c.unitPrice,
+                    quantity: c.quantity,
+                    total: itemTotal,
+                    note: note || '',
+                    date: italyDate,
+                    paymentStatus: isPartial ? 'partial' : paymentStatus,
+                    paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
+                    amountPaid: itemPaid,
+                    photos: photoUrls,
+                }
+            })
+
+            const { error: updateErr } = await supabase
+                .from('bookings')
+                .update({
+                    booking_details: {
+                        ...details,
+                        danni: [...existingDanni, ...newEntries]
+                    }
+                })
+                .eq('id', booking.id)
+
+            if (updateErr) throw new Error('Errore nel salvataggio del danno.')
+
+            const isFullyPaid = paymentStatus === 'paid' && paidAmount >= cartTotal
+
+            if (paymentStatus === 'paid' && paidAmount < cartTotal) {
+                // PARTIAL: save but no fattura
+                toast.success(`Danno registrato (Parziale: €${paidAmount.toFixed(2)} / €${cartTotal.toFixed(2)}) — fattura non generata`)
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
+            } else if (isFullyPaid) {
+                // FULLY PAID: generate fattura + send to SDI
                 const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -85,7 +186,11 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 })
 
                 const data = await response.json()
-                if (!response.ok) throw new Error(data.message || data.error || 'Errore nella generazione.')
+                if (!response.ok) {
+                    const errMsg = data.message || data.error || 'Errore nella generazione.'
+                    toast.error(`Fattura NON generata: ${errMsg}`, { duration: 10000 })
+                    throw new Error(errMsg)
+                }
 
                 if (data.invoiceId) {
                     const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
@@ -103,46 +208,57 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 }
 
                 toast.success(`Fattura danni generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
-            } else {
-                // DA SALDARE: save to booking_details.danni[] (no fattura)
-                const { data: currentBooking, error: fetchErr } = await supabase
-                    .from('bookings')
-                    .select('booking_details')
-                    .eq('id', booking.id)
-                    .single()
-
-                if (fetchErr) throw new Error('Errore nel recupero della prenotazione.')
-
-                const details = currentBooking?.booking_details || {}
-                const existingDanni = details.danni || []
-                const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-
-                const newEntries = cart.map(c => ({
-                    label: c.label,
-                    amount: c.unitPrice,
-                    quantity: c.quantity,
-                    total: Math.round(c.unitPrice * c.quantity * 100) / 100,
-                    note: note || '',
-                    date: italyDate,
-                    paymentStatus: 'pending'
-                }))
-
-                const { error: updateErr } = await supabase
-                    .from('bookings')
-                    .update({
-                        booking_details: {
-                            ...details,
-                            danni: [...existingDanni, ...newEntries]
-                        }
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+            } else if (paymentStatus === 'nexi_pay_by_link') {
+                // NEXI PAY BY LINK: generate link + send WhatsApp
+                try {
+                    const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bookingId: booking.id,
+                            amount: cartTotal,
+                            customerEmail: booking.customer_email || '',
+                            customerName: booking.customer_name || 'Cliente',
+                            description: `Danni — ${booking.customer_name}`,
+                            expirationHours: 1,
+                            paymentPurpose: 'danni',
+                        }),
                     })
-                    .eq('id', booking.id)
+                    const linkData = await linkRes.json()
 
-                if (updateErr) throw new Error('Errore nel salvataggio del danno.')
+                    if (linkRes.ok && linkData.paymentUrl) {
+                        // Send WhatsApp to customer
+                        const custPhone = booking.customer_phone
+                        if (custPhone) {
+                            await fetch('/.netlify/functions/send-whatsapp-notification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    customPhone: custPhone,
+                                    customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${booking.customer_name},\n\nIn riferimento al contratto di noleggio, sono stati rilevati danni per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
+                                })
+                            })
+                        }
 
+                        // Copy link to clipboard
+                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+
+                        toast.success(`Pay by Link inviato al cliente! €${cartTotal.toFixed(2)}`)
+                    } else {
+                        toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
+                    }
+                } catch (linkErr: any) {
+                    toast.error('Errore Pay by Link: ' + linkErr.message)
+                }
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
+            } else {
+                // DA SALDARE: already saved above, just show toast
                 toast.success(`Danno registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
+                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
             }
 
-            setCart([]); setNote(''); onSuccess(); onClose()
+            setCart([]); setNote(''); setPhotos([]); setPhotoPreviewUrls([]); onSuccess(); onClose()
         } catch (err: any) {
             console.error('Error generating danni:', err)
             setError(err.message || 'Errore nella generazione.')
@@ -153,7 +269,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
     const handleClose = () => {
         if (isGenerating) return
-        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setError(''); onClose()
+        setCart([]); setCustomAmount(''); setCustomLabel(''); setNote(''); setPaymentStatus('pending'); setPaymentMethod('Contanti'); setAmountPaid(''); setError(''); setPhotos([]); setPhotoPreviewUrls([]);  onClose()
     }
 
     const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
@@ -296,6 +412,40 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         </div>
                     )}
 
+                    {/* Foto Danni */}
+                    <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+                        <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-2">Foto Danni</p>
+                        <label className="flex items-center justify-center w-full px-3 py-3 rounded-xl bg-white/[0.06] border border-dashed border-white/[0.12] text-theme-text-muted hover:border-red-500/50 hover:text-red-400 cursor-pointer transition-colors">
+                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-[13px]">{photos.length > 0 ? `${photos.length} foto` : 'Aggiungi foto...'}</span>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handlePhotoSelect}
+                                className="hidden"
+                                disabled={isGenerating}
+                            />
+                        </label>
+                        {photoPreviewUrls.length > 0 && (
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                                {photoPreviewUrls.map((url, i) => (
+                                    <div key={i} className="relative group">
+                                        <img src={url} alt={`Foto ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-white/10" />
+                                        <button
+                                            type="button"
+                                            onClick={() => removePhoto(i)}
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >X</button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Note */}
                     <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
                         <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-2">Note interne</p>
@@ -326,12 +476,21 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     {error && (
                         <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 space-y-2">
                             <p className="text-red-400 text-[13px]">{error}</p>
-                            {isCustomerDataError && onEditCustomer && (booking.customer_id || booking.user_id) && (
+                            {isCustomerDataError && onEditCustomer && (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        const cid = booking.customer_id || booking.user_id
+                                    onClick={async () => {
+                                        let cid = booking.customer_id || booking.user_id
+                                        if (!cid && booking.customer_email) {
+                                            const { data } = await supabase
+                                                .from('customers_extended')
+                                                .select('id')
+                                                .eq('email', booking.customer_email)
+                                                .maybeSingle()
+                                            if (data?.id) cid = data.id
+                                        }
                                         if (cid && onEditCustomer) { onEditCustomer(cid); handleClose() }
+                                        else toast.error('Cliente non trovato. Aggiorna manualmente il profilo.')
                                     }}
                                     className="w-full py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-[13px] font-medium rounded-xl transition-colors"
                                 >
@@ -346,14 +505,70 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select
                             value={paymentStatus}
-                            onChange={e => setPaymentStatus(e.target.value as 'paid' | 'pending')}
+                            onChange={e => { setPaymentStatus(e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link'); if (e.target.value !== 'paid') setAmountPaid('') }}
                             disabled={isGenerating}
-                            className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                            className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
                         >
-                            <option value="pending">Da Saldare</option>
-                            <option value="paid">Pagato</option>
+                            <option value="pending" className="bg-theme-bg-secondary text-theme-text-primary">Da Saldare</option>
+                            <option value="nexi_pay_by_link" className="bg-theme-bg-secondary text-theme-text-primary">Nexi Pay by Link</option>
+                            <option value="paid" className="bg-theme-bg-secondary text-theme-text-primary">Pagato</option>
                         </select>
                     </div>
+
+                    {/* Payment method - shown when Pagato */}
+                    {paymentStatus === 'paid' && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-[13px] text-theme-text-muted">Metodo</span>
+                            <select
+                                value={paymentMethod}
+                                onChange={e => setPaymentMethod(e.target.value)}
+                                disabled={isGenerating}
+                                className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                            >
+                                <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
+                                <option value="Bonifico">Bonifico</option>
+                                <option value="Contanti">Contanti</option>
+                                <option value="Credit Wallet">Credit Wallet</option>
+                                <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
+                                <option value="Paypal">Paypal</option>
+                                <option value="RIBA">RIBA</option>
+                                <option value="RID">RID</option>
+                                <option value="Bollettino postale">Bollettino postale</option>
+                                <option value="Assegno">Assegno</option>
+                                <option value="Assegno circolare">Assegno circolare</option>
+                                <option value="PagoPA">PagoPA</option>
+                                <option value="RID utenze">RID utenze</option>
+                                <option value="RIB veloce">RIB veloce</option>
+                                <option value="SEPA Direct Debit">SEPA Direct Debit</option>
+                                <option value="SEPA Direct Debit CORE">SEPA Direct Debit CORE</option>
+                                <option value="SEPA Direct Debit B2B">SEPA Direct Debit B2B</option>
+                                <option value="Domiciliazione bancaria">Domiciliazione bancaria</option>
+                                <option value="Domiciliazione postale">Domiciliazione postale</option>
+                                <option value="Trattenuta su somme già riscosse">Trattenuta su somme già riscosse</option>
+                                <option value="Bollettino bancario">Bollettino bancario</option>
+                                <option value="Contanti presso tesoreria">Contanti presso tesoreria</option>
+                                <option value="Vaglia cambiario">Vaglia cambiario</option>
+                                <option value="Quietanza erario">Quietanza erario</option>
+                                <option value="Giroconto su conti di contabilità">Giroconto su conti di contabilità</option>
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Amount paid - shown when Pagato */}
+                    {paymentStatus === 'paid' && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-[13px] text-theme-text-muted">Importo pagato (€)</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={amountPaid}
+                                onChange={e => setAmountPaid(e.target.value)}
+                                placeholder={cartTotal.toFixed(2)}
+                                disabled={isGenerating}
+                                className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50 placeholder-theme-text-muted/50"
+                            />
+                        </div>
+                    )}
 
                     {/* CTA buttons */}
                     <div className="flex gap-3 pt-1">

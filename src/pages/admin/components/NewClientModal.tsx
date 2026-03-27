@@ -57,12 +57,15 @@ interface ClientFormData {
   rappresentante_nome: string
   rappresentante_cognome: string
   rappresentante_cf: string
+  rappresentante_data_nascita: string
+  rappresentante_luogo_nascita: string
   rappresentante_ruolo: string
   rappresentante_doc_tipo: string
   rappresentante_doc_numero: string
   rappresentante_doc_rilascio: string
   rappresentante_doc_scadenza: string
   rappresentante_doc_luogo: string
+  rappresentante_patente: string
 
   // Pubblica Amministrazione
   codice_univoco: string
@@ -112,12 +115,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     rappresentante_nome: '',
     rappresentante_cognome: '',
     rappresentante_cf: '',
+    rappresentante_data_nascita: '',
+    rappresentante_luogo_nascita: '',
     rappresentante_ruolo: '',
     rappresentante_doc_tipo: '',
     rappresentante_doc_numero: '',
     rappresentante_doc_rilascio: '',
     rappresentante_doc_scadenza: '',
     rappresentante_doc_luogo: '',
+    rappresentante_patente: '',
     codice_univoco: '',
     cf_pa: '',
     ente_ufficio: '',
@@ -204,12 +210,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           rappresentante_nome: metadata.rappresentante?.nome || '',
           rappresentante_cognome: metadata.rappresentante?.cognome || '',
           rappresentante_cf: metadata.rappresentante?.cf || '',
+          rappresentante_data_nascita: metadata.rappresentante?.data_nascita || '',
+          rappresentante_luogo_nascita: metadata.rappresentante?.luogo_nascita || '',
           rappresentante_ruolo: metadata.rappresentante?.ruolo || '',
           rappresentante_doc_tipo: metadata.rappresentante?.documento?.tipo || '',
           rappresentante_doc_numero: metadata.rappresentante?.documento?.numero || '',
           rappresentante_doc_rilascio: metadata.rappresentante?.documento?.rilascio || '',
           rappresentante_doc_scadenza: metadata.rappresentante?.documento?.scadenza || '',
           rappresentante_doc_luogo: metadata.rappresentante?.documento?.luogo || '',
+          rappresentante_patente: metadata.rappresentante?.patente || '',
 
           // PA
           codice_univoco: initialData.codice_univoco || '',
@@ -259,6 +268,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           contatti_cliente: '',
           rappresentante_nome: '',
           rappresentante_cognome: '',
+          rappresentante_data_nascita: '',
+          rappresentante_luogo_nascita: '',
           rappresentante_cf: '',
           rappresentante_ruolo: '',
           rappresentante_doc_tipo: '',
@@ -266,6 +277,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           rappresentante_doc_rilascio: '',
           rappresentante_doc_scadenza: '',
           rappresentante_doc_luogo: '',
+          rappresentante_patente: '',
           codice_univoco: '',
           cf_pa: '',
           ente_ufficio: '',
@@ -321,11 +333,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     return emailRegex.test(email)
   }
 
-  // Basic check for Italian tax code format
+  // Basic check for Italian tax code format (16 chars for persona fisica, 11 digits for azienda)
   const validateCodiceFiscale = (cf: string): boolean => {
-    // 16 alphanumeric characters
-    const cfRegex = /^[A-Z0-9]{16}$/i
-    return cfRegex.test(cf.replace(/\s/g, ''))
+    const clean = cf.replace(/\s/g, '')
+    return /^[A-Z0-9]{16}$/i.test(clean) || /^[0-9]{11}$/.test(clean)
   }
 
   const validatePartitaIVA = (piva: string): boolean => {
@@ -428,7 +439,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             nome: formData.rappresentante_nome,
             cognome: formData.rappresentante_cognome,
             cf: formData.rappresentante_cf,
+            data_nascita: formData.rappresentante_data_nascita,
+            luogo_nascita: formData.rappresentante_luogo_nascita,
             ruolo: formData.rappresentante_ruolo,
+            patente: formData.rappresentante_patente?.toUpperCase() || '',
             documento: {
               tipo: formData.rappresentante_doc_tipo,
               numero: formData.rappresentante_doc_numero,
@@ -1118,6 +1132,28 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     />
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data di Nascita</label>
+                      <input
+                        type="date"
+                        value={formData.rappresentante_data_nascita}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_data_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo di Nascita</label>
+                      <input
+                        type="text"
+                        value={formData.rappresentante_luogo_nascita}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_luogo_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                        placeholder="es. Cagliari"
+                      />
+                    </div>
+                  </div>
+
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Documento Rappresentante</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1172,6 +1208,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                           placeholder="es. Comune di Roma"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Patente Rappresentante</h4>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Patente</label>
+                      <input
+                        type="text"
+                        value={formData.rappresentante_patente}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_patente: e.target.value.toUpperCase() })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
+                        placeholder="es. CA1234567X"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1315,8 +1365,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setDriversLicenseFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {driversLicenseFront && (
@@ -1330,8 +1380,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setDriversLicenseBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {driversLicenseBack && (
@@ -1357,8 +1407,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setIdentityFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {identityFront && (
@@ -1372,8 +1422,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setIdentityBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {identityBack && (
@@ -1399,8 +1449,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setCodiceFiscaleFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {codiceFiscaleFront && (
@@ -1414,8 +1464,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setCodiceFiscaleBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {codiceFiscaleBack && (
@@ -1451,7 +1501,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-black font-bold hover:bg-yellow-500 transition-colors shadow-lg disabled:opacity-50"
+              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-white font-bold hover:bg-[#247a6f] transition-colors shadow-lg disabled:opacity-50"
             >
               {isSaving ? 'Salvataggio...' : (initialData ? 'Aggiorna Cliente' : 'Crea Cliente')}
             </button>

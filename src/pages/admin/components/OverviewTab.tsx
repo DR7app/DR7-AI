@@ -82,7 +82,7 @@ export default function OverviewTab({ onTabChange }: OverviewTabProps) {
                 title: 'Da Saldare',
                 value: stats.unpaidBookings,
                 tab: 'unpaid' as const,
-                color: 'from-yellow-500 to-yellow-600',
+                color: 'from-[#2d8a7e] to-[#247a6f]',
             },
             {
                 title: 'Verifiche Pendenti',

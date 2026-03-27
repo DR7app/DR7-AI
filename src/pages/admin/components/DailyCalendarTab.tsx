@@ -287,7 +287,7 @@ export default function DailyCalendarTab() {
                         </button>
                         <button
                             onClick={() => setSelectedDate(new Date())}
-                            className="px-3 py-2 bg-dr7-gold hover:bg-yellow-500 text-black rounded text-xs font-bold"
+                            className="px-3 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-bold"
                         >
                             Oggi
                         </button>

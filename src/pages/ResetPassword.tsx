@@ -13,6 +13,12 @@ export default function ResetPassword() {
   const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
+    // Check URL hash for recovery token (handles race condition where event fires before listener)
+    const hash = window.location.hash
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=magiclink'))) {
+      setReady(true)
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setReady(true)
@@ -142,7 +148,7 @@ export default function ResetPassword() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-dr7-gold hover:bg-yellow-500 text-black font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm"
+                  className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm"
                 >
                   {loading ? 'Aggiornamento in corso...' : 'Aggiorna Password'}
                 </button>

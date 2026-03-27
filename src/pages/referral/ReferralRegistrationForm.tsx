@@ -127,7 +127,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
               type="text"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none"
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#2d8a7e] focus:ring-1 focus:ring-[#2d8a7e] outline-none"
               placeholder="Mario"
               required
             />
@@ -139,7 +139,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
               type="text"
               value={cognome}
               onChange={(e) => setCognome(e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none"
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#2d8a7e] focus:ring-1 focus:ring-[#2d8a7e] outline-none"
               placeholder="Rossi"
               required
             />
@@ -151,7 +151,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
               type="tel"
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none"
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#2d8a7e] focus:ring-1 focus:ring-[#2d8a7e] outline-none"
               placeholder="+39 345 123 4567"
               required
             />
@@ -163,7 +163,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none"
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#2d8a7e] focus:ring-1 focus:ring-[#2d8a7e] outline-none"
               placeholder="mario@email.com"
             />
           </div>
@@ -174,7 +174,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
               type="text"
               value={referralCode}
               onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none font-mono"
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#2d8a7e] focus:ring-1 focus:ring-[#2d8a7e] outline-none font-mono"
               placeholder="DR7-XXXXXX"
             />
           </div>
@@ -188,7 +188,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-[#d4af37] text-black font-bold rounded-xl hover:bg-[#c4a030] transition-colors disabled:opacity-50"
+            className="w-full py-3 bg-[#2d8a7e] text-white font-bold rounded-xl hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
             {loading ? 'Invio codice...' : 'Invia Codice WhatsApp'}
           </button>
@@ -213,7 +213,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           <button
             onClick={handleVerifyAndRegister}
             disabled={loading || otpCode.length !== 6}
-            className="w-full py-3 bg-[#d4af37] text-black font-bold rounded-xl hover:bg-[#c4a030] transition-colors disabled:opacity-50"
+            className="w-full py-3 bg-[#2d8a7e] text-white font-bold rounded-xl hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
             {loading ? 'Verifica in corso...' : 'Verifica e Registrati'}
           </button>

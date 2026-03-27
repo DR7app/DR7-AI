@@ -7,11 +7,15 @@ export interface AdminRole {
   canManageFleet: boolean
   canManageAdmins: boolean
   loading: boolean
+  adminName: string | null
+  adminId: string | null
 }
 
 export function useAdminRole(): AdminRole {
   const [role, setRole] = useState<'superadmin' | 'admin'>('admin')
   const [canViewFinancials, setCanViewFinancials] = useState(false)
+  const [adminName, setAdminName] = useState<string | null>(null)
+  const [adminId, setAdminId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -26,7 +30,7 @@ export function useAdminRole(): AdminRole {
 
         const { data, error } = await supabase
           .from('admins')
-          .select('role, can_view_financials')
+          .select('id, role, can_view_financials, nome')
           .eq('user_id', user.id)
           .single()
 
@@ -38,6 +42,8 @@ export function useAdminRole(): AdminRole {
         } else if (data) {
           setRole(data.role as 'superadmin' | 'admin')
           setCanViewFinancials(data.can_view_financials || false)
+          setAdminName(data.nome || null)
+          setAdminId(data.id || null)
         }
       } catch (err) {
         console.error('Failed to load admin role:', err)
@@ -55,5 +61,5 @@ export function useAdminRole(): AdminRole {
   const canManageFleet = role === 'superadmin'
   const canManageAdmins = role === 'superadmin'
 
-  return { role, canViewFinancials, canManageFleet, canManageAdmins, loading }
+  return { role, canViewFinancials, canManageFleet, canManageAdmins, loading, adminName, adminId }
 }

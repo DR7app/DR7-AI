@@ -503,7 +503,7 @@ export default function BirthdaysTab() {
                     <h2 className="text-xl font-bold text-theme-text-primary flex items-center gap-2">
                         Compleanni
                         {upcomingCount > 0 && (
-                            <span className="bg-dr7-gold text-black text-sm font-bold px-2 py-0.5 rounded-full">
+                            <span className="bg-dr7-gold text-white text-sm font-bold px-2 py-0.5 rounded-full">
                                 {upcomingCount}
                             </span>
                         )}

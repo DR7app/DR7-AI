@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,7 @@ interface CustomerGroup {
   penaliItems: PendingItem[]
   danniItems: PendingItem[]
   totalRemaining: number  // in cents
+  chargedViaMit: number   // cents already collected via addebito MIT
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -78,6 +80,7 @@ interface CustomerGroup {
 export default function UnpaidBookingsTab() {
   const [bookings, setBookings] = useState<UnpaidBooking[]>([])
   const [fatturaItemsMap, setFatturaItemsMap] = useState<Record<string, FatturaItem[]>>({})
+  const [mitChargedMap, setMitChargedMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [filterService, setFilterService] = useState<'all' | 'rental' | 'prime_wash'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -90,6 +93,16 @@ export default function UnpaidBookingsTab() {
   const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [processingKey, setProcessingKey] = useState<string | null>(null)
+
+  // Addebito state
+  const [showAddebitoModal, setShowAddebitoModal] = useState(false)
+  const [addebitoGroup, setAddebitoGroup] = useState<CustomerGroup | null>(null)
+  const [addebitoContractId, setAddebitoContractId] = useState<string | null>(null)
+  const [addebitoDanniPhotos, setAddebitoDanniPhotos] = useState<string[]>([])
+  const [addebitoSending, setAddebitoSending] = useState(false)
+  const [addebitoItemAmount, setAddebitoItemAmount] = useState<number | null>(null) // cents, null = full group
+  const [addebitoItemLabel, setAddebitoItemLabel] = useState<string | null>(null)
+  const [addebitoCarryForward, setAddebitoCarryForward] = useState<number>(0) // cents carry-forward from other unpaid items
 
   useEffect(() => {
     loadUnpaidBookings()
@@ -105,6 +118,121 @@ export default function UnpaidBookingsTab() {
     return () => { subscription.unsubscribe() }
   }, [])
 
+  // ── Addebito ──────────────────────────────────────────────────────────
+
+  async function openAddebitoNexi(group: CustomerGroup, itemAmountCents?: number, itemLabel?: string) {
+    setAddebitoGroup(group)
+    setAddebitoSending(false)
+    setAddebitoContractId(null)
+    setAddebitoDanniPhotos([])
+
+    // Calculate carry-forward: remaining from OTHER items when charging a single item
+    let carryForward = 0
+    if (itemAmountCents != null) {
+      // totalRemaining includes ALL items; subtract this item to get carry-forward
+      carryForward = Math.max(0, group.totalRemaining - itemAmountCents)
+    }
+    setAddebitoCarryForward(carryForward)
+    // Total charge = item amount + carry-forward from other unpaid items
+    setAddebitoItemAmount(itemAmountCents != null ? itemAmountCents + carryForward : null)
+    setAddebitoItemLabel(itemLabel ?? null)
+    setShowAddebitoModal(true)
+
+    // Collect danni photos from all bookings in the group
+    const allPhotos: string[] = []
+    const allBookings = [...group.noleggioBookings, ...group.primeWashBookings]
+    for (const b of allBookings) {
+      const danni = b.booking_details?.danni || []
+      for (const d of danni) {
+        if (d.photos && Array.isArray(d.photos)) {
+          allPhotos.push(...d.photos)
+        }
+      }
+    }
+    setAddebitoDanniPhotos(allPhotos)
+
+    // Lookup contract_id: 1) customer metadata, 2) nexi_transactions by email
+    let contractId: string | null = null
+
+    // Try customer metadata first (most reliable — saved on every payment)
+    if (group.customerEmail) {
+      const { data: cust } = await supabase
+        .from('customers_extended')
+        .select('metadata')
+        .eq('email', group.customerEmail.toLowerCase().trim())
+        .maybeSingle()
+      if (cust?.metadata?.nexi_contract_id) {
+        contractId = cust.metadata.nexi_contract_id
+      }
+    }
+
+    // Fallback: search nexi_transactions
+    if (!contractId) {
+      const { data: txs } = await supabase
+        .from('nexi_transactions')
+        .select('metadata')
+        .eq('customer_email', group.customerEmail)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      contractId = txs?.find(t => t.metadata?.contract_id)?.metadata?.contract_id || null
+    }
+
+    // Fallback: check booking_details.nexi_contract_id
+    if (!contractId) {
+      const allBookings = [...group.noleggioBookings, ...group.primeWashBookings]
+      for (const b of allBookings) {
+        if (b.booking_details?.nexi_contract_id) {
+          contractId = b.booking_details.nexi_contract_id
+          break
+        }
+      }
+    }
+
+    setAddebitoContractId(contractId)
+    if (!contractId) {
+      toast.error('Nessun Contract ID Nexi trovato per questo cliente')
+    }
+  }
+
+  async function handleAddebitoUnpaid() {
+    if (!addebitoGroup) return
+    const amountCents = addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining
+    const amount = amountCents / 100
+    if (amount <= 0) return
+    setAddebitoSending(true)
+    try {
+      const res = await fetch('/.netlify/functions/nexi-nuovo-addebito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: null,
+          bookingId: addebitoGroup.noleggioBookings[0]?.id || addebitoGroup.primeWashBookings[0]?.id || null,
+          customerName: addebitoGroup.customerName,
+          customerEmail: addebitoGroup.customerEmail,
+          contractNumber: addebitoGroup.noleggioBookings[0]?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
+          amount: amount.toFixed(2),
+          causale: addebitoItemLabel ? `${addebitoItemLabel} - ${addebitoGroup.customerName}` : `Saldo dovuto - ${addebitoGroup.customerName}`,
+          contractId: addebitoContractId || null,
+          recurring: false,
+          intervalHours: null,
+          photoUrls: addebitoDanniPhotos,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Addebito programmato')
+        setShowAddebitoModal(false)
+      } else {
+        toast.error(data.error || 'Errore')
+      }
+    } catch (err: any) {
+      toast.error('Errore: ' + err.message)
+    } finally {
+      setAddebitoSending(false)
+    }
+  }
+
   // ── Data Layer (preserved from original) ──────────────────────────────────
 
   async function loadUnpaidBookings() {
@@ -113,7 +241,7 @@ export default function UnpaidBookingsTab() {
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
-        .not('status', 'in', '(cancelled,annullata,completed,completata)')
+        .not('status', 'in', '(cancelled,annullata,completed,completata,deleted)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 
@@ -156,19 +284,41 @@ export default function UnpaidBookingsTab() {
 
       setFatturaItemsMap(fItemsMap)
 
+      // Fetch charged amounts from pending_addebiti
+      const { data: addebiti } = await supabase
+        .from('pending_addebiti')
+        .select('customer_email, charged_amount_cents, amount_cents, status')
+        .eq('status', 'charged')
+
+      const mitMap: Record<string, number> = {}
+      for (const a of (addebiti || [])) {
+        if (a.customer_email) {
+          // Use charged_amount_cents if available, otherwise fall back to amount_cents (full charge)
+          const charged = a.charged_amount_cents || a.amount_cents || 0
+          if (charged > 0) {
+            const key = a.customer_email.toLowerCase().trim()
+            mitMap[key] = (mitMap[key] || 0) + charged
+          }
+        }
+      }
+      setMitChargedMap(mitMap)
+
+      const isPaid = (s: string) => s === 'paid' || s === 'completed' || s === 'succeeded'
+
       const unpaidBookings = (data || []).filter(booking => {
         if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
 
         const extensions = booking.booking_details?.extension_history || []
-        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')) return true
+        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')) return true
 
         const penalties = booking.booking_details?.penalties || []
-        if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')) return true
+        if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link')) return true
 
         const danni = booking.booking_details?.danni || []
-        if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')) return true
+        if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link')) return true
 
-        if (bookingIdsWithFatturaItems.has(booking.id)) return true
+        // Only keep for fattura items if the booking itself is NOT paid
+        if (bookingIdsWithFatturaItems.has(booking.id) && !isPaid(booking.payment_status)) return true
 
         return false
       })
@@ -195,17 +345,29 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Stato pagamento aggiornato!')
+      logAdminAction('mark_paid', 'booking', bookingId, { method: newStatus })
 
       if (newStatus === 'paid') {
         try {
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId, includeIVA: true })
-          })
-          if (invoiceRes.ok) {
-            const invoiceData = await invoiceRes.json()
-            toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata e inviata a SDI`)
+          // Check if fattura already exists for this booking
+          const { data: existingFattura } = await supabase
+            .from('fatture')
+            .select('id, numero_fattura')
+            .eq('booking_id', bookingId)
+            .maybeSingle()
+
+          if (existingFattura) {
+            toast.success(`Fattura ${existingFattura.numero_fattura} già esistente`)
+          } else {
+            const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, includeIVA: true })
+            })
+            if (invoiceRes.ok) {
+              const invoiceData = await invoiceRes.json()
+              toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata`)
+            }
           }
         } catch (invoiceErr) {
           console.warn('Auto-invoice generation failed:', invoiceErr)
@@ -222,7 +384,15 @@ export default function UnpaidBookingsTab() {
 
   async function removeSinglePenaltyDanno(booking: UnpaidBooking, type: 'penalties' | 'danni', originalIndex: number) {
     try {
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details to avoid overwriting concurrent changes
+      const { data: fresh, error: fetchErr } = await supabase
+        .from('bookings')
+        .select('booking_details')
+        .eq('id', booking.id)
+        .single()
+      if (fetchErr) throw fetchErr
+
+      const details = fresh?.booking_details || {}
       const arr: any[] = [...(details[type] || [])]
       arr.splice(originalIndex, 1)
 
@@ -243,7 +413,15 @@ export default function UnpaidBookingsTab() {
 
   async function updateSinglePenaltyDannoAmount(booking: UnpaidBooking, type: 'penalties' | 'danni', originalIndex: number, newAmount: number) {
     try {
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details to avoid overwriting concurrent changes
+      const { data: fresh, error: fetchErr } = await supabase
+        .from('bookings')
+        .select('booking_details')
+        .eq('id', booking.id)
+        .single()
+      if (fetchErr) throw fetchErr
+
+      const details = fresh?.booking_details || {}
       const arr: any[] = [...(details[type] || [])]
       if (arr[originalIndex]) {
         arr[originalIndex] = { ...arr[originalIndex], total: newAmount, amount: newAmount, quantity: 1 }
@@ -277,6 +455,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Estensione rimossa!')
+      logAdminAction('delete_extension', 'booking', booking.id)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: any) {
@@ -299,6 +478,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Estensione segnata come pagata!')
+      logAdminAction('mark_extension_paid', 'booking', booking.id, { extension_index: extIndex })
 
       // Generate fattura for the extension
       const extAmount = ext.additional_amount || 0
@@ -350,6 +530,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Pagamento parziale estensione registrato!')
+      logAdminAction('partial_payment', 'booking', booking.id, { amount: paymentAmount })
       setPartialPayItemKey(null)
 
       // Generate fattura when fully paid
@@ -419,6 +600,7 @@ export default function UnpaidBookingsTab() {
       }
 
       toast.success('Prenotazione eliminata!')
+      logAdminAction('delete_unpaid_booking', 'booking', bookingId)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: any) {
@@ -462,6 +644,47 @@ export default function UnpaidBookingsTab() {
     }
   }
 
+  async function sendPayByLink(booking: UnpaidBooking, amountEur: number, description: string) {
+    try {
+      toast.loading('Generazione link...', { id: 'paylink' })
+      const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          amount: amountEur,
+          customerEmail: booking.customer_email || booking.booking_details?.customer?.email || '',
+          customerName: booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente',
+          description,
+          expirationDays: 7
+        })
+      })
+      const result = await res.json()
+      toast.dismiss('paylink')
+      if (!res.ok) throw new Error(result.error || 'Errore')
+      if (result.paymentUrl) {
+        await navigator.clipboard.writeText(result.paymentUrl)
+        toast.success('Link copiato!')
+        // Send via WhatsApp
+        const phone = booking.customer_phone || booking.booking_details?.customer?.phone
+        if (phone) {
+          await fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customPhone: phone,
+              customMessage: `Gentile ${booking.customer_name || 'Cliente'},\n\nPer completare il pagamento di *€${amountEur.toFixed(2)}* (${description}), clicchi qui:\n${result.paymentUrl}\n\nGrazie,\nDR7`
+            })
+          })
+          toast.success('Link inviato via WhatsApp!')
+        }
+      }
+    } catch (err: any) {
+      toast.dismiss('paylink')
+      toast.error(err.message || 'Errore')
+    }
+  }
+
   async function markSingleFatturaItemPaid(fi: FatturaItem) {
     try {
       const { data: fattura, error: fetchErr } = await supabase
@@ -476,6 +699,7 @@ export default function UnpaidBookingsTab() {
       }
 
       await supabase.from('fatture').update({ items }).eq('id', fi.fatturaId)
+      logAdminAction('mark_fattura_item_paid', 'fattura', fi.fatturaId)
       toast.success('Pagamento registrato')
       loadUnpaidBookings()
     } catch (err: any) {
@@ -488,10 +712,35 @@ export default function UnpaidBookingsTab() {
     if (processingKey) return
     setProcessingKey(key)
     try {
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details
+      const { data: fresh } = await supabase.from('bookings').select('booking_details').eq('id', booking.id).single()
+      const details = fresh?.booking_details || booking.booking_details || {}
       const arr: any[] = details[type] || []
-      const pending = arr.filter((item: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+      const pending = arr.filter((item: any) => item.paymentStatus !== 'paid')
 
+      // 1. FIRST: Mark items as paid in DB (this must succeed)
+      if (pending.length > 0) {
+        const updated = arr.map((item: any) => {
+          if (item.paymentStatus !== 'paid') {
+            const total = item.total || (item.amount || 0) * (item.quantity || 1)
+            return { ...item, paymentStatus: 'paid', amountPaid: total }
+          }
+          return item
+        })
+        const { error: updateErr } = await supabase.from('bookings').update({ booking_details: { ...details, [type]: updated } }).eq('id', booking.id)
+        if (updateErr) throw updateErr
+      }
+
+      // Mark fattura source items as paid
+      const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
+      for (const fi of fItems) {
+        await markSingleFatturaItemPaid(fi)
+      }
+
+      toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
+      logAdminAction('mark_type_paid', 'booking', booking.id, { type })
+
+      // 2. THEN: Try to generate fattura (non-blocking — payment is already marked)
       if (pending.length > 0) {
         const invoiceItems = pending.map((item: any) => {
           const total = item.total || (item.amount || 0) * (item.quantity || 1)
@@ -500,39 +749,31 @@ export default function UnpaidBookingsTab() {
         }).filter((i: any) => i.amount > 0)
 
         if (invoiceItems.length > 0) {
-          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: booking.id,
-              customerId: booking.customer_id || booking.user_id,
-              items: invoiceItems,
-              type: type === 'danni' ? 'danni' : undefined,
-              paymentStatus: 'paid'
+          try {
+            const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookingId: booking.id,
+                customerId: booking.customer_id || booking.user_id,
+                items: invoiceItems,
+                type: type === 'danni' ? 'danni' : undefined,
+                paymentStatus: 'paid'
+              })
             })
-          })
-          if (!res.ok) {
-            const err = await res.json()
-            throw new Error(err.message || err.error || 'Errore generazione fattura')
+            if (res.ok) {
+              const data = await res.json()
+              toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata`)
+            } else {
+              const err = await res.json()
+              toast.error('Fattura non generata: ' + (err.message || err.error || 'errore'))
+            }
+          } catch (invErr: any) {
+            toast.error('Fattura non generata: ' + (invErr.message || 'errore'))
           }
         }
-
-        const updated = arr.map((item: any) => {
-          if (!item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial') {
-            const total = item.total || (item.amount || 0) * (item.quantity || 1)
-            return { ...item, paymentStatus: 'paid', amountPaid: total }
-          }
-          return item
-        })
-        await supabase.from('bookings').update({ booking_details: { ...details, [type]: updated } }).eq('id', booking.id)
       }
 
-      const fItems = (fatturaItemsMap[booking.id] || []).filter(fi => fi.type === type)
-      for (const fi of fItems) {
-        await markSingleFatturaItemPaid(fi)
-      }
-
-      toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
@@ -544,7 +785,9 @@ export default function UnpaidBookingsTab() {
   async function handleTypePartialPayment(booking: UnpaidBooking, type: 'penalties' | 'danni', paymentAmount: number) {
     try {
       let remaining = paymentAmount
-      const details = booking.booking_details || {}
+      // Re-fetch fresh booking_details
+      const { data: fresh } = await supabase.from('bookings').select('booking_details').eq('id', booking.id).single()
+      const details = fresh?.booking_details || booking.booking_details || {}
       const arr: any[] = [...(details[type] || [])]
       let changed = false
       for (let i = 0; i < arr.length; i++) {
@@ -634,27 +877,7 @@ export default function UnpaidBookingsTab() {
         }
       }
 
-      // Generate ONE fattura for all booking_details items using first booking as anchor
-      if (invoiceLineItems.length > 0) {
-        const firstItem = items.find(i => i.source === 'booking_details')!
-        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: firstItem.bookingId,
-            customerId: firstItem.booking.customer_id || firstItem.booking.user_id,
-            items: invoiceLineItems,
-            type: type === 'danni' ? 'danni' : undefined,
-            paymentStatus: 'paid'
-          })
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.message || err.error || 'Errore generazione fattura')
-        }
-      }
-
-      // Mark all booking_details items as paid in DB
+      // 1. FIRST: Mark all booking_details items as paid in DB
       for (const [bookingId, { booking, indices }] of bookingUpdates) {
         const details = booking.booking_details || {}
         const arr: any[] = [...(details[type] || [])]
@@ -674,7 +897,35 @@ export default function UnpaidBookingsTab() {
         if (fi) await markSingleFatturaItemPaid(fi)
       }
 
-      toast.success(`Tutti ${type === 'danni' ? 'i danni' : 'le penali'} segnati come pagati — fattura unica generata!`)
+      toast.success(`Tutti ${type === 'danni' ? 'i danni' : 'le penali'} segnati come pagati`)
+
+      // 2. THEN: Try to generate fattura (non-blocking — payment is already marked)
+      if (invoiceLineItems.length > 0) {
+        const firstItem = items.find(i => i.source === 'booking_details')!
+        try {
+          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: firstItem.bookingId,
+              customerId: firstItem.booking.customer_id || firstItem.booking.user_id,
+              items: invoiceLineItems,
+              type: type === 'danni' ? 'danni' : undefined,
+              paymentStatus: 'paid'
+            })
+          })
+          if (res.ok) {
+            const data = await res.json()
+            toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata`)
+          } else {
+            const err = await res.json()
+            toast.error('Fattura non generata: ' + (err.message || err.error || 'errore'))
+          }
+        } catch (invErr: any) {
+          toast.error('Fattura non generata: ' + (invErr.message || 'errore'))
+        }
+      }
+
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
@@ -709,7 +960,7 @@ export default function UnpaidBookingsTab() {
       // 2. Mark pending extensions as paid and collect their amounts
       const extensions = [...(booking.booking_details?.extension_history || [])]
       for (let i = 0; i < extensions.length; i++) {
-        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+        if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial' || extensions[i].payment_status === 'nexi_pay_by_link') {
           const extTotal = extensions[i].additional_amount || 0
           const extPaid = extensions[i].amount_paid || 0
           const extRemaining = Math.max(0, extTotal - extPaid)
@@ -759,6 +1010,7 @@ export default function UnpaidBookingsTab() {
       }).eq('id', booking.id)
       if (error) throw error
       toast.success('Tutto segnato come pagato!')
+      logAdminAction('mark_booking_extensions_paid', 'booking', booking.id)
 
       loadUnpaidBookings()
     } catch (err: any) {
@@ -803,7 +1055,7 @@ export default function UnpaidBookingsTab() {
 
         const extensions = [...(booking.booking_details?.extension_history || [])]
         for (let i = 0; i < extensions.length; i++) {
-          if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial') {
+          if (extensions[i].payment_status === 'pending' || extensions[i].payment_status === 'partial' || extensions[i].payment_status === 'nexi_pay_by_link') {
             const extTotal = extensions[i].additional_amount || 0
             const extPaid = extensions[i].amount_paid || 0
             const extRemaining = Math.max(0, extTotal - extPaid)
@@ -944,6 +1196,7 @@ export default function UnpaidBookingsTab() {
         toast.success(`Tutto pagato per ${group.customerName}!`)
       }
 
+      logAdminAction('mark_all_customer_paid', 'customer', group.customerKey)
       loadUnpaidBookings()
     } catch (err: any) {
       toast.error(err.message || 'Errore')
@@ -1053,7 +1306,7 @@ export default function UnpaidBookingsTab() {
     } else {
       const extensions = booking.booking_details?.extension_history || []
       extensions.forEach((ext: any) => {
-        if ((ext.payment_status === 'pending' || ext.payment_status === 'partial') && ext.additional_amount) {
+        if ((ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link') && ext.additional_amount) {
           const extTotal = ext.additional_amount * 100
           const extPaid = (ext.amount_paid || 0) * 100
           remaining += Math.max(0, extTotal - extPaid)
@@ -1063,7 +1316,7 @@ export default function UnpaidBookingsTab() {
 
     const penalties = booking.booking_details?.penalties || []
     penalties.forEach((p: any) => {
-      if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial') {
+      if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link') {
         const total = p.total || (p.amount || 0) * (p.quantity || 1)
         const paid = p.amountPaid || 0
         remaining += Math.round((total - paid) * 100)
@@ -1072,7 +1325,7 @@ export default function UnpaidBookingsTab() {
 
     const danni = booking.booking_details?.danni || []
     danni.forEach((d: any) => {
-      if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial') {
+      if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link') {
         const total = d.total || (d.amount || 0) * (d.quantity || 1)
         const paid = d.amountPaid || 0
         remaining += Math.round((total - paid) * 100)
@@ -1091,14 +1344,14 @@ export default function UnpaidBookingsTab() {
     const extensions = booking.booking_details?.extension_history || []
     return extensions
       .map((ext: any, idx: number) => ({ ext, idx }))
-      .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+      .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
   }
 
   const getPendingWithIndex = (booking: UnpaidBooking, arrayKey: 'penalties' | 'danni') => {
     const arr = booking.booking_details?.[arrayKey] || []
     return arr
       .map((item: any, realIdx: number) => ({ item, realIdx }))
-      .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial')
+      .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial' || item.paymentStatus === 'nexi_pay_by_link')
   }
 
   // ── Build Customer Groups ──────────────────────────────────────────────────
@@ -1121,6 +1374,7 @@ export default function UnpaidBookingsTab() {
           penaliItems: [],
           danniItems: [],
           totalRemaining: 0,
+          chargedViaMit: 0,
         })
       }
 
@@ -1139,7 +1393,7 @@ export default function UnpaidBookingsTab() {
       // (or has unpaid extensions). If the booking is paid but has only unpaid
       // danni/penali, it belongs ONLY in those columns.
       const mainIsUnpaid = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
-      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
 
       if (mainIsUnpaid || hasUnpaidExtensions) {
         if (effectiveType === 'rental') {
@@ -1211,6 +1465,16 @@ export default function UnpaidBookingsTab() {
       group.totalRemaining += getRemainingAmount(booking)
     }
 
+    // Subtract MIT charged amounts from totalRemaining
+    for (const group of groupMap.values()) {
+      const emailKey = (group.customerEmail || '').toLowerCase().trim()
+      const charged = mitChargedMap[emailKey] || 0
+      if (charged > 0) {
+        group.chargedViaMit = charged
+        group.totalRemaining = Math.max(0, group.totalRemaining - charged)
+      }
+    }
+
     let groups = Array.from(groupMap.values())
 
     // Apply filter
@@ -1241,7 +1505,7 @@ export default function UnpaidBookingsTab() {
     })
 
     return groups
-  }, [bookings, fatturaItemsMap, filterService, searchQuery, sortBy, sortDir])
+  }, [bookings, fatturaItemsMap, mitChargedMap, filterService, searchQuery, sortBy, sortDir])
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
@@ -1254,13 +1518,13 @@ export default function UnpaidBookingsTab() {
       if (!gMap.has(key)) gMap.set(key, { rental: false, pw: false, penali: false, danni: false })
       const g = gMap.get(key)!
       const mainUnpaid = b.payment_status === 'pending' || b.payment_status === 'unpaid'
-      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial')
+      const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
       if (mainUnpaid || hasUnpaidExt) {
         if (getEffectiveType(b) === 'rental') g.rental = true
         else g.pw = true
       }
-      const hasPen = (b.booking_details?.penalties || []).some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial')
-      const hasDan = (b.booking_details?.danni || []).some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial')
+      const hasPen = (b.booking_details?.penalties || []).some((p: any) => p.paymentStatus !== 'paid')
+      const hasDan = (b.booking_details?.danni || []).some((d: any) => d.paymentStatus !== 'paid')
       if (hasPen || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'penalties')) g.penali = true
       if (hasDan || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'danni')) g.danni = true
     }
@@ -1343,7 +1607,7 @@ export default function UnpaidBookingsTab() {
             value={editAmountValue}
             onChange={e => setEditAmountValue(e.target.value)}
             placeholder={currentAmount.toFixed(2)}
-            className="w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500/50"
+            className="w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
             onKeyDown={e => {
               if (e.key === 'Enter') { const v = parseFloat(editAmountValue); if (!isNaN(v) && v > 0) onSubmit(v) }
               if (e.key === 'Escape') onCancel()
@@ -1354,7 +1618,7 @@ export default function UnpaidBookingsTab() {
         <button
           onClick={() => { const v = parseFloat(editAmountValue); if (!isNaN(v) && v > 0) onSubmit(v) }}
           disabled={!editAmountValue || parseFloat(editAmountValue) <= 0}
-          className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold disabled:opacity-30"
+          className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold disabled:opacity-30"
         >OK</button>
         <button onClick={onCancel} className="px-2 py-1 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">x</button>
       </div>
@@ -1447,6 +1711,10 @@ export default function UnpaidBookingsTab() {
                             onClick={() => markSingleExtensionPaid(booking, extIdx)}
                             className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                           >Pagato</button>
+                          <button
+                            onClick={() => sendPayByLink(booking, extRemaining, `Estensione ${booking.vehicle_name || ''}`)}
+                            className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                          >Invia Link</button>
                           {partialPayItemKey !== extPartialKey && (
                             <button
                               onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue('') }}
@@ -1498,6 +1766,12 @@ export default function UnpaidBookingsTab() {
                     className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                   >Pagato</button>
                 )}
+                {isPending && (
+                  <button
+                    onClick={() => sendPayByLink(booking, remainingCents / 100, `Noleggio ${booking.vehicle_name || ''}`)}
+                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                  >Invia Link</button>
+                )}
                 {isPending && partialPayItemKey !== bkKey && (
                   <button
                     onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
@@ -1507,7 +1781,7 @@ export default function UnpaidBookingsTab() {
                 {editAmountKey !== editKey && (
                   <button
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
-                    className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
                   >Modifica</button>
                 )}
                 {confirmDeleteKey !== bkKey && (
@@ -1584,7 +1858,7 @@ export default function UnpaidBookingsTab() {
                 {editAmountKey !== editKey && (
                   <button
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
-                    className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
                   >Modifica</button>
                 )}
                 {confirmDeleteKey !== bkKey && (
@@ -1619,7 +1893,7 @@ export default function UnpaidBookingsTab() {
 
   // ── Render: Penali/Danni cell content (shared) ─────────────────────────────
 
-  function PendingItemsCell({ items, type, onMarkAllPaid }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void }) {
+  function PendingItemsCell({ items, type, onMarkAllPaid, onAddebito, onAddebitoItem, chargedViaMit }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void; onAddebito?: () => void; onAddebitoItem?: (amountCents: number, label: string) => void; chargedViaMit?: number }) {
     if (items.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     const colorClasses = type === 'penalties'
@@ -1635,6 +1909,20 @@ export default function UnpaidBookingsTab() {
             className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >{processingKey ? 'Elaborazione...' : `Segna Tutti Pagato (${items.length})`}</button>
         )}
+        {onAddebito && (
+          <button
+            onClick={onAddebito}
+            className="w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
+          >Addebito</button>
+        )}
+        {chargedViaMit != null && chargedViaMit > 0 && (() => {
+          const totalItemsCents = Math.round(items.reduce((s, i) => s + i.remaining, 0) * 100)
+          return (
+            <div className="text-xs text-orange-400 bg-orange-900/20 border border-orange-700/30 rounded-lg px-3 py-1.5 font-medium">
+              Da incassare: €{(totalItemsCents / 100).toFixed(2)}
+            </div>
+          )
+        })()}
         {items.map((item, idx) => {
           const itemKey = `${type}:${item.bookingId}:${item.source}:${item.originalIndex}`
           const partialKey = `partial:${itemKey}`
@@ -1664,10 +1952,16 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
                     )}
+                    {onAddebitoItem && (
+                      <button
+                        onClick={() => onAddebitoItem(Math.round(item.remaining * 100), item.label)}
+                        className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
+                      >Addebito</button>
+                    )}
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
-                        className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
                     <button
@@ -1690,10 +1984,16 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
                     )}
+                    {onAddebitoItem && (
+                      <button
+                        onClick={() => onAddebitoItem(Math.round(item.remaining * 100), item.label)}
+                        className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
+                      >Addebito</button>
+                    )}
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
-                        className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
                     <button
@@ -1867,7 +2167,12 @@ export default function UnpaidBookingsTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-red-400 font-bold">€{(group.totalRemaining / 100).toFixed(2)}</span>
+                  <div className="text-right">
+                    <span className="text-red-400 font-bold">€{(group.totalRemaining / 100).toFixed(2)}</span>
+                    {group.chargedViaMit > 0 && (
+                      <div className="text-[10px] text-green-400">Incassato: €{(group.chargedViaMit / 100).toFixed(2)}</div>
+                    )}
+                  </div>
                   <svg className={`w-5 h-5 text-theme-text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -1892,6 +2197,12 @@ export default function UnpaidBookingsTab() {
                     >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
                   )}
 
+                  {/* Addebito button */}
+                  <button
+                    onClick={() => openAddebitoNexi(group)}
+                    className="w-full px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                  >Addebito (auto-retry -10%)</button>
+
                   {/* Noleggio section */}
                   {hasNoleggio && (
                     <div>
@@ -1912,7 +2223,7 @@ export default function UnpaidBookingsTab() {
                   {hasPenali && (
                     <div>
                       <div className="text-xs font-bold text-yellow-400 uppercase mb-1.5">Penali</div>
-                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
+                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                     </div>
                   )}
 
@@ -1920,7 +2231,7 @@ export default function UnpaidBookingsTab() {
                   {hasDanni && (
                     <div>
                       <div className="text-xs font-bold text-red-400 uppercase mb-1.5">Danni</div>
-                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
+                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                     </div>
                   )}
                 </div>
@@ -1969,6 +2280,9 @@ export default function UnpaidBookingsTab() {
                     <div className="text-red-400 font-bold text-lg mt-2">
                       €{(group.totalRemaining / 100).toFixed(2)}
                     </div>
+                    {group.chargedViaMit > 0 && (
+                      <div className="text-xs text-orange-400 mt-0.5">Da incassare: €{(group.totalRemaining / 100).toFixed(2)}</div>
+                    )}
                     {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
                       <button
                         onClick={() => markAllCustomerPaid(group)}
@@ -1976,6 +2290,10 @@ export default function UnpaidBookingsTab() {
                         className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
                     )}
+                    <button
+                      onClick={() => openAddebitoNexi(group)}
+                      className="w-full mt-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >Addebito</button>
                   </td>
 
                   {/* Noleggio column */}
@@ -1990,12 +2308,12 @@ export default function UnpaidBookingsTab() {
 
                   {/* Penali column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} />
+                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                   </td>
 
                   {/* Danni column */}
                   <td className="px-4 py-3 border-l border-theme-border">
-                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} />
+                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                   </td>
                 </tr>
               ))}
@@ -2010,6 +2328,69 @@ export default function UnpaidBookingsTab() {
           </table>
         </div>
       </div>
+
+      {/* Addebito Modal */}
+      {showAddebitoModal && addebitoGroup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-theme-text-primary">
+              Addebito{addebitoItemLabel ? ` — ${addebitoItemLabel}` : ''} — {addebitoGroup.customerName}
+            </h3>
+            <div className="text-sm text-theme-text-secondary space-y-1">
+              <p><strong>Email:</strong> {addebitoGroup.customerEmail}</p>
+              <p><strong>Da incassare:</strong> <span className="text-red-400 font-bold">€{((addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining) / 100).toFixed(2)}</span></p>
+              {addebitoItemAmount != null && addebitoCarryForward > 0 && (
+                <div className="text-xs bg-orange-900/20 border border-orange-700/30 rounded-lg p-2 mt-1 space-y-0.5">
+                  <p className="text-theme-text-muted">
+                    {addebitoItemLabel}: <span className="text-theme-text-primary font-semibold">€{((addebitoItemAmount - addebitoCarryForward) / 100).toFixed(2)}</span>
+                  </p>
+                  <p className="text-theme-text-muted">
+                    Saldo precedente non riscosso: <span className="text-orange-400 font-semibold">+€{(addebitoCarryForward / 100).toFixed(2)}</span>
+                  </p>
+                  <p className="text-theme-text-primary font-bold pt-0.5 border-t border-orange-700/20">
+                    Totale addebito: €{(addebitoItemAmount / 100).toFixed(2)}
+                  </p>
+                </div>
+              )}
+              <p><strong>Contract ID:</strong> {addebitoContractId ? <span className="font-mono text-xs text-green-400">{addebitoContractId}</span> : <span className="text-red-400">Non trovato</span>}</p>
+            </div>
+
+            {/* Danni photos from booking */}
+            {addebitoDanniPhotos.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Foto Danni ({addebitoDanniPhotos.length})</label>
+                <div className="flex gap-2 flex-wrap">
+                  {addebitoDanniPhotos.map((url, i) => (
+                    <img key={i} src={url} alt={`Danno ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-theme-border" />
+                  ))}
+                </div>
+                <p className="text-xs text-theme-text-muted mt-1">Allegate automaticamente dalla scheda danni</p>
+              </div>
+            )}
+
+            <div className="p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg text-xs text-yellow-300">
+              <strong>Flusso:</strong> Email formale inviata subito → seconda email con foto danni → addebito MIT con auto-retry -10%.
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowAddebitoModal(false)}
+                disabled={addebitoSending}
+                className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleAddebitoUnpaid}
+                disabled={addebitoSending || !addebitoContractId}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {addebitoSending ? 'Invio...' : `Invia Email e Programma Addebito €${((addebitoItemAmount != null ? addebitoItemAmount : addebitoGroup.totalRemaining) / 100).toFixed(2)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

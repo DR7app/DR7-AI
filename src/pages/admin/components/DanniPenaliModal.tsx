@@ -1,0 +1,772 @@
+import { useState, useRef } from 'react'
+import toast from 'react-hot-toast'
+import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
+
+interface DanniPenaliModalProps {
+    isOpen: boolean
+    booking: {
+        id: string
+        customer_name: string
+        customer_id?: string
+        user_id?: string
+        customer_email?: string
+        customer_phone?: string
+        vehicle_name?: string
+        booking_details?: any
+    }
+    onClose: () => void
+    onSuccess: () => void
+    onEditCustomer?: (customerId: string) => void
+    initialTab?: 'danni' | 'penali'
+}
+
+interface CartItem {
+    id: string
+    type: 'danno' | 'penale'
+    label: string
+    unitPrice: number
+    quantity: number
+}
+
+interface PenaltyPreset {
+    id: string
+    label: string
+    amount: number
+    description: string
+}
+
+const SUPERCAR_PENALTIES: PenaltyPreset[] = [
+    { id: 'fermo_incidente', label: 'Fermo veicolo incidente/danni', amount: 350, description: '€350/giorno' },
+    { id: 'fermo_alto_valore', label: 'Fermo veicolo (auto > €200k)', amount: 700, description: '€700/giorno' },
+    { id: 'fumo', label: 'Fumo nell\'auto', amount: 50, description: 'Odore/cenere' },
+    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro' },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto' },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 25, description: 'Quadro 8 tacche' },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 50, description: 'Quadro 4 tacche' },
+    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico' },
+    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti' },
+    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda' },
+    { id: 'controlli_elettronici', label: 'Controlli elettronici disattivati', amount: 100, description: 'ESP/stabilita' },
+    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente' },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro' },
+    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 50, description: 'Base minima' },
+    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min' },
+    { id: 'pista', label: 'Utilizzo in pista', amount: 5000, description: 'Kasko non attiva' },
+    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato' },
+    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave' },
+    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE' },
+    { id: 'patente_mancante', label: 'Mancata esibizione patente', amount: 0, description: 'Perdita prenotazione' },
+    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera' },
+]
+
+const URBAN_PENALTIES: PenaltyPreset[] = [
+    { id: 'fermo_utilitarie', label: 'Fermo veicolo (Utilitarie)', amount: 30, description: '€30/giorno' },
+    { id: 'fermo_furgoni', label: 'Fermo veicolo (Furgoni/NCC)', amount: 100, description: '€100/giorno' },
+    { id: 'fumo', label: 'Fumo nell\'auto', amount: 50, description: 'Odore/cenere' },
+    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro' },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto' },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: 'Quadro 8 tacche' },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: 'Quadro 4 tacche' },
+    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico' },
+    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti' },
+    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda' },
+    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente' },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro' },
+    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 20, description: 'Base minima' },
+    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min' },
+    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE' },
+    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato' },
+    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave' },
+    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera' },
+]
+
+export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, onEditCustomer, initialTab = 'danni' }: DanniPenaliModalProps) {
+    const [activeTab, setActiveTab] = useState<'danni' | 'penali'>(initialTab)
+    const [cart, setCart] = useState<CartItem[]>([])
+    const [note, setNote] = useState('')
+    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
+    const [paymentMethod, setPaymentMethod] = useState('Contanti')
+    const [amountPaid, setAmountPaid] = useState('')
+    const [isGenerating, setIsGenerating] = useState(false)
+    const [error, setError] = useState('')
+
+    // Danni-specific
+    const [dannoLabel, setDannoLabel] = useState('')
+    const [dannoAmount, setDannoAmount] = useState('')
+    const [photos, setPhotos] = useState<File[]>([])
+    const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([])
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // Penali-specific
+    const [penaleLabel, setPenaleLabel] = useState('')
+    const [penaleAmount, setPenaleAmount] = useState('')
+
+    if (!isOpen) return null
+
+    const vehicleCategory = booking.booking_details?.vehicle?.category ||
+        booking.booking_details?.vehicleCategory ||
+        booking.booking_details?.category || ''
+    const isSupercar = vehicleCategory === 'exotic'
+    const penaltyList = isSupercar ? SUPERCAR_PENALTIES : URBAN_PENALTIES
+
+    const danniItems = cart.filter(c => c.type === 'danno')
+    const penaliItems = cart.filter(c => c.type === 'penale')
+    const cartTotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
+    const cartItemCount = cart.reduce((sum, c) => sum + c.quantity, 0)
+
+    // ── Danni helpers ──
+    function addDanno() {
+        const amt = parseFloat(dannoAmount)
+        if (!dannoLabel.trim() || isNaN(amt) || amt <= 0) return
+        setCart(prev => [...prev, { id: `danno_${Date.now()}`, type: 'danno', label: dannoLabel.trim(), unitPrice: amt, quantity: 1 }])
+        setDannoLabel('')
+        setDannoAmount('')
+    }
+
+    function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = Array.from(e.target.files || [])
+        setPhotos(prev => [...prev, ...files])
+        setPhotoPreviewUrls(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    function removePhoto(index: number) {
+        URL.revokeObjectURL(photoPreviewUrls[index])
+        setPhotos(prev => prev.filter((_, i) => i !== index))
+        setPhotoPreviewUrls(prev => prev.filter((_, i) => i !== index))
+    }
+
+    async function uploadDanniPhotos(): Promise<string[]> {
+        const urls: string[] = []
+        for (const file of photos) {
+            const ext = file.name.split('.').pop() || 'jpg'
+            const path = `danni/${booking.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+            const { error } = await supabase.storage.from('booking-photos').upload(path, file)
+            if (!error) {
+                const { data: urlData } = supabase.storage.from('booking-photos').getPublicUrl(path)
+                if (urlData?.publicUrl) urls.push(urlData.publicUrl)
+            }
+        }
+        return urls
+    }
+
+    // ── Penali helpers ──
+    function getCartQty(penaltyId: string): number {
+        return cart.find(c => c.id === penaltyId)?.quantity || 0
+    }
+
+    function addPenaltyPreset(penalty: PenaltyPreset) {
+        setCart(prev => {
+            const existing = prev.find(c => c.id === penalty.id)
+            if (existing) {
+                return prev.map(c => c.id === penalty.id ? { ...c, quantity: c.quantity + 1 } : c)
+            }
+            return [...prev, { id: penalty.id, type: 'penale' as const, label: penalty.label, unitPrice: penalty.amount, quantity: 1 }]
+        })
+    }
+
+    function removePenaltyPreset(penaltyId: string) {
+        setCart(prev => {
+            const existing = prev.find(c => c.id === penaltyId)
+            if (existing && existing.quantity > 1) {
+                return prev.map(c => c.id === penaltyId ? { ...c, quantity: c.quantity - 1 } : c)
+            }
+            return prev.filter(c => c.id !== penaltyId)
+        })
+    }
+
+    function updateCartPrice(itemId: string, newPrice: number) {
+        setCart(prev => prev.map(c => c.id === itemId ? { ...c, unitPrice: newPrice } : c))
+    }
+
+    function addCustomPenale() {
+        const amt = parseFloat(penaleAmount)
+        if (!penaleLabel.trim() || isNaN(amt) || amt <= 0) return
+        setCart(prev => [...prev, { id: `penale_${Date.now()}`, type: 'penale', label: penaleLabel.trim(), unitPrice: amt, quantity: 1 }])
+        setPenaleLabel('')
+        setPenaleAmount('')
+    }
+
+    function removeItem(itemId: string) {
+        setCart(prev => prev.filter(c => c.id !== itemId))
+    }
+
+    function incrementQty(itemId: string) {
+        setCart(prev => prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity + 1 } : c))
+    }
+
+    function decrementQty(itemId: string) {
+        setCart(prev => {
+            const item = prev.find(c => c.id === itemId)
+            if (item && item.quantity > 1) return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c)
+            return prev.filter(c => c.id !== itemId)
+        })
+    }
+
+    // ── Submit ──
+    const handleSubmit = async () => {
+        setError('')
+        if (cart.length === 0) { setError('Aggiungi almeno un danno o una penale.'); return }
+        if (cartTotal <= 0) { setError('Il totale deve essere maggiore di zero.'); return }
+
+        setIsGenerating(true)
+        try {
+            // Upload photos
+            let photoUrls: string[] = []
+            if (photos.length > 0) photoUrls = await uploadDanniPhotos()
+
+            // Fetch current booking
+            const { data: currentBooking, error: fetchErr } = await supabase
+                .from('bookings')
+                .select('booking_details, customer_phone, customer_email, customer_name')
+                .eq('id', booking.id)
+                .single()
+            if (fetchErr) throw new Error('Errore nel recupero della prenotazione.')
+
+            const details = currentBooking?.booking_details || {}
+            const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+            const paidAmount = amountPaid ? parseFloat(amountPaid) : cartTotal
+            const isPartial = paymentStatus === 'paid' && paidAmount < cartTotal
+
+            // Build danni entries
+            const existingDanni = details.danni || []
+            const newDanniEntries = danniItems.map(c => {
+                const itemTotal = Math.round(c.unitPrice * c.quantity * 100) / 100
+                let itemPaid = 0
+                if (paymentStatus === 'paid') {
+                    if (isPartial) {
+                        itemPaid = Math.round((itemTotal / cartTotal) * paidAmount * 100) / 100
+                    } else {
+                        itemPaid = itemTotal
+                    }
+                }
+                return {
+                    label: c.label, amount: c.unitPrice, quantity: c.quantity, total: itemTotal,
+                    note: note || '', date: italyDate,
+                    paymentStatus: isPartial ? 'partial' : paymentStatus,
+                    paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
+                    amountPaid: itemPaid, photos: photoUrls,
+                }
+            })
+
+            // Build penalty entries
+            const existingPenalties = details.penalties || []
+            const newPenaltyEntries = penaliItems.map(c => {
+                const itemTotal = Math.round(c.unitPrice * c.quantity * 100) / 100
+                let itemPaid = 0
+                if (paymentStatus === 'paid') {
+                    if (isPartial) {
+                        itemPaid = Math.round((itemTotal / cartTotal) * paidAmount * 100) / 100
+                    } else {
+                        itemPaid = itemTotal
+                    }
+                }
+                return {
+                    label: c.label, amount: c.unitPrice, quantity: c.quantity, total: itemTotal,
+                    note: note || '', date: italyDate,
+                    paymentStatus: isPartial ? 'partial' : paymentStatus,
+                    paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
+                    amountPaid: itemPaid,
+                }
+            })
+
+            // Save to booking_details
+            const updatedDetails = { ...details }
+            if (newDanniEntries.length > 0) updatedDetails.danni = [...existingDanni, ...newDanniEntries]
+            if (newPenaltyEntries.length > 0) updatedDetails.penalties = [...existingPenalties, ...newPenaltyEntries]
+
+            const { error: updateErr } = await supabase
+                .from('bookings')
+                .update({ booking_details: updatedDetails })
+                .eq('id', booking.id)
+            if (updateErr) throw new Error('Errore nel salvataggio.')
+
+            // Determine what we're saving
+            const hasDanni = danniItems.length > 0
+            const hasPenali = penaliItems.length > 0
+            const purposeLabel = hasDanni && hasPenali ? 'danni/penali' : hasDanni ? 'danni' : 'penali'
+            const paymentPurpose = hasDanni && hasPenali ? 'danni_penali' : hasDanni ? 'danni' : 'penali'
+
+            if (paymentStatus === 'paid' && paidAmount < cartTotal) {
+                // PARTIAL
+                toast.success(`${purposeLabel} registrato (Parziale: €${paidAmount.toFixed(2)} / €${cartTotal.toFixed(2)})`)
+                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
+            } else if (paymentStatus === 'paid') {
+                // FULLY PAID → fattura
+                const allItems = [
+                    ...danniItems.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
+                    ...penaliItems.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
+                ]
+                const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bookingId: booking.id,
+                        customerId: booking.customer_id || booking.user_id,
+                        items: allItems,
+                        note: note || undefined,
+                        type: paymentPurpose,
+                        paymentStatus
+                    })
+                })
+                const data = await response.json()
+                if (!response.ok) {
+                    const errMsg = data.message || data.error || 'Errore nella generazione.'
+                    toast.error(`Fattura NON generata: ${errMsg}`, { duration: 10000 })
+                    throw new Error(errMsg)
+                }
+                if (data.invoiceId) {
+                    const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ invoiceId: data.invoiceId })
+                    })
+                    if (pdfResponse.ok) {
+                        const html = await pdfResponse.text()
+                        const blob = new Blob([html], { type: 'text/html' })
+                        const url = URL.createObjectURL(blob)
+                        const w = window.open(url, '_blank')
+                        if (w) setTimeout(() => URL.revokeObjectURL(url), 3000)
+                    }
+                }
+                toast.success(`Fattura ${purposeLabel} generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
+                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, status: paymentStatus, paymentMethod })
+            } else if (paymentStatus === 'nexi_pay_by_link') {
+                // NEXI PAY BY LINK — one combined link
+                try {
+                    const custPhone = currentBooking?.customer_phone || booking.customer_phone || booking.booking_details?.customer?.phone
+                    const custEmail = currentBooking?.customer_email || booking.customer_email || booking.booking_details?.customer?.email
+                    const custName = currentBooking?.customer_name || booking.customer_name
+
+                    const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bookingId: booking.id,
+                            amount: cartTotal,
+                            customerEmail: custEmail || '',
+                            customerName: custName || 'Cliente',
+                            description: `${purposeLabel.charAt(0).toUpperCase() + purposeLabel.slice(1)} — ${custName}`,
+                            expirationHours: 1,
+                            paymentPurpose,
+                        }),
+                    })
+                    const linkData = await linkRes.json()
+
+                    if (linkRes.ok && linkData.paymentUrl) {
+                        if (custPhone) {
+                            const itemsList = cart.map(c => `- ${c.label}: €${(c.unitPrice * c.quantity).toFixed(2)}`).join('\n')
+                            await fetch('/.netlify/functions/send-whatsapp-notification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    customPhone: custPhone,
+                                    customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nIn riferimento al contratto di noleggio, sono stati rilevati ${purposeLabel} per un importo totale di €${cartTotal.toFixed(2)}.\n\nDettaglio:\n${itemsList}\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
+                                })
+                            })
+                        }
+                        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch {}
+                        toast.success(`Pay by Link ${purposeLabel} inviato! €${cartTotal.toFixed(2)}`)
+                    } else {
+                        toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
+                    }
+                } catch (linkErr: any) {
+                    toast.error('Errore Pay by Link: ' + linkErr.message)
+                }
+                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
+            } else {
+                // DA SALDARE
+                toast.success(`${purposeLabel} registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
+                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+            }
+
+            resetAndClose()
+        } catch (err: any) {
+            console.error('Error generating danni/penali:', err)
+            setError(err.message || 'Errore nella generazione.')
+        } finally {
+            setIsGenerating(false)
+        }
+    }
+
+    function resetAndClose() {
+        setCart([]); setNote(''); setPhotos([]); setPhotoPreviewUrls([])
+        setDannoLabel(''); setDannoAmount(''); setPenaleLabel(''); setPenaleAmount('')
+        setPaymentStatus('pending'); setPaymentMethod('Contanti'); setAmountPaid('')
+        setError(''); setActiveTab(initialTab)
+        onSuccess(); onClose()
+    }
+
+    const handleClose = () => {
+        if (isGenerating) return
+        setCart([]); setNote(''); setPhotos([]); setPhotoPreviewUrls([])
+        setDannoLabel(''); setDannoAmount(''); setPenaleLabel(''); setPenaleAmount('')
+        setPaymentStatus('pending'); setPaymentMethod('Contanti'); setAmountPaid('')
+        setError(''); setActiveTab(initialTab)
+        onClose()
+    }
+
+    const isCustomerDataError = error.includes('incomplete') || error.includes('obbligatorio')
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={handleClose}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+            <div
+                className="relative w-full sm:max-w-lg max-h-[92vh] flex flex-col bg-theme-bg-secondary/95 backdrop-blur-xl rounded-t-3xl sm:rounded-3xl shadow-2xl border border-white/10 overflow-hidden"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Drag handle (mobile) */}
+                <div className="sm:hidden flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 rounded-full bg-white/20" />
+                </div>
+
+                {/* Header */}
+                <div className="px-6 pt-4 sm:pt-6 pb-2">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xl font-bold text-theme-text-primary tracking-tight">Danni & Penali</h2>
+                            <p className="text-[13px] text-theme-text-muted mt-0.5">{booking.customer_name}</p>
+                        </div>
+                        <button
+                            onClick={handleClose}
+                            disabled={isGenerating}
+                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-all"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="flex mt-3 rounded-xl bg-white/[0.04] border border-white/[0.06] p-1">
+                        <button
+                            onClick={() => setActiveTab('danni')}
+                            className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-all ${activeTab === 'danni' ? 'bg-red-500/20 text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                        >
+                            Danni {danniItems.length > 0 && `(${danniItems.length})`}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('penali')}
+                            className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-all ${activeTab === 'penali' ? 'bg-dr7-gold/20 text-dr7-gold' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                        >
+                            Penali {penaliItems.length > 0 && `(${penaliItems.length})`}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto px-4 pb-4">
+                    {activeTab === 'danni' ? (
+                        <>
+                            {/* Add danno */}
+                            <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+                                <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Aggiungi danno</p>
+                                <div className="space-y-2">
+                                    <input
+                                        type="text" value={dannoLabel} onChange={e => setDannoLabel(e.target.value)}
+                                        placeholder="Descrizione danno"
+                                        className="w-full px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDanno() } }}
+                                    />
+                                    <div className="flex gap-2 items-center">
+                                        <div className="relative flex-1">
+                                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[13px]">&euro;</span>
+                                            <input
+                                                type="number" step="0.01" min="0" value={dannoAmount}
+                                                onChange={e => setDannoAmount(e.target.value)}
+                                                placeholder="Importo"
+                                                className="w-full pl-7 pr-2 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDanno() } }}
+                                            />
+                                        </div>
+                                        <button type="button" onClick={addDanno}
+                                            disabled={!dannoLabel.trim() || !dannoAmount || parseFloat(dannoAmount) <= 0}
+                                            className="w-9 h-9 rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Danni in cart */}
+                            {danniItems.length > 0 && (
+                                <div className="mt-3 rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
+                                    {danniItems.map((item, idx) => (
+                                        <div key={item.id} className={`flex items-center gap-3 px-4 py-3 ${idx < danniItems.length - 1 ? 'border-b border-white/[0.06]' : ''} bg-red-500/[0.06]`}>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[13px] leading-tight text-theme-text-primary font-medium">{item.label}</p>
+                                                <p className="text-[11px] text-theme-text-muted leading-tight mt-0.5">
+                                                    €{item.unitPrice % 1 === 0 ? item.unitPrice : item.unitPrice.toFixed(2)}
+                                                    {item.quantity > 1 && ` × ${item.quantity}`}
+                                                </p>
+                                            </div>
+                                            <span className="font-semibold text-red-400 shrink-0 tabular-nums text-[13px]">
+                                                €{(item.unitPrice * item.quantity).toFixed(2)}
+                                            </span>
+                                            <div className="flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] shrink-0">
+                                                <button type="button" onClick={() => decrementQty(item.id)} className="w-7 h-7 flex items-center justify-center text-theme-text-muted hover:text-red-400 transition-colors rounded-l-full">
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M5 12h14" /></svg>
+                                                </button>
+                                                <span className="w-5 text-center text-[12px] font-semibold text-theme-text-primary tabular-nums">{item.quantity}</span>
+                                                <button type="button" onClick={() => incrementQty(item.id)} className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors rounded-r-full">
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                                </button>
+                                            </div>
+                                            <button type="button" onClick={() => removeItem(item.id)} className="w-5 h-5 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center transition-all shrink-0">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Foto Danni */}
+                            <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+                                <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-2">Foto Danni</p>
+                                <label className="flex items-center justify-center w-full px-3 py-3 rounded-xl bg-white/[0.06] border border-dashed border-white/[0.12] text-theme-text-muted hover:border-red-500/50 hover:text-red-400 cursor-pointer transition-colors">
+                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="text-[13px]">{photos.length > 0 ? `${photos.length} foto` : 'Aggiungi foto...'}</span>
+                                    <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoSelect} className="hidden" disabled={isGenerating} />
+                                </label>
+                                {photoPreviewUrls.length > 0 && (
+                                    <div className="flex gap-2 mt-2 flex-wrap">
+                                        {photoPreviewUrls.map((url, i) => (
+                                            <div key={i} className="relative group">
+                                                <img src={url} alt={`Foto ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-white/10" />
+                                                <button type="button" onClick={() => removePhoto(i)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">X</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* Preset penalties */}
+                            <div className="rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
+                                {penaltyList.map((penalty, idx) => {
+                                    const qty = getCartQty(penalty.id)
+                                    const isVariable = penalty.amount === 0
+                                    const isLast = idx === penaltyList.length - 1
+                                    return (
+                                        <div key={penalty.id} className={`flex items-center gap-3 px-4 py-3 ${!isLast ? 'border-b border-white/[0.06]' : ''} ${qty > 0 ? 'bg-dr7-gold/[0.06]' : ''}`}>
+                                            <div className="flex-1 min-w-0">
+                                                <p className={`text-[13px] leading-tight ${qty > 0 ? 'text-theme-text-primary font-medium' : 'text-theme-text-primary'}`}>{penalty.label}</p>
+                                                <p className="text-[11px] text-theme-text-muted leading-tight mt-0.5">{penalty.description}</p>
+                                            </div>
+                                            <span className={`text-[13px] font-medium shrink-0 ${qty > 0 ? 'text-dr7-gold' : 'text-theme-text-muted'}`}>
+                                                {isVariable ? 'Var.' : `€${penalty.amount % 1 === 0 ? penalty.amount : penalty.amount.toFixed(2)}`}
+                                            </span>
+                                            {qty === 0 ? (
+                                                <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-7 h-7 rounded-full bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 flex items-center justify-center transition-all shrink-0">
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                                </button>
+                                            ) : (
+                                                <div className="flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] shrink-0">
+                                                    <button type="button" onClick={() => removePenaltyPreset(penalty.id)} className="w-8 h-8 flex items-center justify-center text-theme-text-muted hover:text-red-400 transition-colors rounded-l-full">
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M5 12h14" /></svg>
+                                                    </button>
+                                                    <span className="w-7 text-center text-[13px] font-semibold text-theme-text-primary tabular-nums">{qty}</span>
+                                                    <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#247a6f] transition-colors rounded-r-full">
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+
+                            {/* Custom penalty */}
+                            <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+                                <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Penale personalizzata</p>
+                                <div className="flex gap-2 items-center">
+                                    <input type="text" value={penaleLabel} onChange={e => setPenaleLabel(e.target.value)} placeholder="Descrizione"
+                                        className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                    />
+                                    <div className="relative w-20">
+                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[13px]">&euro;</span>
+                                        <input type="number" step="0.01" min="0" value={penaleAmount} onChange={e => setPenaleAmount(e.target.value)} placeholder="0"
+                                            className="w-full pl-7 pr-2 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] text-right placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                        />
+                                    </div>
+                                    <button type="button" onClick={addCustomPenale}
+                                        disabled={!penaleLabel.trim() || !penaleAmount || parseFloat(penaleAmount) <= 0}
+                                        className="w-9 h-9 rounded-full bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Note */}
+                    <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+                        <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-2">Note interne</p>
+                        <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                            className="w-full px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold/50 resize-none"
+                            placeholder="Opzionale..." disabled={isGenerating}
+                        />
+                    </div>
+                </div>
+
+                {/* Bottom: combined cart summary + payment + CTA */}
+                <div className="border-t border-white/[0.08] bg-theme-bg-secondary/98 backdrop-blur-xl px-6 py-4 space-y-3 shrink-0">
+                    {/* Combined cart summary */}
+                    {cart.length > 0 && (
+                        <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                            {cart.map(item => (
+                                <div key={item.id} className="flex items-center gap-2 text-[13px]">
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.type === 'danno' ? 'bg-red-400' : 'bg-dr7-gold'}`} />
+                                    <span className="flex-1 text-theme-text-primary truncate">{item.label}</span>
+                                    {item.unitPrice === 0 ? (
+                                        <div className="relative w-16 shrink-0">
+                                            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[11px]">&euro;</span>
+                                            <input type="number" step="0.01" min="0"
+                                                onChange={e => updateCartPrice(item.id, parseFloat(e.target.value) || 0)}
+                                                placeholder="0"
+                                                className="w-full pl-5 pr-1 py-0.5 bg-white/[0.06] border border-dr7-gold/30 rounded-lg text-theme-text-primary text-[11px] text-right focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <span className="text-theme-text-muted text-[11px] shrink-0">
+                                            {item.quantity > 1 && `${item.quantity} × €${item.unitPrice % 1 === 0 ? item.unitPrice : item.unitPrice.toFixed(2)}`}
+                                        </span>
+                                    )}
+                                    <span className={`font-semibold shrink-0 w-14 text-right tabular-nums ${item.type === 'danno' ? 'text-red-400' : 'text-dr7-gold'}`}>
+                                        €{(item.unitPrice * item.quantity).toFixed(2)}
+                                    </span>
+                                    <button type="button" onClick={() => removeItem(item.id)} className="w-5 h-5 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center transition-all shrink-0">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Totale */}
+                    <div className="flex items-center justify-between">
+                        <span className="text-[13px] text-theme-text-muted">
+                            {cart.length === 0 ? 'Nessuna voce' : `${cartItemCount} ${cartItemCount === 1 ? 'voce' : 'voci'}${danniItems.length > 0 && penaliItems.length > 0 ? ` (${danniItems.length}D + ${penaliItems.length}P)` : ''}`}
+                        </span>
+                        <span className="text-2xl font-bold text-theme-text-primary tracking-tight tabular-nums">
+                            €{cartTotal % 1 === 0 ? cartTotal : cartTotal.toFixed(2)}
+                        </span>
+                    </div>
+
+                    {/* Error */}
+                    {error && (
+                        <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 space-y-2">
+                            <p className="text-red-400 text-[13px]">{error}</p>
+                            {isCustomerDataError && onEditCustomer && (
+                                <button type="button"
+                                    onClick={async () => {
+                                        let cid = booking.customer_id || booking.user_id
+                                        if (!cid && booking.customer_email) {
+                                            const { data } = await supabase.from('customers_extended').select('id').eq('email', booking.customer_email).maybeSingle()
+                                            if (data?.id) cid = data.id
+                                        }
+                                        if (cid && onEditCustomer) { onEditCustomer(cid); handleClose() }
+                                        else toast.error('Cliente non trovato.')
+                                    }}
+                                    className="w-full py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-[13px] font-medium rounded-xl transition-colors"
+                                >
+                                    Modifica Dati Cliente
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Payment status */}
+                    <div className="flex items-center gap-3">
+                        <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
+                        <select value={paymentStatus}
+                            onChange={e => { setPaymentStatus(e.target.value as any); if (e.target.value !== 'paid') setAmountPaid('') }}
+                            disabled={isGenerating}
+                            className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                        >
+                            <option value="pending" className="bg-theme-bg-secondary text-theme-text-primary">Da Saldare</option>
+                            <option value="nexi_pay_by_link" className="bg-theme-bg-secondary text-theme-text-primary">Nexi Pay by Link</option>
+                            <option value="paid" className="bg-theme-bg-secondary text-theme-text-primary">Pagato</option>
+                        </select>
+                    </div>
+
+                    {/* Payment method */}
+                    {paymentStatus === 'paid' && (
+                        <>
+                            <div className="flex items-center gap-3">
+                                <span className="text-[13px] text-theme-text-muted">Metodo</span>
+                                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} disabled={isGenerating}
+                                    className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                >
+                                    <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
+                                    <option value="Bonifico">Bonifico</option>
+                                    <option value="Contanti">Contanti</option>
+                                    <option value="Credit Wallet">Credit Wallet</option>
+                                    <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
+                                    <option value="Paypal">Paypal</option>
+                                    <option value="RIBA">RIBA</option>
+                                    <option value="RID">RID</option>
+                                    <option value="Bollettino postale">Bollettino postale</option>
+                                    <option value="Assegno">Assegno</option>
+                                    <option value="Assegno circolare">Assegno circolare</option>
+                                    <option value="PagoPA">PagoPA</option>
+                                    <option value="RID utenze">RID utenze</option>
+                                    <option value="RIB veloce">RIB veloce</option>
+                                    <option value="SEPA Direct Debit">SEPA Direct Debit</option>
+                                    <option value="SEPA Direct Debit CORE">SEPA Direct Debit CORE</option>
+                                    <option value="SEPA Direct Debit B2B">SEPA Direct Debit B2B</option>
+                                    <option value="Domiciliazione bancaria">Domiciliazione bancaria</option>
+                                    <option value="Domiciliazione postale">Domiciliazione postale</option>
+                                    <option value="Trattenuta su somme già riscosse">Trattenuta su somme già riscosse</option>
+                                    <option value="Bollettino bancario">Bollettino bancario</option>
+                                    <option value="Contanti presso tesoreria">Contanti presso tesoreria</option>
+                                    <option value="Vaglia cambiario">Vaglia cambiario</option>
+                                    <option value="Quietanza erario">Quietanza erario</option>
+                                    <option value="Giroconto su conti di contabilità">Giroconto su conti di contabilità</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-[13px] text-theme-text-muted">Importo pagato (€)</span>
+                                <input type="number" step="0.01" value={amountPaid} onChange={e => setAmountPaid(e.target.value)}
+                                    placeholder={cartTotal.toFixed(2)} disabled={isGenerating}
+                                    className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50 placeholder-theme-text-muted/50"
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {/* CTA */}
+                    <div className="flex gap-3 pt-1">
+                        <button type="button" onClick={handleClose} disabled={isGenerating}
+                            className="flex-1 py-3 bg-white/[0.08] hover:bg-white/[0.12] text-theme-text-primary text-[15px] font-medium rounded-2xl transition-all disabled:opacity-50"
+                        >
+                            Annulla
+                        </button>
+                        <button type="button" onClick={handleSubmit} disabled={isGenerating || cart.length === 0 || cartTotal < 10}
+                            className="flex-1 py-3 bg-gradient-to-r from-red-500 to-dr7-gold hover:from-red-600 hover:to-[#247a6f] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={cartTotal > 0 && cartTotal < 10 ? 'Importo minimo: €10.00' : undefined}
+                        >
+                            {isGenerating ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Generazione...
+                                </span>
+                            ) : cartTotal > 0 && cartTotal < 10 ? 'Minimo €10.00' : 'Conferma'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}

@@ -44,6 +44,8 @@ export interface Booking {
     dropoff_date: string
     status: string
     service_type?: string
+    payment_method?: string | null
+    payment_status?: string | null
 }
 
 export interface AvailabilityResult {
@@ -186,6 +188,8 @@ export function getEarliestValidPickupTime(
     const vehicleBookings = existingBookings.filter(booking => {
         if (excludeBookingId && booking.id === excludeBookingId) return false
         if (booking.status === 'cancelled') return false
+        // Exclude pending Nexi Pay by Link bookings (awaiting payment)
+        if (booking.payment_method === 'Nexi Pay by Link' && booking.payment_status === 'pending') return false
         return matchVehicleByPlate(booking, vehicle)
     })
 
@@ -306,6 +310,8 @@ export function isVehicleAvailable(
 
         // Skip cancelled bookings
         if (booking.status === 'cancelled') return false
+        // Skip pending Nexi Pay by Link bookings (awaiting payment)
+        if (booking.payment_method === 'Nexi Pay by Link' && booking.payment_status === 'pending') return false
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions
@@ -338,6 +344,7 @@ export function isVehicleAvailable(
     if (vehicleBookings.length > 0) {
         console.log(`[AVAILABILITY CHECK] Bookings matched to ${vehicle.display_name} (${vehiclePlate}):`)
         vehicleBookings.forEach((b, i) => {
+            console.log(`  ${i + 1}. ID: ${b.id?.substring(0, 8)} | ${new Date(b.pickup_date).toLocaleDateString('it-IT')} → ${new Date(b.dropoff_date).toLocaleDateString('it-IT')} | Customer: ${b.customer_name} | Status: ${b.status} | Plate: ${b.vehicle_plate || 'N/A'}`)
         })
     }
 
@@ -352,15 +359,6 @@ export function isVehicleAvailable(
         // Check for overlap: (requestStart < bookingEndWithBuffer) && (requestEnd > bookingStart)
         if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
             const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
-
-                bookingPeriod: `${bookingStart.toISOString()} → ${bookingEnd.toISOString()}`,
-                requestedPeriod: `${requestStart.toISOString()} → ${requestEnd.toISOString()}`,
-                customer: booking.customer_name,
-                matchedBy: booking.vehicle_id === vehicle.id ? `vehicle_id: ${booking.vehicle_id}` :
-                           `plate: ${booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate}`,
-                bookingStatus: booking.status,
-                serviceType: booking.service_type || 'rental'
-            })
 
             return {
                 available: false,

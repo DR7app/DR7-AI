@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
@@ -112,10 +113,17 @@ export default function CustomersTab() {
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
+  const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // Gift Voucher feature
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // Duplicates
+  const [mergingDuplicates, setMergingDuplicates] = useState(false)
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -195,6 +203,206 @@ export default function CustomersTab() {
 
   }, [allCustomers, searchQuery, currentPage])
 
+  async function exportCustomersCSV() {
+    setExporting(true)
+    try {
+      const csvHeaders = [
+        'Nome', 'Cognome', 'Email', 'Telefono', 'Tipo Cliente',
+        'Codice Fiscale', 'Partita IVA', 'Indirizzo', 'CAP', 'Città',
+        'Provincia', 'Nazione', 'Data Nascita', 'Luogo Nascita',
+        'Ragione Sociale', 'Denominazione', 'Numero Patente',
+        'Tipo Patente', 'Scadenza Patente', 'Note', 'Status',
+        'Membership', 'Creato il'
+      ]
+
+      const escapeCSV = (val: any) => {
+        if (val == null) return ''
+        const str = String(val)
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`
+        }
+        return str
+      }
+
+      const rows = allCustomers.map(c => [
+        c.nome || '', c.cognome || '', c.email || '', c.telefono || c.phone || '',
+        c.tipo_cliente || '', c.codice_fiscale || '', c.partita_iva || '',
+        c.indirizzo || '', c.codice_postale || '', c.citta_residenza || c.citta || '',
+        c.provincia_residenza || '', c.nazione || '', c.data_nascita || '',
+        c.luogo_nascita || '', c.ragione_sociale || '', c.denominazione || '',
+        c.numero_patente || c.metadata?.patente?.numero || '',
+        c.tipo_patente || c.metadata?.patente?.tipo || '',
+        c.scadenza_patente || c.metadata?.patente?.scadenza || '',
+        c.notes || '', c.status || '', c.membership_tier || '',
+        c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : ''
+      ].map(escapeCSV))
+
+      const csvContent = [csvHeaders.join(','), ...rows.map(r => r.join(','))].join('\n')
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+
+      // Zip if > 5MB
+      if (blob.size > 5 * 1024 * 1024) {
+        const { default: JSZip } = await import('jszip')
+        const zip = new JSZip()
+        zip.file('clienti_dr7.csv', csvContent)
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        const url = URL.createObjectURL(zipBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `clienti_dr7_${new Date().toISOString().slice(0, 10)}.zip`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `clienti_dr7_${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+
+      toast.success(`${allCustomers.length} clienti esportati!`)
+    } catch (err: any) {
+      console.error('Export error:', err)
+      toast.error('Errore durante esportazione')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function importCustomersCSV(file: File) {
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) {
+        toast.error('File vuoto o senza dati')
+        return
+      }
+
+      // Parse header row
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = []
+        let current = ''
+        let inQuotes = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') {
+              current += '"'
+              i++
+            } else if (ch === '"') {
+              inQuotes = false
+            } else {
+              current += ch
+            }
+          } else {
+            if (ch === '"') {
+              inQuotes = true
+            } else if (ch === ',' || ch === ';') {
+              result.push(current.trim())
+              current = ''
+            } else {
+              current += ch
+            }
+          }
+        }
+        result.push(current.trim())
+        return result
+      }
+
+      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, '_'))
+
+      // Map CSV headers to customers_extended columns
+      const headerMap: Record<string, string> = {
+        'nome': 'nome', 'cognome': 'cognome', 'email': 'email',
+        'telefono': 'telefono', 'phone': 'telefono',
+        'tipo_cliente': 'tipo_cliente', 'codice_fiscale': 'codice_fiscale',
+        'partita_iva': 'partita_iva', 'indirizzo': 'indirizzo',
+        'cap': 'codice_postale', 'codice_postale': 'codice_postale',
+        'città': 'citta_residenza', 'citta': 'citta_residenza', 'citta_residenza': 'citta_residenza',
+        'provincia': 'provincia_residenza', 'provincia_residenza': 'provincia_residenza',
+        'nazione': 'nazione', 'data_nascita': 'data_nascita',
+        'luogo_nascita': 'luogo_nascita',
+        'ragione_sociale': 'ragione_sociale', 'denominazione': 'denominazione',
+        'numero_patente': 'numero_patente', 'tipo_patente': 'tipo_patente',
+        'scadenza_patente': 'scadenza_patente', 'note': 'note',
+      }
+
+      let imported = 0
+      let skipped = 0
+      const errors: string[] = []
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i])
+        if (values.every(v => !v)) continue // skip empty rows
+
+        const customerData: Record<string, string> = { source: 'csv_import' }
+        headers.forEach((header, idx) => {
+          const dbCol = headerMap[header]
+          if (dbCol && values[idx]) {
+            customerData[dbCol] = values[idx]
+          }
+        })
+
+        // Need at least nome or email or ragione_sociale
+        if (!customerData.nome && !customerData.email && !customerData.ragione_sociale && !customerData.denominazione) {
+          skipped++
+          continue
+        }
+
+        // Default tipo_cliente
+        if (!customerData.tipo_cliente) {
+          customerData.tipo_cliente = customerData.ragione_sociale || customerData.denominazione
+            ? 'azienda' : 'persona_fisica'
+        }
+
+        // Normalize phone
+        if (customerData.telefono) {
+          let phone = customerData.telefono.replace(/[\s\-\+\(\)]/g, '')
+          if (phone.startsWith('00')) phone = phone.substring(2)
+          if (phone.length === 10) phone = '39' + phone
+          customerData.telefono = phone
+        }
+
+        try {
+          const response = await fetch('/.netlify/functions/save-customer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customerData })
+          })
+          if (response.ok) {
+            imported++
+          } else {
+            const err = await response.json()
+            errors.push(`Riga ${i + 1}: ${err.error || 'Errore'}`)
+            skipped++
+          }
+        } catch {
+          errors.push(`Riga ${i + 1}: Errore di rete`)
+          skipped++
+        }
+      }
+
+      if (imported > 0) {
+        toast.success(`${imported} clienti importati!${skipped > 0 ? ` (${skipped} saltati)` : ''}`)
+        loadCustomers()
+      } else {
+        toast.error(`Nessun cliente importato. ${skipped} righe saltate.`)
+      }
+
+      if (errors.length > 0) {
+        console.warn('Import errors:', errors)
+      }
+    } catch (err: any) {
+      console.error('Import error:', err)
+      toast.error('Errore durante importazione: ' + (err.message || ''))
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   async function loadCustomers() {
     setLoading(true)
     try {
@@ -204,81 +412,8 @@ export default function CustomersTab() {
       const { data: { user } } = await supabase.auth.getUser()
       console.log('[CustomersTab] Current user:', user?.email)
 
-      // Get unique customers from bookings table (primary source of customer data)
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('customer_name, customer_email, customer_phone, user_id, booked_at, booking_details')
-        .order('booked_at', { ascending: false })
-
-
-      if (bookingsError) {
-        console.error('[CustomersTab] Could not load customers from bookings:', bookingsError)
-      }
-
-      // Merge customers by email or phone
+      // Use customers_extended as the SINGLE source of truth (no more bookings merge = no duplicates)
       const customerMap = new Map<string, Customer>()
-      const collisionCounter: Record<string, number> = {}
-
-      // Process bookings data to create unique customer entries
-      if (bookingsData) {
-        console.log('Total bookings:', bookingsData.length)
-        console.log('Top Collisions:', Object.entries(collisionCounter).filter(([, v]) => v > 1).sort((a, b) => b[1] - a[1]).slice(0, 5))
-        bookingsData.forEach((booking: any) => {
-          // Extract customer data from booking_details if available
-          const details = booking.booking_details?.customer || {}
-
-          // Get customer info from direct columns or booking_details
-          const customerName = booking.customer_name || details.fullName || 'Cliente'
-          // CRITICAL FIX: Normalize email and phone to ensure keys match with customers_extended
-          const customerEmail = (booking.customer_email || details.email || '').toLowerCase().trim() || null
-          const customerPhone = (booking.customer_phone || details.phone || '').trim() || null
-
-          // Debug log
-          if (!customerPhone && !customerEmail) {
-            console.log('Missing contact info for:', {
-              customerName,
-              booking_details: booking.booking_details
-            })
-          }
-
-          // Use email as primary key for merging, fallback to phone or user_id
-          const key = customerEmail || customerPhone || booking.user_id
-
-          if (key) {
-            // ... existing logic ...
-            const existing = customerMap.get(key)
-            if (existing) {
-              if (!existing.phone && customerPhone) {
-                existing.phone = customerPhone
-              }
-              if (!existing.email && customerEmail) {
-                existing.email = customerEmail
-              }
-              if (existing.full_name === 'Cliente' && customerName) {
-                existing.full_name = customerName
-              }
-            } else {
-              // Create new customer entry - use user_id if valid, otherwise generate temp ID
-              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-              const customerId = (booking.user_id && uuidRegex.test(booking.user_id))
-                ? booking.user_id
-                : `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-              customerMap.set(key, {
-                id: customerId,
-                full_name: customerName,
-                email: customerEmail,
-                phone: customerPhone,
-                driver_license_number: null,
-                notes: null,
-                created_at: booking.booked_at,
-                updated_at: booking.booked_at
-              })
-            }
-          }
-        })
-        console.log('Unique customers from bookings:', customerMap.size)
-      }
 
       // Get customers from customers_extended table via Netlify function (bypasses RLS)
       console.log('[CustomersTab] Fetching customers_extended via Netlify function...')
@@ -303,43 +438,16 @@ export default function CustomersTab() {
 
       // DEBUG: Log counts
       console.log('STATS:', {
-        bookings: bookingsData?.length || 0,
+        bookings: 0,
         customers_extended: customersExtendedData?.length || 0,
         unique_map_size: customerMap.size
       })
 
       if (!customersExtendedError && customersExtendedData) {
         console.log('[CustomersTab] Customers from customers_extended:', customersExtendedData.length)
-        // console.log('[CustomersTab] Sample customer:', customersExtendedData[0])
-
-        // First, deduplicate customers_extended by ID to ensure we only process each once
-        const seenIds = new Set<string>()
 
         customersExtendedData.forEach((customer: any) => {
-          // Skip if we've already processed this ID
-          if (seenIds.has(customer.id)) {
-            console.warn('[CustomersTab] Skipping duplicate ID:', customer.id)
-            return
-          }
-          seenIds.add(customer.id)
-
-          // CRITICAL: We want to overwrite any existing "booking entry" that matches this customer's email or phone
-          // because the DB record is the "real" one with the correct ID.
-
-          let matchedKey: string | null = null;
-
-          if (customer.email && customer.email.trim()) {
-            const emailKey = customer.email.trim().toLowerCase()
-            if (customerMap.has(emailKey)) matchedKey = emailKey
-          }
-
-          if (!matchedKey && customer.telefono && customer.telefono.trim()) {
-            const phoneKey = customer.telefono.trim()
-            if (customerMap.has(phoneKey)) matchedKey = phoneKey
-          }
-
-          // Determine the key we will use for this customer in the map
-          // Ideally, we use the ID to be absolutely unique
+          // Use customer ID as unique key — no duplicates possible
           const canonicalKey = customer.id
 
           // Create display name based on customer type
@@ -433,23 +541,7 @@ export default function CustomersTab() {
             metadata: customer.metadata
           }
 
-          // INSERT the "Real" customer
           customerMap.set(canonicalKey, extendedData as any)
-
-          // REMOVE any placeholder entries that were based on email or phone
-          // This ensures we don't have duplicates (one real, one from booking with temp ID)
-          if (matchedKey && matchedKey !== canonicalKey) {
-            // console.log(`[CustomersTab] Replacing placeholder ${matchedKey} with DB record ${canonicalKey}`)
-            customerMap.delete(matchedKey)
-          }
-
-          // Also check explicitly for email key again to be sure
-          if (customer.email && customer.email.trim()) {
-            const emailKey = customer.email.trim().toLowerCase()
-            if (emailKey !== canonicalKey && customerMap.has(emailKey)) {
-              customerMap.delete(emailKey)
-            }
-          }
         })
 
       }
@@ -530,6 +622,153 @@ export default function CustomersTab() {
   }
 
 
+
+  async function handleRemoveDuplicates() {
+    setMergingDuplicates(true)
+
+    // Group by normalized email or phone — same name alone is NOT enough
+    const emailGroups = new Map<string, Customer[]>()
+    const phoneGroups = new Map<string, Customer[]>()
+
+    allCustomers.forEach(c => {
+      if (c.id.startsWith('temp-')) return
+
+      const email = (c.email || '').trim().toLowerCase()
+      const phone = (c.phone || c.telefono || '').trim().replace(/\s/g, '')
+
+      if (email) {
+        if (!emailGroups.has(email)) emailGroups.set(email, [])
+        emailGroups.get(email)!.push(c)
+      }
+      if (phone && phone.length >= 8) {
+        if (!phoneGroups.has(phone)) phoneGroups.set(phone, [])
+        phoneGroups.get(phone)!.push(c)
+      }
+    })
+
+    const seenIds = new Set<string>()
+    const groups: Customer[][] = []
+
+    const addGroup = (group: Customer[]) => {
+      if (group.some(c => seenIds.has(c.id))) return
+      // Split by tipo_cliente — never merge azienda with persona_fisica
+      const byType = new Map<string, Customer[]>()
+      group.forEach(c => {
+        const tipo = c.tipo_cliente || 'persona_fisica'
+        if (!byType.has(tipo)) byType.set(tipo, [])
+        byType.get(tipo)!.push(c)
+      })
+      byType.forEach(subGroup => {
+        if (subGroup.length < 2) return
+        if (subGroup.some(c => seenIds.has(c.id))) return
+        subGroup.forEach(c => seenIds.add(c.id))
+        groups.push(subGroup)
+      })
+    }
+
+    emailGroups.forEach(group => { if (group.length >= 2) addGroup(group) })
+    phoneGroups.forEach(group => { if (group.length >= 2) addGroup(group) })
+
+    if (groups.length === 0) {
+      toast.success('Nessun duplicato trovato!')
+      setMergingDuplicates(false)
+      return
+    }
+
+    let merged = 0
+    let failed = 0
+    const totalToRemove = groups.reduce((s, g) => s + g.length - 1, 0)
+
+    for (const group of groups) {
+      const ok = await mergeDuplicateGroup(group)
+      if (ok) merged++
+      else failed++
+    }
+
+    setMergingDuplicates(false)
+    toast.success(`${totalToRemove} duplicati rimossi (${merged} gruppi unificati)${failed > 0 ? ` — ${failed} errori` : ''}`)
+    loadCustomers()
+  }
+
+  // Count non-null fields to determine completeness
+  function getCompleteness(c: Customer): number {
+    const fields = [
+      c.email, c.phone, c.telefono, c.nome, c.cognome,
+      c.codice_fiscale, c.data_nascita, c.luogo_nascita,
+      c.indirizzo, c.citta_residenza, c.codice_postale,
+      c.numero_patente, c.tipo_patente, c.scadenza_patente,
+      c.partita_iva, c.ragione_sociale, c.pec,
+      c.nazione, c.provincia_nascita, c.provincia_residenza,
+      c.sesso, c.notes
+    ]
+    return fields.filter(f => f != null && String(f).trim() !== '').length
+  }
+
+  async function mergeDuplicateGroup(group: Customer[]) {
+    // Sort by completeness — most complete first
+    const sorted = [...group].sort((a, b) => getCompleteness(b) - getCompleteness(a))
+    const keeper = sorted[0]
+    const toDelete = sorted.slice(1)
+
+    // Merge missing fields from less complete records into keeper
+    const mergeFields: (keyof Customer)[] = [
+      'email', 'phone', 'telefono', 'nome', 'cognome',
+      'codice_fiscale', 'data_nascita', 'luogo_nascita',
+      'indirizzo', 'citta_residenza', 'codice_postale',
+      'numero_patente', 'tipo_patente', 'scadenza_patente',
+      'emessa_da', 'data_rilascio_patente',
+      'partita_iva', 'ragione_sociale', 'denominazione',
+      'pec', 'nazione', 'provincia_nascita', 'provincia_residenza',
+      'sesso', 'notes', 'numero_civico', 'tipo_cliente',
+      'codice_destinatario', 'indirizzo_azienda'
+    ]
+
+    const updates: Record<string, any> = {}
+    for (const donor of toDelete) {
+      for (const field of mergeFields) {
+        const keeperVal = keeper[field]
+        const donorVal = donor[field]
+        if ((!keeperVal || String(keeperVal).trim() === '') && donorVal && String(donorVal).trim() !== '') {
+          updates[field] = donorVal
+          ;(keeper as any)[field] = donorVal
+        }
+      }
+    }
+
+    try {
+      // Update keeper with merged fields if any
+      if (Object.keys(updates).length > 0) {
+        const response = await fetch('/.netlify/functions/manage-customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', customerId: keeper.id, updates })
+        })
+        if (!response.ok) {
+          const err = await response.json()
+          throw new Error(err.error || 'Errore aggiornamento')
+        }
+      }
+
+      // Delete less complete duplicates
+      for (const dup of toDelete) {
+        const response = await fetch('/.netlify/functions/manage-customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', customerId: dup.id })
+        })
+        if (!response.ok) {
+          const err = await response.json()
+          console.error(`Failed to delete duplicate ${dup.id}:`, err)
+        }
+      }
+
+      return true
+    } catch (err: any) {
+      console.error('Merge error:', err)
+      toast.error(`Errore merge: ${err.message}`)
+      return false
+    }
+  }
 
   async function handleDelete(id: string) {
     console.log('[handleDelete] Starting delete for ID:', id)
@@ -1638,7 +1877,7 @@ export default function CustomersTab() {
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingLicense
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
                               </span>
@@ -1715,7 +1954,7 @@ export default function CustomersTab() {
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingId
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
                               </span>
@@ -1792,7 +2031,7 @@ export default function CustomersTab() {
                               />
                               <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium text-center w-full cursor-pointer ${uploadingCodiceFiscale
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                                : 'bg-dr7-gold text-black hover:bg-dr7-gold/90'
+                                : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
                                 {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
                               </span>
@@ -1873,7 +2112,7 @@ export default function CustomersTab() {
                 </button>
                 <button
                   onClick={() => handleBulkStatusUpdate('elite')}
-                  className="px-3 py-2 rounded-full text-sm font-bold bg-amber-700 text-white hover:bg-amber-500 border border-amber-400 transition-all"
+                  className="px-3 py-2 rounded-full text-sm font-bold bg-dr7-gold text-white hover:bg-[#247a6f] border border-dr7-gold transition-all"
                   title="Imposta come Elite"
                 >
                   Elite
@@ -1887,6 +2126,46 @@ export default function CustomersTab() {
                 </button>
               </div>
             )}
+            <button
+              onClick={handleRemoveDuplicates}
+              disabled={allCustomers.length === 0 || mergingDuplicates}
+              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {mergingDuplicates ? 'Rimuovendo...' : 'Rimuovi Duplicati'}
+            </button>
+            <button
+              onClick={exportCustomersCSV}
+              disabled={exporting || allCustomers.length === 0}
+              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {exporting ? 'Esportando...' : 'Esporta CSV'}
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              {importing ? 'Importando...' : 'Importa CSV'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) importCustomersCSV(file)
+              }}
+            />
             <Button onClick={() => {
               setSelectedCustomer(null)  // Clear any previous selection
               setShowNewClientModal(true)
@@ -2272,46 +2551,12 @@ export default function CustomersTab() {
           console.log('[onClientCreated] called with:', { clientId, hasData: !!customerData })
           setShowNewClientModal(false)
           setSelectedCustomer(null)
-          // Use the customer data passed directly from the Netlify function response
-          // (avoids RLS issues that block client-side re-fetching from customers_extended)
-          if (customerData) {
-            const newCustomer = customerData
-            let fullName = 'Cliente'
-            if (newCustomer.tipo_cliente === 'persona_fisica') {
-              fullName = `${newCustomer.nome || ''} ${newCustomer.cognome || ''}`.trim()
-            } else if (newCustomer.tipo_cliente === 'azienda') {
-              fullName = newCustomer.ragione_sociale || newCustomer.denominazione || 'Azienda'
-            } else if (newCustomer.tipo_cliente === 'pubblica_amministrazione') {
-              fullName = newCustomer.ente_ufficio || newCustomer.denominazione || 'Pubblica Amministrazione'
-            }
-            const mappedCustomer = {
-              ...newCustomer,
-              id: clientId,
-                full_name: fullName || 'Cliente',
-                phone: newCustomer.telefono,
-                driver_license_number: newCustomer.numero_patente,
-                created_at: newCustomer.created_at,
-                updated_at: newCustomer.updated_at || newCustomer.created_at,
-                notes: newCustomer.note,
-                source: 'db',
-            } as any
-            setAllCustomers(prev => {
-              const existingIndex = prev.findIndex(c => c.id === clientId)
-              if (existingIndex !== -1) {
-                // Edit: replace existing customer in-place (don't inflate count)
-                const updated = [...prev]
-                updated[existingIndex] = mappedCustomer
-                return updated
-              }
-              // New: prepend to list
-              return [mappedCustomer, ...prev]
-            })
-          }
-          // Always reload for full consistency (pagination fix ensures all customers are fetched)
+          // Don't update state manually — just reload from DB for consistency
           loadCustomers()
         }}
         initialData={selectedCustomer}
       />
+
     </div>
   )
 }
