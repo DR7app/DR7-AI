@@ -14,14 +14,6 @@ if (!supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Handle expired/invalid sessions — redirect to login
-supabase.auth.onAuthStateChange(async (event) => {
-  if (event === 'SIGNED_OUT') return
-  if (event === 'TOKEN_REFRESHED') return
-
-  // Check for invalid refresh tokens on any auth event
-  const { error } = await supabase.auth.getSession()
-  if (error?.message?.includes('Refresh Token') || error?.message?.includes('Invalid Refresh Token')) {
-    await supabase.auth.signOut()
-    window.location.href = '/login'
-  }
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') return
 })
