@@ -204,7 +204,8 @@ const handler: Handler = async (event) => {
         whatsappMessage = renderTemplate(whatsappTemplate.body || '', templateVars);
       } else {
         // Fallback default WhatsApp template
-        whatsappMessage = `Ciao ${firstName}! 👋\nLa tua esperienza con noi è importante.\n\nSe ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto, è il modo migliore per crescere insieme.\n\nIn segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un codice sconto da 100€ sul tuo prossimo noleggio e uno da 10€ sul tuo prossimo lavaggio.\n\nClicca qui per lasciarla!👇🏻\n ${reviewLink}\n\n\nDR7`;
+        const custName = candidate.customer_name || 'Cliente';
+        whatsappMessage = `Ciao ${custName}! 👋\nLa tua esperienza con noi è importante.\n\nSe ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto, è il modo migliore per crescere insieme.\n\nIn segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un codice sconto da 100€ sul tuo prossimo noleggio e uno da 10€ sul tuo prossimo lavaggio utilizzabile sul sito.\n\nClicca qui per lasciarla!👇🏻\n ${reviewLink}\n\n\nDR7`;
       }
     }
 
