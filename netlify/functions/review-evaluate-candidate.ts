@@ -64,7 +64,7 @@ async function loadSourceRecord(sourceRecordId: string, serviceType: ServiceType
   } else {
     const { data, error } = await supabase
       .from('car_wash_bookings')
-      .select('id, customer_name, customer_email, customer_phone, status, payment_status')
+      .select('id, customer_name, customer_email, customer_phone, status, payment_status, service_name, notes')
       .eq('id', sourceRecordId)
       .single();
     if (error) throw new Error(`Car wash booking not found: ${error.message}`);
@@ -92,10 +92,20 @@ function checkInternalOrBasicExclusions(
 
   const name = (record.customer_name || '').toLowerCase();
 
-  // WASH-specific internal check
+  // WASH-specific internal check — exclude internal washes, rientro washes, test records
   if (serviceType === 'WASH') {
     const internalKeywords = ['interno', 'internal', 'rientro', 'test'];
-    if (internalKeywords.some((kw) => name.includes(kw))) {
+    const serviceName = (record.service_name || record.description || record.notes || '').toLowerCase();
+    if (internalKeywords.some((kw) => name.includes(kw) || serviceName.includes(kw))) {
+      is_internal = true;
+      reasons.push({ code: 'INTERNAL_RECORD', text: EXCLUSION_REASONS.INTERNAL_RECORD });
+      return { excluded: true, reasons, is_internal };
+    }
+  }
+
+  // RENTAL: also exclude test bookings
+  if (serviceType === 'RENTAL') {
+    if (name.includes('test') || name.includes('interno')) {
       is_internal = true;
       reasons.push({ code: 'INTERNAL_RECORD', text: EXCLUSION_REASONS.INTERNAL_RECORD });
       return { excluded: true, reasons, is_internal };

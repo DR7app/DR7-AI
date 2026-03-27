@@ -290,34 +290,50 @@ export default function ReviewManagementTab() {
   }
 
   async function handleBulkEvaluate() {
-    if (!confirm('Valutare tutte le prenotazioni completate negli ultimi 30 giorni?')) return
+    if (!confirm('Valutare tutte le prenotazioni e lavaggi completati negli ultimi 30 giorni?')) return
     setEvaluating(true)
-    const toastId = toast.loading('Valutazione prenotazioni recenti...')
+    const toastId = toast.loading('Valutazione prenotazioni e lavaggi recenti...')
 
     try {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      const { data: bookings, error } = await supabase
+      // Fetch completed RENTAL bookings
+      const { data: rentals, error: rentalError } = await supabase
         .from('bookings')
-        .select('id, customer_name, customer_email, customer_phone, booking_details')
+        .select('id')
         .in('status', ['completed', 'completata'])
         .gte('dropoff_date', thirtyDaysAgo.toISOString())
         .order('dropoff_date', { ascending: false })
 
-      if (error) throw error
+      if (rentalError) throw rentalError
+
+      // Fetch completed WASH bookings
+      const { data: washes, error: washError } = await supabase
+        .from('car_wash_bookings')
+        .select('id')
+        .in('status', ['completed', 'completata'])
+        .gte('appointment_date', thirtyDaysAgo.toISOString())
+        .order('appointment_date', { ascending: false })
+
+      if (washError) throw washError
+
+      const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = [
+        ...(rentals || []).map(r => ({ id: r.id, serviceType: 'RENTAL' as const })),
+        ...(washes || []).map(w => ({ id: w.id, serviceType: 'WASH' as const })),
+      ]
 
       let evaluated = 0
       let skipped = 0
 
-      for (const booking of (bookings || [])) {
+      for (const record of allRecords) {
         try {
           const res = await fetch(`${NETLIFY_BASE}/review-evaluate-candidate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              bookingId: booking.id,
-              action: 'evaluate',
+              sourceRecordId: record.id,
+              serviceType: record.serviceType,
             }),
           })
           if (res.ok) {
@@ -325,14 +341,14 @@ export default function ReviewManagementTab() {
           } else {
             skipped++
           }
-          toast.loading(`Valutazione: ${evaluated + skipped}/${bookings!.length}`, { id: toastId })
+          toast.loading(`Valutazione: ${evaluated + skipped}/${allRecords.length} (${record.serviceType})`, { id: toastId })
         } catch {
           skipped++
         }
       }
 
       toast.dismiss(toastId)
-      toast.success(`Valutazione completata: ${evaluated} valutati, ${skipped} saltati`)
+      toast.success(`Valutazione completata: ${evaluated} valutati, ${skipped} saltati (${rentals?.length || 0} noleggi, ${washes?.length || 0} lavaggi)`)
       await Promise.all([fetchCandidates(), fetchStats()])
     } catch (err: any) {
       toast.dismiss(toastId)
