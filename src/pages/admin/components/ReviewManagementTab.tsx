@@ -120,42 +120,38 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // Rentals: include confirmed/completed bookings with past dropoff_date
-      // (most bookings stay 'confirmed' even after return)
-      // Use or() to include NULL service_type (old bookings) + car_rental + rental
-      const { data: rentals, error: rErr } = await supabase
+      // Fetch ALL non-cancelled bookings with past end dates in the last 30 days
+      const { data: allBookings, error: bErr } = await supabase
         .from('bookings')
-        .select('id, service_type')
+        .select('id, service_type, service_name, vehicle_name, dropoff_date, appointment_date')
         .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'active', 'in_corso'])
-        .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental,service_type.eq.')
-        .lte('dropoff_date', new Date().toISOString())
-        .gte('dropoff_date', thirtyDaysAgo.toISOString().split('T')[0])
-        .order('dropoff_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1000)
 
-      if (rErr) throw rErr
+      if (bErr) throw bErr
 
-      // Car washes: filter by appointment_date, exclude rientro
-      const { data: washes, error: wErr } = await supabase
-        .from('bookings')
-        .select('id, service_type, service_name, vehicle_name')
-        .in('status', ['confirmed', 'confermata', 'completed', 'completata'])
-        .eq('service_type', 'car_wash')
-        .lte('appointment_date', new Date().toISOString().split('T')[0])
-        .gte('appointment_date', thirtyDaysAgo.toISOString().split('T')[0])
-        .order('appointment_date', { ascending: false })
+      const now = new Date()
+      const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = []
 
-      if (wErr) throw wErr
+      for (const b of (allBookings || [])) {
+        const isWash = b.service_type === 'car_wash'
 
-      // Filter out lavaggio rientro on client side too
-      const filteredWashes = (washes || []).filter(w => {
-        const name = ((w.service_name || w.vehicle_name || '') as string).toLowerCase()
-        return !name.includes('rientro') && !name.includes('interno')
-      })
-
-      const allRecords = [
-        ...(rentals || []).map(b => ({ id: b.id, serviceType: 'RENTAL' as const })),
-        ...filteredWashes.map(b => ({ id: b.id, serviceType: 'WASH' as const })),
-      ]
+        if (isWash) {
+          // Car wash: use appointment_date, exclude rientro/interno
+          if (!b.appointment_date) continue
+          const apptDate = new Date(b.appointment_date)
+          if (apptDate > now || apptDate < thirtyDaysAgo) continue
+          const name = ((b.service_name || b.vehicle_name || '') as string).toLowerCase()
+          if (name.includes('rientro') || name.includes('interno')) continue
+          allRecords.push({ id: b.id, serviceType: 'WASH' })
+        } else {
+          // Rental: use dropoff_date
+          if (!b.dropoff_date) continue
+          const dropoff = new Date(b.dropoff_date)
+          if (dropoff > now || dropoff < thirtyDaysAgo) continue
+          allRecords.push({ id: b.id, serviceType: 'RENTAL' })
+        }
+      }
 
       let done = 0
       for (const record of allRecords) {
