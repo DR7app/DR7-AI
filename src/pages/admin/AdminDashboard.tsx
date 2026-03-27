@@ -77,8 +77,9 @@ export default function AdminDashboard() {
   const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
   const adminOnlyTabs: TabType[] = ['bulk-import', 'reports', 'report-noleggio', 'report-lavaggio', 'report-clienti']
   const isTabRestricted = (tab: TabType) => {
+    if (adminRole === 'superadmin') return false
     if (financialTabs.includes(tab) && !canViewFinancials) return true
-    if (adminOnlyTabs.includes(tab) && adminRole !== 'superadmin') return true
+    if (adminOnlyTabs.includes(tab)) return true
     return false
   }
 
