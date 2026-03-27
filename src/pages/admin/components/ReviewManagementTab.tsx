@@ -106,8 +106,55 @@ export default function ReviewManagementTab() {
 
   async function loadAll() {
     setLoading(true)
-    await Promise.all([fetchCandidates(), fetchStats(), fetchSettings(), fetchTemplates()])
+    await Promise.all([fetchSettings(), fetchTemplates()])
+    // Check if any candidates exist
+    const { count } = await supabase.from('review_candidates').select('id', { count: 'exact', head: true })
+    if (!count || count === 0) {
+      await autoEvaluateAll()
+    }
+    await Promise.all([fetchCandidates(), fetchStats()])
     setLoading(false)
+  }
+
+  async function autoEvaluateAll() {
+    const toastId = toast.loading('Caricamento prenotazioni e lavaggi...')
+    try {
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+      const [{ data: rentals }, { data: washes }] = await Promise.all([
+        supabase.from('bookings').select('id')
+          .in('status', ['completed', 'completata'])
+          .gte('dropoff_date', thirtyDaysAgo.toISOString()),
+        supabase.from('car_wash_bookings').select('id')
+          .in('status', ['completed', 'completata'])
+          .gte('appointment_date', thirtyDaysAgo.toISOString()),
+      ])
+
+      const allRecords = [
+        ...(rentals || []).map(r => ({ id: r.id, serviceType: 'RENTAL' as const })),
+        ...(washes || []).map(w => ({ id: w.id, serviceType: 'WASH' as const })),
+      ]
+
+      let done = 0
+      for (const record of allRecords) {
+        try {
+          await fetch(`${NETLIFY_BASE}/review-evaluate-candidate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sourceRecordId: record.id, serviceType: record.serviceType }),
+          })
+        } catch { /* skip */ }
+        done++
+        if (done % 5 === 0) toast.loading(`Valutazione: ${done}/${allRecords.length}`, { id: toastId })
+      }
+
+      toast.dismiss(toastId)
+      toast.success(`${done} prenotazioni valutate`)
+      await Promise.all([fetchCandidates(), fetchStats()])
+    } catch {
+      toast.dismiss(toastId)
+    }
   }
 
   async function fetchCandidates() {
