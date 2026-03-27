@@ -139,9 +139,19 @@ const handler: Handler = async (event) => {
     const reviewLink = GOOGLE_REVIEW_URL;
 
     // 5. Load templates based on service_type + channel
-    const templateVars = {
+    const serviceTypeLabel = candidate.service_type === 'WASH' ? 'lavaggio' : 'noleggio';
+    const serviceTypeLabelCap = candidate.service_type === 'WASH' ? 'Lavaggio' : 'Noleggio';
+    const firstName = (candidate.customer_name || 'Cliente').split(' ')[0];
+
+    const templateVars: Record<string, string> = {
       customer_name: candidate.customer_name || 'Cliente',
+      first_name: firstName,
       review_link: reviewLink,
+      service_type: serviceTypeLabel,
+      Service_type: serviceTypeLabelCap,
+      servizio: serviceTypeLabel,
+      Servizio: serviceTypeLabelCap,
+      vehicle_name: candidate.vehicle_name || candidate.source_details?.vehicle_name || '',
     };
 
     let emailSubject = '';
