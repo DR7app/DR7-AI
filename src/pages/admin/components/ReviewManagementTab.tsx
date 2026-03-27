@@ -200,7 +200,7 @@ export default function ReviewManagementTab() {
 
   async function fetchTemplates() {
     try {
-      const res = await fetch(`${NETLIFY_BASE}/review-templates`)
+      const res = await fetch(`${NETLIFY_BASE}/review-settings?type=templates`)
       if (res.ok) {
         const data = await res.json()
         setTemplates(data.templates || data || [])
@@ -386,7 +386,9 @@ export default function ReviewManagementTab() {
       }
 
       toast.dismiss(toastId)
-      toast.success(`Valutazione completata: ${evaluated} valutati, ${skipped} saltati (${rentals?.length || 0} noleggi, ${washes?.length || 0} lavaggi)`)
+      const rentalCount = allRecords.filter(r => r.serviceType === 'RENTAL').length
+      const washCount = allRecords.filter(r => r.serviceType === 'WASH').length
+      toast.success(`Valutazione completata: ${evaluated} valutati, ${skipped} saltati (${rentalCount} noleggi, ${washCount} lavaggi)`)
       await Promise.all([fetchCandidates(), fetchStats()])
     } catch (err: any) {
       toast.dismiss(toastId)
@@ -417,7 +419,7 @@ export default function ReviewManagementTab() {
   async function handleSaveTemplate(template: ReviewTemplate) {
     setSavingTemplateKey(template.template_key)
     try {
-      const res = await fetch(`${NETLIFY_BASE}/review-templates`, {
+      const res = await fetch(`${NETLIFY_BASE}/review-settings?type=templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(template),
