@@ -120,13 +120,15 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // Rentals: filter by dropoff_date
+      // Rentals: include confirmed/completed bookings with past dropoff_date
+      // (most bookings stay 'confirmed' even after return)
       const { data: rentals, error: rErr } = await supabase
         .from('bookings')
         .select('id, service_type')
-        .in('status', ['completed', 'completata'])
-        .or('service_type.is.null,service_type.eq.car_rental')
-        .gte('dropoff_date', thirtyDaysAgo.toISOString())
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'active', 'in_corso'])
+        .not('service_type', 'eq', 'car_wash')
+        .lte('dropoff_date', new Date().toISOString())
+        .gte('dropoff_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('dropoff_date', { ascending: false })
 
       if (rErr) throw rErr
@@ -135,8 +137,9 @@ export default function ReviewManagementTab() {
       const { data: washes, error: wErr } = await supabase
         .from('bookings')
         .select('id, service_type, service_name, vehicle_name')
-        .in('status', ['completed', 'completata'])
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata'])
         .eq('service_type', 'car_wash')
+        .lte('appointment_date', new Date().toISOString().split('T')[0])
         .gte('appointment_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('appointment_date', { ascending: false })
 
@@ -370,13 +373,15 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // Rentals: filter by dropoff_date
+      // Rentals: include confirmed/completed bookings with past dropoff_date
+      // (most bookings stay 'confirmed' even after return)
       const { data: rentals, error: rErr } = await supabase
         .from('bookings')
         .select('id, service_type')
-        .in('status', ['completed', 'completata'])
-        .or('service_type.is.null,service_type.eq.car_rental')
-        .gte('dropoff_date', thirtyDaysAgo.toISOString())
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'active', 'in_corso'])
+        .not('service_type', 'eq', 'car_wash')
+        .lte('dropoff_date', new Date().toISOString())
+        .gte('dropoff_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('dropoff_date', { ascending: false })
 
       if (rErr) throw rErr
@@ -385,8 +390,9 @@ export default function ReviewManagementTab() {
       const { data: washes, error: wErr } = await supabase
         .from('bookings')
         .select('id, service_type, service_name, vehicle_name')
-        .in('status', ['completed', 'completata'])
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata'])
         .eq('service_type', 'car_wash')
+        .lte('appointment_date', new Date().toISOString().split('T')[0])
         .gte('appointment_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('appointment_date', { ascending: false })
 

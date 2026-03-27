@@ -42,7 +42,7 @@ const EXCLUSION_REASONS: Record<ExclusionReasonCode, string> = {
 };
 
 const PAID_STATUSES = ['paid', 'completed', 'succeeded'];
-const CONCLUDED_STATUSES = ['completed', 'completata'];
+const CONCLUDED_STATUSES = ['completed', 'completata', 'confirmed', 'confermata', 'active', 'in_corso'];
 
 interface EvaluationResult {
   eligibility_status: EligibilityStatus;
@@ -134,7 +134,7 @@ async function evaluateEligibility(
     .from('fatture')
     .select('id')
     .eq('booking_id', sourceRecordId)
-    .eq('tipo', 'penale')
+    .eq('tipo_fattura', 'penale')
     .limit(1);
   const hasPenalty = hasPenaltyInDetails || (penaltyFatture && penaltyFatture.length > 0);
   if (hasPenalty) {
@@ -147,7 +147,7 @@ async function evaluateEligibility(
     .from('fatture')
     .select('id')
     .eq('booking_id', sourceRecordId)
-    .eq('tipo', 'danno')
+    .eq('tipo_fattura', 'danno')
     .limit(1);
   const hasDamage = hasDamageInDetails || (dannoFatture && dannoFatture.length > 0);
   if (hasDamage) {
