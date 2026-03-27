@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -50,7 +51,7 @@ async function createBuonoSconto(participantId: string, amountCents: number, rea
 
 const handler: Handler = async (event) => {
   const headers = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };

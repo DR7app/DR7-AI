@@ -1092,7 +1092,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         b.status !== 'deleted' &&
         b.service_type !== 'car_wash' &&
         b.service_type !== 'mechanical_service' &&
-        b.service_type !== 'mechanical_service' &&
         b.service_type !== 'mechanical'
       ).map(b => ({
         ...b,

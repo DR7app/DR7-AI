@@ -36,6 +36,10 @@ export default function FirmaPage() {
 
     useEffect(() => {
         if (token) loadSigningData()
+        // Cleanup cooldown interval on unmount
+        return () => {
+            if (cooldownRef.current) clearInterval(cooldownRef.current)
+        }
     }, [token])
 
     async function loadSigningData() {

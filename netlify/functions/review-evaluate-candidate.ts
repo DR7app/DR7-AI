@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -5,11 +6,11 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const headers = {
-  'Access-Control-Allow-Origin': '*',
+const getHeaders = (origin?: string) => ({
+  'Access-Control-Allow-Origin': getCorsOrigin(origin),
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+});
 
 type ServiceType = 'RENTAL' | 'WASH';
 type EligibilityStatus = 'ELIGIBLE' | 'TO_REVIEW' | 'EXCLUDED';
@@ -304,11 +305,11 @@ async function insertAuditLog(
 
 const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+    return { statusCode: 200, headers: getHeaders(event.headers.origin), body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
+    return { statusCode: 405, headers: getHeaders(event.headers.origin), body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
   try {
@@ -317,7 +318,7 @@ const handler: Handler = async (event) => {
     if (!sourceRecordId || !serviceType) {
       return {
         statusCode: 400,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'Missing required fields: sourceRecordId, serviceType' }),
       };
     }
@@ -325,7 +326,7 @@ const handler: Handler = async (event) => {
     if (!['RENTAL', 'WASH'].includes(serviceType)) {
       return {
         statusCode: 400,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'serviceType must be RENTAL or WASH' }),
       };
     }
@@ -335,7 +336,7 @@ const handler: Handler = async (event) => {
     if (existing) {
       return {
         statusCode: 200,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ candidate: existing, duplicate: true }),
       };
     }
@@ -359,7 +360,7 @@ const handler: Handler = async (event) => {
 
       return {
         statusCode: 200,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ candidate, duplicate: false }),
       };
     }
@@ -375,14 +376,14 @@ const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers,
+      headers: getHeaders(event.headers.origin),
       body: JSON.stringify({ candidate, duplicate: false }),
     };
   } catch (error: any) {
     console.error('review-evaluate-candidate error:', error);
     return {
       statusCode: 500,
-      headers,
+      headers: getHeaders(event.headers.origin),
       body: JSON.stringify({ error: error.message || 'Internal server error' }),
     };
   }

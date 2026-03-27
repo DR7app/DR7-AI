@@ -30,3 +30,14 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env*.backup
+
+# Debug scripts with credentials
+*.cjs
+!scripts/*.cjs
+
+# Sensitive files
+credentials*.json
+*.pem
+*.key
+oauth_tokens.json

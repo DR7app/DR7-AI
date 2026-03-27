@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -5,13 +6,14 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const headers = {
-  'Access-Control-Allow-Origin': '*',
+const getHeaders = (origin?: string) => ({
+  'Access-Control-Allow-Origin': getCorsOrigin(origin),
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+});
 
 const handler: Handler = async (event) => {
+  const headers = getHeaders(event.headers.origin);
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }

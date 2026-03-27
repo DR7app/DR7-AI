@@ -1,44 +1,53 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
 import ReservationsTab from './components/ReservationsTab'
-import CustomersTab from './components/CustomersTab'
-import CustomerWalletTab from './components/CustomerWalletTab'
-import VehiclesTab from './components/VehiclesTab'
-import CalendarTab from './components/CalendarTab'
-import CarWashBookingsTab from './components/CarWashBookingsTab'
-import CarWashCalendarTab from './components/CarWashCalendarTab'
-import UnpaidBookingsTab from './components/UnpaidBookingsTab'
-import MarketingTab from './components/MarketingTab'
-import ReviewManagementTab from './components/ReviewManagementTab'
-import FatturaTab from './components/FatturaTab'
-import ContrattoTab from './components/ContrattoTab'
-import GestioneMulteTab from './components/GestioneMulteTab'
-import DailyCalendarModal from './components/DailyCalendarModal'
-import ScannerTab from './components/ScannerTab'
-import CauzioniTab from './components/CauzioniTab'
-import NexiTab from './components/NexiTab'
-import BirthdaysTab, { useBirthdayCount } from './components/BirthdaysTab'
-import FleetManagementTab from './components/FleetManagementTab'
-import ScadenzeTab from './components/ScadenzeTab'
-import ReportsTab from './components/ReportsTab'
-import ReportLavaggioTab from './components/ReportLavaggioTab'
-import ReportClientiTab from './components/ReportClientiTab'
-import ReportPenaliDanniTab from './components/ReportPenaliDanniTab'
-import BulkImportTab from './components/BulkImportTab'
-import ReferralProgramTab from './components/ReferralProgramTab'
-import CodiciScontoTab from './components/CodiciScontoTab'
-import GestioneDanniTab from './components/GestioneDanniTab'
-import CargosTab from './components/CargosTab'
-import TrusteraTab from './components/TrusteraTab'
+import { useBirthdayCount } from './components/BirthdaysTab'
 import PlaceholderTab from './components/PlaceholderTab'
-import CarWashCatalogTab from './components/CarWashCatalogTab'
-import OperatoriTab from './components/OperatoriTab'
-import DashboardTab from './components/DashboardTab'
-import RevenuePricingTab from './components/RevenuePricingTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
+
+// Lazy-load all tabs except the default (ReservationsTab) for code splitting
+const CustomersTab = lazy(() => import('./components/CustomersTab'))
+const CustomerWalletTab = lazy(() => import('./components/CustomerWalletTab'))
+const VehiclesTab = lazy(() => import('./components/VehiclesTab'))
+const CalendarTab = lazy(() => import('./components/CalendarTab'))
+const CarWashBookingsTab = lazy(() => import('./components/CarWashBookingsTab'))
+const CarWashCalendarTab = lazy(() => import('./components/CarWashCalendarTab'))
+const UnpaidBookingsTab = lazy(() => import('./components/UnpaidBookingsTab'))
+const MarketingTab = lazy(() => import('./components/MarketingTab'))
+const ReviewManagementTab = lazy(() => import('./components/ReviewManagementTab'))
+const FatturaTab = lazy(() => import('./components/FatturaTab'))
+const ContrattoTab = lazy(() => import('./components/ContrattoTab'))
+const GestioneMulteTab = lazy(() => import('./components/GestioneMulteTab'))
+const DailyCalendarModal = lazy(() => import('./components/DailyCalendarModal'))
+const ScannerTab = lazy(() => import('./components/ScannerTab'))
+const CauzioniTab = lazy(() => import('./components/CauzioniTab'))
+const NexiTab = lazy(() => import('./components/NexiTab'))
+const BirthdaysTab = lazy(() => import('./components/BirthdaysTab'))
+const FleetManagementTab = lazy(() => import('./components/FleetManagementTab'))
+const ScadenzeTab = lazy(() => import('./components/ScadenzeTab'))
+const ReportsTab = lazy(() => import('./components/ReportsTab'))
+const ReportLavaggioTab = lazy(() => import('./components/ReportLavaggioTab'))
+const ReportClientiTab = lazy(() => import('./components/ReportClientiTab'))
+const ReportPenaliDanniTab = lazy(() => import('./components/ReportPenaliDanniTab'))
+const BulkImportTab = lazy(() => import('./components/BulkImportTab'))
+const ReferralProgramTab = lazy(() => import('./components/ReferralProgramTab'))
+const CodiciScontoTab = lazy(() => import('./components/CodiciScontoTab'))
+const GestioneDanniTab = lazy(() => import('./components/GestioneDanniTab'))
+const CargosTab = lazy(() => import('./components/CargosTab'))
+const TrusteraTab = lazy(() => import('./components/TrusteraTab'))
+const CarWashCatalogTab = lazy(() => import('./components/CarWashCatalogTab'))
+const OperatoriTab = lazy(() => import('./components/OperatoriTab'))
+const DashboardTab = lazy(() => import('./components/DashboardTab'))
+const RevenuePricingTab = lazy(() => import('./components/RevenuePricingTab'))
+
+const TabLoader = () => (
+  <div className="flex items-center justify-center py-12">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div>
+  </div>
+)
 
 type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing'
 
@@ -369,6 +378,7 @@ export default function AdminDashboard() {
 
         {/* Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          <Suspense fallback={<TabLoader />}>
           <div>
           {activeTab === 'reservations' && (
             <ReservationsTab
@@ -432,14 +442,17 @@ export default function AdminDashboard() {
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'revenue-pricing' && <RevenuePricingTab />}
           </div>
+          </Suspense>
         </main>
       </div>
 
       {/* Daily Calendar Modal */}
-      <DailyCalendarModal
-        isOpen={isCalendarModalOpen}
-        onClose={() => setIsCalendarModalOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <DailyCalendarModal
+          isOpen={isCalendarModalOpen}
+          onClose={() => setIsCalendarModalOpen(false)}
+        />
+      </Suspense>
 
       {/* Password Change Modal */}
       {showPasswordModal && (

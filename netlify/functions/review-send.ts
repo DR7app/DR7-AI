@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
@@ -13,11 +14,11 @@ const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL || 'https://g.page/r/CQw
 type SendChannel = 'EMAIL_ONLY' | 'WHATSAPP_ONLY' | 'EMAIL_AND_WHATSAPP';
 type SendMode = 'AUTOMATIC' | 'MANUAL';
 
-const headers = {
-  'Access-Control-Allow-Origin': '*',
+const getHeaders = (origin?: string) => ({
+  'Access-Control-Allow-Origin': getCorsOrigin(origin),
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+});
 
 /**
  * Cleans a phone number to Green API format (e.g. 393457905205)
@@ -46,11 +47,11 @@ function renderTemplate(template: string, vars: Record<string, string>): string 
 
 const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+    return { statusCode: 200, headers: getHeaders(event.headers.origin), body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    return { statusCode: 405, headers: getHeaders(event.headers.origin), body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
   try {
@@ -63,7 +64,7 @@ const handler: Handler = async (event) => {
     if (!candidateId || !sendChannel || !sendMode) {
       return {
         statusCode: 400,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'Missing required fields: candidateId, sendChannel, sendMode' }),
       };
     }
@@ -79,7 +80,7 @@ const handler: Handler = async (event) => {
       console.error('[review-send] Candidate not found:', candidateError);
       return {
         statusCode: 404,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'Candidato non trovato' }),
       };
     }
@@ -92,7 +93,7 @@ const handler: Handler = async (event) => {
     if (!allowedStatuses.includes(candidate.eligibility_status)) {
       return {
         statusCode: 400,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({
           error: `Candidato non idoneo per l'invio. Stato: ${candidate.eligibility_status}`,
         }),
@@ -106,7 +107,7 @@ const handler: Handler = async (event) => {
     if (needsEmail && !candidate.contact_available_email) {
       return {
         statusCode: 400,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'Email non disponibile per questo candidato' }),
       };
     }
@@ -114,7 +115,7 @@ const handler: Handler = async (event) => {
     if (needsWhatsapp && !candidate.contact_available_whatsapp) {
       return {
         statusCode: 400,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'WhatsApp non disponibile per questo candidato' }),
       };
     }
@@ -130,7 +131,7 @@ const handler: Handler = async (event) => {
     if (existingRequest && existingRequest.length > 0) {
       return {
         statusCode: 409,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'Richiesta di recensione gi\u00e0 inviata per questo candidato' }),
       };
     }
@@ -222,7 +223,7 @@ const handler: Handler = async (event) => {
       console.error('[review-send] Error creating review_request:', insertError);
       return {
         statusCode: 500,
-        headers,
+        headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'Errore nella creazione della richiesta' }),
       };
     }
@@ -358,7 +359,7 @@ const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers,
+      headers: getHeaders(event.headers.origin),
       body: JSON.stringify({
         success: anySucceeded,
         request: updatedRequest || request,
@@ -369,7 +370,7 @@ const handler: Handler = async (event) => {
     console.error('[review-send] Fatal error:', error);
     return {
       statusCode: 500,
-      headers,
+      headers: getHeaders(event.headers.origin),
       body: JSON.stringify({ error: error.message }),
     };
   }

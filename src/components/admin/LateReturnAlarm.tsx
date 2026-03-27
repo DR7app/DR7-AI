@@ -21,6 +21,7 @@ const LateReturnAlarm: React.FC = () => {
     const audioContextRef = useRef<AudioContext | null>(null);
     const oscillatorRef = useRef<OscillatorNode | null>(null);
     const gainNodeRef = useRef<GainNode | null>(null);
+    const pulseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Track auth state
     useEffect(() => {
@@ -117,14 +118,17 @@ const LateReturnAlarm: React.FC = () => {
             gainNode.connect(audioContext.destination);
             oscillator.start();
 
-            const pulse = () => {
-                if (!oscillatorRef.current) return;
+            // Use setInterval instead of recursive setTimeout to allow proper cleanup
+            if (pulseIntervalRef.current) clearInterval(pulseIntervalRef.current);
+            pulseIntervalRef.current = setInterval(() => {
+                if (!oscillatorRef.current || !gainNodeRef.current) {
+                    if (pulseIntervalRef.current) clearInterval(pulseIntervalRef.current);
+                    return;
+                }
                 gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
                 gainNode.gain.setValueAtTime(0.3, audioContext.currentTime + 0.5);
-                setTimeout(pulse, 1000);
-            };
-            pulse();
+            }, 1000);
 
             audioContextRef.current = audioContext;
             oscillatorRef.current = oscillator;
@@ -135,6 +139,10 @@ const LateReturnAlarm: React.FC = () => {
     };
 
     const stopAlarm = () => {
+        if (pulseIntervalRef.current) {
+            clearInterval(pulseIntervalRef.current);
+            pulseIntervalRef.current = null;
+        }
         if (oscillatorRef.current) {
             try { oscillatorRef.current.stop(); oscillatorRef.current.disconnect(); } catch (e) { }
             oscillatorRef.current = null;

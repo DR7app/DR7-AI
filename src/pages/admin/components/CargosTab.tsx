@@ -411,12 +411,12 @@ export default function CargosTab() {
     // Sub-tab
     const [activeSubTab, setActiveSubTab] = useState<'send' | 'export'>('send')
 
-    // Load saved config
+    // Load saved config from sessionStorage (not localStorage - avoid persisting credentials)
     useEffect(() => {
-        const saved = localStorage.getItem('cargos_password')
+        const saved = sessionStorage.getItem('cargos_session')
         if (saved) {
             setPassword(saved)
-            setIsAuthenticated(true) // Assume valid if saved
+            setIsAuthenticated(true)
         }
     }, [])
 
@@ -441,7 +441,7 @@ export default function CargosTab() {
             } else {
                 toast.success('Connessione CARGOS riuscita!')
                 setIsAuthenticated(true)
-                localStorage.setItem('cargos_password', password)
+                sessionStorage.setItem('cargos_session', password)
                 setShowSettings(false)
             }
         } catch (err: any) {
@@ -959,7 +959,7 @@ export default function CargosTab() {
                     <div className="flex justify-end mt-4 gap-2">
                         <Button
                             variant="secondary"
-                            onClick={() => { setPassword(''); localStorage.removeItem('cargos_password'); setIsAuthenticated(false); toast.success('Credenziali rimosse') }}
+                            onClick={() => { setPassword(''); sessionStorage.removeItem('cargos_session'); setIsAuthenticated(false); toast.success('Credenziali rimosse') }}
                         >
                             Reset
                         </Button>

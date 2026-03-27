@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import type { Handler } from "@netlify/functions";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
@@ -37,7 +38,7 @@ const conversationHistory: Map<string, Array<{role: string, content: string}>> =
 const handler: Handler = async (event) => {
   // CORS headers
   const headers = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": getCorsOrigin(event.headers.origin),
     "Access-Control-Allow-Headers": "Content-Type",
     "Content-Type": "application/json",
   };

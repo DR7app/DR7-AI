@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
@@ -410,7 +411,7 @@ interface ProcessMultaRequest {
 
 const handler: Handler = async (event) => {
     const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
     }

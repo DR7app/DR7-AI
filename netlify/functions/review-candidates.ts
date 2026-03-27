@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -5,11 +6,11 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const headers = {
-  'Access-Control-Allow-Origin': '*',
+const getHeaders = (origin?: string) => ({
+  'Access-Control-Allow-Origin': getCorsOrigin(origin),
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+});
 
 async function handleGet(event: any) {
   const params = event.queryStringParameters || {};
@@ -86,7 +87,7 @@ async function handleGet(event: any) {
 
   return {
     statusCode: 200,
-    headers,
+    headers: getHeaders(event.headers?.origin),
     body: JSON.stringify({
       candidates: candidates || [],
       total: count || 0,
@@ -95,13 +96,13 @@ async function handleGet(event: any) {
   };
 }
 
-async function handleBulkEvaluate(body: any) {
+async function handleBulkEvaluate(body: any, origin?: string) {
   const { sourceRecordIds, serviceType } = body;
 
   if (!Array.isArray(sourceRecordIds) || sourceRecordIds.length === 0) {
     return {
       statusCode: 400,
-      headers,
+      headers: getHeaders(origin),
       body: JSON.stringify({ error: 'sourceRecordIds must be a non-empty array' }),
     };
   }
@@ -109,7 +110,7 @@ async function handleBulkEvaluate(body: any) {
   if (!serviceType || !['RENTAL', 'WASH'].includes(serviceType)) {
     return {
       statusCode: 400,
-      headers,
+      headers: getHeaders(origin),
       body: JSON.stringify({ error: 'serviceType must be RENTAL or WASH' }),
     };
   }
@@ -146,7 +147,7 @@ async function handleBulkEvaluate(body: any) {
 
   return {
     statusCode: 200,
-    headers,
+    headers: getHeaders(origin),
     body: JSON.stringify({
       total: ids.length,
       succeeded,
@@ -157,6 +158,7 @@ async function handleBulkEvaluate(body: any) {
 }
 
 const handler: Handler = async (event) => {
+  const headers = getHeaders(event.headers.origin);
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
@@ -172,7 +174,7 @@ const handler: Handler = async (event) => {
       const body = JSON.parse(event.body || '{}');
 
       if (body.action === 'bulk_evaluate') {
-        return await handleBulkEvaluate(body);
+        return await handleBulkEvaluate(body, event.headers.origin);
       }
 
       return {

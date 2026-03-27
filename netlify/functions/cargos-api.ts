@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import crypto from 'crypto'
 
@@ -325,7 +326,7 @@ export { buildRecord, AGENCY, FIELD_SIZES, CargosRecordData }
 
 const handler: Handler = async (event) => {
     const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
     }

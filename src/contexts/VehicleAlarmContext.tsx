@@ -51,24 +51,25 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const [session, setSession] = useState<Session | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
-    const triggeredAlarmsRef = useRef<Set<string>>(() => {
+    const triggeredAlarmsRef = useRef<Set<string>>(new Set<string>())
+
+    // Initialize triggered alarms from localStorage on mount
+    useEffect(() => {
         try {
             const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
-            // Cleanup: only keep alarms from the last 24 hours
             const now = Date.now()
             const DAY_MS = 24 * 60 * 60 * 1000
             if (Array.isArray(stored) && stored.length > 0 && typeof stored[0] === 'object') {
                 const valid = stored.filter((entry: { id: string; ts: number }) => now - entry.ts < DAY_MS)
                 localStorage.setItem('triggered_alarms', JSON.stringify(valid))
-                return new Set(valid.map((entry: { id: string }) => entry.id))
+                triggeredAlarmsRef.current = new Set(valid.map((entry: { id: string }) => entry.id))
+            } else {
+                localStorage.setItem('triggered_alarms', '[]')
             }
-            // Migration from old format (plain string array) — clear old entries
-            localStorage.setItem('triggered_alarms', '[]')
-            return new Set<string>()
         } catch {
-            return new Set<string>()
+            // Ignore storage errors
         }
-    })
+    }, [])
 
     // Helper: add alarm to triggered set with timestamp for cleanup
     const markAlarmTriggered = (trackingId: string) => {
@@ -677,16 +678,51 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
-    // Poll every 60 seconds — only when authenticated
+    // Poll every 60 seconds — only when authenticated and tab is visible
     useEffect(() => {
         if (!session) return
-        checkAlarms()
-        checkFleetMaintenanceAlarms()
-        const interval = setInterval(() => {
-            checkAlarms()
-            checkFleetMaintenanceAlarms()
-        }, 60000)
-        return () => clearInterval(interval)
+
+        let interval: ReturnType<typeof setInterval> | null = null
+        let isRunning = false
+
+        const runChecks = async () => {
+            if (isRunning) return
+            isRunning = true
+            try {
+                await Promise.all([checkAlarms(), checkFleetMaintenanceAlarms()])
+            } finally {
+                isRunning = false
+            }
+        }
+
+        const startPolling = () => {
+            runChecks()
+            interval = setInterval(runChecks, 60000)
+        }
+
+        const stopPolling = () => {
+            if (interval) {
+                clearInterval(interval)
+                interval = null
+            }
+        }
+
+        // Pause polling when tab is hidden to save resources
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                stopPolling()
+            } else {
+                startPolling()
+            }
+        }
+
+        startPolling()
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+
+        return () => {
+            stopPolling()
+            document.removeEventListener('visibilitychange', handleVisibilityChange)
+        }
     }, [session])
 
     // Cleanup audio on unmount
