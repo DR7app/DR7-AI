@@ -1816,11 +1816,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       logAdminAction('delete_booking', 'booking', bookingId, { customer: customerName })
-      alert('Prenotazione eliminata definitivamente')
+      toast.success('Prenotazione eliminata')
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
-      alert('Errore durante l\'eliminazione: ' + (error as Error).message)
+      toast.error('Errore durante l\'eliminazione: ' + (error as Error).message)
     }
   }
 
