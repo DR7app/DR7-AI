@@ -219,7 +219,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         // Validate minimum required fields — only block on targa and surname
         const plate = (booking.vehicle_plate || bd.vehicle_plate || bd.vehicle?.plate || '').toUpperCase()
         const licenseNumber = (isAzienda ? rapp.patente : '') || c?.numero_patente || c?.patente_numero || bd.customer?.driverLicense || (isAzienda ? 'ND000000000' : '')
-        const docNumber = c?.documento_numero || bd.customer?.documentNumber || ''
+        const docNumber = c?.documento_numero || c?.numero_documento_rappresentante || rapp.documento?.numero || bd.customer?.documentNumber || licenseNumber || ''
 
         const missing = []
         if (!plate) missing.push('targa')

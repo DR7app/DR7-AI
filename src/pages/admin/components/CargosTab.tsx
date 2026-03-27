@@ -42,6 +42,7 @@ interface CustomerExtended {
     cf_rappresentante?: string
     documento_tipo?: string
     documento_numero?: string
+    numero_documento_rappresentante?: string
     documento_rilasciato_da?: string
     indirizzo?: string
     citta?: string
@@ -309,7 +310,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 27 */ lookupIstatCode(c?.citta || ''),
         /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
         /* 29 */ DOC_TYPE_MAP[c?.documento_tipo || rapp.documento?.tipo || 'CI'] || 'IDENT',
-        /* 30 */ c?.documento_numero || rapp.documento?.numero || bd.customer?.documentNumber || '',
+        /* 30 */ c?.documento_numero || c?.numero_documento_rappresentante || rapp.documento?.numero || bd.customer?.documentNumber || c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || '',
         /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ (() => {
             if (c?.tipo_cliente === 'azienda') {
@@ -375,7 +376,7 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
 
         const meta = c?.metadata || (c as any)?.metadata || {}
         const rapp = meta?.rappresentante || {}
-        if (!c?.documento_numero && !rapp.documento?.numero && !bd.customer?.documentNumber) {
+        if (!c?.documento_numero && !c?.numero_documento_rappresentante && !rapp.documento?.numero && !bd.customer?.documentNumber && !c?.numero_patente && !c?.patente_numero && !bd.customer?.licenseNumber && !bd.customer?.driverLicense) {
             issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
         }
 
@@ -777,7 +778,7 @@ export default function CargosTab() {
                 c?.luogo_nascita || '',
                 c?.numero_patente || c?.patente_numero || '',
                 c?.documento_tipo || 'CI',
-                c?.documento_numero || '',
+                c?.documento_numero || c?.numero_documento_rappresentante || c?.numero_patente || c?.patente_numero || '',
                 c?.telefono || b.customer_phone || ''
             ].join(',')
         })
@@ -809,7 +810,7 @@ export default function CargosTab() {
             xml += `    <Restituzione data="${formatDateCargos(b.dropoff_date)}" luogo="${AGENCY.locationCode}" indirizzo="${AGENCY.address}"/>\n`
             xml += `    <Agenzia id="${AGENCY.id}" nome="${AGENCY.name}" indirizzo="${AGENCY.address}" tel="${AGENCY.phone}"/>\n`
             xml += `    <Veicolo tipo="${guessVehicleType(b.vehicle_name || '')}" marca="${guessVehicleBrand(b.vehicle_name || '')}" modello="${guessVehicleModel(b.vehicle_name || '')}" targa="${b.vehicle_plate || ''}"/>\n`
-            xml += `    <Conducente cognome="${surname.toUpperCase()}" nome="${name.toUpperCase()}" nascita="${formatDateOnlyCargos(c?.data_nascita || '')}" luogoNascita="${c?.luogo_nascita || ''}" patente="${c?.numero_patente || c?.patente_numero || ''}" documento="${c?.documento_numero || ''}" tel="${c?.telefono || b.customer_phone || ''}"/>\n`
+            xml += `    <Conducente cognome="${surname.toUpperCase()}" nome="${name.toUpperCase()}" nascita="${formatDateOnlyCargos(c?.data_nascita || '')}" luogoNascita="${c?.luogo_nascita || ''}" patente="${c?.numero_patente || c?.patente_numero || ''}" documento="${c?.documento_numero || c?.numero_documento_rappresentante || c?.numero_patente || c?.patente_numero || ''}" tel="${c?.telefono || b.customer_phone || ''}"/>\n`
             xml += `  </Contratto>\n`
         })
 
