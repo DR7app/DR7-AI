@@ -524,9 +524,23 @@ export default function CargosTab() {
                             .maybeSingle()
                         if (c) customerData = c
                     }
-                    console.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, cf_rapp=${customerData?.cf_rappresentante || 'N/A'}`)
+                    // Resolve plate from vehicles table if missing
+                    let resolvedPlate = b.vehicle_plate || b.booking_details?.vehicle_plate || b.booking_details?.vehicle?.plate || ''
+                    if (!resolvedPlate && (b.vehicle_id || b.booking_details?.vehicle_id || b.vehicle_name)) {
+                        const vId = b.vehicle_id || b.booking_details?.vehicle_id
+                        let vQuery = supabase.from('vehicles').select('plate').limit(1)
+                        if (vId) {
+                            vQuery = vQuery.eq('id', vId)
+                        } else if (b.vehicle_name) {
+                            vQuery = vQuery.eq('display_name', b.vehicle_name)
+                        }
+                        const { data: veh } = await vQuery.maybeSingle()
+                        if (veh?.plate) resolvedPlate = veh.plate
+                    }
+
+                    console.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, plate=${resolvedPlate || 'MISSING'}`)
                     const alreadySent = b.booking_details?.cargos_sent === true
-                    return { ...b, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
+                    return { ...b, vehicle_plate: resolvedPlate || b.vehicle_plate, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
                 })
             )
 
