@@ -109,11 +109,7 @@ export default function ReviewManagementTab() {
   async function loadAll() {
     setLoading(true)
     await Promise.all([fetchSettings(), fetchTemplates()])
-    // Check if any candidates exist
-    const { count } = await supabase.from('review_candidates').select('id', { count: 'exact', head: true })
-    if (!count || count === 0) {
-      await autoEvaluateAll()
-    }
+    await autoEvaluateAll()
     await Promise.all([fetchCandidates(), fetchStats()])
     setLoading(false)
   }
