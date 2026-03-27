@@ -1,9 +1,0 @@
-@import "tailwindcss/theme" layer(theme);
-@import "tailwindcss/preflight" layer(base);
-@import "tailwindcss/utilities" layer(utilities);
-
-@theme {
-  --color-dr7-gold: #D4AF37;
-  --color-dr7-dark: #1a1a1a;
-  --color-dr7-darker: #0f0f0f;
-}

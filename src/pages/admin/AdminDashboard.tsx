@@ -71,7 +71,16 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
-  const { role: adminRole } = useAdminRole()
+  const { role: adminRole, canViewFinancials } = useAdminRole()
+
+  // RBAC: tabs restricted to superadmin
+  const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
+  const adminOnlyTabs: TabType[] = ['bulk-import', 'reports', 'report-noleggio', 'report-lavaggio', 'report-clienti']
+  const isTabRestricted = (tab: TabType) => {
+    if (financialTabs.includes(tab) && !canViewFinancials) return true
+    if (adminOnlyTabs.includes(tab) && adminRole !== 'superadmin') return true
+    return false
+  }
 
   async function handleSignOut() {
     clearAdminCache()
@@ -367,7 +376,7 @@ export default function AdminDashboard() {
               onDataConsumed={() => setInitialReservationData(null)}
             />
           )}
-          {activeTab === 'unpaid' && <UnpaidBookingsTab />}
+          {activeTab === 'unpaid' && (isTabRestricted('unpaid') ? <PlaceholderTab title="Accesso non autorizzato" /> : <UnpaidBookingsTab />)}
           {activeTab === 'customers' && <CustomersTab />}
           {activeTab === 'customer-wallet' && <CustomerWalletTab />}
           {activeTab === 'vehicles' && <VehiclesTab />}
@@ -388,19 +397,19 @@ export default function AdminDashboard() {
             />
           )}
           {activeTab === 'carwash-catalog' && <CarWashCatalogTab />}
-          {activeTab === 'fattura' && <FatturaTab />}
+          {activeTab === 'fattura' && (isTabRestricted('fattura') ? <PlaceholderTab title="Accesso non autorizzato" /> : <FatturaTab />)}
           {activeTab === 'contratto' && <ContrattoTab />}
-          {activeTab === 'cauzioni' && <CauzioniTab />}
+          {activeTab === 'cauzioni' && (isTabRestricted('cauzioni') ? <PlaceholderTab title="Accesso non autorizzato" /> : <CauzioniTab />)}
           {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'birthdays' && <BirthdaysTab />}
           {activeTab === 'reviews' && <ReviewManagementTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
           {activeTab === 'scanner' && <ScannerTab />}
-          {activeTab === 'nexi' && <NexiTab />}
+          {activeTab === 'nexi' && (isTabRestricted('nexi') ? <PlaceholderTab title="Accesso non autorizzato" /> : <NexiTab />)}
           {activeTab === 'scadenze' && <ScadenzeTab />}
-          {activeTab === 'reports' && <ReportsTab />}
-          {activeTab === 'report-noleggio' && <ReportsTab />}
-          {activeTab === 'bulk-import' && <BulkImportTab />}
+          {activeTab === 'reports' && (isTabRestricted('reports') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
+          {activeTab === 'report-noleggio' && (isTabRestricted('report-noleggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
+          {activeTab === 'bulk-import' && (isTabRestricted('bulk-import') ? <PlaceholderTab title="Accesso non autorizzato" /> : <BulkImportTab />)}
           {activeTab === 'referral' && <ReferralProgramTab />}
           {/* Placeholder tabs for new features */}
           {activeTab === 'gestione-danni' && <GestioneDanniTab />}
@@ -409,8 +418,8 @@ export default function AdminDashboard() {
           {activeTab === 'trustera' && <TrusteraTab />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
-          {activeTab === 'report-lavaggio' && <ReportLavaggioTab />}
-          {activeTab === 'report-clienti' && <ReportClientiTab />}
+          {activeTab === 'report-lavaggio' && (isTabRestricted('report-lavaggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportLavaggioTab />)}
+          {activeTab === 'report-clienti' && (isTabRestricted('report-clienti') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportClientiTab />)}
           {activeTab === 'report-penali-danni' && <ReportPenaliDanniTab />}
           {activeTab === 'com-email' && <PlaceholderTab title="E-mail" />}
           {activeTab === 'com-pec' && <PlaceholderTab title="PEC" />}

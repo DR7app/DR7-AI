@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
+import PdfViewer from '../components/PdfViewer'
+import { fetchWithTimeout } from '../utils/fetchUtils'
 
 type SigningStatus = 'loading' | 'viewing' | 'otp_sending' | 'otp_sent' | 'otp_verifying' | 'signing' | 'signed' | 'expired' | 'error'
 
@@ -28,7 +30,9 @@ export default function FirmaPage() {
     const [existingMarketingConsent, setExistingMarketingConsent] = useState<boolean | null>(null)
     const [showMarketingInfo, setShowMarketingInfo] = useState(false)
     const [otpChannel, setOtpChannel] = useState<'whatsapp' | 'email' | null>(null)
+    const [otpCooldown, setOtpCooldown] = useState(0)
     const otpRefs = useRef<(HTMLInputElement | null)[]>([])
+    const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     useEffect(() => {
         if (token) loadSigningData()
@@ -36,7 +40,7 @@ export default function FirmaPage() {
 
     async function loadSigningData() {
         try {
-            const res = await fetch('/.netlify/functions/signature-get', {
+            const res = await fetchWithTimeout('/.netlify/functions/signature-get', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token })
@@ -48,7 +52,7 @@ export default function FirmaPage() {
             }
 
             if (!res.ok) {
-                const err = await res.json()
+                const err = await res.json().catch(() => ({}))
                 setError(err.error || 'Errore nel caricamento')
                 setStatus('error')
                 return
@@ -85,15 +89,15 @@ export default function FirmaPage() {
         setStatus('otp_sending')
         setError('')
         try {
-            const res = await fetch('/.netlify/functions/signature-send-otp', {
+            const res = await fetchWithTimeout('/.netlify/functions/signature-send-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token })
             })
 
             if (!res.ok) {
-                const err = await res.json()
-                setError(err.error)
+                const err = await res.json().catch(() => ({}))
+                setError(err.error || 'Errore nell\'invio OTP')
                 setStatus('viewing')
                 return
             }
@@ -103,6 +107,18 @@ export default function FirmaPage() {
 
             setStatus('otp_sent')
             setOtp(['', '', '', '', '', ''])
+            // Start cooldown
+            setOtpCooldown(60)
+            if (cooldownRef.current) clearInterval(cooldownRef.current)
+            cooldownRef.current = setInterval(() => {
+                setOtpCooldown(prev => {
+                    if (prev <= 1) {
+                        if (cooldownRef.current) clearInterval(cooldownRef.current)
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
             setTimeout(() => otpRefs.current[0]?.focus(), 100)
         } catch {
             setError('Errore nell\'invio del codice OTP')
@@ -120,16 +136,15 @@ export default function FirmaPage() {
         setStatus('otp_verifying')
         setError('')
         try {
-            const res = await fetch('/.netlify/functions/signature-verify-otp', {
+            const res = await fetchWithTimeout('/.netlify/functions/signature-verify-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, otp: otpCode })
             })
 
-            const data = await res.json()
-
             if (!res.ok) {
-                setError(data.error)
+                const data = await res.json().catch(() => ({}))
+                setError(data.error || 'Errore nella verifica')
                 if (data.remainingAttempts !== undefined) {
                     setRemainingAttempts(data.remainingAttempts)
                 }
@@ -158,19 +173,19 @@ export default function FirmaPage() {
 
         setError('')
         try {
-            const res = await fetch('/.netlify/functions/signature-complete', {
+            const res = await fetchWithTimeout('/.netlify/functions/signature-complete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, marketingConsent: acceptedMarketing })
             })
 
+            const data = await res.json().catch(() => ({}))
+
             if (!res.ok) {
-                const err = await res.json()
-                setError(err.error)
+                setError(data.error || 'Errore durante la firma')
                 return
             }
 
-            const data = await res.json()
             setSignedPdfUrl(data.signedPdfUrl)
             setSignedAt(data.signedAt)
             setStatus('signed')
@@ -246,7 +261,7 @@ export default function FirmaPage() {
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
             <div className="bg-black text-white py-4 px-6 flex items-center justify-between">
-                <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" className="h-10" />
+                <img src="/DR7logo1.png" alt="DR7" className="h-10" />
                 <span className="text-sm text-gray-400">Firma Elettronica</span>
             </div>
 
@@ -302,6 +317,7 @@ export default function FirmaPage() {
                                 Scarica PDF
                             </a>
                         </div>
+                        <PdfViewer url={contract.pdfUrl} />
                     </div>
                 )}
 
@@ -378,10 +394,12 @@ export default function FirmaPage() {
                             </button>
                             <button
                                 onClick={handleRequestOtp}
-                                disabled={status === 'otp_verifying'}
-                                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                                disabled={status === 'otp_verifying' || otpCooldown > 0}
+                                className="text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
                             >
-                                Non hai ricevuto il codice? Invia di nuovo
+                                {otpCooldown > 0
+                                    ? `Riprova tra ${otpCooldown}s`
+                                    : 'Non hai ricevuto il codice? Invia di nuovo'}
                             </button>
                         </div>
                     </div>

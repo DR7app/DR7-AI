@@ -981,7 +981,28 @@ export default function UnpaidBookingsTab() {
         }
       }
 
-      // 3. Update booking in DB
+      // 3. Generate fattura FIRST — if it fails, abort before marking as paid
+      if (invoiceLineItems.length > 0) {
+        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: booking.id,
+            customerId: booking.customer_id || booking.user_id,
+            items: invoiceLineItems,
+            rawDescriptions: true,
+            paymentStatus: 'paid'
+          })
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.message || err.error || 'Errore generazione fattura — nessun elemento segnato come pagato.')
+        }
+        const data = await res.json()
+        toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata!`)
+      }
+
+      // 4. Fattura succeeded — NOW update booking in DB
       const { error } = await supabase.from('bookings').update({
         payment_status: 'paid',
         status: 'confirmed',
@@ -990,29 +1011,6 @@ export default function UnpaidBookingsTab() {
       if (error) throw error
       toast.success('Tutto segnato come pagato!')
       logAdminAction('mark_booking_extensions_paid', 'booking', booking.id)
-
-      // 4. Generate ONE fattura with ONLY unpaid items
-      if (invoiceLineItems.length > 0) {
-        try {
-          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: booking.id,
-              customerId: booking.customer_id || booking.user_id,
-              items: invoiceLineItems,
-              rawDescriptions: true,
-              paymentStatus: 'paid'
-            })
-          })
-          if (res.ok) {
-            const data = await res.json()
-            toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata!`)
-          }
-        } catch (invoiceErr) {
-          console.warn('Auto-invoice generation failed:', invoiceErr)
-        }
-      }
 
       loadUnpaidBookings()
     } catch (err: any) {
@@ -1032,7 +1030,8 @@ export default function UnpaidBookingsTab() {
       let anchorBookingId = group.noleggioBookings[0]?.id || group.primeWashBookings[0]?.id || group.penaliItems[0]?.bookingId || group.danniItems[0]?.bookingId
       let anchorCustomerId = ''
 
-      // 1. Noleggio bookings + extensions → mark paid, collect line items
+      // 1. Noleggio bookings + extensions → collect line items (DO NOT mark paid yet — fattura first)
+      const noleggioUpdates: { bookingId: string; extensions: any[]; booking: UnpaidBooking }[] = []
       for (const booking of group.noleggioBookings) {
         if (!anchorCustomerId) anchorCustomerId = booking.customer_id || booking.user_id || ''
         if (!anchorBookingId) anchorBookingId = booking.id
@@ -1077,13 +1076,11 @@ export default function UnpaidBookingsTab() {
           }
         }
 
-        await supabase.from('bookings').update({
-          payment_status: 'paid', status: 'confirmed',
-          booking_details: { ...booking.booking_details, extension_history: extensions }
-        }).eq('id', booking.id)
+        noleggioUpdates.push({ bookingId: booking.id, extensions, booking })
       }
 
-      // 2. Prime Wash bookings → mark paid, collect line items
+      // 2. Prime Wash bookings → collect line items (DO NOT mark paid yet — fattura first)
+      const primeWashBookingIds: string[] = []
       for (const booking of group.primeWashBookings) {
         if (!anchorCustomerId) anchorCustomerId = booking.customer_id || booking.user_id || ''
         if (!anchorBookingId) anchorBookingId = booking.id
@@ -1096,12 +1093,10 @@ export default function UnpaidBookingsTab() {
           invoiceLineItems.push({ label: serviceName, amount: remainingEur, quantity: 1 })
         }
 
-        await supabase.from('bookings').update({
-          payment_status: 'paid', status: 'confirmed'
-        }).eq('id', booking.id)
+        primeWashBookingIds.push(booking.id)
       }
 
-      // 3. Penali → mark paid in booking_details, collect line items
+      // 3. Penali → collect line items (DO NOT mark paid yet — fattura first)
       const penaliBookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
       for (const item of group.penaliItems) {
         if (!anchorCustomerId) anchorCustomerId = item.booking.customer_id || item.booking.user_id || ''
@@ -1115,19 +1110,8 @@ export default function UnpaidBookingsTab() {
           penaliBookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
         }
       }
-      for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
-        const details = booking.booking_details || {}
-        const arr: any[] = [...(details.penalties || [])]
-        for (const idx of indices) {
-          if (arr[idx]) {
-            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
-            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
-          }
-        }
-        await supabase.from('bookings').update({ booking_details: { ...details, penalties: arr } }).eq('id', bookingId)
-      }
 
-      // 4. Danni → mark paid in booking_details, collect line items
+      // 4. Danni → collect line items (DO NOT mark paid yet — fattura first)
       const danniBookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
       for (const item of group.danniItems) {
         if (!anchorCustomerId) anchorCustomerId = item.booking.customer_id || item.booking.user_id || ''
@@ -1141,26 +1125,8 @@ export default function UnpaidBookingsTab() {
           danniBookingUpdates.get(item.bookingId)!.indices.push(item.originalIndex)
         }
       }
-      for (const [bookingId, { booking, indices }] of danniBookingUpdates) {
-        const details = booking.booking_details || {}
-        const arr: any[] = [...(details.danni || [])]
-        for (const idx of indices) {
-          if (arr[idx]) {
-            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
-            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
-          }
-        }
-        await supabase.from('bookings').update({ booking_details: { ...details, danni: arr } }).eq('id', bookingId)
-      }
 
-      // 5. Mark fattura-source penali/danni items as paid
-      const fatturaSourceItems = [...group.penaliItems, ...group.danniItems].filter(i => i.source === 'fattura')
-      for (const fItem of fatturaSourceItems) {
-        const fi = (fatturaItemsMap[fItem.bookingId] || []).find(f => f.fatturaId === fItem.fatturaId && f.itemIndex === fItem.itemIndex)
-        if (fi) await markSingleFatturaItemPaid(fi)
-      }
-
-      // 6. Generate ONE combined fattura for all booking_details items
+      // 5. Generate fattura FIRST — if it fails, abort before marking anything as paid
       if (invoiceLineItems.length > 0 && anchorBookingId) {
         const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
           method: 'POST',
@@ -1173,15 +1139,60 @@ export default function UnpaidBookingsTab() {
             paymentStatus: 'paid'
           })
         })
-        if (res.ok) {
-          const data = await res.json()
-          toast.success(`Fattura unica ${data.invoice?.numero_fattura || ''} generata per ${group.customerName}!`)
-        } else {
+        if (!res.ok) {
           const err = await res.json()
-          console.warn('Combined invoice generation failed:', err)
-          toast.success(`Tutto pagato per ${group.customerName}! (fattura non generata: ${err.message || err.error || 'errore'})`)
+          throw new Error(err.message || err.error || 'Errore generazione fattura — nessun elemento segnato come pagato.')
         }
-      } else {
+        const data = await res.json()
+        toast.success(`Fattura unica ${data.invoice?.numero_fattura || ''} generata per ${group.customerName}!`)
+      }
+
+      // 6. Fattura succeeded (or no items) — NOW mark everything as paid in DB
+      for (const { bookingId, extensions, booking } of noleggioUpdates) {
+        await supabase.from('bookings').update({
+          payment_status: 'paid', status: 'confirmed',
+          booking_details: { ...booking.booking_details, extension_history: extensions }
+        }).eq('id', bookingId)
+      }
+
+      for (const pwId of primeWashBookingIds) {
+        await supabase.from('bookings').update({
+          payment_status: 'paid', status: 'confirmed'
+        }).eq('id', pwId)
+      }
+
+      for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details.penalties || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, penalties: arr } }).eq('id', bookingId)
+      }
+
+      for (const [bookingId, { booking, indices }] of danniBookingUpdates) {
+        const details = booking.booking_details || {}
+        const arr: any[] = [...(details.danni || [])]
+        for (const idx of indices) {
+          if (arr[idx]) {
+            const total = arr[idx].total || (arr[idx].amount || 0) * (arr[idx].quantity || 1)
+            arr[idx] = { ...arr[idx], paymentStatus: 'paid', amountPaid: total }
+          }
+        }
+        await supabase.from('bookings').update({ booking_details: { ...details, danni: arr } }).eq('id', bookingId)
+      }
+
+      // 7. Mark fattura-source penali/danni items as paid
+      const fatturaSourceItems = [...group.penaliItems, ...group.danniItems].filter(i => i.source === 'fattura')
+      for (const fItem of fatturaSourceItems) {
+        const fi = (fatturaItemsMap[fItem.bookingId] || []).find(f => f.fatturaId === fItem.fatturaId && f.itemIndex === fItem.itemIndex)
+        if (fi) await markSingleFatturaItemPaid(fi)
+      }
+
+      if (invoiceLineItems.length === 0) {
         toast.success(`Tutto pagato per ${group.customerName}!`)
       }
 

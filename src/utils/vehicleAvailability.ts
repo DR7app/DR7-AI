@@ -259,7 +259,6 @@ export function isVehicleAvailable(
 
     // Check vehicle status
     if (vehicle.status === 'retired' || vehicle.status === 'maintenance') {
-        console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - STATUS: ${vehicle.status}`)
         return {
             available: false,
             reason: `Vehicle is marked as ${vehicle.status}`
@@ -268,7 +267,6 @@ export function isVehicleAvailable(
 
     // Check for maintenance blocks
     if (isVehicleBlocked(vehicle, pickupDate, returnDate, pickupTime, returnTime)) {
-        console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - MAINTENANCE BLOCK: ${vehicle.metadata?.unavailable_from} to ${vehicle.metadata?.unavailable_until}`)
         return {
             available: false,
             reason: 'Vehicle is blocked for maintenance during this period'
@@ -307,7 +305,6 @@ export function isVehicleAvailable(
     const vehicleBookings = existingBookings.filter(booking => {
         // Skip the booking we're editing
         if (excludeBookingId && booking.id === excludeBookingId) {
-            console.log('[AVAILABILITY CHECK] ⏭️ Skipping current booking being edited:', booking.id)
             return false
         }
 
@@ -331,11 +328,9 @@ export function isVehicleAvailable(
                 (booking.vehicle_id && editingBooking?.vehicle_id && booking.vehicle_id === editingBooking.vehicle_id)
 
             if (editingBooking && sameVehicle) {
-                console.log('[CAR WASH CHECK] ✅ EXCLUDING car wash booking for same vehicle', booking.id)
                 // This car wash is for the same vehicle being extended, skip it
                 return false
             }
-            console.log('[CAR WASH CHECK] ❌ NOT excluding car wash - different vehicle')
         }
 
         // CRITICAL: Only include bookings that can be matched to this vehicle by plate
@@ -365,16 +360,6 @@ export function isVehicleAvailable(
         if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
             const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
 
-            console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - BOOKING CONFLICT with booking ${booking.id?.substring(0,8)}:`, {
-                bookingPeriod: `${bookingStart.toISOString()} → ${bookingEnd.toISOString()}`,
-                requestedPeriod: `${requestStart.toISOString()} → ${requestEnd.toISOString()}`,
-                customer: booking.customer_name,
-                matchedBy: booking.vehicle_id === vehicle.id ? `vehicle_id: ${booking.vehicle_id}` :
-                           `plate: ${booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate}`,
-                bookingStatus: booking.status,
-                serviceType: booking.service_type || 'rental'
-            })
-
             return {
                 available: false,
                 reason: `Vehicle is booked until ${bookingEnd.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}. Earliest available: ${earliestTime ? earliestTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'not today'}`,
@@ -383,7 +368,6 @@ export function isVehicleAvailable(
         }
     }
 
-    console.log(`[isVehicleAvailable] ✅ ${vehicle.display_name} (${vehiclePlate}) - AVAILABLE`)
     return { available: true }
 }
 

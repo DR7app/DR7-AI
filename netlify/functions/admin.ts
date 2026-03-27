@@ -314,10 +314,19 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
 
       if (error) throw error
 
+      // Escape CSV values to prevent formula injection
+      const escCsv = (val: any): string => {
+        const s = String(val ?? '')
+        if (s.match(/^[=+\-@\t\r]/) || s.includes(',') || s.includes('"') || s.includes('\n')) {
+          return '"' + s.replace(/"/g, '""') + '"'
+        }
+        return s
+      }
+
       const csv = [
         'id,start_at,end_at,status,total_amount,currency,source',
         ...data.map((r: any) =>
-          `${r.id},${r.start_at},${r.end_at},${r.status},${r.total_amount},${r.currency},${r.source || ''}`
+          [r.id, r.start_at, r.end_at, r.status, r.total_amount, r.currency, r.source || ''].map(escCsv).join(',')
         )
       ].join('\n')
 
@@ -336,6 +345,6 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
 
   } catch (error: any) {
     console.error('Function error:', error)
-    return response(500, { error: error.message || 'Internal server error' }, origin)
+    return response(500, { error: 'Internal server error' }, origin)
   }
 }
