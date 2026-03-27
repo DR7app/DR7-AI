@@ -204,8 +204,7 @@ const handler: Handler = async (event) => {
         whatsappMessage = renderTemplate(whatsappTemplate.body || '', templateVars);
       } else {
         // Fallback default WhatsApp template
-        const firstName = (candidate.customer_name || 'Cliente').split(' ')[0];
-        whatsappMessage = `Ciao ${firstName},\n\nGrazie per aver scelto DR7 Empire!\n\nLa tua opinione \u00e8 fondamentale per noi. Se ti fa piacere, lasciaci una recensione a 5 stelle raccontando la tua esperienza.\n\nIn segno di gratitudine, inviandoci uno screenshot della recensione riceverai un buono sconto da \u20ac100 sul tuo prossimo noleggio e uno da \u20ac10 sul tuo prossimo lavaggio.\n\nClicca qui per lasciare la recensione:\n${reviewLink}\n\nGrazie mille!\nDubai Rent 7.0 S.p.A.`;
+        whatsappMessage = `Ciao ${firstName}! 👋\nLa tua esperienza con noi è importante.\n\nSe ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto, è il modo migliore per crescere insieme.\n\nIn segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un codice sconto da 100€ sul tuo prossimo noleggio e uno da 10€ sul tuo prossimo lavaggio.\n\nClicca qui per lasciarla!👇🏻\n ${reviewLink}\n\n\nDR7`;
       }
     }
 
