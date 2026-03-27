@@ -162,13 +162,13 @@ export default function GestioneMulteTab() {
                     <div className="flex bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
                         <button
                             onClick={() => setActiveSubTab('history')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'history' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                            className={`px-4 py-2 text-sm font-medium transition-colors min-h-[44px] ${activeSubTab === 'history' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                         >
                             Storico PEC
                         </button>
                         <button
                             onClick={() => setActiveSubTab('upload')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSubTab === 'upload' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                            className={`px-4 py-2 text-sm font-medium transition-colors min-h-[44px] ${activeSubTab === 'upload' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                         >
                             Carica &amp; Invia PEC
                         </button>

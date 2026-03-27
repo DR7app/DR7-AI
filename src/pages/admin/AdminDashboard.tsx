@@ -149,7 +149,7 @@ export default function AdminDashboard() {
 
   // Reusable style helpers for nav
   const sidebarItemClass = (isActive: boolean) =>
-    `w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044]'}`
+    `w-full text-left px-3 py-2 min-h-[44px] flex items-center rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044]'}`
   const sidebarSectionClass = 'px-3 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider'
 
   // Mobile tab labels
@@ -206,7 +206,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[70] w-64 max-w-[85vw] bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[70] w-full sm:w-64 bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo + Close */}
         <div className="px-5 py-4 bg-white flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -216,7 +216,7 @@ export default function AdminDashboard() {
               <p className="text-[#1a2332]/50 text-[10px] tracking-widest">A.I.</p>
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="text-[#1a2332]/40 hover:text-[#1a2332] p-1">
+          <button onClick={() => setSidebarOpen(false)} className="text-[#1a2332]/40 hover:text-[#1a2332] min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg -mr-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -296,9 +296,9 @@ export default function AdminDashboard() {
         <div className="px-3 py-3 border-t border-white/10 space-y-1">
           <button
             onClick={() => setIsCalendarModalOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
+            className="w-full flex items-center gap-2 px-3 min-h-[44px] rounded-lg text-sm text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             Calendario Giornaliero
@@ -306,9 +306,9 @@ export default function AdminDashboard() {
           {!alarmState.audioEnabled && (
             <button
               onClick={enableAudio}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
+              className="w-full flex items-center gap-2 px-3 min-h-[44px] rounded-lg text-sm text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               Attiva Allarmi
@@ -316,16 +316,16 @@ export default function AdminDashboard() {
           )}
           <button
             onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
+            className="w-full flex items-center gap-2 px-3 min-h-[44px] rounded-lg text-sm text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
             Cambia Password
           </button>
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/40 hover:text-red-400 hover:bg-[#243044] transition-colors"
+            className="w-full flex items-center gap-2 px-3 min-h-[44px] rounded-lg text-sm text-white/40 hover:text-red-400 hover:bg-[#243044] transition-colors"
           >
             Esci
           </button>
@@ -349,7 +349,7 @@ export default function AdminDashboard() {
             {tabHistory.length > 0 && (
               <button
                 onClick={goBack}
-                className="p-2 rounded-lg hover:bg-theme-bg-hover transition-colors text-theme-text-muted hover:text-theme-text-primary flex-shrink-0"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-theme-bg-hover transition-colors text-theme-text-muted hover:text-theme-text-primary flex-shrink-0"
                 aria-label="Indietro"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

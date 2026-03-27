@@ -882,7 +882,7 @@ export default function CargosTab() {
                             Invio telematico contratti — Polizia di Stato
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <div className="flex bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
                             <button
                                 onClick={() => setActiveSubTab('send')}
@@ -993,7 +993,7 @@ export default function CargosTab() {
                 <div className="space-y-4">
                     {/* View mode + Date selector + load */}
                     <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
-                        <div className="flex gap-2 mb-3">
+                        <div className="flex flex-wrap gap-2 mb-3">
                             <button
                                 onClick={() => setViewMode('all')}
                                 className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${viewMode === 'all' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
@@ -1014,7 +1014,7 @@ export default function CargosTab() {
                     {/* Bookings table */}
                     {bookings.length > 0 && (
                         <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-                            <div className="px-4 py-3 border-b border-theme-border flex justify-between items-center">
+                            <div className="px-4 py-3 border-b border-theme-border flex flex-wrap justify-between items-center gap-2">
                                 <div className="flex items-center gap-3">
                                     <label className="flex items-center gap-2 cursor-pointer">
                                         <input
@@ -1028,7 +1028,7 @@ export default function CargosTab() {
                                         </span>
                                     </label>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                     <Button
                                         variant="secondary"
                                         onClick={handleCheck}

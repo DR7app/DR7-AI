@@ -555,7 +555,7 @@ export default function ReviewManagementTab() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6">
+    <div className="p-3 sm:p-6">
       {/* Header */}
       <div className="mb-6 flex justify-between items-center flex-wrap gap-3">
         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
@@ -805,7 +805,7 @@ export default function ReviewManagementTab() {
           placeholder="Cerca per nome, email, telefono..."
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          className="flex-1 min-w-[200px] px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-xl text-sm text-theme-text-primary placeholder-theme-text-secondary"
+          className="w-full sm:flex-1 sm:min-w-[200px] px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-xl text-sm text-theme-text-primary placeholder-theme-text-secondary"
         />
         {activeTab === 'ELIGIBLE' && (
           <>

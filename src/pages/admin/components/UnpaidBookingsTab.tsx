@@ -2247,9 +2247,9 @@ export default function UnpaidBookingsTab() {
       </div>
 
       {/* ── Desktop Table View ───────────────────────────────────────────── */}
-      <div className="hidden lg:block bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+      <div className="block bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[800px]">
             <thead>
               <tr className="border-b-2 border-theme-border">
                 <th className="px-4 py-3 text-left text-sm font-semibold w-[18%]">

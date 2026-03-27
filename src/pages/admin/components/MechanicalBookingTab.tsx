@@ -296,8 +296,8 @@ export default function MechanicalBookingTab() {
       />
 
       {/* Bookings Table */}
-      <div className="rounded-lg overflow-hidden">
-        <table className="w-full">
+      <div className="rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[700px]">
           <thead className="">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
@@ -355,20 +355,20 @@ export default function MechanicalBookingTab() {
                         setEditingId(booking.id)
                         setShowForm(true)
                       }}
-                      className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
+                      className="px-3 py-1 min-h-[44px] bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       Modifica
                     </button>
                     <button
                       onClick={() => handleGenerateInvoice(booking)}
                       disabled={generatingInvoice}
-                      className={`px-3 py-1 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors disabled:opacity-50`}
+                      className={`px-3 py-1 min-h-[44px] ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors disabled:opacity-50`}
                     >
                       {generatingInvoice ? '...' : 'Fattura'}
                     </button>
                     <button
                       onClick={() => handleDelete(booking.id)}
-                      className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
+                      className="px-3 py-1 min-h-[44px] bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       ×
                     </button>

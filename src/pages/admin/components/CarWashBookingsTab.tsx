@@ -1957,8 +1957,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         ) : (
           <div className="rounded-lg overflow-hidden">
             {/* Desktop table */}
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full min-w-max">
+            <div className="block overflow-x-auto">
+              <table className="w-full min-w-[700px]">
                 <thead>
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
