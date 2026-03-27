@@ -541,6 +541,11 @@ export default function CargosTab() {
         }
     }, [exportDate, viewMode])
 
+    // Auto-load bookings on mount and when filters change
+    useEffect(() => {
+        loadBookings()
+    }, [loadBookings])
+
     // ── Send to CARGOS ───────────────────────────────────────────────────────
 
     async function handleSend() {
@@ -980,25 +985,12 @@ export default function CargosTab() {
                                 className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${viewMode === 'date' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                             >Per data</button>
                         </div>
-                        <div className="flex flex-col sm:flex-row items-end gap-3">
-                            {viewMode === 'date' && <div className="flex-1">
+                        {viewMode === 'date' && <div className="flex flex-col sm:flex-row items-end gap-3">
+                            <div className="flex-1">
                                 <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
                                 <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
-                            </div>}
-                            <Button onClick={loadBookings} disabled={loading} className="flex items-center gap-2">
-                                {loading ? (
-                                    <>
-                                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-                                        Caricamento...
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                        Carica Prenotazioni
-                                    </>
-                                )}
-                            </Button>
-                        </div>
+                            </div>
+                        </div>}
                     </div>
 
                     {/* Bookings table */}
@@ -1211,10 +1203,6 @@ export default function CargosTab() {
                                 <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
                                 <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
                             </div>
-
-                            <Button onClick={loadBookings} disabled={loading} className="w-full flex items-center justify-center gap-2">
-                                {loading ? 'Caricamento...' : 'Carica Prenotazioni'}
-                            </Button>
 
                             {bookings.length > 0 && (
                                 <div className="space-y-3">
