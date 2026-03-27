@@ -122,19 +122,20 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      const [{ data: rentals }, { data: washes }] = await Promise.all([
-        supabase.from('bookings').select('id')
-          .in('status', ['completed', 'completata'])
-          .gte('dropoff_date', thirtyDaysAgo.toISOString()),
-        supabase.from('car_wash_bookings').select('id')
-          .in('status', ['completed', 'completata'])
-          .gte('appointment_date', thirtyDaysAgo.toISOString()),
-      ])
+      // All bookings are in the 'bookings' table — car wash has service_type='car_wash'
+      const { data: allBookings, error: bErr } = await supabase
+        .from('bookings')
+        .select('id, service_type')
+        .in('status', ['completed', 'completata'])
+        .gte('created_at', thirtyDaysAgo.toISOString())
+        .order('created_at', { ascending: false })
 
-      const allRecords = [
-        ...(rentals || []).map(r => ({ id: r.id, serviceType: 'RENTAL' as const })),
-        ...(washes || []).map(w => ({ id: w.id, serviceType: 'WASH' as const })),
-      ]
+      if (bErr) throw bErr
+
+      const allRecords = (allBookings || []).map(b => ({
+        id: b.id,
+        serviceType: (b.service_type === 'car_wash' ? 'WASH' : 'RENTAL') as 'RENTAL' | 'WASH',
+      }))
 
       let done = 0
       for (const record of allRecords) {
@@ -345,30 +346,20 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // Fetch completed RENTAL bookings
-      const { data: rentals, error: rentalError } = await supabase
+      // All bookings (rentals + washes) are in the 'bookings' table
+      const { data: allBookings, error: bErr } = await supabase
         .from('bookings')
-        .select('id')
+        .select('id, service_type')
         .in('status', ['completed', 'completata'])
-        .gte('dropoff_date', thirtyDaysAgo.toISOString())
-        .order('dropoff_date', { ascending: false })
+        .gte('created_at', thirtyDaysAgo.toISOString())
+        .order('created_at', { ascending: false })
 
-      if (rentalError) throw rentalError
+      if (bErr) throw bErr
 
-      // Fetch completed WASH bookings
-      const { data: washes, error: washError } = await supabase
-        .from('car_wash_bookings')
-        .select('id')
-        .in('status', ['completed', 'completata'])
-        .gte('appointment_date', thirtyDaysAgo.toISOString())
-        .order('appointment_date', { ascending: false })
-
-      if (washError) throw washError
-
-      const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = [
-        ...(rentals || []).map(r => ({ id: r.id, serviceType: 'RENTAL' as const })),
-        ...(washes || []).map(w => ({ id: w.id, serviceType: 'WASH' as const })),
-      ]
+      const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = (allBookings || []).map(b => ({
+        id: b.id,
+        serviceType: (b.service_type === 'car_wash' ? 'WASH' : 'RENTAL') as 'RENTAL' | 'WASH',
+      }))
 
       let evaluated = 0
       let skipped = 0

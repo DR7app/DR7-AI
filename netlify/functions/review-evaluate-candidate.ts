@@ -53,23 +53,14 @@ interface EvaluationResult {
 }
 
 async function loadSourceRecord(sourceRecordId: string, serviceType: ServiceType) {
-  if (serviceType === 'RENTAL') {
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('id, customer_name, customer_email, customer_phone, status, payment_status, booking_details')
-      .eq('id', sourceRecordId)
-      .single();
-    if (error) throw new Error(`Booking not found: ${error.message}`);
-    return data;
-  } else {
-    const { data, error } = await supabase
-      .from('car_wash_bookings')
-      .select('id, customer_name, customer_email, customer_phone, status, payment_status, service_name, notes')
-      .eq('id', sourceRecordId)
-      .single();
-    if (error) throw new Error(`Car wash booking not found: ${error.message}`);
-    return data;
-  }
+  // All bookings (rental + car_wash) are in the 'bookings' table
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, customer_name, customer_email, customer_phone, status, payment_status, booking_details, service_type, service_name, notes, vehicle_name')
+    .eq('id', sourceRecordId)
+    .single();
+  if (error) throw new Error(`Booking not found: ${error.message}`);
+  return data;
 }
 
 async function checkDuplicate(sourceRecordId: string, serviceType: ServiceType) {
