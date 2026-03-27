@@ -26,8 +26,7 @@ const handler: Handler = async (event) => {
         const { data: templates, error } = await supabase
           .from('review_templates')
           .select('*')
-          .order('service_type', { ascending: true })
-          .order('channel', { ascending: true });
+          .order('template_key', { ascending: true });
 
         if (error) {
           console.error('[review-settings] Error fetching templates:', error);
@@ -100,29 +99,20 @@ const handler: Handler = async (event) => {
       const body = JSON.parse(event.body || '{}');
 
       // POST: Update template
-      if (body.action === 'update_template') {
-        const { templateKey, subject, body: templateBody } = body;
+      if (body.action === 'update_template' || body.template_key) {
+        const templateKey = body.templateKey || body.template_key;
+        const subject = body.subject;
+        const templateBody = body.body;
 
         if (!templateKey || !templateBody) {
           return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: 'templateKey e body sono obbligatori' }),
+            body: JSON.stringify({ error: 'template_key e body sono obbligatori' }),
           };
         }
 
-        // templateKey format: "{service_type}_{channel}" e.g. "rental_email"
-        const [serviceType, channel] = templateKey.split('_');
-
-        if (!serviceType || !channel) {
-          return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: 'Formato templateKey non valido (es. rental_email)' }),
-          };
-        }
-
-        // Upsert: update if exists, insert if not
+        // Upsert by template_key (e.g. 'RENTAL_EMAIL')
         const updateData: Record<string, any> = {
           body: templateBody,
           updated_at: new Date().toISOString(),
@@ -131,12 +121,10 @@ const handler: Handler = async (event) => {
           updateData.subject = subject;
         }
 
-        // Try update first
         const { data: existing } = await supabase
           .from('review_templates')
           .select('id')
-          .eq('service_type', serviceType)
-          .eq('channel', channel)
+          .eq('template_key', templateKey)
           .single();
 
         let result;
@@ -144,20 +132,16 @@ const handler: Handler = async (event) => {
           result = await supabase
             .from('review_templates')
             .update(updateData)
-            .eq('service_type', serviceType)
-            .eq('channel', channel)
+            .eq('template_key', templateKey)
             .select()
             .single();
         } else {
           result = await supabase
             .from('review_templates')
             .insert({
-              service_type: serviceType,
-              channel: channel,
+              template_key: templateKey,
               subject: subject || null,
               body: templateBody,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
             })
             .select()
             .single();
