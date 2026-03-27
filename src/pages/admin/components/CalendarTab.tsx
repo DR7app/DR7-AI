@@ -512,12 +512,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                   <div className="absolute inset-0 z-20 pointer-events-none">
                     {row.events.map(evt => {
                       // STRICT COLOR CONTRACT (Premium Dark Theme)
-                      // RED = Customer booking (clean, modern red)
+                      // DR7 BRAND = Customer booking (logo blue/teal)
                       // ORANGE = Unavailable (muted orange)
 
-                      // Color: Darker, less flashy red (like Non pagato but muted)
-                      let bgClass = "bg-red-800"
-                      let borderClass = "border-red-700/30"
+                      let bgClass = "bg-dr7-gold"
+                      let borderClass = "border-dr7-gold/30"
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
