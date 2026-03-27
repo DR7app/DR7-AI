@@ -127,10 +127,10 @@ export default function ReviewManagementTab() {
       // All bookings are in the 'bookings' table — car wash has service_type='car_wash'
       const { data: allBookings, error: bErr } = await supabase
         .from('bookings')
-        .select('id, service_type')
+        .select('id, service_type, dropoff_date')
         .in('status', ['completed', 'completata'])
-        .gte('created_at', thirtyDaysAgo.toISOString())
-        .order('created_at', { ascending: false })
+        .gte('dropoff_date', thirtyDaysAgo.toISOString())
+        .order('dropoff_date', { ascending: false })
 
       if (bErr) throw bErr
 
@@ -359,10 +359,10 @@ export default function ReviewManagementTab() {
       // All bookings (rentals + washes) are in the 'bookings' table
       const { data: allBookings, error: bErr } = await supabase
         .from('bookings')
-        .select('id, service_type')
+        .select('id, service_type, dropoff_date')
         .in('status', ['completed', 'completata'])
-        .gte('created_at', thirtyDaysAgo.toISOString())
-        .order('created_at', { ascending: false })
+        .gte('dropoff_date', thirtyDaysAgo.toISOString())
+        .order('dropoff_date', { ascending: false })
 
       if (bErr) throw bErr
 
