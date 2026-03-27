@@ -11,7 +11,7 @@ import CarWashBookingsTab from './components/CarWashBookingsTab'
 import CarWashCalendarTab from './components/CarWashCalendarTab'
 import UnpaidBookingsTab from './components/UnpaidBookingsTab'
 import MarketingTab from './components/MarketingTab'
-import ReviewsTab from './components/ReviewsTab'
+import ReviewManagementTab from './components/ReviewManagementTab'
 import FatturaTab from './components/FatturaTab'
 import ContrattoTab from './components/ContrattoTab'
 import GestioneMulteTab from './components/GestioneMulteTab'
@@ -393,7 +393,7 @@ export default function AdminDashboard() {
           {activeTab === 'cauzioni' && <CauzioniTab />}
           {activeTab === 'marketing' && <MarketingTab />}
           {activeTab === 'birthdays' && <BirthdaysTab />}
-          {activeTab === 'reviews' && <ReviewsTab />}
+          {activeTab === 'reviews' && <ReviewManagementTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
           {activeTab === 'scanner' && <ScannerTab />}
           {activeTab === 'nexi' && <NexiTab />}
