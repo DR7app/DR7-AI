@@ -124,20 +124,38 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // All bookings are in the 'bookings' table — car wash has service_type='car_wash'
-      const { data: allBookings, error: bErr } = await supabase
+      // Rentals: filter by dropoff_date
+      const { data: rentals, error: rErr } = await supabase
         .from('bookings')
-        .select('id, service_type, dropoff_date')
+        .select('id, service_type')
         .in('status', ['completed', 'completata'])
+        .or('service_type.is.null,service_type.eq.car_rental')
         .gte('dropoff_date', thirtyDaysAgo.toISOString())
         .order('dropoff_date', { ascending: false })
 
-      if (bErr) throw bErr
+      if (rErr) throw rErr
 
-      const allRecords = (allBookings || []).map(b => ({
-        id: b.id,
-        serviceType: (b.service_type === 'car_wash' ? 'WASH' : 'RENTAL') as 'RENTAL' | 'WASH',
-      }))
+      // Car washes: filter by appointment_date, exclude rientro
+      const { data: washes, error: wErr } = await supabase
+        .from('bookings')
+        .select('id, service_type, service_name, vehicle_name')
+        .in('status', ['completed', 'completata'])
+        .eq('service_type', 'car_wash')
+        .gte('appointment_date', thirtyDaysAgo.toISOString().split('T')[0])
+        .order('appointment_date', { ascending: false })
+
+      if (wErr) throw wErr
+
+      // Filter out lavaggio rientro on client side too
+      const filteredWashes = (washes || []).filter(w => {
+        const name = ((w.service_name || w.vehicle_name || '') as string).toLowerCase()
+        return !name.includes('rientro') && !name.includes('interno')
+      })
+
+      const allRecords = [
+        ...(rentals || []).map(b => ({ id: b.id, serviceType: 'RENTAL' as const })),
+        ...filteredWashes.map(b => ({ id: b.id, serviceType: 'WASH' as const })),
+      ]
 
       let done = 0
       for (const record of allRecords) {
@@ -356,20 +374,37 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // All bookings (rentals + washes) are in the 'bookings' table
-      const { data: allBookings, error: bErr } = await supabase
+      // Rentals: filter by dropoff_date
+      const { data: rentals, error: rErr } = await supabase
         .from('bookings')
-        .select('id, service_type, dropoff_date')
+        .select('id, service_type')
         .in('status', ['completed', 'completata'])
+        .or('service_type.is.null,service_type.eq.car_rental')
         .gte('dropoff_date', thirtyDaysAgo.toISOString())
         .order('dropoff_date', { ascending: false })
 
-      if (bErr) throw bErr
+      if (rErr) throw rErr
 
-      const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = (allBookings || []).map(b => ({
-        id: b.id,
-        serviceType: (b.service_type === 'car_wash' ? 'WASH' : 'RENTAL') as 'RENTAL' | 'WASH',
-      }))
+      // Car washes: filter by appointment_date, exclude rientro
+      const { data: washes, error: wErr } = await supabase
+        .from('bookings')
+        .select('id, service_type, service_name, vehicle_name')
+        .in('status', ['completed', 'completata'])
+        .eq('service_type', 'car_wash')
+        .gte('appointment_date', thirtyDaysAgo.toISOString().split('T')[0])
+        .order('appointment_date', { ascending: false })
+
+      if (wErr) throw wErr
+
+      const filteredWashes = (washes || []).filter(w => {
+        const name = ((w.service_name || w.vehicle_name || '') as string).toLowerCase()
+        return !name.includes('rientro') && !name.includes('interno')
+      })
+
+      const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = [
+        ...(rentals || []).map(b => ({ id: b.id, serviceType: 'RENTAL' as const })),
+        ...filteredWashes.map(b => ({ id: b.id, serviceType: 'WASH' as const })),
+      ]
 
       let evaluated = 0
       let skipped = 0
