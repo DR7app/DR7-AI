@@ -149,11 +149,11 @@ const handler: Handler = async (event) => {
     let whatsappMessage = '';
 
     if (needsEmail) {
+      const templateKey = `${candidate.service_type}_EMAIL`; // e.g. RENTAL_EMAIL, WASH_EMAIL
       const { data: emailTemplate } = await supabase
         .from('review_templates')
         .select('*')
-        .eq('service_type', candidate.service_type || 'rental')
-        .eq('channel', 'email')
+        .eq('template_key', templateKey)
         .single();
 
       if (emailTemplate) {
@@ -183,11 +183,11 @@ const handler: Handler = async (event) => {
     }
 
     if (needsWhatsapp) {
+      const waTemplateKey = `${candidate.service_type}_WHATSAPP`; // e.g. RENTAL_WHATSAPP, WASH_WHATSAPP
       const { data: whatsappTemplate } = await supabase
         .from('review_templates')
         .select('*')
-        .eq('service_type', candidate.service_type || 'rental')
-        .eq('channel', 'whatsapp')
+        .eq('template_key', waTemplateKey)
         .single();
 
       if (whatsappTemplate) {
@@ -204,16 +204,10 @@ const handler: Handler = async (event) => {
       .from('review_requests')
       .insert({
         candidate_id: candidateId,
-        booking_id: candidate.booking_id,
-        customer_id: candidate.customer_id,
         send_channel: sendChannel,
         send_mode: sendMode,
         send_status: 'TO_SEND',
         review_link: reviewLink,
-        email_subject: emailSubject || null,
-        email_body: emailBody || null,
-        whatsapp_message: whatsappMessage || null,
-        created_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -336,8 +330,8 @@ const handler: Handler = async (event) => {
     // 10. Create audit log
     await supabase.from('review_audit_logs').insert({
       candidate_id: candidateId,
-      request_id: request.id,
-      action: 'REVIEW_SENT',
+      review_request_id: request.id,
+      action: finalStatus === 'SENT' ? 'MANUAL_SEND_TRIGGERED' : 'SEND_FAILED',
       details: {
         send_channel: sendChannel,
         send_mode: sendMode,

@@ -53,8 +53,8 @@ const handler: Handler = async (event) => {
       total_candidates: all.length,
 
       // Service type counts
-      rental_count: all.filter(c => c.service_type === 'rental' || c.service_type === null).length,
-      wash_count: all.filter(c => c.service_type === 'car_wash').length,
+      rental_count: all.filter(c => c.service_type === 'RENTAL').length,
+      wash_count: all.filter(c => c.service_type === 'WASH').length,
     };
 
     return {

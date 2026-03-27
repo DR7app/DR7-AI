@@ -233,19 +233,27 @@ async function insertCandidate(
   record: any,
   evaluation: EvaluationResult
 ) {
+  const firstReason = evaluation.exclusion_reasons?.[0];
+  const hasEmail = !!(record.customer_email && record.customer_email.trim());
+  const hasPhone = !!(record.customer_phone && record.customer_phone.trim());
+
   const candidateData = {
     source_record_id: sourceRecordId,
     service_type: serviceType,
-    customer_name: record.customer_name || null,
+    customer_name: record.customer_name || 'N/A',
     customer_email: record.customer_email || null,
     customer_phone: record.customer_phone || null,
     eligibility_status: evaluation.eligibility_status,
     review_risk: evaluation.review_risk,
     send_status: evaluation.send_status,
-    exclusion_reasons: evaluation.exclusion_reasons,
+    exclusion_reason_code: firstReason?.code || null,
+    exclusion_reason_text: firstReason?.text || null,
+    contact_available_email: hasEmail,
+    contact_available_whatsapp: hasPhone,
     is_internal_record: evaluation.is_internal_record,
-    evaluated_at: new Date().toISOString(),
+    auto_created: true,
     created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 
   const { data, error } = await supabase
@@ -273,18 +281,17 @@ async function insertAuditLog(
     action = 'CANDIDATE_EXCLUDED';
   }
 
-  const { error } = await supabase.from('review_audit_log').insert({
+  const { error } = await supabase.from('review_audit_logs').insert({
     candidate_id: candidateId,
-    source_record_id: sourceRecordId,
-    service_type: serviceType,
     action,
     details: {
+      source_record_id: sourceRecordId,
+      service_type: serviceType,
       eligibility_status: evaluation.eligibility_status,
       review_risk: evaluation.review_risk,
       send_status: evaluation.send_status,
       exclusion_reasons: evaluation.exclusion_reasons,
     },
-    created_at: new Date().toISOString(),
   });
 
   if (error) {

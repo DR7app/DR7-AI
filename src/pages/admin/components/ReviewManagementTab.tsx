@@ -6,17 +6,19 @@ import toast from 'react-hot-toast'
 
 interface ReviewCandidate {
   id: string
-  booking_id: string
+  source_record_id: string
   customer_name: string
   customer_email: string | null
   customer_phone: string | null
   service_type: 'RENTAL' | 'WASH'
   eligibility_status: 'ELIGIBLE' | 'TO_REVIEW' | 'EXCLUDED'
-  risk_level: 'GREEN' | 'YELLOW' | 'RED'
-  send_status: 'TO_SEND' | 'SENT' | 'FAILED'
-  exclusion_reason: string | null
+  review_risk: 'GREEN' | 'YELLOW' | 'RED'
+  send_status: 'TO_SEND' | 'SENT' | 'EXCLUDED' | 'FAILED' | 'BLOCKED'
+  exclusion_reason_code: string | null
   exclusion_reason_text: string | null
-  review_link: string | null
+  contact_available_email: boolean
+  contact_available_whatsapp: boolean
+  is_internal_record: boolean
   created_at: string
   updated_at: string
 }
@@ -179,7 +181,15 @@ export default function ReviewManagementTab() {
       const res = await fetch(`${NETLIFY_BASE}/review-dashboard-stats`)
       if (!res.ok) throw new Error('Errore caricamento statistiche')
       const data = await res.json()
-      setStats(data)
+      const s = data.stats || data
+      setStats({
+        eligible: s.eligible_count || s.eligible || 0,
+        to_review: s.to_review_count || s.to_review || 0,
+        excluded: s.excluded_count || s.excluded || 0,
+        to_send: s.to_send_count || s.to_send || 0,
+        sent: s.sent_count || s.sent || 0,
+        failed: s.failed_count || s.failed || 0,
+      })
     } catch (err: any) {
       console.error('fetchStats error:', err)
     }
@@ -862,7 +872,7 @@ export default function ReviewManagementTab() {
 
                     {/* Rischio */}
                     <td className="px-4 py-3 text-sm">
-                      {getRiskBadge(candidate.risk_level)}
+                      {getRiskBadge(candidate.review_risk)}
                     </td>
 
                     {/* Stato Invio */}
@@ -873,7 +883,7 @@ export default function ReviewManagementTab() {
                     {/* Motivo Esclusione (EXCLUDED only) */}
                     {activeTab === 'EXCLUDED' && (
                       <td className="px-4 py-3 text-sm text-red-400">
-                        {candidate.exclusion_reason_text || candidate.exclusion_reason || '---'}
+                        {candidate.exclusion_reason_text || candidate.exclusion_reason_code || '---'}
                       </td>
                     )}
 
