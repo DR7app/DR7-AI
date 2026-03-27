@@ -51,7 +51,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const [session, setSession] = useState<Session | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
-    const triggeredAlarmsRef = useRef<Set<string>>(() => {
+    const triggeredAlarmsRef = useRef<Set<string>>((() => {
         try {
             const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
             // Cleanup: only keep alarms from the last 24 hours
@@ -68,7 +68,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         } catch {
             return new Set<string>()
         }
-    })
+    })())
 
     // Helper: add alarm to triggered set with timestamp for cleanup
     const markAlarmTriggered = (trackingId: string) => {

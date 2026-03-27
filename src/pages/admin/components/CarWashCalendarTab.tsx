@@ -120,12 +120,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       .channel('carwash-calendar-realtime')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
-        (payload) => {
+        (_payload) => {
           // Reload data when any booking changes
           loadData()
         }
       )
-      .subscribe((status) => {
+      .subscribe((_status) => {
       })
 
     return () => {

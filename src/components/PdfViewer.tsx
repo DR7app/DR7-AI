@@ -55,8 +55,9 @@ export default function PdfViewer({ url, className }: PdfViewerProps) {
             const ctx = canvas.getContext('2d')!
             await page.render({
                 canvasContext: ctx,
-                viewport: scaledViewport
-            }).promise
+                viewport: scaledViewport,
+                canvas,
+            } as any).promise
 
             renderedPagesRef.current.add(pageNum)
         } catch {
