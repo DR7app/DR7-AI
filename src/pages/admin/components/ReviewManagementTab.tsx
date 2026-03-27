@@ -122,11 +122,12 @@ export default function ReviewManagementTab() {
 
       // Rentals: include confirmed/completed bookings with past dropoff_date
       // (most bookings stay 'confirmed' even after return)
+      // Use or() to include NULL service_type (old bookings) + car_rental + rental
       const { data: rentals, error: rErr } = await supabase
         .from('bookings')
         .select('id, service_type')
         .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'active', 'in_corso'])
-        .not('service_type', 'eq', 'car_wash')
+        .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental,service_type.eq.')
         .lte('dropoff_date', new Date().toISOString())
         .gte('dropoff_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('dropoff_date', { ascending: false })
@@ -375,11 +376,12 @@ export default function ReviewManagementTab() {
 
       // Rentals: include confirmed/completed bookings with past dropoff_date
       // (most bookings stay 'confirmed' even after return)
+      // Use or() to include NULL service_type (old bookings) + car_rental + rental
       const { data: rentals, error: rErr } = await supabase
         .from('bookings')
         .select('id, service_type')
         .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'active', 'in_corso'])
-        .not('service_type', 'eq', 'car_wash')
+        .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental,service_type.eq.')
         .lte('dropoff_date', new Date().toISOString())
         .gte('dropoff_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('dropoff_date', { ascending: false })
