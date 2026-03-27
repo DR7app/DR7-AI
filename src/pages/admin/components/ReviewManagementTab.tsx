@@ -252,12 +252,13 @@ export default function ReviewManagementTab() {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   async function handleSend(candidateId: string, channel: 'EMAIL' | 'WHATSAPP' | 'BOTH') {
+    const channelMap: Record<string, string> = { EMAIL: 'EMAIL_ONLY', WHATSAPP: 'WHATSAPP_ONLY', BOTH: 'EMAIL_AND_WHATSAPP' }
     setSendingId(candidateId)
     try {
       const res = await fetch(`${NETLIFY_BASE}/review-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, channel }),
+        body: JSON.stringify({ candidateId, sendChannel: channelMap[channel] || 'EMAIL_AND_WHATSAPP', sendMode: 'MANUAL' }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -288,7 +289,7 @@ export default function ReviewManagementTab() {
       const sendRes = await fetch(`${NETLIFY_BASE}/review-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, channel: 'BOTH' }),
+        body: JSON.stringify({ candidateId, sendChannel: 'EMAIL_AND_WHATSAPP', sendMode: 'MANUAL' }),
       })
       if (!sendRes.ok) throw new Error('Approvato ma errore durante l\'invio')
 
@@ -346,7 +347,7 @@ export default function ReviewManagementTab() {
         const res = await fetch(`${NETLIFY_BASE}/review-send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidateId: candidate.id, channel }),
+          body: JSON.stringify({ candidateId: candidate.id, sendChannel: channel === 'BOTH' ? 'EMAIL_AND_WHATSAPP' : channel === 'EMAIL' ? 'EMAIL_ONLY' : 'WHATSAPP_ONLY', sendMode: 'AUTOMATIC' }),
         })
         if (res.ok) {
           success++
@@ -600,10 +601,6 @@ export default function ReviewManagementTab() {
           <div className="text-2xl sm:text-3xl font-bold text-yellow-500">{stats.to_review}</div>
         </div>
         <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-          <div className="text-xs sm:text-sm text-theme-text-secondary">Esclusi</div>
-          <div className="text-2xl sm:text-3xl font-bold text-red-500">{stats.excluded}</div>
-        </div>
-        <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
           <div className="text-xs sm:text-sm text-theme-text-secondary">Da Inviare</div>
           <div className="text-2xl sm:text-3xl font-bold text-blue-500">{stats.to_send}</div>
         </div>
@@ -778,7 +775,6 @@ export default function ReviewManagementTab() {
         {([
           { key: 'ELIGIBLE' as TabKey, label: 'Idonei', count: stats.eligible },
           { key: 'TO_REVIEW' as TabKey, label: 'Da Verificare', count: stats.to_review },
-          { key: 'EXCLUDED' as TabKey, label: 'Esclusi', count: stats.excluded },
         ]).map(tab => (
           <button
             key={tab.key}
