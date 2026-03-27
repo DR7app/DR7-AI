@@ -315,6 +315,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         ]
 
         const record = fields.map((val, i) => padField(String(val), FIELD_SIZES[i])).join('')
+        console.log(`[cargos-auto-send] Record length: ${record.length} (expected 1505), first 100: ${record.substring(0, 100)}`)
 
         // Validate APIKEY
         if (!CARGOS_APIKEY || CARGOS_APIKEY.length < 48) {
@@ -328,9 +329,12 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             headers: { 'Authorization': basicAuth, 'Accept': 'application/json' },
         })
 
+        console.log(`[cargos-auto-send] Auth response: status=${tokenRes.status}`)
+
         if (!tokenRes.ok) {
-            const body = await tokenRes.json().catch(() => ({}))
-            return { success: false, error: `CARGOS auth fallita: ${body.error_description || tokenRes.statusText}` }
+            const body = await tokenRes.text().catch(() => '')
+            console.error(`[cargos-auto-send] Auth failed: ${body.substring(0, 200)}`)
+            return { success: false, error: `CARGOS auth fallita (${tokenRes.status}): ${body.substring(0, 100)}` }
         }
 
         const rawText = await tokenRes.text()
@@ -368,13 +372,16 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             body: JSON.stringify([record]),
         })
 
+        const sendResText = await sendRes.text()
+        console.log(`[cargos-auto-send] CARGOS Send response: status=${sendRes.status}, body=${sendResText.substring(0, 500)}`)
+
         if (!sendRes.ok) {
-            const errBody = await sendRes.json().catch(() => ({}))
-            return { success: false, error: `CARGOS invio fallito: ${errBody.error_description || sendRes.statusText}` }
+            return { success: false, error: `CARGOS invio fallito (${sendRes.status}): ${sendResText.substring(0, 200)}` }
         }
 
-        const sendResult = await sendRes.json()
-        console.log(`[cargos-auto-send] Booking ${bookingId} sent to CARGOS successfully`, sendResult)
+        let sendResult: any
+        try { sendResult = JSON.parse(sendResText) } catch { sendResult = sendResText }
+        console.log(`[cargos-auto-send] Booking ${bookingId} CARGOS response:`, JSON.stringify(sendResult).substring(0, 300))
 
         // Mark booking as sent to CARGOS
         await supabase
