@@ -118,12 +118,17 @@ const handler: Handler = async (event) => {
         }
 
         if (!response.ok) {
-            console.error('[nexi-create-preauth] ERROR:', responseData);
+            console.error('[nexi-create-preauth] ERROR:', JSON.stringify(responseData));
+            const nexiError = responseData.errors?.[0]?.description
+                || responseData.error?.description
+                || responseData.message
+                || responseData.error_description
+                || JSON.stringify(responseData).substring(0, 300)
             return {
                 statusCode: response.status,
                 headers,
                 body: JSON.stringify({
-                    error: responseData.errors?.[0]?.description || 'Failed to create pre-authorization'
+                    error: `Nexi (${response.status}): ${nexiError}`
                 })
             };
         }
