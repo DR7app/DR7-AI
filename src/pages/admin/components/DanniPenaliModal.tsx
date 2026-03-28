@@ -13,6 +13,7 @@ interface DanniPenaliModalProps {
         customer_email?: string
         customer_phone?: string
         vehicle_name?: string
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         booking_details?: any
     }
     onClose: () => void
@@ -371,6 +372,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     } else {
                         toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
                     }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
@@ -382,9 +384,10 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             }
 
             resetAndClose()
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error generating danni/penali:', err)
-            setError(err.message || 'Errore nella generazione.')
+            setError(_errMsg || 'Errore nella generazione.')
         } finally {
             setIsGenerating(false)
         }
@@ -688,7 +691,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     <div className="flex items-center gap-3">
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select value={paymentStatus}
-                            onChange={e => { setPaymentStatus(e.target.value as any); if (e.target.value !== 'paid') setAmountPaid('') }}
+                            onChange={e => { setPaymentStatus(e.target.value as typeof paymentStatus); if (e.target.value !== 'paid') setAmountPaid('') }}
                             disabled={isGenerating}
                             className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                         >

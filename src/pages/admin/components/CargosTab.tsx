@@ -17,6 +17,7 @@ interface BookingForCargos {
     vehicle_name: string
     vehicle_plate?: string
     vehicle_id?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     user_id?: string
     status: string
@@ -55,6 +56,7 @@ interface CustomerExtended {
     denominazione?: string
     ragione_sociale?: string
     partita_iva?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata?: any
 }
 
@@ -237,6 +239,7 @@ function birthDateFromCF(cf: string): string {
 function buildCargosRecord(booking: BookingForCargos): string {
     const c = booking.customerData
     const bd = booking.booking_details || {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meta = c?.metadata || (c as any)?.metadata || {}
     const rapp = meta?.rappresentante || {}
 
@@ -375,6 +378,7 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
             issues.push({ field: 'Data Nascita', message: 'Data di nascita mancante', severity: 'error' })
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const meta = c?.metadata || (c as any)?.metadata || {}
         const rapp = meta?.rappresentante || {}
         if (!c?.documento_numero && !c?.numero_documento_rappresentante && !rapp.documento?.numero && !bd.customer?.documentNumber && !c?.numero_patente && !c?.patente_numero && !bd.customer?.licenseNumber && !bd.customer?.driverLicense) {
@@ -445,8 +449,9 @@ export default function CargosTab() {
                 sessionStorage.setItem('cargos_session', password)
                 setShowSettings(false)
             }
-        } catch (err: any) {
-            toast.error('Errore connessione: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore connessione: ' + _errMsg)
         } finally {
             setAuthLoading(false)
         }
@@ -486,6 +491,7 @@ export default function CargosTab() {
             if (error) throw error
 
             // Filter out car wash, mechanical, and Hummer experience bookings — only rental bookings go to CARGOS
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const rentalBookings = (rawBookings || []).filter((b: any) => {
                 if (b.service_type && b.service_type !== '' && b.service_type !== 'car_rental') return false
                 if ((b.vehicle_name || '').toLowerCase().includes('hummer')) return false
@@ -553,8 +559,9 @@ export default function CargosTab() {
             // Auto-select all
             setSelectedIds(new Set(enriched.map(b => b.id)))
 
-        } catch (err: any) {
-            toast.error('Errore caricamento: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore caricamento: ' + _errMsg)
         } finally {
             setLoading(false)
         }
@@ -630,8 +637,10 @@ export default function CargosTab() {
                 return
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const checkErrors = checkResults.filter((r: any) => r.esito === false)
             if (checkErrors.length > 0) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const errorDetails = checkErrors.map((r: any) =>
                     r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore) || 'Errore sconosciuto'
                 ).join('; ')
@@ -657,7 +666,9 @@ export default function CargosTab() {
             } else {
                 // Check per-record results
                 const sendResults = Array.isArray(sendData.data) ? sendData.data : (Array.isArray(sendData) ? sendData : [])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const sendErrors = sendResults.filter((r: any) => r.esito === false)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const sendOk = sendResults.filter((r: any) => r.esito === true)
 
                 // If response is not an array or empty — something unexpected
@@ -667,6 +678,7 @@ export default function CargosTab() {
                     toast.error(`Risposta CARGOS inattesa: ${rawResp}`, { duration: 10000 })
                     setSendResult({ success: 0, errors: selected.length, details: `Risposta inattesa: ${rawResp}` })
                 } else if (sendErrors.length > 0) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const errorDetails = sendErrors.map((r: any) =>
                         r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore) || 'Errore sconosciuto'
                     ).join('; ')
@@ -674,6 +686,7 @@ export default function CargosTab() {
                     setSendResult({ success: sendOk.length, errors: sendErrors.length, details: errorDetails })
                 } else {
                     // Real success — mark as sent
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const txIds = sendResults.map((r: any) => r.transactionid).filter(Boolean).join(', ')
                     toast.success(`${selected.length} contratti inviati a CARGOS! TX: ${txIds || 'OK'}`, { duration: 5000 })
                     setSendResult({ success: selected.length, errors: 0, details: txIds || 'OK' })
@@ -700,9 +713,10 @@ export default function CargosTab() {
                     }
                 }
             }
-        } catch (err: any) {
-            toast.error('Errore invio: ' + err.message)
-            setSendResult({ success: 0, errors: selected.length, details: err.message })
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore invio: ' + _errMsg)
+            setSendResult({ success: 0, errors: selected.length, details: _errMsg })
         } finally {
             setSending(false)
         }
@@ -734,8 +748,10 @@ export default function CargosTab() {
             } else {
                 // Check per-record results
                 const results = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : [])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const errors = results.filter((r: any) => r.esito === false)
                 if (errors.length > 0) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const errorDetails = errors.map((r: any) =>
                         r.errore?.error_description || r.errore?.error || 'Errore sconosciuto'
                     ).join('; ')
@@ -747,8 +763,9 @@ export default function CargosTab() {
                     selectedIds.has(b.id) ? { ...b, cargosStatus: 'checking' as const } : b
                 ))
             }
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         } finally {
             setSending(false)
         }
@@ -945,6 +962,7 @@ export default function CargosTab() {
                             <Input
                                 type="password"
                                 value={password}
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 onChange={(e: any) => setPassword(e.target.value)}
                                 placeholder="••••••••"
                             />
@@ -1007,6 +1025,7 @@ export default function CargosTab() {
                         {viewMode === 'date' && <div className="flex flex-col sm:flex-row items-end gap-3">
                             <div className="flex-1">
                                 <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
+                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                 <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
                             </div>
                         </div>}
@@ -1220,6 +1239,7 @@ export default function CargosTab() {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Data Inizio Noleggio</label>
+                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                 <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
                             </div>
 

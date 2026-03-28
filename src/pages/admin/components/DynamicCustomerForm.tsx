@@ -65,7 +65,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
       } else {
         toast.error('Nessun risultato trovato')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Search error:', error)
       toast.error('Errore durante la ricerca')
     }
@@ -77,6 +77,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
 
     try {
       // Prepare data based on client type
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const customerData: any = {
         tipo_cliente: tipoCliente,
         nazione: formData.nazione,
@@ -109,9 +110,10 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
 
       toast.success('Cliente creato con successo!')
       onSuccess()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error creating customer:', error)
-      toast.error(`Errore: ${error.message}`)
+      toast.error(`Errore: ${_errMsg}`)
     } finally {
       setLoading(false)
     }
@@ -129,7 +131,7 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
           </label>
           <select
             value={tipoCliente}
-            onChange={(e) => setTipoCliente(e.target.value as any)}
+            onChange={(e) => setTipoCliente(e.target.value as typeof tipoCliente)}
             className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
             required
           >

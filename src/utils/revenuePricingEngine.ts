@@ -417,11 +417,13 @@ export function calculateDynamicPrice(
 export function parseConfigFromDB(row: {
   enabled?: boolean
   mode?: string
-  config?: Record<string, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  config?: Record<string, any>
 } | null): RevenueConfig {
   if (!row) return getDefaultConfig()
 
-  const c = (row.config || {}) as Record<string, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c = (row.config || {}) as Record<string, any>
   const validModes: RevenueMode[] = ['disabled', 'suggestion', 'auto_apply']
   const rawMode = String(row.mode || 'suggestion')
   // Map legacy mode names

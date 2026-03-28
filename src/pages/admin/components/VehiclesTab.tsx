@@ -13,6 +13,7 @@ interface Vehicle {
   status: 'available' | 'unavailable' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
   category: 'exotic' | 'urban' | 'aziendali' | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -170,9 +171,10 @@ export default function VehiclesTab() {
       setEditingId(null)
       resetForm()
       loadVehicles()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to save vehicle:', error)
-      alert('Impossibile salvare il veicolo: ' + (error.message || JSON.stringify(error)))
+      alert('Impossibile salvare il veicolo: ' + (_errMsg || JSON.stringify(error)))
     }
   }
 
@@ -312,9 +314,10 @@ export default function VehiclesTab() {
 
       await loadVehicles()
       alert('Veicolo eliminato con successo! Prenotazioni e documenti sono stati conservati.')
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to delete vehicle:', error)
-      alert('Errore durante l\'eliminazione: ' + error.message)
+      alert('Errore durante l\'eliminazione: ' + _errMsg)
     }
   }
 
@@ -368,6 +371,7 @@ export default function VehiclesTab() {
   }
 
   async function syncToGoogleCalendar(vehicle: Vehicle) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const metadata = vehicle.metadata as any
     const unavailableFrom = metadata?.unavailable_from
     const unavailableUntil = metadata?.unavailable_until
@@ -427,10 +431,15 @@ export default function VehiclesTab() {
       status: vehicle.status,
       daily_rate: vehicle.daily_rate.toString(),
       category: vehicle.category || 'exotic',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       unavailable_from: (vehicle.metadata as any)?.unavailable_from || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       unavailable_until: (vehicle.metadata as any)?.unavailable_until || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       unavailable_from_time: (vehicle.metadata as any)?.unavailable_from_time || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       unavailable_until_time: (vehicle.metadata as any)?.unavailable_until_time || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       unavailable_reason: (vehicle.metadata as any)?.unavailable_reason || ''
     })
     setEditingId(vehicle.id)

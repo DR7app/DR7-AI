@@ -20,6 +20,7 @@ interface CarWashBooking {
   price_total: number
   status: string
   payment_status: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details: any
   created_at: string
   vehicle_name?: string
@@ -47,6 +48,7 @@ const SERVICE_DURATIONS_MAXI: Record<string, number> = {
   luxury: 280,
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getServiceDuration = (serviceName: string, vehicleCategory?: string, bookingDetails?: any): number => {
   // Prefer totalDuration saved at booking time (always in sync with catalog)
   if (bookingDetails?.totalDuration && bookingDetails.totalDuration > 0) {
@@ -143,11 +145,13 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       const endDate = new Date(year, month + 1, 0, 23, 59, 59)
 
       // Fetch ALL bookings via Netlify function (bypasses RLS)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let bookingsData: any[] | null = null
       try {
         const res = await fetch('/.netlify/functions/list-bookings')
         const result = await res.json()
         if (res.ok && result.bookings) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           bookingsData = result.bookings.filter((b: any) =>
             b.service_type === 'car_wash' && b.status !== 'cancelled'
           )

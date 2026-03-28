@@ -248,6 +248,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     } else {
                         toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
                     }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
@@ -259,9 +260,10 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             }
 
             setCart([]); setNote(''); setPhotos([]); setPhotoPreviewUrls([]); onSuccess(); onClose()
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error generating danni:', err)
-            setError(err.message || 'Errore nella generazione.')
+            setError(_errMsg || 'Errore nella generazione.')
         } finally {
             setIsGenerating(false)
         }

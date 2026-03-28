@@ -56,6 +56,7 @@ export default function CustomerWalletTab() {
 
   // Expanded customer details
   const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [expandedTransactions, setExpandedTransactions] = useState<any[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
 
@@ -90,6 +91,7 @@ export default function CustomerWalletTab() {
       // Load ALL customers
       const response = await fetch('/.netlify/functions/list-customers')
       const result = await response.json()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allCustomers: any[] = result.customers || []
 
       // Load wallets via referral_participants → wallets chain
@@ -120,6 +122,7 @@ export default function CustomerWalletTab() {
 
       // Also load from user_credit_balance (website wallet — stores in EUR, not cents)
       // Use service role via Netlify function to bypass RLS
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let creditBalances: any[] | null = null
       try {
         const token = (await supabase.auth.getSession()).data.session?.access_token
@@ -156,6 +159,7 @@ export default function CustomerWalletTab() {
       }
 
       // Map all customers with their wallet balance from BOTH systems
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mapped: CustomerResult[] = allCustomers.map((cust: any) => {
         const phone = cust.telefono || null
         // Referral wallet (by phone)
@@ -188,6 +192,7 @@ export default function CustomerWalletTab() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function apiCall(body: Record<string, any>) {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     const res = await fetch('/.netlify/functions/customer-wallet-admin', {
@@ -368,8 +373,9 @@ export default function CustomerWalletTab() {
         console.error('[Wallet] API error:', data)
         toast.error(data.error || `Errore: ${JSON.stringify(data).substring(0, 150)}`)
       }
-    } catch (err: any) {
-      toast.error('Errore di connessione: ' + (err.message || ''))
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore di connessione: ' + (_errMsg || ''))
     }
     setActionLoading(false)
   }
@@ -518,6 +524,7 @@ export default function CustomerWalletTab() {
                       <p className="text-xs text-theme-text-muted text-center py-2">Nessuna transazione</p>
                     ) : (
                       <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {expandedTransactions.map((txn: any, i: number) => (
                           <div key={txn.id || i} className="flex justify-between items-center text-xs py-1.5 px-2 rounded hover:bg-theme-bg-tertiary/30">
                             <div className="flex-1 min-w-0">

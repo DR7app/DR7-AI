@@ -55,8 +55,9 @@ export default function ResetPassword() {
       const { error } = await supabase.auth.updateUser({ password })
       if (error) throw error
       navigate('/admin')
-    } catch (err: any) {
-      setError(err.message || 'Errore durante l\'aggiornamento della password')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      setError(_errMsg || 'Errore durante l\'aggiornamento della password')
     } finally {
       setLoading(false)
     }

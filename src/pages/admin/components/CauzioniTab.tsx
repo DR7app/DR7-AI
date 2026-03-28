@@ -64,6 +64,7 @@ export default function CauzioniTab() {
         setLoading(true)
         try {
             // Try FK join first, fall back to separate queries if FKs not set up
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let data: any[] | null = null
 
             const { data: joinData, error: joinError } = await supabase
@@ -89,10 +90,14 @@ export default function CauzioniTab() {
                 data = plainData || []
 
                 // Batch-fetch customers and vehicles
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const clienteIds = [...new Set(data.map((c: any) => c.cliente_id).filter(Boolean))]
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const veicoloIds = [...new Set(data.map((c: any) => c.veicolo_id).filter(Boolean))]
 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const customersMap: Record<string, any> = {}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const vehiclesMap: Record<string, any> = {}
 
                 if (clienteIds.length > 0) {
@@ -100,6 +105,7 @@ export default function CauzioniTab() {
                         .from('customers_extended')
                         .select('id, nome, cognome, denominazione, ragione_sociale, tipo_cliente, email')
                         .in('id', clienteIds)
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     ;(customers || []).forEach((c: any) => { customersMap[c.id] = c })
                 }
 
@@ -108,10 +114,12 @@ export default function CauzioniTab() {
                         .from('vehicles')
                         .select('id, display_name, plate')
                         .in('id', veicoloIds)
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     ;(vehicles || []).forEach((v: any) => { vehiclesMap[v.id] = v })
                 }
 
                 // Attach to data
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 data = data.map((c: any) => ({
                     ...c,
                     customers_extended: customersMap[c.cliente_id] || null,
@@ -122,6 +130,7 @@ export default function CauzioniTab() {
             const today = new Date()
             today.setHours(0, 0, 0, 0)
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const formattedData = (data || []).map((c: any) => {
                 const scadenzaDate = new Date(c.scadenza_cauzione)
                 scadenzaDate.setHours(0, 0, 0, 0)
@@ -150,9 +159,10 @@ export default function CauzioniTab() {
             })
 
             setCauzioni(formattedData)
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error fetching cauzioni:', error)
-            toast.error(`Errore nel caricamento delle cauzioni: ${error.message}`)
+            toast.error(`Errore nel caricamento delle cauzioni: ${_errMsg}`)
         } finally {
             setLoading(false)
         }
@@ -224,9 +234,10 @@ export default function CauzioniTab() {
 
             toast.success('Cauzione marcata come Restituita')
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error marking restituita:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
@@ -331,9 +342,10 @@ export default function CauzioniTab() {
                 updated_at: new Date().toISOString()
             }).eq('id', cauzione.id)
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             toast.dismiss('mit')
-            toast.error(error.message || 'Errore')
+            toast.error(_errMsg || 'Errore')
         }
     }
 
@@ -384,9 +396,10 @@ export default function CauzioniTab() {
 
                 fetchCauzioni()
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             toast.dismiss('paylink')
-            toast.error(error.message || 'Errore')
+            toast.error(_errMsg || 'Errore')
         }
     }
 
@@ -416,14 +429,16 @@ export default function CauzioniTab() {
             }
 
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error creating preauth:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
     const handleMarkSbloccataPreauth = async (cauzione: Cauzione) => {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
 
             if (nexiTransactionId) {
@@ -432,7 +447,9 @@ export default function CauzioniTab() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         cauzioneId: cauzione.id,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         operationId: (cauzione as any).nexi_operation_id || nexiTransactionId,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         orderId: (cauzione as any).nexi_order_id
                     })
                 })
@@ -455,9 +472,10 @@ export default function CauzioniTab() {
             }
 
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error marking sbloccata:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
@@ -472,6 +490,7 @@ export default function CauzioniTab() {
         }
 
         try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
 
             if (nexiTransactionId) {
@@ -480,8 +499,10 @@ export default function CauzioniTab() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         cauzioneId: cauzione.id,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         operationId: (cauzione as any).nexi_operation_id || nexiTransactionId,
                         amount: amount,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         orderId: (cauzione as any).nexi_order_id
                     })
                 })
@@ -509,9 +530,10 @@ export default function CauzioniTab() {
             }
 
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error capturing payment:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
@@ -528,9 +550,10 @@ export default function CauzioniTab() {
             if (error) throw error
             toast.success('Cauzione segnata come incassata')
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error marking incassata:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
@@ -547,9 +570,10 @@ export default function CauzioniTab() {
             if (error) throw error
             toast.success('Cauzione riportata a Da incassare')
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error marking da incassare:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
@@ -568,14 +592,16 @@ export default function CauzioniTab() {
             if (error) throw error
             toast.success('Cauzione incassata in cassa')
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error marking cauzione as danno:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
     const handleRevertStato = async (cauzione: Cauzione, newStato: string) => {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const updateData: any = {
                 stato: newStato,
                 updated_at: new Date().toISOString()
@@ -596,9 +622,10 @@ export default function CauzioniTab() {
             if (error) throw error
             toast.success(`Cauzione ripristinata a "${newStato}"`)
             fetchCauzioni()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error reverting cauzione:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 

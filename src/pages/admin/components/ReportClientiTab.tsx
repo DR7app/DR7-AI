@@ -175,8 +175,9 @@ export default function ReportClientiTab() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || 'Errore nel caricamento')
       setClientiData(data)
-    } catch (err: any) {
-      setError(err.message || 'Errore sconosciuto')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      setError(_errMsg || 'Errore sconosciuto')
     } finally {
       setLoading(false)
     }

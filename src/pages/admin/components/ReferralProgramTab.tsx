@@ -102,6 +102,7 @@ export default function ReferralProgramTab() {
   const [buoniLoading, setBuoniLoading] = useState(false)
 
   // Fraud data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [fraudData, setFraudData] = useState<any>(null)
   const [fraudLoading, setFraudLoading] = useState(false)
 
@@ -676,6 +677,7 @@ export default function ReferralProgramTab() {
                   <p className="text-green-400 text-sm">Nessun cluster IP sospetto rilevato</p>
                 ) : (
                   <div className="space-y-3">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {fraudData.suspicious_ips.map((item: any, i: number) => (
                       <div key={i} className="bg-theme-bg-primary rounded-lg p-3">
                         <div className="flex justify-between items-center mb-2">
@@ -683,6 +685,7 @@ export default function ReferralProgramTab() {
                           <span className="text-red-400 text-sm font-bold">{item.count} registrazioni</span>
                         </div>
                         <div className="space-y-1">
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                           {item.entries.slice(0, 5).map((e: any, j: number) => (
                             <p key={j} className="text-theme-text-muted text-xs">
                               {e.nome} {e.cognome} - {e.telefono} ({new Date(e.created_at).toLocaleDateString('it-IT')})
@@ -704,6 +707,7 @@ export default function ReferralProgramTab() {
                   <p className="text-green-400 text-sm">Nessun fingerprint duplicato rilevato</p>
                 ) : (
                   <div className="space-y-3">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {fraudData.suspicious_fingerprints.map((item: any, i: number) => (
                       <div key={i} className="bg-theme-bg-primary rounded-lg p-3">
                         <div className="flex justify-between items-center mb-2">
@@ -711,6 +715,7 @@ export default function ReferralProgramTab() {
                           <span className="text-red-400 text-sm font-bold">{item.count} registrazioni</span>
                         </div>
                         <div className="space-y-1">
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                           {item.entries.slice(0, 5).map((e: any, j: number) => (
                             <p key={j} className="text-theme-text-muted text-xs">
                               {e.nome} {e.cognome} - {e.telefono}
@@ -732,6 +737,7 @@ export default function ReferralProgramTab() {
                   <p className="text-green-400 text-sm">Tutti i telefoni sono verificati</p>
                 ) : (
                   <div className="space-y-1">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {fraudData.unverified_phones.map((p: any) => (
                       <p key={p.id} className="text-theme-text-muted text-xs">
                         {p.nome} {p.cognome} - {p.telefono} ({new Date(p.created_at).toLocaleDateString('it-IT')})

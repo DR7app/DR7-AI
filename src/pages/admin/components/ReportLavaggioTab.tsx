@@ -43,8 +43,9 @@ export default function ReportLavaggioTab() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
       setWashData(data)
-    } catch (err: any) {
-      setError(err.message || 'Errore sconosciuto')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      setError(_errMsg || 'Errore sconosciuto')
     } finally {
       setLoading(false)
     }

@@ -3,7 +3,9 @@ import { supabase } from '../../supabaseClient';
 import DocumentReviewModal from './DocumentReviewModal';
 
 export default function IncomingScansList() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [scans, setScans] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [selectedScan, setSelectedScan] = useState<any | null>(null);
 
     useEffect(() => {

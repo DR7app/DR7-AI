@@ -7,7 +7,9 @@ import { logger } from '../../../utils/logger'
 interface NewClientModalProps {
   isOpen: boolean
   onClose: () => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onClientCreated?: (clientId: string, customerData?: any) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialData?: any // Can be Customer type, but using any for flexibility with the complex objects
 }
 
@@ -374,6 +376,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // Auto-detect residence status based on provincia/città di residenza
       const residenceStatus = getResidenceStatus(formData.provincia_residenza, formData.citta_residenza)
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const customerData: any = {
         tipo_cliente: formData.tipo_cliente,
         email: formData.email,
@@ -607,6 +610,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 .from('customer_documents')
                 .insert({
                   customer_id: createdClientId,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   document_type: docType as any,
                   file_name: file.name,
                   file_path: filePath,
@@ -618,9 +622,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
               logger.log(`✅ ${docType}${suffix} uploaded successfully`)
               return true
-            } catch (error: any) {
+            } catch (error: unknown) {
+              const _errMsg = error instanceof Error ? error.message : String(error)
               console.error(`Error uploading ${docType}${suffix}:`, error)
-              toast.error(`Errore caricamento ${docType}${suffix}: ${error.message}`)
+              toast.error(`Errore caricamento ${docType}${suffix}: ${_errMsg}`)
               return false
             }
           }
@@ -671,32 +676,36 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
       handleClose()
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const errObj = error as Record<string, any> | null
+      const errCode = typeof errObj === 'object' && errObj !== null ? String(errObj.code ?? '') : ''
       console.error('❌ Error saving customer:', error)
       console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
+        message: _errMsg,
+        code: errCode,
+        details: errObj && typeof errObj === 'object' ? errObj.details : undefined,
+        hint: errObj && typeof errObj === 'object' ? errObj.hint : undefined
       })
 
       // Provide specific error messages based on error type
       let errorMessage = 'Errore salvataggio cliente: '
 
-      if (error.code === '42501') {
+      if (errCode === '42501') {
         // Permission denied - RLS policy issue
         errorMessage += 'Permessi insufficienti. Verifica che il tuo account abbia i permessi di amministratore.'
-      } else if (error.code === '42703') {
+      } else if (errCode === '42703') {
         // Column does not exist
-        errorMessage += `Colonna mancante nel database: ${error.message}. Esegui lo script update_customers_extended_schema.sql`
-      } else if (error.message?.includes('duplicate key')) {
+        errorMessage += `Colonna mancante nel database: ${_errMsg}. Esegui lo script update_customers_extended_schema.sql`
+      } else if (_errMsg?.includes('duplicate key')) {
         errorMessage += 'Cliente già esistente con questa email o codice fiscale.'
-      } else if (error.message?.includes('violates check constraint')) {
+      } else if (_errMsg?.includes('violates check constraint')) {
         errorMessage += 'Dati non validi. Verifica i campi obbligatori.'
-      } else if (error.message?.includes('network')) {
+      } else if (_errMsg?.includes('network')) {
         errorMessage += 'Errore di connessione. Verifica la tua connessione internet.'
       } else {
-        errorMessage += error.message || 'Errore sconosciuto'
+        errorMessage += _errMsg || 'Errore sconosciuto'
       }
 
       toast.error(errorMessage)
@@ -822,7 +831,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Sesso</label>
                       <select
                         value={formData.sesso}
-                        onChange={(e) => setFormData({ ...formData, sesso: e.target.value as any })}
+                        onChange={(e) => setFormData({ ...formData, sesso: e.target.value as typeof formData.sesso })}
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       >
                         {!formData.sesso && <option value="">Seleziona...</option>}

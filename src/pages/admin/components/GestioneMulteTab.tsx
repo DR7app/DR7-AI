@@ -11,14 +11,18 @@ export default function GestioneMulteTab() {
     const [multaPdfBase64, setMultaPdfBase64] = useState('')
     const [multaProcessing, setMultaProcessing] = useState(false)
     const [multaStep, setMultaStep] = useState<'upload' | 'review' | 'sent'>('upload')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [multaData, setMultaData] = useState<any>(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [driverData, setDriverData] = useState<any>(null)
     const [letterText, setLetterText] = useState('')
     const [pecSending, setPecSending] = useState(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [pecResult, setPecResult] = useState<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     // PEC History
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [pecHistory, setPecHistory] = useState<any[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
 
@@ -82,8 +86,9 @@ export default function GestioneMulteTab() {
             setLetterText(data.letterText)
             setMultaStep('review')
             toast.success('Conducente trovato! Controlla i dati prima di inviare.')
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         } finally {
             setMultaProcessing(false)
         }
@@ -129,8 +134,9 @@ export default function GestioneMulteTab() {
                 has_documento_id: (driverData.id_urls?.length || 0) > 0,
                 pdf_filename: multaFile?.name || null,
             }).then(() => loadPecHistory())
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         } finally {
             setPecSending(false)
         }

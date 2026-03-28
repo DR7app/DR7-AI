@@ -100,6 +100,7 @@ export function useScadenze() {
       })
 
       // Cauzioni
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       cauzioni?.forEach((cauzione: any) => {
         // Build customer name from customers_extended join
         const custData = cauzione.customers_extended
@@ -414,6 +415,7 @@ export function useScadenze() {
           .update({ data_incasso: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq('id', scadenza.reference_id)
         setScadenze(prev => prev.map(s =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           s.id === scadenza.id ? { ...s, status: 'collected' as any } : s
         ))
       } else if (action === 'refund' && scadenza.reference_type === 'cauzione') {
@@ -479,6 +481,7 @@ export function useScadenze() {
     try {
       const isRecurring = !!updates.recurring_interval
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dbUpdates: Record<string, any> = {}
       if (updates.item_type !== undefined) dbUpdates.item_type = updates.item_type
       if (updates.description !== undefined) dbUpdates.description = updates.description

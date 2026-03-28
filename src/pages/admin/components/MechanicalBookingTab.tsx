@@ -32,6 +32,7 @@ interface MechanicalBooking {
   status: string
   payment_status: string
   payment_method?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details: any
   created_at: string
 }
@@ -47,6 +48,7 @@ export default function MechanicalBookingTab() {
 
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
 
   async function openEditCustomer(customerId: string) {
@@ -86,6 +88,7 @@ export default function MechanicalBookingTab() {
       if (customersError) throw customersError
 
       // Map customers_extended to Customer interface
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
         id: c.id,
         full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),
@@ -210,10 +213,11 @@ export default function MechanicalBookingTab() {
 
       logAdminAction('generate_mechanical_fattura', 'mechanical_booking', booking.id)
       loadData()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating invoice:', error)
       console.error('Error generating invoice:', error)
-      const errorMessage = error.message || ''
+      const errorMessage = _errMsg || ''
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {

@@ -44,9 +44,10 @@ async function sendWhatsAppNotification(ticketNumbers: number[], fullName: strin
     } else {
       return { success: false, error: result.message || 'Unknown error' };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const _errMsg = error instanceof Error ? error.message : String(error)
     console.error('[WhatsApp] Exception:', error);
-    return { success: false, error: error.message || 'Network error' };
+    return { success: false, error: _errMsg || 'Network error' };
   }
 }
 
@@ -225,6 +226,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
       if (bookingsData) {
         logger.log('[ManualSaleModal] Bookings found:', bookingsData.length);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         bookingsData.forEach((booking: any) => {
           const details = booking.booking_details?.customer || {};
           const customerName = booking.customer_name || details.fullName || 'Cliente';
@@ -259,6 +261,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
       if (!customersError && customersData) {
         logger.log('[ManualSaleModal] Customers from customers table:', customersData.length);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         customersData.forEach((c: any) => {
           const key = c.email || c.phone || c.id;
           if (key && !customerMap.has(key)) {
@@ -284,6 +287,7 @@ const ManualSaleModal: React.FC<ManualSaleModalProps & { prefillData?: { email: 
 
       if (!customersExtendedError && customersExtendedData) {
         logger.log('[ManualSaleModal] Extended customers found:', customersExtendedData.length);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         customersExtendedData.forEach((customer: any) => {
           const key = customer.email || customer.telefono || customer.id;
 
@@ -710,6 +714,7 @@ const LotteriaBoard: React.FC = () => {
 
           const uuid = generateTicketUuid(ticketNumber);
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ticketData: any = {
             uuid: uuid,
             ticket_number: ticketNumber,
@@ -810,10 +815,11 @@ const LotteriaBoard: React.FC = () => {
       setSelectedTicket(null);
       setSelectedTickets([]);
       setMultiSelectMode(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       setGeneratingPdf(false);
       console.error('Error in bulk sale:', error);
-      alert(`Errore: ${error.message || 'Errore durante la vendita multipla.'}`);
+      alert(`Errore: ${_errMsg || 'Errore durante la vendita multipla.'}`);
       await fetchSoldTickets();
     }
   };
@@ -847,6 +853,7 @@ const LotteriaBoard: React.FC = () => {
 
       const uuid = generateTicketUuid(ticketNumber);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ticketData: any = {
         uuid: uuid,
         ticket_number: ticketNumber,
@@ -949,6 +956,7 @@ const LotteriaBoard: React.FC = () => {
           }
 
           alert(message);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (pdfError: any) {
           setGeneratingPdf(false);
           console.error('Error sending PDF:', pdfError);
@@ -966,9 +974,10 @@ const LotteriaBoard: React.FC = () => {
       // Always refresh the board after attempt
       await fetchSoldTickets();
       setSelectedTicket(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error saving manual sale:', error);
-      alert(`Errore: ${error.message || 'Errore durante il salvataggio.'}`);
+      alert(`Errore: ${_errMsg || 'Errore durante il salvataggio.'}`);
       await fetchSoldTickets(); // Refresh to show current state
       setSelectedTicket(null);
     }
@@ -1030,9 +1039,10 @@ const LotteriaBoard: React.FC = () => {
 
       setSearchResults(data);
       setShowSearchModal(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error searching tickets:', error);
-      alert(`Errore nella ricerca: ${error.message}`);
+      alert(`Errore nella ricerca: ${_errMsg}`);
     }
   };
 
@@ -1075,9 +1085,10 @@ const LotteriaBoard: React.FC = () => {
           setSearchEmail('');
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error canceling ticket:', error);
-      alert(`Errore nella cancellazione: ${error.message}`);
+      alert(`Errore nella cancellazione: ${_errMsg}`);
     }
   };
 
@@ -1098,9 +1109,10 @@ const LotteriaBoard: React.FC = () => {
       );
 
       setAvailableClients(uniqueClients);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[LotteriaBoard] Error loading clients:', error);
-      alert(`Errore nel caricamento dei clienti: ${error.message}`);
+      alert(`Errore nel caricamento dei clienti: ${_errMsg}`);
     } finally {
       setLoadingClients(false);
     }
@@ -1172,6 +1184,7 @@ const LotteriaBoard: React.FC = () => {
       // Then send emails
       logger.log('[LotteriaBoard] Sending emails...');
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const requestBody: any = {};
       if (!sendToAll) {
         requestBody.recipientEmails = selectedRecipients;
@@ -1192,9 +1205,10 @@ const LotteriaBoard: React.FC = () => {
       } else {
         throw new Error(result.error || 'Errore sconosciuto');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[LotteriaBoard] Error sending emails:', error);
-      alert(`❌ Errore nell'invio delle email:\n${error.message}`);
+      alert(`❌ Errore nell'invio delle email:\n${_errMsg}`);
     } finally {
       setSendingEmails(false);
     }
@@ -1214,9 +1228,10 @@ const LotteriaBoard: React.FC = () => {
         setEmailSubject('Importante: Comunicazione Lotteria DR7 Empire');
         setEmailTextContent('Gentile Cliente,\n\nInserisci qui il contenuto della tua email...\n\nCordiali saluti,\nIl Team DR7 Empire');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[LotteriaBoard] Error loading template:', error);
-      alert(`Errore nel caricamento del template: ${error.message}`);
+      alert(`Errore nel caricamento del template: ${_errMsg}`);
     } finally {
       setLoadingTemplate(false);
     }
@@ -1286,9 +1301,10 @@ const LotteriaBoard: React.FC = () => {
       } else {
         throw new Error(result.error || 'Errore sconosciuto');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[LotteriaBoard] Error saving template:', error);
-      alert(`❌ Errore nel salvataggio del template:\n${error.message}`);
+      alert(`❌ Errore nel salvataggio del template:\n${_errMsg}`);
     } finally {
       setSavingTemplate(false);
     }
@@ -1479,7 +1495,9 @@ const LotteriaBoard: React.FC = () => {
                   <div><strong>Email:</strong> {ticket.email}</div>
                   {ticket.customer_phone && <div><strong>Telefono:</strong> {ticket.customer_phone}</div>}
                   <div><strong>Data:</strong> {new Date(ticket.purchase_date).toLocaleDateString('it-IT')}</div>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {(ticket as any).payment_method && (
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     <div><strong>Pagamento:</strong> {(ticket as any).payment_method}</div>
                   )}
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
@@ -1808,9 +1826,11 @@ const LotteriaBoard: React.FC = () => {
                   {new Date(selectedTicketForDetails.purchase_date).toLocaleString('it-IT')}
                 </div>
               </div>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {(selectedTicketForDetails as any).payment_method && (
                 <div className="bg-theme-bg-tertiary p-3 rounded">
                   <div className="text-sm text-theme-text-muted">Metodo Pagamento</div>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   <div className="font-semibold text-theme-text-primary">{(selectedTicketForDetails as any).payment_method}</div>
                 </div>
               )}

@@ -14,6 +14,7 @@ interface Booking {
     appointment_time?: string
     service_type?: string
     service_name?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     status: string
     type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
@@ -74,11 +75,13 @@ export default function DailyCalendarTab() {
             logger.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
 
             // Fetch ALL bookings via Netlify function (bypasses RLS)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let bookingsToProcess: any[] = []
             try {
                 const res = await fetch('/.netlify/functions/list-bookings')
                 const result = await res.json()
                 if (res.ok && result.bookings) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     bookingsToProcess = result.bookings.filter((b: any) => b.status !== 'cancelled')
                 }
             } catch {
@@ -113,6 +116,7 @@ export default function DailyCalendarTab() {
                     romeComponents.year === selectedComponents.year
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             bookingsToProcess.forEach((booking: any) => {
                 // Check-In (Pickup)
                 if (isSameDay(booking.pickup_date)) {

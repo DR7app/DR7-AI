@@ -228,6 +228,7 @@ function MarketingContent() {
             const customerMap = new Map<string, Customer>()
 
             if (bookingsData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 bookingsData.forEach((booking: any) => {
                     const details = booking.booking_details?.customer || {}
                     const customerName = booking.customer_name || details.fullName || 'Cliente'
@@ -260,6 +261,7 @@ function MarketingContent() {
             if (extendedError && extendedError.code !== '42P01') throw extendedError
 
             if (extendedData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 extendedData.forEach((c: any) => {
                     const key = c.email || c.telefono || c.id
 
@@ -288,6 +290,7 @@ function MarketingContent() {
                 .order('created_at', { ascending: false })
 
             if (!customersError && customersData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 customersData.forEach((c: any) => {
                     const key = c.email || c.phone || c.id
                     if (key && !customerMap.has(key)) {
@@ -337,6 +340,7 @@ function MarketingContent() {
                 .in('id', userIds)
 
             const userMap = new Map<string, { name: string; email: string }>()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             usersData?.forEach((u: any) => {
                 const name = u.tipo_cliente === 'persona_fisica'
                     ? `${u.nome || ''} ${u.cognome || ''}`.trim()
@@ -369,6 +373,7 @@ function MarketingContent() {
 
             if (error) throw error
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const results: CustomerMarketingConsent[] = (data || []).map((c: any) => {
                 const fullName = c.tipo_cliente === 'persona_fisica'
                     ? `${c.nome || ''} ${c.cognome || ''}`.trim()
@@ -412,6 +417,7 @@ function MarketingContent() {
             const now = new Date()
             const expiredIds: string[] = []
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const processedCodes = codes.map((code: any) => {
                 if (code.status === 'active' && new Date(code.valid_until) < now) {
                     expiredIds.push(code.id)
@@ -440,6 +446,7 @@ function MarketingContent() {
 
             const usageMap = new Map<string, { count: number; total: number; lastUsed: string | null }>()
             if (usageData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 usageData.forEach((u: any) => {
                     const existing = usageMap.get(u.discount_code_id) || { count: 0, total: 0, lastUsed: null }
                     existing.count += 1
@@ -451,6 +458,7 @@ function MarketingContent() {
                 })
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const codesWithUsage: DiscountCode[] = processedCodes.map((code: any) => {
                 const usage = usageMap.get(code.id)
                 return {
@@ -488,9 +496,10 @@ function MarketingContent() {
             setDiscountCodes(prev => prev.map(c =>
                 c.id === id ? { ...c, status: newStatus as DiscountCode['status'] } : c
             ))
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error toggling code status:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
@@ -668,9 +677,10 @@ function MarketingContent() {
                     throw new Error(result.error || 'Errore sconosciuto')
                 }
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error sending gift vouchers:', error)
-            toast.error('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
+            toast.error('Errore nell\'invio: ' + (_errMsg || 'Errore sconosciuto'))
         }
     }
 

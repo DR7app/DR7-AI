@@ -120,7 +120,7 @@ export default function MessaggiSistemaTab() {
 
             if (error) throw error
             setTemplates(data || [])
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error loading templates:', err)
             toast.error('Errore caricamento messaggi')
         } finally {
@@ -139,7 +139,7 @@ export default function MessaggiSistemaTab() {
 
             if (error && error.code !== '42P01') throw error
             setSentLogs(data || [])
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error loading sent logs:', err)
         } finally {
             setLogsLoading(false)
@@ -162,9 +162,10 @@ export default function MessaggiSistemaTab() {
             setTemplates(prev => prev.map(t => t.id === id ? { ...t, message_body: editBody, updated_at: new Date().toISOString() } : t))
             setEditingId(null)
             toast.success('Messaggio aggiornato')
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error saving template:', err)
-            toast.error('Errore salvataggio: ' + err.message)
+            toast.error('Errore salvataggio: ' + _errMsg)
         } finally {
             setSaving(false)
         }
@@ -213,9 +214,10 @@ export default function MessaggiSistemaTab() {
             setNewSendHour(9)
             setNewTargetCategory('all')
             toast.success('Nuovo messaggio creato')
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error creating template:', err)
-            toast.error('Errore creazione: ' + err.message)
+            toast.error('Errore creazione: ' + _errMsg)
         } finally {
             setCreatingNew(false)
         }
@@ -231,8 +233,9 @@ export default function MessaggiSistemaTab() {
             if (error) throw error
             setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_automatic: newVal } : t))
             toast.success(newVal ? 'Invio automatico attivato' : 'Invio automatico disattivato')
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         }
     }
 
@@ -246,11 +249,13 @@ export default function MessaggiSistemaTab() {
             if (error) throw error
             setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_enabled: newVal } : t))
             toast.success(newVal ? 'Messaggio attivato' : 'Messaggio disattivato')
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async function handleUpdateAutomation(templateId: string, field: string, value: any) {
         try {
             const { error } = await supabase
@@ -259,8 +264,9 @@ export default function MessaggiSistemaTab() {
                 .eq('id', templateId)
             if (error) throw error
             setTemplates(prev => prev.map(t => t.id === templateId ? { ...t, [field]: value } : t))
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         }
     }
 
@@ -280,9 +286,10 @@ export default function MessaggiSistemaTab() {
             if (error) throw error
             setTemplates(prev => prev.filter(t => t.id !== template.id))
             toast.success('Messaggio eliminato')
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error deleting template:', err)
-            toast.error('Errore eliminazione: ' + err.message)
+            toast.error('Errore eliminazione: ' + _errMsg)
         }
     }
 
@@ -314,6 +321,7 @@ export default function MessaggiSistemaTab() {
                 .limit(10)
 
             const merged = new Map<string, CustomerResult>()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const process = (items: any[] | null) => {
                 items?.forEach(c => {
                     if (c.telefono && !merged.has(c.id)) {
@@ -333,7 +341,7 @@ export default function MessaggiSistemaTab() {
             // Filter out already-selected
             const selectedIds = new Set(selectedCustomers.map(c => c.id))
             setCustomerResults(Array.from(merged.values()).filter(c => !selectedIds.has(c.id)))
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error searching customers:', err)
         } finally {
             setSearching(false)

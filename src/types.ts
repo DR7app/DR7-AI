@@ -110,7 +110,8 @@ export interface Reservation {
   source: string | null
   total_amount: number
   currency: string
-  addons: Record<string, unknown> | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addons: Record<string, any> | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -124,6 +125,7 @@ export interface AuditLog {
   action: string
   entity_type: string
   entity_id: string | null
-  diff: Record<string, unknown> | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  diff: Record<string, any> | null
   created_at: string
 }

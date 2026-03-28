@@ -127,9 +127,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         }
         setPreviewUrls(urls)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error loading customer data:', error)
-      toast.error(`Errore nel caricamento dati: ${error.message}`)
+      toast.error(`Errore nel caricamento dati: ${_errMsg}`)
     } finally {
       setLoading(false)
     }
@@ -159,9 +160,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         }
         setPreviewUrls(urls)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error loading documents:', error)
-      toast.error(`Errore nel caricamento documenti: ${error.message}`)
+      toast.error(`Errore nel caricamento documenti: ${_errMsg}`)
     }
   }
 
@@ -245,9 +247,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       toast.success('Documento caricato con successo!')
       setSelectedFiles({ ...selectedFiles, [documentType]: null })
       await loadDocuments()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error uploading document:', error)
-      toast.error(`ERRORE nel caricamento: ${error.message}`)
+      toast.error(`ERRORE nel caricamento: ${_errMsg}`)
     } finally {
       setUploading({ ...uploading, [documentType]: false })
     }
@@ -272,9 +275,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
       toast.success('Documento eliminato')
       await loadDocuments()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error deleting document:', error)
-      toast.error(`ERRORE nell'eliminazione: ${error.message}`)
+      toast.error(`ERRORE nell'eliminazione: ${_errMsg}`)
     }
   }
 

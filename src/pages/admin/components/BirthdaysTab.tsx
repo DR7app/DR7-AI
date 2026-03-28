@@ -81,9 +81,10 @@ export default function BirthdaysTab() {
             setMessageTemplate(draftMessage)
             setEditingMessage(false)
             alert('Messaggio salvato!')
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error saving message template:', error)
-            alert(`Errore nel salvataggio: ${error.message}`)
+            alert(`Errore nel salvataggio: ${_errMsg}`)
         } finally {
             setSavingMessage(false)
         }
@@ -158,6 +159,7 @@ export default function BirthdaysTab() {
             today.setHours(0, 0, 0, 0)
 
             const processedCustomers: CustomerBirthday[] = (customersData || [])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .map((c: any) => {
                     const fullName = c.tipo_cliente === 'persona_fisica'
                         ? `${c.nome || ''} ${c.cognome || ''}`.trim()
@@ -478,9 +480,10 @@ export default function BirthdaysTab() {
 
             // Show success with code
             alert(`Messaggio inviato a ${customer.full_name}!\n\nCodice sconto generato: ${discountCode}`)
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error sending birthday message:', error)
-            alert('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
+            alert('Errore nell\'invio: ' + (_errMsg || 'Errore sconosciuto'))
         } finally {
             setSending(null)
         }
@@ -833,6 +836,7 @@ export function useBirthdayCount() {
                 const sentSet = new Set((sentData || []).map(s => s.customer_id))
 
                 let upcomingCount = 0
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ;(customersData || []).forEach((c: any) => {
                     if (sentSet.has(c.id)) return
 

@@ -18,6 +18,7 @@ interface MechanicalBooking {
   price_total: number
   status: string
   payment_status: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details: any
   created_at: string
 }
@@ -100,6 +101,7 @@ export default function MechanicalCalendarTab() {
       if (customersError) throw customersError
 
       // Map customers_extended to Customer interface
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
         id: c.id,
         full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),

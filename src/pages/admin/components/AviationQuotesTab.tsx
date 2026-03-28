@@ -494,7 +494,7 @@ export default function AviationQuotesTab() {
               <Select
                 label="Scopo del Volo"
                 value={formData.purpose}
-                onChange={(e) => setFormData({ ...formData, purpose: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, purpose: e.target.value as typeof formData.purpose })}
                 options={[
                   { value: 'business', label: 'Business' },
                   { value: 'tourist', label: 'Turistico' },
@@ -505,7 +505,7 @@ export default function AviationQuotesTab() {
               <Select
                 label="Priorità Principale"
                 value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value as typeof formData.priority })}
                 options={[
                   { value: 'speed', label: 'Velocità' },
                   { value: 'luxury', label: 'Lusso' },
@@ -627,7 +627,7 @@ export default function AviationQuotesTab() {
               <Select
                 label="Metodo di Pagamento"
                 value={formData.payment_method}
-                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as typeof formData.payment_method })}
                 options={[
                   { value: 'card', label: 'Carta' },
                   { value: 'bank_transfer', label: 'Bonifico' },
@@ -719,7 +719,7 @@ export default function AviationQuotesTab() {
               <Select
                 label="Stato"
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
                 options={[
                   { value: 'pending', label: 'In Attesa' },
                   { value: 'quoted', label: 'Preventivato' },

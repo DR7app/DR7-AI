@@ -6,6 +6,7 @@ import {
 // Types
 export interface CalendarEvent {
     id: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking: any
     // Rome Local Time components
     startLocal: Date
@@ -40,6 +41,7 @@ export function toDayIndex0(romeDate: Date): number {
  * Handles the "Midnight Rule" and strict inclusive/exclusive logic
  */
 export function normalizeBooking(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking: any,
     currentYear: number,
     currentMonth0: number, // 0-indexed month

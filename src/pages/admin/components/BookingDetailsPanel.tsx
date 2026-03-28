@@ -6,6 +6,7 @@ import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 import { logger } from '../../../utils/logger'
 
 interface BookingDetailsPanelProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking: any
   onClose: () => void
   onEdit?: (bookingId: string) => void

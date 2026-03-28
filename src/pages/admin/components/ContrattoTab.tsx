@@ -66,6 +66,7 @@ export default function ContrattoTab() {
 
       if (error) throw error
       // Resolve customer_name from booking if contract's customer_name is empty
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resolved = (data || []).map((c: any) => {
         const b = c.bookings
         if (!c.customer_name && b) {
@@ -220,7 +221,7 @@ export default function ContrattoTab() {
       } else {
         toast.error(data.error || 'Errore nell\'invio')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Signature init error:', error)
       toast.error('Errore nell\'invio della richiesta di firma')
     } finally {
@@ -408,7 +409,7 @@ export default function ContrattoTab() {
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato</label>
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
                   className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 >
                   <option value="active">Attivo</option>
@@ -613,8 +614,9 @@ export default function ContrattoTab() {
                           }
                           toast.success('Contratto rigenerato!', { id: 'regen' })
                           loadContracts()
-                        } catch (err: any) {
-                          toast.error('Errore: ' + err.message, { id: 'regen' })
+                        } catch (err: unknown) {
+                          const _errMsg = err instanceof Error ? err.message : String(err)
+                          toast.error('Errore: ' + _errMsg, { id: 'regen' })
                         }
                       }}
                       className="w-full bg-orange-600/30 hover:bg-orange-600/50 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"

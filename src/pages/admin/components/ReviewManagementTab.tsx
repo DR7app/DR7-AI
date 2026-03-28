@@ -169,7 +169,7 @@ export default function ReviewManagementTab() {
       if (!res.ok) throw new Error('Errore caricamento candidati')
       const data = await res.json()
       setCandidates(data.candidates || data || [])
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('fetchCandidates error:', err)
       toast.error('Errore nel caricamento dei candidati recensione')
     }
@@ -181,7 +181,7 @@ export default function ReviewManagementTab() {
       if (!res.ok) throw new Error('Errore caricamento statistiche')
       const data = await res.json()
       setStats(data)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('fetchStats error:', err)
     }
   }
@@ -194,7 +194,7 @@ export default function ReviewManagementTab() {
       const s = { ...DEFAULT_SETTINGS, ...data }
       setSettings(s)
       setSettingsDraft(s)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('fetchSettings error:', err)
     }
   }
@@ -217,7 +217,7 @@ export default function ReviewManagementTab() {
         setTemplates(defaults)
         setTemplatesDraft(defaults)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('fetchTemplates error:', err)
     }
   }
@@ -238,8 +238,9 @@ export default function ReviewManagementTab() {
       }
       toast.success('Richiesta recensione inviata!')
       await Promise.all([fetchCandidates(), fetchStats()])
-    } catch (err: any) {
-      toast.error(err.message || 'Errore durante l\'invio')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore durante l\'invio')
     } finally {
       setSendingId(null)
     }
@@ -267,8 +268,9 @@ export default function ReviewManagementTab() {
 
       toast.success('Approvato e inviato!')
       await Promise.all([fetchCandidates(), fetchStats()])
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg)
     } finally {
       setSendingId(null)
     }
@@ -287,8 +289,9 @@ export default function ReviewManagementTab() {
       if (!res.ok) throw new Error('Errore esclusione')
       toast.success('Cliente escluso dalle recensioni')
       await Promise.all([fetchCandidates(), fetchStats()])
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg)
     } finally {
       setSendingId(null)
     }
@@ -399,9 +402,10 @@ export default function ReviewManagementTab() {
       toast.dismiss(toastId)
       toast.success(`Valutazione completata: ${evaluated} valutati, ${skipped} saltati (${rentals?.length || 0} noleggi, ${washes?.length || 0} lavaggi)`)
       await Promise.all([fetchCandidates(), fetchStats()])
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       toast.dismiss(toastId)
-      toast.error('Errore durante la valutazione: ' + (err.message || 'Errore'))
+      toast.error('Errore durante la valutazione: ' + (_errMsg || 'Errore'))
     } finally {
       setEvaluating(false)
     }
@@ -418,8 +422,9 @@ export default function ReviewManagementTab() {
       if (!res.ok) throw new Error('Errore salvataggio impostazioni')
       setSettings(settingsDraft)
       toast.success('Impostazioni salvate')
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg)
     } finally {
       setSavingSettings(false)
     }
@@ -437,8 +442,9 @@ export default function ReviewManagementTab() {
       toast.success(`Template "${TEMPLATE_LABELS[template.template_key]}" salvato`)
       // Update main state
       setTemplates(prev => prev.map(t => t.template_key === template.template_key ? template : t))
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg)
     } finally {
       setSavingTemplateKey(null)
     }
@@ -620,7 +626,7 @@ export default function ReviewManagementTab() {
               <label className="block text-sm text-theme-text-secondary mb-1">Canale auto noleggio</label>
               <select
                 value={settingsDraft.auto_channel_rental}
-                onChange={e => setSettingsDraft({ ...settingsDraft, auto_channel_rental: e.target.value as any })}
+                onChange={e => setSettingsDraft({ ...settingsDraft, auto_channel_rental: e.target.value as typeof settingsDraft.auto_channel_rental })}
                 className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-xl text-sm text-theme-text-primary"
               >
                 <option value="DISABLED">Disattivato</option>
@@ -635,7 +641,7 @@ export default function ReviewManagementTab() {
               <label className="block text-sm text-theme-text-secondary mb-1">Canale auto lavaggio</label>
               <select
                 value={settingsDraft.auto_channel_wash}
-                onChange={e => setSettingsDraft({ ...settingsDraft, auto_channel_wash: e.target.value as any })}
+                onChange={e => setSettingsDraft({ ...settingsDraft, auto_channel_wash: e.target.value as typeof settingsDraft.auto_channel_wash })}
                 className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-xl text-sm text-theme-text-primary"
               >
                 <option value="DISABLED">Disattivato</option>
@@ -758,7 +764,7 @@ export default function ReviewManagementTab() {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <select
           value={filterServiceType}
-          onChange={e => setFilterServiceType(e.target.value as any)}
+          onChange={e => setFilterServiceType(e.target.value as typeof filterServiceType)}
           className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-xl text-sm text-theme-text-primary"
         >
           <option value="ALL">Tutti</option>

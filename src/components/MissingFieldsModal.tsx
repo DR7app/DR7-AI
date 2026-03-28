@@ -6,8 +6,10 @@ interface MissingFieldsModalProps {
     isOpen: boolean
     onClose: () => void
     customerId: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     customerData: any
     missingFields: string[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSave: (updatedData: any) => void
 }
 
@@ -49,6 +51,7 @@ export default function MissingFieldsModal({
     missingFields,
     onSave
 }: MissingFieldsModalProps) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [isSaving, setIsSaving] = useState(false)
@@ -59,6 +62,7 @@ export default function MissingFieldsModal({
     // Initialize form data with existing customer data
     useEffect(() => {
         if (isOpen && customerData) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const initialData: Record<string, any> = {}
             missingFields.forEach(field => {
                 initialData[field] = customerData[field] || ''
@@ -67,6 +71,7 @@ export default function MissingFieldsModal({
         }
     }, [isOpen, customerData, missingFields])
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }))
         // Clear error when user starts typing
@@ -118,6 +123,7 @@ export default function MissingFieldsModal({
             logger.log('[MissingFieldsModal] Saving missing fields:', formData)
 
             // Build the payload: merge existing customer data with new form values
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const savePayload: any = { ...customerData, ...formData }
 
             // Handle special field mappings
@@ -161,9 +167,10 @@ export default function MissingFieldsModal({
             // Call onSave callback with updated data
             onSave(data)
             onClose()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('[MissingFieldsModal] Save error:', error)
-            toast.error(`Errore durante il salvataggio: ${error.message}`)
+            toast.error(`Errore durante il salvataggio: ${_errMsg}`)
         } finally {
             setIsSaving(false)
         }

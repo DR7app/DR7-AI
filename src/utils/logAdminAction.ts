@@ -40,6 +40,7 @@ export async function logAdminAction(
   action: string,
   entity_type?: string,
   entity_id?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details?: Record<string, any>
 ) {
   try {

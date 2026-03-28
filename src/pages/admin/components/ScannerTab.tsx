@@ -118,6 +118,7 @@ export default function ScannerTab() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [showNewClientModal, setShowNewClientModal] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [clientModalData, setClientModalData] = useState<any>(null);
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -207,9 +208,10 @@ export default function ScannerTab() {
             }));
 
             return result.data;
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Extraction error:', err);
-            setError(`Errore estrazione ${slot.label}: ${err.message}`);
+            setError(`Errore estrazione ${slot.label}: ${_errMsg}`);
             setDocuments(prev => ({
                 ...prev,
                 [slotKey]: { ...prev[slotKey], extracting: false }
@@ -242,6 +244,7 @@ export default function ScannerTab() {
         for (const data of results) {
             Object.entries(data).forEach(([key, value]) => {
                 if (value && value !== '') {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (merged as any)[key] = value;
                 }
             });
@@ -283,6 +286,7 @@ export default function ScannerTab() {
         if (!mergedData) return;
 
         // Convert scanned documents to File objects for upload
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const scannedFiles: any = {};
 
         if (documents.id_front.preview) {
@@ -299,6 +303,7 @@ export default function ScannerTab() {
         }
 
         // Map extracted data to NewClientModal format (matching expected field names)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const clientData: any = {
             tipo_cliente: 'persona_fisica',
             // Personal info

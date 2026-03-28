@@ -31,6 +31,7 @@ interface UnpaidBooking {
   status: string
   payment_status: string
   payment_method?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details?: any
   created_at: string
 }
@@ -227,8 +228,9 @@ export default function UnpaidBookingsTab() {
       } else {
         toast.error(data.error || 'Errore')
       }
-    } catch (err: any) {
-      toast.error('Errore: ' + err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore: ' + _errMsg)
     } finally {
       setAddebitoSending(false)
     }
@@ -257,6 +259,7 @@ export default function UnpaidBookingsTab() {
 
       for (const f of (fatture || [])) {
         if (!f.items || !Array.isArray(f.items) || !f.booking_id) continue
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         f.items.forEach((fi: any, idx: number) => {
           if (!fi.description) return
           const desc = fi.description as string
@@ -310,12 +313,15 @@ export default function UnpaidBookingsTab() {
         if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
 
         const extensions = booking.booking_details?.extension_history || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')) return true
 
         const penalties = booking.booking_details?.penalties || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link')) return true
 
         const danni = booking.booking_details?.danni || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link')) return true
 
         // Only keep for fattura items if the booking itself is NOT paid
@@ -376,9 +382,10 @@ export default function UnpaidBookingsTab() {
       }
 
       loadUnpaidBookings()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to update payment status:', error)
-      const errorMessage = error?.message || error?.details || JSON.stringify(error)
+      const _errMsg = error instanceof Error ? error.message : String(error)
+      const errorMessage = _errMsg || JSON.stringify(error)
       toast.error(`Errore: ${errorMessage}`)
     }
   }
@@ -394,6 +401,7 @@ export default function UnpaidBookingsTab() {
       if (fetchErr) throw fetchErr
 
       const details = fresh?.booking_details || {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const arr: any[] = [...(details[type] || [])]
       arr.splice(originalIndex, 1)
 
@@ -406,9 +414,10 @@ export default function UnpaidBookingsTab() {
       toast.success(`${type === 'danni' ? 'Danno' : 'Penale'} rimosso!`)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to remove item:', error)
-      toast.error('Errore: ' + (error.message || error))
+      toast.error('Errore: ' + (_errMsg || error))
     }
   }
 
@@ -423,6 +432,7 @@ export default function UnpaidBookingsTab() {
       if (fetchErr) throw fetchErr
 
       const details = fresh?.booking_details || {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const arr: any[] = [...(details[type] || [])]
       if (arr[originalIndex]) {
         arr[originalIndex] = { ...arr[originalIndex], total: newAmount, amount: newAmount, quantity: 1 }
@@ -437,9 +447,10 @@ export default function UnpaidBookingsTab() {
       toast.success('Importo aggiornato!')
       setEditAmountKey(null)
       loadUnpaidBookings()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to update amount:', error)
-      toast.error('Errore: ' + (error.message || error))
+      toast.error('Errore: ' + (_errMsg || error))
     }
   }
 
@@ -459,8 +470,9 @@ export default function UnpaidBookingsTab() {
       logAdminAction('delete_extension', 'booking', booking.id)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
-    } catch (error: any) {
-      toast.error('Errore: ' + (error.message || error))
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
+      toast.error('Errore: ' + (_errMsg || error))
     }
   }
 
@@ -503,8 +515,9 @@ export default function UnpaidBookingsTab() {
       }
 
       loadUnpaidBookings()
-    } catch (error: any) {
-      toast.error('Errore: ' + (error.message || error))
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
+      toast.error('Errore: ' + (_errMsg || error))
     }
   }
 
@@ -555,8 +568,9 @@ export default function UnpaidBookingsTab() {
       }
 
       loadUnpaidBookings()
-    } catch (error: any) {
-      toast.error('Errore: ' + (error.message || error))
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
+      toast.error('Errore: ' + (_errMsg || error))
     }
   }
 
@@ -604,9 +618,10 @@ export default function UnpaidBookingsTab() {
       logAdminAction('delete_unpaid_booking', 'booking', bookingId)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to delete booking:', error)
-      toast.error('Errore: ' + (error.message || error))
+      toast.error('Errore: ' + (_errMsg || error))
     }
   }
 
@@ -620,6 +635,7 @@ export default function UnpaidBookingsTab() {
 
       if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
       if (items[fi.itemIndex]) {
         const existing = items[fi.itemIndex]
@@ -640,8 +656,9 @@ export default function UnpaidBookingsTab() {
       if (updateErr) throw updateErr
       toast.success('Pagamento registrato')
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -680,9 +697,10 @@ export default function UnpaidBookingsTab() {
           toast.success('Link inviato via WhatsApp!')
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       toast.dismiss('paylink')
-      toast.error(err.message || 'Errore')
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -692,6 +710,7 @@ export default function UnpaidBookingsTab() {
         .from('fatture').select('id, items').eq('id', fi.fatturaId).single()
       if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
       if (items[fi.itemIndex]) {
         const existing = items[fi.itemIndex]
@@ -703,8 +722,9 @@ export default function UnpaidBookingsTab() {
       logAdminAction('mark_fattura_item_paid', 'fattura', fi.fatturaId)
       toast.success('Pagamento registrato')
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -716,11 +736,14 @@ export default function UnpaidBookingsTab() {
       // Re-fetch fresh booking_details
       const { data: fresh } = await supabase.from('bookings').select('booking_details').eq('id', booking.id).single()
       const details = fresh?.booking_details || booking.booking_details || {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const arr: any[] = details[type] || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pending = arr.filter((item: any) => item.paymentStatus !== 'paid')
 
       // 1. FIRST: Mark items as paid in DB (this must succeed)
       if (pending.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updated = arr.map((item: any) => {
           if (item.paymentStatus !== 'paid') {
             const total = item.total || (item.amount || 0) * (item.quantity || 1)
@@ -743,10 +766,12 @@ export default function UnpaidBookingsTab() {
 
       // 2. THEN: Try to generate fattura (non-blocking — payment is already marked)
       if (pending.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const invoiceItems = pending.map((item: any) => {
           const total = item.total || (item.amount || 0) * (item.quantity || 1)
           const remaining = total - (item.amountPaid || 0)
           return { label: item.label, amount: remaining, quantity: 1 }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }).filter((i: any) => i.amount > 0)
 
         if (invoiceItems.length > 0) {
@@ -769,6 +794,7 @@ export default function UnpaidBookingsTab() {
               const err = await res.json()
               toast.error('Fattura non generata: ' + (err.message || err.error || 'errore'))
             }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (invErr: any) {
             toast.error('Fattura non generata: ' + (invErr.message || 'errore'))
           }
@@ -776,8 +802,9 @@ export default function UnpaidBookingsTab() {
       }
 
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setProcessingKey(null)
     }
@@ -789,6 +816,7 @@ export default function UnpaidBookingsTab() {
       // Re-fetch fresh booking_details
       const { data: fresh } = await supabase.from('bookings').select('booking_details').eq('id', booking.id).single()
       const details = fresh?.booking_details || booking.booking_details || {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const arr: any[] = [...(details[type] || [])]
       let changed = false
       for (let i = 0; i < arr.length; i++) {
@@ -825,8 +853,9 @@ export default function UnpaidBookingsTab() {
 
       toast.success('Pagamento parziale registrato')
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -851,8 +880,9 @@ export default function UnpaidBookingsTab() {
       toast.success('Pagamento parziale registrato')
       setPartialPayItemKey(null)
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -881,6 +911,7 @@ export default function UnpaidBookingsTab() {
       // 1. FIRST: Mark all booking_details items as paid in DB
       for (const [bookingId, { booking, indices }] of bookingUpdates) {
         const details = booking.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[type] || [])]
         for (const idx of indices) {
           if (arr[idx]) {
@@ -922,14 +953,16 @@ export default function UnpaidBookingsTab() {
             const err = await res.json()
             toast.error('Fattura non generata: ' + (err.message || err.error || 'errore'))
           }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (invErr: any) {
           toast.error('Fattura non generata: ' + (invErr.message || 'errore'))
         }
       }
 
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setProcessingKey(null)
     }
@@ -1014,8 +1047,9 @@ export default function UnpaidBookingsTab() {
       logAdminAction('mark_booking_extensions_paid', 'booking', booking.id)
 
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -1032,6 +1066,7 @@ export default function UnpaidBookingsTab() {
       let anchorCustomerId = ''
 
       // 1. Noleggio bookings + extensions → collect line items (DO NOT mark paid yet — fattura first)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const noleggioUpdates: { bookingId: string; extensions: any[]; booking: UnpaidBooking }[] = []
       for (const booking of group.noleggioBookings) {
         if (!anchorCustomerId) anchorCustomerId = booking.customer_id || booking.user_id || ''
@@ -1164,6 +1199,7 @@ export default function UnpaidBookingsTab() {
 
       for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
         const details = booking.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details.penalties || [])]
         for (const idx of indices) {
           if (arr[idx]) {
@@ -1176,6 +1212,7 @@ export default function UnpaidBookingsTab() {
 
       for (const [bookingId, { booking, indices }] of danniBookingUpdates) {
         const details = booking.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details.danni || [])]
         for (const idx of indices) {
           if (arr[idx]) {
@@ -1199,8 +1236,9 @@ export default function UnpaidBookingsTab() {
 
       logAdminAction('mark_all_customer_paid', 'customer', group.customerKey)
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setProcessingKey(null)
     }
@@ -1218,8 +1256,9 @@ export default function UnpaidBookingsTab() {
       toast.success('Importo aggiornato!')
       setEditAmountKey(null)
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -1233,6 +1272,7 @@ export default function UnpaidBookingsTab() {
 
       if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
       items.splice(fi.itemIndex, 1)
 
@@ -1245,8 +1285,9 @@ export default function UnpaidBookingsTab() {
       toast.success('Elemento fattura eliminato!')
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -1260,6 +1301,7 @@ export default function UnpaidBookingsTab() {
 
       if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
       if (items[fi.itemIndex]) {
         items[fi.itemIndex] = {
@@ -1279,8 +1321,9 @@ export default function UnpaidBookingsTab() {
       toast.success('Importo fattura aggiornato!')
       setEditAmountKey(null)
       loadUnpaidBookings()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     }
   }
 
@@ -1306,6 +1349,7 @@ export default function UnpaidBookingsTab() {
       remaining += Math.max(0, total - paid)
     } else {
       const extensions = booking.booking_details?.extension_history || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       extensions.forEach((ext: any) => {
         if ((ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link') && ext.additional_amount) {
           const extTotal = ext.additional_amount * 100
@@ -1316,6 +1360,7 @@ export default function UnpaidBookingsTab() {
     }
 
     const penalties = booking.booking_details?.penalties || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     penalties.forEach((p: any) => {
       if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link') {
         const total = p.total || (p.amount || 0) * (p.quantity || 1)
@@ -1325,6 +1370,7 @@ export default function UnpaidBookingsTab() {
     })
 
     const danni = booking.booking_details?.danni || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     danni.forEach((d: any) => {
       if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link') {
         const total = d.total || (d.amount || 0) * (d.quantity || 1)
@@ -1344,14 +1390,18 @@ export default function UnpaidBookingsTab() {
   const getPendingExtensions = (booking: UnpaidBooking) => {
     const extensions = booking.booking_details?.extension_history || []
     return extensions
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((ext: any, idx: number) => ({ ext, idx }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
   }
 
   const getPendingWithIndex = (booking: UnpaidBooking, arrayKey: 'penalties' | 'danni') => {
     const arr = booking.booking_details?.[arrayKey] || []
     return arr
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((item: any, realIdx: number) => ({ item, realIdx }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial' || item.paymentStatus === 'nexi_pay_by_link')
   }
 
@@ -1394,6 +1444,7 @@ export default function UnpaidBookingsTab() {
       // (or has unpaid extensions). If the booking is paid but has only unpaid
       // danni/penali, it belongs ONLY in those columns.
       const mainIsUnpaid = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
 
       if (mainIsUnpaid || hasUnpaidExtensions) {
@@ -1520,12 +1571,15 @@ export default function UnpaidBookingsTab() {
       if (!gMap.has(key)) gMap.set(key, { rental: false, pw: false, penali: false, danni: false })
       const g = gMap.get(key)!
       const mainUnpaid = b.payment_status === 'pending' || b.payment_status === 'unpaid'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const hasUnpaidExt = (b.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
       if (mainUnpaid || hasUnpaidExt) {
         if (getEffectiveType(b) === 'rental') g.rental = true
         else g.pw = true
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const hasPen = (b.booking_details?.penalties || []).some((p: any) => p.paymentStatus !== 'paid')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const hasDan = (b.booking_details?.danni || []).some((d: any) => d.paymentStatus !== 'paid')
       if (hasPen || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'penalties')) g.penali = true
       if (hasDan || (fatturaItemsMap[b.id] || []).some(fi => fi.type === 'danni')) g.danni = true
@@ -1679,6 +1733,7 @@ export default function UnpaidBookingsTab() {
               {/* Pending extensions */}
               {pendingExts.length > 0 && (
                 <div className="mt-1.5 space-y-1.5">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {pendingExts.map(({ ext, idx: extIdx }: any) => {
                     let days = ext.additional_days
                     if (!days && ext.previous_dropoff && ext.new_dropoff) {

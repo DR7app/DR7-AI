@@ -81,6 +81,7 @@ function DocumentiSubTab() {
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customerResults, setCustomerResults] = useState<any[]>([])
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
 
@@ -99,7 +100,7 @@ function DocumentiSubTab() {
 
       if (error) throw error
       setRequests(data || [])
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load signature requests:', err)
       toast.error('Errore caricamento richieste')
     } finally {
@@ -125,6 +126,7 @@ function DocumentiSubTab() {
     setShowCustomerDropdown(true)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function selectCustomer(customer: any) {
     const name = customer.denominazione || [customer.nome, customer.cognome].filter(Boolean).join(' ')
     setFormData({
@@ -185,9 +187,10 @@ function DocumentiSubTab() {
       }
 
       toast.success('Documento caricato')
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('Upload error:', err)
-      toast.error('Errore caricamento: ' + err.message)
+      toast.error('Errore caricamento: ' + _errMsg)
     } finally {
       setUploading(false)
     }
@@ -224,6 +227,7 @@ function DocumentiSubTab() {
         logger.log('[TRUSTERA] About to log action, requestId:', data.requestId)
         logAdminAction('send_trustera_document', 'signature', data.requestId, { document: formData.documentName, signer: formData.signerName })
           .then(() => logger.log('[TRUSTERA] logAdminAction completed'))
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .catch((err: any) => console.error('[TRUSTERA] logAdminAction FAILED:', err))
         setShowUpload(false)
         resetForm()
@@ -231,9 +235,10 @@ function DocumentiSubTab() {
       } else {
         toast.error(data.error || 'Errore nell\'invio')
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('Send error:', err)
-      toast.error('Errore: ' + err.message)
+      toast.error('Errore: ' + _errMsg)
     } finally {
       setSending(false)
     }
@@ -258,8 +263,9 @@ function DocumentiSubTab() {
       toast.success('Richiesta eliminata')
       logAdminAction('delete_trustera_document', 'signature', id)
       loadRequests()
-    } catch (err: any) {
-      toast.error('Errore eliminazione: ' + err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore eliminazione: ' + _errMsg)
     }
   }
 
@@ -531,7 +537,7 @@ function MarketingConsentSubTab() {
       }
 
       setCustomers(Array.from(emailMap.values()))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load customers:', err)
       toast.error('Errore caricamento clienti')
     } finally {

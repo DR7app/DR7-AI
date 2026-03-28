@@ -83,7 +83,8 @@ export default function RevenuePricingTab() {
 
       setConfig(parseConfigFromDB(data))
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Errore sconosciuto'
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      const message = err instanceof Error ? _errMsg : 'Errore sconosciuto'
       toast.error('Errore caricamento config: ' + message)
     }
     setLoading(false)
@@ -133,7 +134,8 @@ export default function RevenuePricingTab() {
       toast.success('Configurazione salvata')
       setValidationErrors([])
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Errore sconosciuto'
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      const message = err instanceof Error ? _errMsg : 'Errore sconosciuto'
       toast.error('Errore salvataggio: ' + message)
     }
     setSaving(false)
@@ -163,7 +165,8 @@ export default function RevenuePricingTab() {
       }
       setSimResult(data as PricingTrace)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Errore sconosciuto'
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      const message = err instanceof Error ? _errMsg : 'Errore sconosciuto'
       toast.error('Errore simulazione backend: ' + message + ' — uso preview locale')
       runLocalPreview()
     }

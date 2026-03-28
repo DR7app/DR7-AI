@@ -13,6 +13,7 @@ interface Booking {
     appointment_time?: string
     service_type?: string
     service_name?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     status: string
     type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
@@ -204,6 +205,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     components.year === selectedDate.getFullYear()
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data?.forEach((booking: any) => {
                 if (isSameDay(booking.pickup_date)) {
                     const isRental = !booking.service_type ||

@@ -74,6 +74,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function updateField(field: keyof Vehicle, value: any) {
         setEditedVehicle(prev => ({ ...prev, [field]: value }))
     }

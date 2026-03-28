@@ -3,6 +3,7 @@ import { supabase } from '../../supabaseClient';
 import toast from 'react-hot-toast';
 
 interface DocumentReviewModalProps {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     scan: any;
     isOpen: boolean;
     onClose: () => void;
@@ -19,6 +20,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
     const [docType, setDocType] = useState(extractedData.doc_type || 'generic');
 
     // Search state for manual linking
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [customers, setCustomers] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -83,9 +85,10 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
             setCustomers([newCustomer, ...customers]);
 
             toast.success(`Cliente "${newCustomer.nome} ${newCustomer.cognome}" creato con successo!`);
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error creating customer:', err);
-            toast.error(`Errore nella creazione del cliente: ${err.message}`);
+            toast.error(`Errore nella creazione del cliente: ${_errMsg}`);
         } finally {
             setLoading(false);
         }

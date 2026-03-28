@@ -45,8 +45,9 @@ export default function ReportPenaliDanniTab() {
       if (!danniRes.ok) throw new Error(danniJson.error || 'Errore danni')
       setPenaliData(penaliJson)
       setDanniData(danniJson)
-    } catch (err: any) {
-      setError(err.message || 'Errore sconosciuto')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      setError(_errMsg || 'Errore sconosciuto')
     } finally {
       setLoading(false)
     }

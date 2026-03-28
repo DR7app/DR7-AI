@@ -60,6 +60,7 @@ export default function CodiciScontoTab() {
             const now = new Date()
             const expiredIds: string[] = []
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const processedCodes = codes.map((code: any) => {
                 if (code.status === 'active' && new Date(code.valid_until) < now) {
                     expiredIds.push(code.id)
@@ -88,6 +89,7 @@ export default function CodiciScontoTab() {
 
             const usageMap = new Map<string, { count: number; total: number; lastUsed: string | null }>()
             if (usageData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 usageData.forEach((u: any) => {
                     const existing = usageMap.get(u.discount_code_id) || { count: 0, total: 0, lastUsed: null }
                     existing.count += 1
@@ -99,6 +101,7 @@ export default function CodiciScontoTab() {
                 })
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const codesWithUsage: DiscountCode[] = processedCodes.map((code: any) => {
                 const usage = usageMap.get(code.id)
                 return {
@@ -136,9 +139,10 @@ export default function CodiciScontoTab() {
             setDiscountCodes(prev => prev.map(c =>
                 c.id === id ? { ...c, status: newStatus as DiscountCode['status'] } : c
             ))
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error toggling code status:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 

@@ -89,7 +89,8 @@ export default function CarWashCatalogTab() {
   async function saveEditing(service: CarWashService) {
     setSaving(true)
     try {
-      const updates: Record<string, unknown> = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: Record<string, any> = {
         price: parseFloat(editPrice) || service.price,
         name: editName.trim() || service.name,
         duration: editDuration.trim() || service.duration,

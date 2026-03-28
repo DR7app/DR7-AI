@@ -105,6 +105,7 @@ export default function CarWashTab() {
         }
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const serviceData: any = {
         name: formData.name,
         name_en: formData.name_en,

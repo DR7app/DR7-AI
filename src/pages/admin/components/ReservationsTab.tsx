@@ -166,6 +166,7 @@ interface Vehicle {
   status: 'available' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
   category?: 'exotic' | 'urban' | 'aziendali'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -181,6 +182,7 @@ interface Reservation {
   source: string | null
   total_amount: number
   currency: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addons: Record<string, any> | null
   created_by: string | null
   created_at: string
@@ -208,6 +210,7 @@ interface Booking {
   customer_name: string | null
   customer_email: string | null
   customer_phone: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details: Record<string, any> | null
   booked_at: string
   created_at: string
@@ -232,6 +235,7 @@ interface Booking {
     yousign_status: string | null
     signed_pdf_url: string | null
     yousign_signature_request_id: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } | any
 }
 
@@ -280,6 +284,7 @@ const normalizePlate = (s: string) => s ? s.replace(/\s+/g, '').toUpperCase() : 
 
 // Helper to check if a booking belongs to a vehicle
 // CRITICAL: Only matches by vehicle_id or plate - NEVER by name
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   // First try vehicle_id (most reliable) - check both top-level and booking_details
   const bookingVehicleId = booking.vehicle_id || booking.booking_details?.vehicle_id
@@ -325,6 +330,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Missing Data Modal State
   const [showMissingDataModal, setShowMissingDataModal] = useState(false)
   const [missingFields, setMissingFields] = useState<string[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tempCustomerData, setTempCustomerData] = useState<any>(null)
   const [currentValidationBooking, setCurrentValidationBooking] = useState<Booking | null>(null)
   const [validationContext, setValidationContext] = useState<'contract' | 'invoice' | 'booking'>('contract')
@@ -634,8 +640,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         cauzione_targa_year: data.year || '',
       }))
       toast.success(`${data.brand} ${data.model} (${data.year}) trovato`)
-    } catch (err: any) {
-      toast.error('Errore: ' + err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore: ' + _errMsg)
     } finally {
       setTargaLoading(false)
     }
@@ -725,6 +732,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
 
   // Penalty Modal State
@@ -769,14 +777,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       } else {
         throw new Error('Customer not found')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const errCode = typeof error === 'object' && error !== null ? String((error as Record<string, any>).code ?? '') : ''
       console.error('Error fetching customer for edit:', error)
 
       // More helpful error message
-      if (error.code === 'PGRST116' || error.message?.includes('not found')) {
+      if (errCode === 'PGRST116' || _errMsg?.includes('not found')) {
         alert("Cliente non trovato nel database.\n\nIl cliente potrebbe essere stato creato sul sito web ma non ha ancora un profilo completo nell'admin panel.\n\nContatta il supporto tecnico per risolvere questo problema.")
       } else {
-        alert("Impossibile caricare i dati del cliente per la modifica.\n\nErrore: " + (error.message || 'Errore sconosciuto'))
+        alert("Impossibile caricare i dati del cliente per la modifica.\n\nErrore: " + (_errMsg || 'Errore sconosciuto'))
       }
     }
   }
@@ -1139,6 +1150,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
       if (bookingsForCustomers) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         bookingsForCustomers.forEach((booking: any) => {
           const details = booking.booking_details?.customer || {}
           const customerName = booking.customer_name || details.fullName || 'Cliente'
@@ -1192,7 +1204,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       logger.log('[ReservationsTab] Customers from bookings:', customerMap.size)
 
       // Also fetch from customers_extended via Netlify function (bypasses RLS, paginates beyond 1000 limit)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let customersExtendedData: any[] | null = null
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let customersExtendedError: any = null
       try {
         const custResponse = await fetch('/.netlify/functions/list-customers')
@@ -1202,8 +1216,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         } else {
           customersExtendedError = { message: custResult.error }
         }
-      } catch (e: any) {
-        customersExtendedError = { message: e.message }
+      } catch (e: unknown) {
+        const _errMsg = e instanceof Error ? e.message : String(e)
+        customersExtendedError = { message: _errMsg }
       }
 
       if (customersExtendedError) {
@@ -1211,6 +1226,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       } else if (customersExtendedData) {
         logger.log('[ReservationsTab] Customers from customers_extended:', customersExtendedData.length)
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         customersExtendedData.forEach((c: any) => {
           // Map to local Customer interface
           let fullName = 'N/A'
@@ -1502,9 +1518,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
       })
       toast.success('Link di pagamento rinviato via WhatsApp!')
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('Error resending payment link:', err)
-      toast.error('Errore invio WhatsApp: ' + err.message)
+      toast.error('Errore invio WhatsApp: ' + _errMsg)
     }
   }
 
@@ -1517,6 +1534,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
 
     // Skip contract for non-rental bookings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svcType = booking.service_type || (booking as any).booking_details?.service_type || ''
     if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
       logger.log(`[handleGenerateContract] Skipping — service_type=${svcType} is not a rental`)
@@ -1527,9 +1545,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     let missing: string[]
     try {
       missing = await validateCustomerData(booking)
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[handleGenerateContract] Validation error:', error)
-      alert(error.message)
+      alert(_errMsg)
       return
     }
 
@@ -1564,9 +1583,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Reload data to show the contract link and Yousign button in the UI
       await loadData()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating contract:', error)
-      alert('Errore nella generazione del contratto: ' + error.message + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
+      alert('Errore nella generazione del contratto: ' + _errMsg + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
     } finally {
       setGeneratingContract(false)
     }
@@ -1579,9 +1599,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     let missing: string[]
     try {
       missing = await validateCustomerData(booking)
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[handleGenerateInvoice] Validation error:', error)
-      alert(error.message)
+      alert(_errMsg)
       return
     }
 
@@ -1673,9 +1694,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // SDI send is now handled automatically by the backend
       loadData()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating invoice:', error)
-      const errorMessage = error.message || ''
+      const errorMessage = _errMsg || ''
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
@@ -1766,9 +1788,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (result.paymentUrl) {
         window.open(result.paymentUrl, '_blank')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error creating pre-auth:', error)
-      alert('Errore nella creazione della preautorizzazione: ' + error.message)
+      alert('Errore nella creazione della preautorizzazione: ' + _errMsg)
     } finally {
       setCreatingPreAuth(false)
     }
@@ -2224,6 +2247,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Build update payload
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const bookingUpdate: Record<string, any> = {
         dropoff_date: newDropoffDateTime.toISOString(),
         price_total: newTotal,
@@ -2448,6 +2472,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else {
             toast.error('Errore Pay by Link: ' + (linkData.error || 'Errore'))
           }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (linkErr: any) {
           console.error('[handleConfirmExtend] Pay by Link error:', linkErr)
           toast.error('Errore Pay by Link: ' + linkErr.message)
@@ -2461,9 +2486,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Refresh data
       await loadData()
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[handleConfirmExtend] Error:', error)
-      alert('Errore: ' + (error.message || 'Errore sconosciuto'))
+      alert('Errore: ' + (_errMsg || 'Errore sconosciuto'))
     } finally {
       setIsExtending(false)
     }
@@ -2479,6 +2505,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // VALIDATION LOGIC
     if (!skipValidation) {
       let missing: string[] = []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let tempCustData: any = {}
       let targetCustomerId = ''
 
@@ -3186,6 +3213,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             logger.log('✅ Existing customer found (dedup), reusing ID:', existingCustomer.id)
           } else {
             // No existing customer found -- create new one
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const customerData: any = {
               tipo_cliente: newCustomerData.tipo_cliente,
               nazione: newCustomerData.nazione,
@@ -3243,6 +3271,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let customerInfo: any = newCustomerMode && !overrideCustomerId ? {
         ...newCustomerData,
         id: customerId,
@@ -3662,6 +3691,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else {
             toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
           }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (linkErr: any) {
           console.error('⚠️ Nexi Pay by Link error:', linkErr)
           toast.error('Errore Pay by Link: ' + linkErr.message)
@@ -4292,7 +4322,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Tipo Cliente"
                       required
                       value={newCustomerData.tipo_cliente}
-                      onChange={(e) => setNewCustomerData({ ...newCustomerData, tipo_cliente: e.target.value as any })}
+                      onChange={(e) => setNewCustomerData({ ...newCustomerData, tipo_cliente: e.target.value as typeof newCustomerData.tipo_cliente })}
                       options={[
                         { value: 'persona_fisica', label: 'Persona Fisica' },
                         { value: 'azienda', label: 'Azienda' },
@@ -5121,6 +5151,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   value={formData.payment_method}
                   onChange={(e) => {
                     const method = e.target.value
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const updates: any = { payment_method: method }
                     // Nexi Pay by Link = always pending until customer pays
                     if (method === 'Nexi Pay by Link') {
@@ -5912,6 +5943,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             customerData={tempCustomerData}
             missingFields={missingFields}
             onClose={() => setShowMissingDataModal(false)}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onSave={async (updatedData: any) => {
               try {
                 logger.log('[ReservationsTab] Missing fields saved:', updatedData)
@@ -5949,9 +5981,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     handleGenerateInvoice(currentValidationBooking)
                   }, 100)
                 }
-              } catch (error: any) {
+              } catch (error: unknown) {
+                const _errMsg = error instanceof Error ? error.message : String(error)
                 console.error('[ReservationsTab] Error after saving missing fields:', error)
-                alert(`Errore: ${error.message}`)
+                alert(`Errore: ${_errMsg}`)
               }
             }}
           />

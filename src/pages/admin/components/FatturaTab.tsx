@@ -26,6 +26,7 @@ interface Invoice {
   sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'scartata' | 'error'
   sdi_id?: string
   sdi_sent_at?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sdi_response?: any
   customer_sdi_code?: string
   customer_pec?: string

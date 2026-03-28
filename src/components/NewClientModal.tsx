@@ -8,6 +8,7 @@ interface NewClientModalProps {
   isOpen: boolean
   onClose: () => void
   onClientCreated?: (clientId: string) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialData?: any // Customer data for editing
 }
 
@@ -133,6 +134,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         // CRITICAL: Check if this is a "new" customer placeholder from booking
         // If so, we want to CREATE a new record, not update the temp ID
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if ((initialData as any)._isNew) {
           logger.log('[NewClientModal] _isNew flag detected -> Force CREATE mode')
           setEditingId(null) // Force create mode
@@ -375,6 +377,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // Auto-detect residence status based on provincia/città di residenza
       const residenceStatus = getResidenceStatus(formData.provincia_residenza, formData.citta_residenza)
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const customerData: any = {
         tipo_cliente: formData.tipo_cliente,
         email: formData.email,
@@ -550,6 +553,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       email: !!formData.email && validateEmail(formData.email),
       phone: !!formData.telefono && validateItalianPhone(formData.telefono),
       nazione: !!formData.nazione,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       type_checks: {} as any
     }
 

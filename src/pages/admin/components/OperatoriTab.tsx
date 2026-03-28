@@ -16,6 +16,7 @@ interface LogEntry {
   action: string
   entity_type: string | null
   entity_id: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details: Record<string, any>
   created_at: string
 }

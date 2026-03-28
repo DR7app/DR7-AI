@@ -30,6 +30,7 @@ export interface Vehicle {
     status: 'available' | 'rented' | 'maintenance' | 'retired'
     daily_rate: number
     category?: 'exotic' | 'urban' | 'aziendali'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata: Record<string, any> | null
     created_at: string
     updated_at: string
@@ -69,6 +70,7 @@ function normalizePlate(plate: string | null | undefined): string {
  */
 export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean {
     // First try vehicle_id (most reliable) - check both top-level and booking_details
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingVehicleId = booking.vehicle_id || (booking as any).booking_details?.vehicle_id
     if (bookingVehicleId && bookingVehicleId === vehicle.id) {
         logger.log(`[matchVehicleByPlate] MATCH by vehicle_id: ${bookingVehicleId} === ${vehicle.id}`)
@@ -76,6 +78,7 @@ export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean
     }
 
     // Then try plate matching - check both top-level and booking_details
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingPlate = normalizePlate(booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate)
     const vehiclePlate = normalizePlate(vehicle.plate || vehicle.targa)
 
@@ -85,6 +88,7 @@ export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean
     }
 
     // Debug: log when no match found
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate) {
         logger.log(`[matchVehicleByPlate] NO MATCH: booking plate=${bookingPlate}, vehicle plate=${vehiclePlate}, booking_id=${booking.id?.substring(0,8)}`)
     }

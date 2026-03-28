@@ -15,6 +15,7 @@ const PENALI_KEYWORDS = [
   'subnoleggio', 'neopatentati', 'non abilitati', 'patente', 'riconsegna',
 ]
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function classifyInvoiceItems(items: any[]): 'danni' | 'penali' | null {
   for (const item of items) {
     const desc = (item.description || '').toLowerCase()
@@ -143,7 +144,9 @@ export default function GestioneDanniTab() {
         const bookingLabel = `${b.vehicle_name || '—'} — ${b.pickup_date || '—'}`
 
         for (const arrayKey of ['penalties', 'danni'] as const) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const entries: any[] = details[arrayKey] || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           entries.forEach((entry: any, idx: number) => {
             const g = getOrCreate(b.customer_name || '', b.customer_email || '')
             const total = entry.total || (entry.amount || 0) * (entry.quantity || 1)
@@ -200,6 +203,7 @@ export default function GestioneDanniTab() {
         // Skip if this booking's penalties/danni were already added from booking_details
         if (f.booking_id && bookingIdsWithDetails.has(f.booking_id)) continue
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const hasPenalty = f.items.some((item: any) =>
           item.description && (item.description.includes('Penale prenotazione') || item.description.includes('Danno prenotazione'))
         )
@@ -276,9 +280,10 @@ export default function GestioneDanniTab() {
         .sort((a, b) => (b.penaliTotal + b.danniTotal) - (a.penaliTotal + a.danniTotal))
 
       setCustomers(result)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('GestioneDanniTab load error:', err)
-      setError(err.message || 'Errore nel caricamento dei dati.')
+      setError(_errMsg || 'Errore nel caricamento dei dati.')
     } finally {
       setLoading(false)
     }
@@ -315,8 +320,9 @@ export default function GestioneDanniTab() {
       } else {
         toast.error(data.error || 'Errore creazione link')
       }
-    } catch (err: any) {
-      toast.error('Errore Pay by Link: ' + err.message)
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore Pay by Link: ' + _errMsg)
     } finally {
       setPayByLinkLoading(null)
     }
@@ -380,6 +386,7 @@ export default function GestioneDanniTab() {
 
         const details = booking?.booking_details || {}
         // Remove all entries at the given indices (delete from end to preserve indices)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[arrayKey] || [])]
         const indicesToRemove = items.map(i => i.arrayIndex).sort((a, b) => b - a)
         for (const idx of indicesToRemove) {
@@ -396,8 +403,9 @@ export default function GestioneDanniTab() {
 
       toast.success(`${type === 'penali' ? 'Penali' : 'Danni'} eliminati`)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -418,6 +426,7 @@ export default function GestioneDanniTab() {
         if (fetchErr) throw fetchErr
 
         const details = booking?.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[item.arrayKey] || [])]
         arr.splice(item.arrayIndex, 1)
 
@@ -437,8 +446,10 @@ export default function GestioneDanniTab() {
 
         if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
         // Find matching line item by description
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
 
         if (matchIdx >= 0) {
@@ -464,8 +475,9 @@ export default function GestioneDanniTab() {
       toast.success('Voce eliminata')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -486,6 +498,7 @@ export default function GestioneDanniTab() {
         if (fetchErr) throw fetchErr
 
         const details = booking?.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[item.arrayKey] || [])]
         if (arr[item.arrayIndex]) {
           arr[item.arrayIndex] = { ...arr[item.arrayIndex], amount: newTotal, total: newTotal, quantity: 1 }
@@ -507,7 +520,9 @@ export default function GestioneDanniTab() {
 
         if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
 
         if (matchIdx >= 0) {
@@ -527,8 +542,9 @@ export default function GestioneDanniTab() {
       toast.success('Importo aggiornato')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -549,6 +565,7 @@ export default function GestioneDanniTab() {
         if (fetchErr) throw fetchErr
 
         const details = booking?.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[item.arrayKey] || [])]
         if (arr[item.arrayIndex]) {
           const existing = arr[item.arrayIndex]
@@ -577,7 +594,9 @@ export default function GestioneDanniTab() {
 
         if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
 
         if (matchIdx >= 0) {
@@ -602,8 +621,9 @@ export default function GestioneDanniTab() {
       toast.success('Pagamento registrato')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -637,6 +657,7 @@ export default function GestioneDanniTab() {
       if (fetchErr) throw fetchErr
 
       const details = booking?.booking_details || {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existing: any[] = details[arrayKey] || []
       const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
 
@@ -662,8 +683,9 @@ export default function GestioneDanniTab() {
       setNewAmount('')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }

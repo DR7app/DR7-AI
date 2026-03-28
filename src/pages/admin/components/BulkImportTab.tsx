@@ -94,6 +94,7 @@ export default function BulkImportTab() {
         .filter(isValidFile)
         .map(file => ({
           file,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           folder: getFolderFromPath((file as any).webkitRelativePath || '')
         }))
       setTrackedFiles(prev => [...prev, ...newTracked])
@@ -287,6 +288,7 @@ export default function BulkImportTab() {
         for (const member of members) {
           const val = member.data?.[field]
           if (val && val.trim()) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (mergedData as any)[field] = val
             break
           }
@@ -347,8 +349,9 @@ export default function BulkImportTab() {
         } else {
           results[i] = { ...results[i], status: 'error', error: result.error || 'Extraction failed' }
         }
-      } catch (error: any) {
-        results[i] = { ...results[i], status: 'error', error: error.message }
+      } catch (error: unknown) {
+        const _errMsg = error instanceof Error ? error.message : String(error)
+        results[i] = { ...results[i], status: 'error', error: _errMsg }
       }
 
       setExtractedFiles([...results])
@@ -468,6 +471,7 @@ export default function BulkImportTab() {
           if (existing) existingId = existing.id
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const customerData: any = {
           tipo_cliente: 'persona_fisica',
           nome: d.nome || null,
@@ -595,10 +599,11 @@ export default function BulkImportTab() {
           idx === mi ? { ...c, saved: true } : c
         ))
         setSavedCount(prev => prev + 1)
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const _errMsg = error instanceof Error ? error.message : String(error)
         console.error('Error saving customer:', error)
         setMergedCustomers(prev => prev.map((c, idx) =>
-          idx === mi ? { ...c, error: `Save failed: ${error.message}` } : c
+          idx === mi ? { ...c, error: `Save failed: ${_errMsg}` } : c
         ))
       }
     }
@@ -919,6 +924,7 @@ export default function BulkImportTab() {
                                   <label className="text-xs text-theme-text-muted">{field.label}</label>
                                   <input
                                     type="text"
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                     value={(customer.data as any)?.[field.key] || ''}
                                     onChange={(e) => updateMergedField(i, field.key, e.target.value)}
                                     className="mt-1 w-full bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-sm text-theme-text-primary"

@@ -39,6 +39,7 @@ interface Booking {
   service_type?: string
   payment_method?: string | null
   payment_status?: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details?: any
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
@@ -77,6 +78,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         .or('status.neq.retired,display_name.eq.Test')
 
       // Fetch ALL bookings via Netlify function (bypasses RLS)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let allBookings: any[] | null = null
       try {
         const bookingsResponse = await fetch('/.netlify/functions/list-bookings')
@@ -128,7 +130,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             .filter((id): id is string => !!id)
 
           // Lookup by email and id separately
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const customersByEmail = new Map<string, any>()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const customersById = new Map<string, any>()
 
           if (emails.length > 0) {

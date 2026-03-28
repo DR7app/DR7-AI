@@ -108,7 +108,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // Try to unlock audio with AudioContext (reuse single instance)
             try {
                 if (!audioContextRef.current) {
-                    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+                    audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
                 }
                 if (audioContextRef.current.state === 'suspended') {
                     await audioContextRef.current.resume()
@@ -241,6 +241,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     if (!booking.appointment_date || !booking.appointment_time) continue
 
                     // Skip internal/rientro washes
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const details = (booking.booking_details || {}) as any
                     if (details.internal === true) continue
                     if (details.createdBy === 'automatic_system') continue
@@ -360,6 +361,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (!pickupsError && pickups && pickups.length > 0) {
                 for (const booking of pickups) {
                     // Check if deposit exists and > 0
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const details = booking.booking_details as any
                     const deposit = details?.deposit ? Number(details.deposit) : 0
 

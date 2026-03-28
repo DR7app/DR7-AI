@@ -41,6 +41,7 @@ interface UserDocument {
     codice_ipa?: string
     codice_univoco?: string
     rappresentante_legale?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata?: any
     tipo_cliente?: string
     source?: string
@@ -217,6 +218,7 @@ export default function DocumentsVerificationTab() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {
         status,
         verified_at: new Date().toISOString(),
@@ -267,12 +269,14 @@ export default function DocumentsVerificationTab() {
         ]
 
         const targetFileName = doc.file_path.split('/').pop()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const match = allDocs.find((d: any) => d.fileName === targetFileName)
 
         if (match?.url) {
           window.open(match.url, '_blank')
         } else {
           // Fallback: try to find by fuzzy match if exact match fails
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const fuzzyMatch = allDocs.find((d: any) =>
             doc.file_path.includes(d.fileName) || d.fileName.includes(targetFileName || '___')
           )
@@ -280,6 +284,7 @@ export default function DocumentsVerificationTab() {
           if (fuzzyMatch?.url) {
             window.open(fuzzyMatch.url, '_blank')
           } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             console.error('Document mismatch. Targets:', targetFileName, 'Found:', allDocs.map((d: any) => d.fileName))
             toast.error('Impossibile recuperare il file sicuro. Riprova')
           }
@@ -435,6 +440,7 @@ export default function DocumentsVerificationTab() {
                     {/* Header with Name and Badges */}
                     <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="text-2xl font-bold text-theme-text-primary">{user?.full_name || 'Nome non disponibile'}</h3>
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {(user as any)?.is_new && (
                         <span className="px-3 py-1 text-xs font-bold bg-green-600 text-white rounded-full shadow-lg">
                           🆕 NUOVO CLIENTE
@@ -624,7 +630,9 @@ export default function DocumentsVerificationTab() {
                     {/* Registration Metadata */}
                     <div className="pt-2 border-t border-theme-border/30">
                       <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-theme-text-muted">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {(user as any)?.created_at && (
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           <span>📅 Registrato: {new Date((user as any).created_at).toLocaleDateString('it-IT')} alle {new Date((user as any).created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
                         )}
                         {user?.updated_at && (

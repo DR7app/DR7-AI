@@ -25,6 +25,7 @@ interface Booking {
     deposit_amount?: number | null
     payment_status: string
     status: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     service_type?: string
     cauzione?: Cauzione | null
@@ -84,6 +85,7 @@ export default function CheckOutTab() {
 
                 if (cauzioni) {
                     const cauzioniMap = new Map<string, Cauzione>()
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     cauzioni.forEach((c: any) => {
                         cauzioniMap.set(c.riferimento_contratto_id, c)
                     })
@@ -193,8 +195,9 @@ export default function CheckOutTab() {
             } else {
                 setErrorMsg(result.message || 'Errore invio WhatsApp')
             }
-        } catch (err: any) {
-            setErrorMsg(err.message || 'Errore di rete')
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            setErrorMsg(_errMsg || 'Errore di rete')
         }
     }
 

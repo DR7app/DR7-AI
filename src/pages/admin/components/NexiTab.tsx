@@ -87,9 +87,10 @@ export default function NexiTab() {
             } else {
                 toast.error(data.error || 'Errore invio email')
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             toast.dismiss('trigger-email')
-            toast.error('Errore: ' + err.message)
+            toast.error('Errore: ' + _errMsg)
         }
     }
 
@@ -109,8 +110,9 @@ export default function NexiTab() {
             } else {
                 toast.error('Errore: ' + (data.error || 'Errore sconosciuto'))
             }
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         }
     }
 
@@ -123,8 +125,9 @@ export default function NexiTab() {
             if (!response.ok) throw new Error(data.error || 'Failed to fetch messages')
 
             setTransactions(data.transactions || [])
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            setError(_errMsg)
         } finally {
             setLoading(false)
         }
@@ -228,8 +231,9 @@ export default function NexiTab() {
             } else {
                 toast.error(data.error || 'Errore nell\'invio')
             }
-        } catch (err: any) {
-            toast.error('Errore: ' + err.message)
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         } finally {
             setAddebitoSending(false)
         }

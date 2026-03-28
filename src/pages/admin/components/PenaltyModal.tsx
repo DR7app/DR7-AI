@@ -11,6 +11,7 @@ interface PenaltyModalProps {
         customer_id?: string
         user_id?: string
         vehicle_name?: string
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         booking_details?: any
     }
     onClose: () => void
@@ -271,6 +272,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     } else {
                         toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
                     }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
@@ -316,9 +318,10 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
             }
 
             setCart([]); setNote(''); onSuccess(); onClose()
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error generating penalty:', err)
-            setError(err.message || 'Errore nella generazione.')
+            setError(_errMsg || 'Errore nella generazione.')
         } finally {
             setIsGenerating(false)
         }

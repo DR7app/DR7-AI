@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 
 interface DiscountCodeGeneratorModalProps {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editingCode?: any | null
     onClose: () => void
     onSave: () => void
@@ -46,6 +47,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
         usage_conditions: editingCode?.usage_conditions || '',
     })
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateField = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }))
     }
@@ -149,9 +151,10 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
             }
 
             onSave()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error saving discount code:', error)
-            toast.error(`Errore nel salvataggio: ${error.message}`)
+            toast.error(`Errore nel salvataggio: ${_errMsg}`)
         } finally {
             setLoading(false)
         }

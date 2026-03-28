@@ -164,6 +164,7 @@ export default function DashboardTab() {
 
   // Supplier costs state
   const [supplierData, setSupplierData] = useState<{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     invoices: any[]; supplierTotals: Record<string, { count: number; total: number }>
     grandTotal: number; totalCount: number
   } | null>(null)
@@ -182,9 +183,10 @@ export default function DashboardTab() {
         throw new Error(json.error || `HTTP ${res.status}`)
       }
       setSupplierData(json)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('[Dashboard] Supplier costs error:', err)
-      setSupplierError(err.message || 'Errore sconosciuto')
+      setSupplierError(_errMsg || 'Errore sconosciuto')
       setSupplierData(null)
     } finally {
       setSupplierLoading(false)
@@ -205,8 +207,9 @@ export default function DashboardTab() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)
-    } catch (err: any) {
-      setError(err.message || 'Errore nel caricamento')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      setError(_errMsg || 'Errore nel caricamento')
     } finally {
       setLoading(false)
     }
@@ -617,6 +620,7 @@ export default function DashboardTab() {
                           <div className="px-5 pb-3 space-y-1.5">
                             {supplierData.invoices
                               .filter(inv => inv.sender === supplier)
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               .map((inv: any, idx: number) => (
                                 <div key={inv.id || idx} className="flex items-center justify-between bg-white/[0.02] rounded-lg px-3 py-2">
                                   <div className="flex items-center gap-3 min-w-0">
