@@ -383,7 +383,19 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         try { sendResult = JSON.parse(sendResText) } catch { sendResult = sendResText }
         console.log(`[cargos-auto-send] Booking ${bookingId} CARGOS response:`, JSON.stringify(sendResult).substring(0, 300))
 
-        // Mark booking as sent to CARGOS
+        // Check per-record result — CARGOS returns array of {esito, errore, transactionid}
+        const results = Array.isArray(sendResult) ? sendResult : []
+        const rejected = results.filter((r: any) => r.esito === false)
+        if (rejected.length > 0) {
+            const errMsg = rejected.map((r: any) => r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore)).join('; ')
+            console.error(`[cargos-auto-send] ❌ Booking ${bookingId} REJECTED by CARGOS: ${errMsg}`)
+            return { success: false, error: `CARGOS ha rifiutato il record: ${errMsg}` }
+        }
+
+        const txId = results[0]?.transactionid || ''
+        console.log(`[cargos-auto-send] ✅ Booking ${bookingId} sent successfully, TX: ${txId}`)
+
+        // Mark booking as sent to CARGOS only after confirmed success
         await supabase
             .from('bookings')
             .update({
@@ -391,6 +403,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
                     ...bd,
                     cargos_sent: true,
                     cargos_sent_at: new Date().toISOString(),
+                    cargos_tx_id: txId,
                 }
             })
             .eq('id', bookingId)
