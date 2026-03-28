@@ -463,12 +463,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     garante_email: '',
   })
 
-  // Revenue Management — dynamic price suggestion
+  // Revenue Management — dynamic price suggestion (uses PricingTrace from backend)
   const [revenueSuggestion, setRevenueSuggestion] = useState<{
-    suggestedPrice: number; dailyRate: number; rentalDays: number; basePrice: number
+    finalTotalEur: number; finalDailyRateEur: number; rentalDays: number
+    selectedBaseRateEur: number; selectedBaseRateSource: string
     breakdown: { label: string; coeff: number; description: string }[]
-    occupationPct: number; daysAhead: number
-    limits: { minHit: boolean; maxHit: boolean }
+    occupancyPct: number; mode: string; enabled: boolean
+    minHit: boolean; maxHit: boolean
+    vehicleName: string; category: string
   } | null>(null)
   const [revenueLoading, setRevenueLoading] = useState(false)
   const [revenueExpanded, setRevenueExpanded] = useState(false)
@@ -491,8 +493,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
-        if (data.enabled && data.suggestedPrice) {
+        if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
+          // AUTO_APPLY: automatically set the total amount
+          if (data.mode === 'auto_apply') {
+            setFormData(prev => ({ ...prev, total_amount: data.finalTotalEur.toFixed(2) }))
+          }
         } else {
           setRevenueSuggestion(null)
         }
@@ -3552,11 +3558,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           notes: formData.notes || null,
           // Revenue Management tracking
           ...(revenueSuggestion ? {
-            revenue_suggested_price: revenueSuggestion.suggestedPrice,
+            revenue_suggested_price: revenueSuggestion.finalTotalEur,
             revenue_breakdown: revenueSuggestion.breakdown,
-            revenue_daily_rate: revenueSuggestion.dailyRate,
-            revenue_base_price: revenueSuggestion.basePrice,
-            operator_override: Math.abs(parseFloat(formData.total_amount || '0') - revenueSuggestion.suggestedPrice) > 0.01
+            revenue_daily_rate: revenueSuggestion.finalDailyRateEur,
+            revenue_base_price: revenueSuggestion.selectedBaseRateEur,
+            revenue_mode: revenueSuggestion.mode,
+            revenue_base_source: revenueSuggestion.selectedBaseRateSource,
+            operator_override: Math.abs(parseFloat(formData.total_amount || '0') - revenueSuggestion.finalTotalEur) > 0.01
           } : {})
         }
       }
@@ -5151,39 +5159,52 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   ]}
                 />
               )}
-              {/* Revenue Management — Prezzo Suggerito */}
+              {/* Revenue Management — Prezzo Suggerito/Auto */}
               {(revenueSuggestion || revenueLoading) && (
-                <div className="border border-amber-500/40 bg-amber-500/5 rounded-lg p-3 space-y-2">
+                <div className={`border rounded-lg p-3 space-y-2 ${
+                  revenueSuggestion?.mode === 'auto_apply'
+                    ? 'border-green-500/40 bg-green-500/5'
+                    : 'border-amber-500/40 bg-amber-500/5'
+                }`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-amber-400">
-                      {revenueLoading ? 'Calcolo prezzo...' : 'Prezzo Suggerito'}
+                    <span className={`text-sm font-semibold ${
+                      revenueSuggestion?.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
+                    }`}>
+                      {revenueLoading ? 'Calcolo prezzo...' :
+                       revenueSuggestion?.mode === 'auto_apply' ? 'Prezzo Dinamico (Auto)' : 'Prezzo Suggerito'}
                     </span>
                     {revenueSuggestion && (
                       <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-amber-400">
-                          €{revenueSuggestion.suggestedPrice.toFixed(2)}
+                        <span className={`text-lg font-bold ${
+                          revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
+                        }`}>
+                          EUR {revenueSuggestion.finalTotalEur.toFixed(2)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              total_amount: revenueSuggestion.suggestedPrice.toFixed(2)
-                            }))
-                          }}
-                          className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
-                        >
-                          Applica
-                        </button>
+                        {revenueSuggestion.mode !== 'auto_apply' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                total_amount: revenueSuggestion.finalTotalEur.toFixed(2)
+                              }))
+                            }}
+                            className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
+                          >
+                            Applica
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
                   {revenueSuggestion && (
                     <>
                       <div className="text-xs text-theme-text-muted">
-                        €{revenueSuggestion.dailyRate.toFixed(2)}/giorno × {revenueSuggestion.rentalDays} giorni
-                        {revenueSuggestion.limits.minHit && ' (min raggiunto)'}
-                        {revenueSuggestion.limits.maxHit && ' (max raggiunto)'}
+                        EUR {revenueSuggestion.finalDailyRateEur.toFixed(2)}/giorno x {revenueSuggestion.rentalDays} giorni
+                        {' '}({revenueSuggestion.selectedBaseRateSource === 'vehicle_override' ? 'override veicolo' :
+                              revenueSuggestion.selectedBaseRateSource === 'category_override' ? 'override categoria' : 'tariffa base'})
+                        {revenueSuggestion.minHit && ' | Min raggiunto'}
+                        {revenueSuggestion.maxHit && ' | Max raggiunto'}
                       </div>
                       <button
                         type="button"
@@ -5195,14 +5216,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       {revenueExpanded && (
                         <div className="space-y-1 pt-1 border-t border-theme-border">
                           <div className="flex justify-between text-xs">
-                            <span className="text-theme-text-muted">Base</span>
-                            <span className="text-theme-text-primary">€{revenueSuggestion.basePrice.toFixed(2)}/g</span>
+                            <span className="text-theme-text-muted">Base selezionata</span>
+                            <span className="text-theme-text-primary">EUR {revenueSuggestion.selectedBaseRateEur.toFixed(2)}/g</span>
                           </div>
                           {revenueSuggestion.breakdown.map((item, i) => (
                             <div key={i} className="flex justify-between text-xs">
                               <span className="text-theme-text-muted">{item.label} ({item.description})</span>
                               <span className={`font-mono ${item.coeff > 1 ? 'text-red-400' : item.coeff < 1 ? 'text-green-400' : 'text-theme-text-primary'}`}>
-                                ×{item.coeff.toFixed(2)}
+                                x{item.coeff.toFixed(2)}
                               </span>
                             </div>
                           ))}
