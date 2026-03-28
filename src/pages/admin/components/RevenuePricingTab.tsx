@@ -181,7 +181,7 @@ export default function RevenuePricingTab() {
       {
         vehicleId: vehicle.id,
         vehicleName: vehicle.display_name,
-        vehicleDailyRateCents: vehicle.daily_rate,
+        vehicleDailyRateCents: vehicle.daily_rate * 100,
         vehicleCategory: vehicle.category || 'urban',
         pickupDate: simPickup,
         dropoffDate: simDropoff,
@@ -366,7 +366,7 @@ export default function RevenuePricingTab() {
           {vehicles.map(v => (
             <div key={v.id} className="grid grid-cols-[2fr_1fr_1fr] gap-2 items-center">
               <span className="text-sm text-theme-text-primary truncate">{v.display_name}</span>
-              <span className="text-xs text-theme-text-muted">Base: EUR {(v.daily_rate / 100).toFixed(2)}</span>
+              <span className="text-xs text-theme-text-muted">Base: EUR {v.daily_rate.toFixed(2)}</span>
               <input
                 type="number" step="0.01" placeholder="Override EUR"
                 className="px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
