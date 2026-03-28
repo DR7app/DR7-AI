@@ -635,7 +635,7 @@ export default function BulkImportTab() {
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          className="border-2 border-dashed border-theme-border rounded-xl p-12 text-center hover:border-theme-border transition-colors bg-theme-bg-secondary/30"
+          className="border-2 border-dashed border-theme-border rounded-xl p-6 sm:p-12 text-center hover:border-theme-border transition-colors bg-theme-bg-secondary/30"
         >
           <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -646,16 +646,16 @@ export default function BulkImportTab() {
           <p className="text-sm text-theme-text-muted mb-4">
             Supporta JPG, PNG, PDF - Carte d'identita, patenti, tessere sanitarie
           </p>
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-wrap gap-3 justify-center">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-5 py-2 bg-theme-text-primary text-theme-bg-primary rounded-lg font-semibold text-sm hover:bg-theme-bg-hover transition-colors"
+              className="px-5 py-2 min-h-[44px] bg-theme-text-primary text-theme-bg-primary rounded-lg font-semibold text-sm hover:bg-theme-bg-hover transition-colors"
             >
               Seleziona File
             </button>
             <button
               onClick={() => folderInputRef.current?.click()}
-              className="px-5 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg font-semibold text-sm hover:bg-theme-bg-hover transition-colors"
+              className="px-5 py-2 min-h-[44px] bg-theme-bg-tertiary text-theme-text-primary rounded-lg font-semibold text-sm hover:bg-theme-bg-hover transition-colors"
             >
               Seleziona Cartella
             </button>
@@ -682,7 +682,7 @@ export default function BulkImportTab() {
       {/* File List (before processing) */}
       {trackedFiles.length > 0 && mergedCustomers.length === 0 && extractedFiles.length === 0 && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-theme-text-primary font-semibold">{trackedFiles.length} documenti selezionati</p>
               {(() => {
@@ -692,29 +692,29 @@ export default function BulkImportTab() {
                 ) : null
               })()}
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
+                className="px-4 py-2 min-h-[44px] bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 + Aggiungi file
               </button>
               <button
                 onClick={() => folderInputRef.current?.click()}
-                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
+                className="px-4 py-2 min-h-[44px] bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 + Aggiungi cartella
               </button>
               <button
                 onClick={processFiles}
-                className="px-6 py-2 bg-theme-text-primary text-theme-bg-primary rounded-lg font-bold text-sm hover:bg-theme-bg-hover transition-colors"
+                className="px-6 py-2 min-h-[44px] bg-theme-text-primary text-theme-bg-primary rounded-lg font-bold text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 Avvia Estrazione AI
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {trackedFiles.map((tf, i) => (
               <div key={i} className="relative bg-theme-bg-secondary/50 rounded-lg border border-theme-border p-3 group">
                 <button
@@ -772,7 +772,7 @@ export default function BulkImportTab() {
       {mergedCustomers.length > 0 && !isProcessing && (
         <div className="space-y-4">
           {/* Summary */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-wrap gap-4 text-sm">
               <span className="text-green-400 font-semibold">{extractedSuccess} documenti estratti</span>
               {extractedErrors > 0 && <span className="text-red-400 font-semibold">{extractedErrors} errori</span>}
@@ -782,17 +782,17 @@ export default function BulkImportTab() {
               )}
               {savedTotal > 0 && <span className="text-blue-400 font-semibold">{savedTotal} salvati</span>}
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => { setTrackedFiles([]); setExtractedFiles([]); setMergedCustomers([]); setProcessedCount(0); setSavedCount(0) }}
-                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
+                className="px-4 py-2 min-h-[44px] bg-theme-bg-tertiary text-theme-text-primary rounded-lg text-sm hover:bg-theme-bg-hover transition-colors"
               >
                 Ricomincia
               </button>
               <button
                 onClick={saveAllCustomers}
                 disabled={isSaving || unsavedCount === 0}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 min-h-[44px] bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving
                   ? `Salvataggio ${savedCount}/${unsavedCount}...`

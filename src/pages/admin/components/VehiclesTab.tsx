@@ -840,8 +840,8 @@ export default function VehiclesTab() {
               </div>
             )}
           </div>
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full">
+          <div className="block overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead className="">
                 <tr>
                   {multiSelectMode && (
@@ -991,8 +991,8 @@ export default function VehiclesTab() {
               </div>
             )}
           </div>
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full">
+          <div className="block overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead className="">
                 <tr>
                   {multiSelectMode && (
@@ -1142,8 +1142,8 @@ export default function VehiclesTab() {
               </div>
             )}
           </div>
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full">
+          <div className="block overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead className="">
                 <tr>
                   {multiSelectMode && (

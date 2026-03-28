@@ -56,8 +56,7 @@ export default function PdfViewer({ url, className }: PdfViewerProps) {
             await page.render({
                 canvasContext: ctx,
                 viewport: scaledViewport,
-                canvas
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                canvas,
             } as any).promise
 
             renderedPagesRef.current.add(pageNum)

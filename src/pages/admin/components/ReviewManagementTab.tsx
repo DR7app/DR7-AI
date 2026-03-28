@@ -6,17 +6,19 @@ import toast from 'react-hot-toast'
 
 interface ReviewCandidate {
   id: string
-  booking_id: string
+  source_record_id: string
   customer_name: string
   customer_email: string | null
   customer_phone: string | null
   service_type: 'RENTAL' | 'WASH'
   eligibility_status: 'ELIGIBLE' | 'TO_REVIEW' | 'EXCLUDED'
-  risk_level: 'GREEN' | 'YELLOW' | 'RED'
-  send_status: 'TO_SEND' | 'SENT' | 'FAILED'
-  exclusion_reason: string | null
+  review_risk: 'GREEN' | 'YELLOW' | 'RED'
+  send_status: 'TO_SEND' | 'SENT' | 'EXCLUDED' | 'FAILED' | 'BLOCKED'
+  exclusion_reason_code: string | null
   exclusion_reason_text: string | null
-  review_link: string | null
+  contact_available_email: boolean
+  contact_available_whatsapp: boolean
+  is_internal_record: boolean
   created_at: string
   updated_at: string
 }
@@ -108,14 +110,13 @@ export default function ReviewManagementTab() {
 
   async function loadAll() {
     setLoading(true)
-    await Promise.all([fetchSettings(), fetchTemplates()])
-    // Check if any candidates exist
-    const { count } = await supabase.from('review_candidates').select('id', { count: 'exact', head: true })
-    if (!count || count === 0) {
-      await autoEvaluateAll()
-    }
-    await Promise.all([fetchCandidates(), fetchStats()])
+    await Promise.all([fetchSettings(), fetchTemplates(), fetchCandidates(), fetchStats()])
     setLoading(false)
+    // Evaluate new bookings in background — don't block the UI
+    autoEvaluateAll().then(() => {
+      fetchCandidates()
+      fetchStats()
+    })
   }
 
   async function autoEvaluateAll() {
@@ -124,19 +125,38 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      const [{ data: rentals }, { data: washes }] = await Promise.all([
-        supabase.from('bookings').select('id')
-          .in('status', ['completed', 'completata'])
-          .gte('dropoff_date', thirtyDaysAgo.toISOString()),
-        supabase.from('car_wash_bookings').select('id')
-          .in('status', ['completed', 'completata'])
-          .gte('appointment_date', thirtyDaysAgo.toISOString()),
-      ])
+      // Fetch ALL non-cancelled bookings with past end dates in the last 30 days
+      const { data: allBookings, error: bErr } = await supabase
+        .from('bookings')
+        .select('id, service_type, service_name, vehicle_name, dropoff_date, appointment_date')
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'active', 'in_corso'])
+        .order('created_at', { ascending: false })
+        .limit(1000)
 
-      const allRecords = [
-        ...(rentals || []).map(r => ({ id: r.id, serviceType: 'RENTAL' as const })),
-        ...(washes || []).map(w => ({ id: w.id, serviceType: 'WASH' as const })),
-      ]
+      if (bErr) throw bErr
+
+      const now = new Date()
+      const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = []
+
+      for (const b of (allBookings || [])) {
+        const isWash = b.service_type === 'car_wash'
+
+        if (isWash) {
+          // Car wash: use appointment_date, exclude rientro/interno
+          if (!b.appointment_date) continue
+          const apptDate = new Date(b.appointment_date)
+          if (apptDate > now || apptDate < thirtyDaysAgo) continue
+          const name = ((b.service_name || b.vehicle_name || '') as string).toLowerCase()
+          if (name.includes('rientro') || name.includes('interno')) continue
+          allRecords.push({ id: b.id, serviceType: 'WASH' })
+        } else {
+          // Rental: use dropoff_date
+          if (!b.dropoff_date) continue
+          const dropoff = new Date(b.dropoff_date)
+          if (dropoff > now || dropoff < thirtyDaysAgo) continue
+          allRecords.push({ id: b.id, serviceType: 'RENTAL' })
+        }
+      }
 
       let done = 0
       for (const record of allRecords) {
@@ -180,8 +200,16 @@ export default function ReviewManagementTab() {
       const res = await fetch(`${NETLIFY_BASE}/review-dashboard-stats`)
       if (!res.ok) throw new Error('Errore caricamento statistiche')
       const data = await res.json()
-      setStats(data)
-    } catch (err: unknown) {
+      const s = data.stats || data
+      setStats({
+        eligible: s.eligible_count || s.eligible || 0,
+        to_review: s.to_review_count || s.to_review || 0,
+        excluded: s.excluded_count || s.excluded || 0,
+        to_send: s.to_send_count || s.to_send || 0,
+        sent: s.sent_count || s.sent || 0,
+        failed: s.failed_count || s.failed || 0,
+      })
+    } catch (err: any) {
       console.error('fetchStats error:', err)
     }
   }
@@ -201,7 +229,7 @@ export default function ReviewManagementTab() {
 
   async function fetchTemplates() {
     try {
-      const res = await fetch(`${NETLIFY_BASE}/review-templates`)
+      const res = await fetch(`${NETLIFY_BASE}/review-settings?type=templates`)
       if (res.ok) {
         const data = await res.json()
         setTemplates(data.templates || data || [])
@@ -225,12 +253,13 @@ export default function ReviewManagementTab() {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   async function handleSend(candidateId: string, channel: 'EMAIL' | 'WHATSAPP' | 'BOTH') {
+    const channelMap: Record<string, string> = { EMAIL: 'EMAIL_ONLY', WHATSAPP: 'WHATSAPP_ONLY', BOTH: 'EMAIL_AND_WHATSAPP' }
     setSendingId(candidateId)
     try {
       const res = await fetch(`${NETLIFY_BASE}/review-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, channel }),
+        body: JSON.stringify({ candidateId, sendChannel: channelMap[channel] || 'EMAIL_AND_WHATSAPP', sendMode: 'MANUAL' }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -262,7 +291,7 @@ export default function ReviewManagementTab() {
       const sendRes = await fetch(`${NETLIFY_BASE}/review-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, channel: 'BOTH' }),
+        body: JSON.stringify({ candidateId, sendChannel: 'EMAIL_AND_WHATSAPP', sendMode: 'MANUAL' }),
       })
       if (!sendRes.ok) throw new Error('Approvato ma errore durante l\'invio')
 
@@ -322,7 +351,7 @@ export default function ReviewManagementTab() {
         const res = await fetch(`${NETLIFY_BASE}/review-send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidateId: candidate.id, channel }),
+          body: JSON.stringify({ candidateId: candidate.id, sendChannel: channel === 'BOTH' ? 'EMAIL_AND_WHATSAPP' : channel === 'EMAIL' ? 'EMAIL_ONLY' : 'WHATSAPP_ONLY', sendMode: 'AUTOMATIC' }),
         })
         if (res.ok) {
           success++
@@ -350,29 +379,40 @@ export default function ReviewManagementTab() {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // Fetch completed RENTAL bookings
-      const { data: rentals, error: rentalError } = await supabase
+      // Rentals: include confirmed/completed bookings with past dropoff_date
+      // (most bookings stay 'confirmed' even after return)
+      // Use or() to include NULL service_type (old bookings) + car_rental + rental
+      const { data: rentals, error: rErr } = await supabase
         .from('bookings')
-        .select('id')
-        .in('status', ['completed', 'completata'])
-        .gte('dropoff_date', thirtyDaysAgo.toISOString())
+        .select('id, service_type')
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'active', 'in_corso'])
+        .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental,service_type.eq.')
+        .lte('dropoff_date', new Date().toISOString())
+        .gte('dropoff_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('dropoff_date', { ascending: false })
 
-      if (rentalError) throw rentalError
+      if (rErr) throw rErr
 
-      // Fetch completed WASH bookings
-      const { data: washes, error: washError } = await supabase
-        .from('car_wash_bookings')
-        .select('id')
-        .in('status', ['completed', 'completata'])
-        .gte('appointment_date', thirtyDaysAgo.toISOString())
+      // Car washes: filter by appointment_date, exclude rientro
+      const { data: washes, error: wErr } = await supabase
+        .from('bookings')
+        .select('id, service_type, service_name, vehicle_name')
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata'])
+        .eq('service_type', 'car_wash')
+        .lte('appointment_date', new Date().toISOString().split('T')[0])
+        .gte('appointment_date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('appointment_date', { ascending: false })
 
-      if (washError) throw washError
+      if (wErr) throw wErr
+
+      const filteredWashes = (washes || []).filter(w => {
+        const name = ((w.service_name || w.vehicle_name || '') as string).toLowerCase()
+        return !name.includes('rientro') && !name.includes('interno')
+      })
 
       const allRecords: { id: string; serviceType: 'RENTAL' | 'WASH' }[] = [
-        ...(rentals || []).map(r => ({ id: r.id, serviceType: 'RENTAL' as const })),
-        ...(washes || []).map(w => ({ id: w.id, serviceType: 'WASH' as const })),
+        ...(rentals || []).map(b => ({ id: b.id, serviceType: 'RENTAL' as const })),
+        ...filteredWashes.map(b => ({ id: b.id, serviceType: 'WASH' as const })),
       ]
 
       let evaluated = 0
@@ -400,7 +440,9 @@ export default function ReviewManagementTab() {
       }
 
       toast.dismiss(toastId)
-      toast.success(`Valutazione completata: ${evaluated} valutati, ${skipped} saltati (${rentals?.length || 0} noleggi, ${washes?.length || 0} lavaggi)`)
+      const rentalCount = allRecords.filter(r => r.serviceType === 'RENTAL').length
+      const washCount = allRecords.filter(r => r.serviceType === 'WASH').length
+      toast.success(`Valutazione completata: ${evaluated} valutati, ${skipped} saltati (${rentalCount} noleggi, ${washCount} lavaggi)`)
       await Promise.all([fetchCandidates(), fetchStats()])
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
@@ -433,7 +475,7 @@ export default function ReviewManagementTab() {
   async function handleSaveTemplate(template: ReviewTemplate) {
     setSavingTemplateKey(template.template_key)
     try {
-      const res = await fetch(`${NETLIFY_BASE}/review-templates`, {
+      const res = await fetch(`${NETLIFY_BASE}/review-settings?type=templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(template),
@@ -521,7 +563,7 @@ export default function ReviewManagementTab() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6">
+    <div className="p-3 sm:p-6">
       {/* Header */}
       <div className="mb-6 flex justify-between items-center flex-wrap gap-3">
         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
@@ -564,10 +606,6 @@ export default function ReviewManagementTab() {
         <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
           <div className="text-xs sm:text-sm text-theme-text-secondary">Da Verificare</div>
           <div className="text-2xl sm:text-3xl font-bold text-yellow-500">{stats.to_review}</div>
-        </div>
-        <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-          <div className="text-xs sm:text-sm text-theme-text-secondary">Esclusi</div>
-          <div className="text-2xl sm:text-3xl font-bold text-red-500">{stats.excluded}</div>
         </div>
         <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
           <div className="text-xs sm:text-sm text-theme-text-secondary">Da Inviare</div>
@@ -744,7 +782,6 @@ export default function ReviewManagementTab() {
         {([
           { key: 'ELIGIBLE' as TabKey, label: 'Idonei', count: stats.eligible },
           { key: 'TO_REVIEW' as TabKey, label: 'Da Verificare', count: stats.to_review },
-          { key: 'EXCLUDED' as TabKey, label: 'Esclusi', count: stats.excluded },
         ]).map(tab => (
           <button
             key={tab.key}
@@ -776,7 +813,7 @@ export default function ReviewManagementTab() {
           placeholder="Cerca per nome, email, telefono..."
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          className="flex-1 min-w-[200px] px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-xl text-sm text-theme-text-primary placeholder-theme-text-secondary"
+          className="w-full sm:flex-1 sm:min-w-[200px] px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-xl text-sm text-theme-text-primary placeholder-theme-text-secondary"
         />
         {activeTab === 'ELIGIBLE' && (
           <>
@@ -877,7 +914,7 @@ export default function ReviewManagementTab() {
 
                     {/* Rischio */}
                     <td className="px-4 py-3 text-sm">
-                      {getRiskBadge(candidate.risk_level)}
+                      {getRiskBadge(candidate.review_risk)}
                     </td>
 
                     {/* Stato Invio */}
@@ -888,7 +925,7 @@ export default function ReviewManagementTab() {
                     {/* Motivo Esclusione (EXCLUDED only) */}
                     {activeTab === 'EXCLUDED' && (
                       <td className="px-4 py-3 text-sm text-red-400">
-                        {candidate.exclusion_reason_text || candidate.exclusion_reason || '---'}
+                        {candidate.exclusion_reason_text || candidate.exclusion_reason_code || '---'}
                       </td>
                     )}
 

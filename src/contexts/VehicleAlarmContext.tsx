@@ -53,10 +53,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const [session, setSession] = useState<Session | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
-    const triggeredAlarmsRef = useRef<Set<string>>(new Set<string>())
-
-    // Initialize triggered alarms from localStorage on mount
-    useEffect(() => {
+    const triggeredAlarmsRef = useRef<Set<string>>((() => {
         try {
             const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
             const now = Date.now()
@@ -71,7 +68,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         } catch {
             // Ignore storage errors
         }
-    }, [])
+    })())
 
     // Helper: add alarm to triggered set with timestamp for cleanup
     const markAlarmTriggered = (trackingId: string) => {

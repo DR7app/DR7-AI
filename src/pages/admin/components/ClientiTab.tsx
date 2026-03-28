@@ -138,7 +138,7 @@ export default function ClientiTab() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-full p-6">
+      <div className="mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-2xl sm:rounded-full p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
@@ -153,13 +153,13 @@ export default function ClientiTab() {
       </div>
 
       {/* Actions Bar */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-theme-text-primary mb-2">Gestione Clienti</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilter('all')}
-              className={`px-3 py-1 rounded-full text-sm ${filter === 'all'
+              className={`px-3 py-1 rounded-full text-sm min-h-[36px] ${filter === 'all'
                   ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
@@ -168,7 +168,7 @@ export default function ClientiTab() {
             </button>
             <button
               onClick={() => setFilter('azienda')}
-              className={`px-3 py-1 rounded-full text-sm ${filter === 'azienda'
+              className={`px-3 py-1 rounded-full text-sm min-h-[36px] ${filter === 'azienda'
                   ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
@@ -177,7 +177,7 @@ export default function ClientiTab() {
             </button>
             <button
               onClick={() => setFilter('persona_fisica')}
-              className={`px-3 py-1 rounded-full text-sm ${filter === 'persona_fisica'
+              className={`px-3 py-1 rounded-full text-sm min-h-[36px] ${filter === 'persona_fisica'
                   ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
@@ -186,7 +186,7 @@ export default function ClientiTab() {
             </button>
             <button
               onClick={() => setFilter('pubblica_amministrazione')}
-              className={`px-3 py-1 rounded-full text-sm ${filter === 'pubblica_amministrazione'
+              className={`px-3 py-1 rounded-full text-sm min-h-[36px] ${filter === 'pubblica_amministrazione'
                   ? 'bg-dr7-gold text-white font-semibold'
                   : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}

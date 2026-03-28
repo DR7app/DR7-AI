@@ -140,9 +140,19 @@ const handler: Handler = async (event) => {
     const reviewLink = GOOGLE_REVIEW_URL;
 
     // 5. Load templates based on service_type + channel
-    const templateVars = {
+    const serviceTypeLabel = candidate.service_type === 'WASH' ? 'lavaggio' : 'noleggio';
+    const serviceTypeLabelCap = candidate.service_type === 'WASH' ? 'Lavaggio' : 'Noleggio';
+    const firstName = (candidate.customer_name || 'Cliente').split(' ')[0];
+
+    const templateVars: Record<string, string> = {
       customer_name: candidate.customer_name || 'Cliente',
+      first_name: firstName,
       review_link: reviewLink,
+      service_type: serviceTypeLabel,
+      Service_type: serviceTypeLabelCap,
+      servizio: serviceTypeLabel,
+      Servizio: serviceTypeLabelCap,
+      vehicle_name: candidate.vehicle_name || candidate.source_details?.vehicle_name || '',
     };
 
     let emailSubject = '';
@@ -150,11 +160,11 @@ const handler: Handler = async (event) => {
     let whatsappMessage = '';
 
     if (needsEmail) {
+      const templateKey = `${candidate.service_type}_EMAIL`; // e.g. RENTAL_EMAIL, WASH_EMAIL
       const { data: emailTemplate } = await supabase
         .from('review_templates')
         .select('*')
-        .eq('service_type', candidate.service_type || 'rental')
-        .eq('channel', 'email')
+        .eq('template_key', templateKey)
         .single();
 
       if (emailTemplate) {
@@ -184,19 +194,19 @@ const handler: Handler = async (event) => {
     }
 
     if (needsWhatsapp) {
+      const waTemplateKey = `${candidate.service_type}_WHATSAPP`; // e.g. RENTAL_WHATSAPP, WASH_WHATSAPP
       const { data: whatsappTemplate } = await supabase
         .from('review_templates')
         .select('*')
-        .eq('service_type', candidate.service_type || 'rental')
-        .eq('channel', 'whatsapp')
+        .eq('template_key', waTemplateKey)
         .single();
 
       if (whatsappTemplate) {
         whatsappMessage = renderTemplate(whatsappTemplate.body || '', templateVars);
       } else {
         // Fallback default WhatsApp template
-        const firstName = (candidate.customer_name || 'Cliente').split(' ')[0];
-        whatsappMessage = `Ciao ${firstName},\n\nGrazie per aver scelto DR7 Empire!\n\nLa tua opinione \u00e8 fondamentale per noi. Se ti fa piacere, lasciaci una recensione a 5 stelle raccontando la tua esperienza.\n\nIn segno di gratitudine, inviandoci uno screenshot della recensione riceverai un buono sconto da \u20ac100 sul tuo prossimo noleggio e uno da \u20ac10 sul tuo prossimo lavaggio.\n\nClicca qui per lasciare la recensione:\n${reviewLink}\n\nGrazie mille!\nDubai Rent 7.0 S.p.A.`;
+        const custName = candidate.customer_name || 'Cliente';
+        whatsappMessage = `Ciao ${custName}! 👋\nLa tua esperienza con noi è importante.\n\nSe ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto, è il modo migliore per crescere insieme.\n\nIn segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un codice sconto da 100€ sul tuo prossimo noleggio e uno da 10€ sul tuo prossimo lavaggio utilizzabile sul sito.\n\nClicca qui per lasciarla!👇🏻\n ${reviewLink}\n\n\nDR7`;
       }
     }
 
@@ -205,16 +215,10 @@ const handler: Handler = async (event) => {
       .from('review_requests')
       .insert({
         candidate_id: candidateId,
-        booking_id: candidate.booking_id,
-        customer_id: candidate.customer_id,
         send_channel: sendChannel,
         send_mode: sendMode,
         send_status: 'TO_SEND',
         review_link: reviewLink,
-        email_subject: emailSubject || null,
-        email_body: emailBody || null,
-        whatsapp_message: whatsappMessage || null,
-        created_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -337,8 +341,8 @@ const handler: Handler = async (event) => {
     // 10. Create audit log
     await supabase.from('review_audit_logs').insert({
       candidate_id: candidateId,
-      request_id: request.id,
-      action: 'REVIEW_SENT',
+      review_request_id: request.id,
+      action: finalStatus === 'SENT' ? 'MANUAL_SEND_TRIGGERED' : 'SEND_FAILED',
       details: {
         send_channel: sendChannel,
         send_mode: sendMode,
