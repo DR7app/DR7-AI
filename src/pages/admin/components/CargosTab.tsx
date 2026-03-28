@@ -595,11 +595,16 @@ export default function CargosTab() {
     // ── Send to CARGOS ───────────────────────────────────────────────────────
 
     async function handleSend() {
+        console.log('[CARGOS] handleSend called, selectedIds:', selectedIds.size, 'bookings:', bookings.length)
+        toast.loading('Preparazione invio CARGOS...', { id: 'cargos-send' })
+
         const selected = bookings.filter(b => selectedIds.has(b.id))
         if (selected.length === 0) {
-            toast.error('Seleziona almeno una prenotazione')
+            toast.error('Seleziona almeno una prenotazione', { id: 'cargos-send' })
             return
         }
+
+        console.log('[CARGOS] Selected bookings:', selected.length)
 
         // Validate all
         let hasErrors = false
@@ -616,25 +621,29 @@ export default function CargosTab() {
 
         if (hasErrors) {
             setBookings(updatedBookings)
-            toast.error('Alcuni record hanno dati mancanti. Correggi prima di inviare.')
+            toast.error('Alcuni record hanno dati mancanti. Correggi prima di inviare.', { id: 'cargos-send' })
             return
         }
 
         setSending(true)
         setSendResult(null)
+        toast.loading(`Invio ${selected.length} contratti a CARGOS...`, { id: 'cargos-send' })
 
         try {
             // Build records
+            console.log('[CARGOS] Building records for', selected.length, 'bookings...')
             const records = selected.map(b => buildCargosRecord(b))
+            console.log('[CARGOS] Records built, first record length:', records[0]?.length)
 
             // First validate with Check
+            console.log('[CARGOS] Calling Check API...')
             const checkRes = await fetch('/.netlify/functions/cargos-api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const checkData = await checkRes.json()
-            console.log('[CARGOS] Check response:', JSON.stringify(checkData))
+            console.log('[CARGOS] Check response:', JSON.stringify(checkData).substring(0, 500))
 
             // Top-level error (auth failure, etc.)
             if (checkData.error) {
@@ -734,9 +743,10 @@ export default function CargosTab() {
                 }
             }
         } catch (err: unknown) {
-          const _errMsg = err instanceof Error ? err.message : String(err)
-            toast.error('Errore invio: ' + _errMsg)
-            setSendResult({ success: 0, errors: selected.length, details: _errMsg })
+            const errMsg = err instanceof Error ? err.message : String(err)
+            console.error('[CARGOS] handleSend error:', err)
+            toast.error('Errore invio CARGOS: ' + errMsg, { id: 'cargos-send', duration: 10000 })
+            setSendResult({ success: 0, errors: selected.length, details: errMsg })
         } finally {
             setSending(false)
         }
