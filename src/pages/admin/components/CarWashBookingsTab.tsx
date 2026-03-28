@@ -619,32 +619,53 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   async function handleResendPaymentLink(booking: CarWashBooking) {
-    const paymentLink = booking.booking_details?.nexi_payment_link
-    if (!paymentLink) {
-      toast.error('Nessun link di pagamento trovato')
-      return
-    }
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
-    if (!custPhone) {
-      navigator.clipboard.writeText(paymentLink)
-      toast.success('Link copiato! Nessun telefono trovato per inviare WhatsApp.')
-      return
-    }
     const custName = booking.customer_name || 'Cliente'
-    const totalEur = ((booking.price_total || 0) / 100).toFixed(2)
+    const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
+    const totalEur = (booking.price_total || 0).toFixed(2)
+    const serviceNames = booking.service_name || 'Lavaggio'
+
+    const toastId = toast.loading('Generazione nuovo link di pagamento...')
+
     try {
-      await fetch('/.netlify/functions/send-whatsapp-notification', {
+      // Generate a NEW Nexi payment link (old one may be expired)
+      const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customPhone: custPhone,
-          customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per il lavaggio è ancora in sospeso.\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link:\n${paymentLink}\n\nGrazie,\nDR7`
+          bookingId: booking.id,
+          amount: booking.price_total || 0,
+          customerEmail: custEmail,
+          customerName: custName,
+          description: `Lavaggio DR7 - ${serviceNames}`,
+          expirationDays: 1
         })
       })
-      toast.success('Link di pagamento rinviato via WhatsApp!')
+      const linkData = await linkRes.json()
+
+      if (!linkRes.ok || !linkData.paymentUrl) {
+        toast.error('Errore generazione link: ' + (linkData.error || 'Errore'), { id: toastId })
+        return
+      }
+
+      // Send via WhatsApp if phone available
+      if (custPhone) {
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: custPhone,
+            customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per il lavaggio è ancora in sospeso.\n\nPer completare il pagamento di *€${totalEur}*, clicchi sul seguente link:\n${linkData.paymentUrl}\n\nIl link scade tra 24 ore.\n\nGrazie,\nDR7`
+          })
+        })
+        toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
+      } else {
+        navigator.clipboard.writeText(linkData.paymentUrl)
+        toast.success('Nuovo link generato e copiato! Nessun telefono per WhatsApp.', { id: toastId })
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err)
-      toast.error('Errore invio WhatsApp: ' + errMsg)
+      toast.error('Errore: ' + errMsg, { id: toastId })
     }
   }
 
@@ -2086,7 +2107,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors min-h-[44px]`}>
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
-                          {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                          {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                             <button onClick={() => handleResendPaymentLink(booking)} className="px-3 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors min-h-[44px]">Rinvia Link</button>
                           )}
                           <button onClick={() => handleDeleteBooking(booking.id, booking.customer_name)} className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors min-h-[44px]">×</button>
@@ -2189,7 +2210,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       >
                         {generatingInvoice ? '...' : 'Fattura'}
                       </button>
-                      {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                      {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                         <button
                           onClick={() => handleResendPaymentLink(booking)}
                           className="flex-1 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-semibold transition-all active:scale-[0.98]"
