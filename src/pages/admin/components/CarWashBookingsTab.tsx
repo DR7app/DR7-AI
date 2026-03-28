@@ -638,7 +638,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           customerEmail: custEmail,
           customerName: custName,
           description: `Lavaggio DR7 - ${serviceNames}`,
-          expirationDays: 1
+          expirationHours: 1
         })
       })
       const linkData = await linkRes.json()
@@ -655,7 +655,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per il lavaggio è ancora in sospeso.\n\nPer completare il pagamento di *€${totalEur}*, clicchi sul seguente link:\n${linkData.paymentUrl}\n\nIl link scade tra 24 ore.\n\nGrazie,\nDR7`
+            customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per il lavaggio è ancora in sospeso.\n\nPer completare il pagamento di *€${totalEur}*, clicchi sul seguente link:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora.\n\nGrazie,\nDR7`
           })
         })
         toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
@@ -971,7 +971,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             customerEmail: customerEmail || '',
             customerName: customerName || 'Cliente',
             description: `Lavaggio DR7 - ${serviceNames}`,
-            expirationDays: 1
+            expirationHours: 1
           })
         })
         const linkData = await linkRes.json()
