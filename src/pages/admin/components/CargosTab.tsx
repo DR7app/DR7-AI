@@ -517,21 +517,24 @@ export default function CargosTab() {
                             .maybeSingle()
                         if (c) customerData = c
                     }
-                    // Fallback: by customer_id from booking_details
-                    if (!customerData && b.booking_details?.customer?.customerId) {
+                    // Fallback: by customer_id from booking_details (only if UUID format)
+                    const custId = b.booking_details?.customer?.customerId
+                    const isUuid = custId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(custId)
+                    if (!customerData && isUuid) {
                         const { data: c } = await supabase
                             .from('customers_extended')
                             .select('*')
-                            .eq('id', b.booking_details.customer.customerId)
+                            .eq('id', custId)
                             .maybeSingle()
                         if (c) customerData = c
                     }
-                    // Fallback: by email
-                    if (!customerData && b.customer_email) {
+                    // Fallback: by email (from customerId if it's an email, or from customer_email)
+                    const emailToTry = (!isUuid && custId?.includes('@') ? custId : null) || b.customer_email
+                    if (!customerData && emailToTry) {
                         const { data: c } = await supabase
                             .from('customers_extended')
                             .select('*')
-                            .eq('email', b.customer_email)
+                            .eq('email', emailToTry)
                             .maybeSingle()
                         if (c) customerData = c
                     }
