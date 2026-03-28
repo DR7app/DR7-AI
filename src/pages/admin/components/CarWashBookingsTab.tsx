@@ -622,7 +622,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     const custName = booking.customer_name || 'Cliente'
     const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
-    const totalEur = (booking.price_total || 0).toFixed(2)
+    const totalEur = ((booking.price_total || 0) / 100).toFixed(2)
     const serviceNames = booking.service_name || 'Lavaggio'
 
     const toastId = toast.loading('Generazione nuovo link di pagamento...')
@@ -634,7 +634,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookingId: booking.id,
-          amount: booking.price_total || 0,
+          amount: (booking.price_total || 0) / 100,
           customerEmail: custEmail,
           customerName: custName,
           description: `Lavaggio DR7 - ${serviceNames}`,
