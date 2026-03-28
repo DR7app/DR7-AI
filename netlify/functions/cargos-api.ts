@@ -341,7 +341,7 @@ const handler: Handler = async (event) => {
 
     try {
         const req: CargosRequest = JSON.parse(event.body || '{}')
-        const password = req.password || CARGOS_PASSWORD
+        const password = (req.password && req.password !== '__server__') ? req.password : CARGOS_PASSWORD
 
         if (!password) {
             return {

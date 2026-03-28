@@ -416,13 +416,30 @@ export default function CargosTab() {
     // Sub-tab
     const [activeSubTab, setActiveSubTab] = useState<'send' | 'export'>('send')
 
-    // Load saved config from sessionStorage (not localStorage - avoid persisting credentials)
+    // Auto-authenticate: try server-side credentials first, then sessionStorage
     useEffect(() => {
         const saved = sessionStorage.getItem('cargos_session')
         if (saved) {
             setPassword(saved)
             setIsAuthenticated(true)
+            return
         }
+        // Try auto-auth with server-side env credentials (no password needed from UI)
+        ;(async () => {
+            try {
+                const res = await fetch('/.netlify/functions/cargos-api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'getToken' }),
+                })
+                const data = await res.json()
+                if (!data.error && data.token) {
+                    setIsAuthenticated(true)
+                    setPassword('__server__')
+                    sessionStorage.setItem('cargos_session', '__server__')
+                }
+            } catch { /* ignore - user can auth manually */ }
+        })()
     }, [])
 
     // ── Auth ─────────────────────────────────────────────────────────────────
@@ -617,7 +634,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const checkData = await checkRes.json()
-            logger.log('[CARGOS] Check response:', JSON.stringify(checkData))
+            console.log('[CARGOS] Check response:', JSON.stringify(checkData))
 
             // Top-level error (auth failure, etc.)
             if (checkData.error) {
@@ -660,7 +677,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'send', records, password }),
             })
             const sendData = await sendRes.json()
-            logger.log('[CARGOS] Send response:', JSON.stringify(sendData))
+            console.log('[CARGOS] Send response:', JSON.stringify(sendData))
 
             // Top-level error
             if (sendData.error) {
@@ -744,7 +761,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const data = await res.json()
-            logger.log('[CARGOS] Check response:', JSON.stringify(data))
+            console.log('[CARGOS] Check response:', JSON.stringify(data))
 
             if (data.error) {
                 toast.error('Errori validazione: ' + data.error)
@@ -1062,7 +1079,7 @@ export default function CargosTab() {
                                     </Button>
                                     <Button
                                         onClick={handleSend}
-                                        disabled={sending || selectedIds.size === 0 || !isAuthenticated}
+                                        disabled={sending || selectedIds.size === 0}
                                         className="bg-green-600 hover:bg-green-500 text-sm flex items-center gap-2"
                                     >
                                         {sending ? (
