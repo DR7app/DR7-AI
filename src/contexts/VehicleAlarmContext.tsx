@@ -61,12 +61,13 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (Array.isArray(stored) && stored.length > 0 && typeof stored[0] === 'object') {
                 const valid = stored.filter((entry: { id: string; ts: number }) => now - entry.ts < DAY_MS)
                 localStorage.setItem('triggered_alarms', JSON.stringify(valid))
-                triggeredAlarmsRef.current = new Set(valid.map((entry: { id: string }) => entry.id))
+                return new Set(valid.map((entry: { id: string }) => entry.id))
             } else {
                 localStorage.setItem('triggered_alarms', '[]')
+                return new Set<string>()
             }
         } catch {
-            // Ignore storage errors
+            return new Set<string>()
         }
     })())
 
