@@ -3,9 +3,13 @@ import toast from 'react-hot-toast'
 // import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
 import { supabase } from '../../../supabaseClient'
 
-/** Convert EUR string to integer cents using string parsing (no floating point) */
-function eurToCents(eur: string): number {
-  const s = (eur || '0').trim()
+/**
+ * Convert EUR string to integer cents using string parsing (no floating point).
+ * Handles >2 decimal digits by rounding (e.g. "19.895" → 1990, not 1989).
+ * This is the ONLY approved EUR→cents conversion in the reservation flow.
+ */
+function eurToCents(eur: string | number): number {
+  const s = String(eur ?? '0').trim()
   const negative = s.startsWith('-')
   const abs = negative ? s.substring(1) : s
   const dotIdx = abs.indexOf('.')
@@ -14,10 +18,30 @@ function eurToCents(eur: string): number {
     totalCents = (parseInt(abs, 10) || 0) * 100
   } else {
     const wholePart = parseInt(abs.substring(0, dotIdx), 10) || 0
-    const decimalStr = abs.substring(dotIdx + 1).padEnd(2, '0').substring(0, 2)
-    totalCents = wholePart * 100 + (parseInt(decimalStr, 10) || 0)
+    const fracStr = abs.substring(dotIdx + 1)
+    if (fracStr.length <= 2) {
+      // Exact: pad to 2 digits
+      const decimalStr = fracStr.padEnd(2, '0')
+      totalCents = wholePart * 100 + (parseInt(decimalStr, 10) || 0)
+    } else {
+      // >2 decimals: use first 3 digits to round properly
+      // e.g. "19.895" → first3 = "895" → 895 → Math.round(895/10) = 90 → 1990
+      const first3 = fracStr.substring(0, 3).padEnd(3, '0')
+      const millis = parseInt(first3, 10) || 0
+      totalCents = wholePart * 100 + Math.round(millis / 10)
+    }
   }
   return negative ? -totalCents : totalCents
+}
+
+/** Convert integer cents to EUR string with exactly 2 decimal places (no floating point) */
+function centsToEurStr(cents: number): string {
+  const rounded = Math.round(cents)
+  const negative = rounded < 0
+  const abs = Math.abs(rounded)
+  const whole = Math.floor(abs / 100)
+  const frac = abs % 100
+  return (negative ? '-' : '') + whole + '.' + String(frac).padStart(2, '0')
 }
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
@@ -503,7 +527,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           setRevenueSuggestion(data)
           // AUTO_APPLY: automatically set the total amount
           if (data.mode === 'auto_apply') {
-            setFormData(prev => ({ ...prev, total_amount: data.finalTotalEur.toFixed(2) }))
+            setFormData(prev => ({ ...prev, total_amount: centsToEurStr(Math.round(data.finalTotalEur * 100)) }))
           }
         } else {
           setRevenueSuggestion(null)
@@ -2073,14 +2097,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       status: booking.status,
       payment_status: booking.payment_status || 'paid',
       payment_method: booking.payment_method || 'Contanti',
-      amount_paid: booking.booking_details?.amountPaid ? (booking.booking_details.amountPaid / 100).toFixed(2) : '0',
+      amount_paid: booking.booking_details?.amountPaid ? centsToEurStr(Math.round(booking.booking_details.amountPaid)) : '0',
       // Subtract delivery/pickup fees to get BASE rental amount only
       // (fees are re-added on save at price_total calculation)
       // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
-      total_amount: (Math.round(booking.price_total
+      total_amount: centsToEurStr(Math.round(booking.price_total
         - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
         - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
-      ) / 100).toFixed(2),
+      )),
       currency: booking.currency.toUpperCase(),
       source: 'admin',
       // 2nd Driver
@@ -2138,14 +2162,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       delivery_zip: booking.delivery_address?.zip || booking.booking_details?.delivery_address?.zip || '',
       delivery_province: booking.delivery_address?.province || booking.booking_details?.delivery_address?.province || '',
       delivery_notes: booking.delivery_address?.notes || booking.booking_details?.delivery_address?.notes || '',
-      delivery_fee: booking.delivery_fee != null ? (Math.round(booking.delivery_fee) / 100).toFixed(2) : (booking.booking_details?.delivery_fee || '0'),
+      delivery_fee: booking.delivery_fee != null ? centsToEurStr(Math.round(booking.delivery_fee)) : (booking.booking_details?.delivery_fee || '0'),
       pickup_enabled: booking.pickup_enabled || booking.booking_details?.pickup_enabled || false,
       pickup_street: booking.pickup_address?.street || booking.booking_details?.pickup_address?.street || '',
       pickup_city: booking.pickup_address?.city || booking.booking_details?.pickup_address?.city || '',
       pickup_zip: booking.pickup_address?.zip || booking.booking_details?.pickup_address?.zip || '',
       pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
-      pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
+      pickup_fee: booking.pickup_fee != null ? centsToEurStr(Math.round(booking.pickup_fee)) : (booking.booking_details?.pickup_fee || '0'),
       notes: booking.booking_details?.notes || booking.notes || '',
     })
 
@@ -2198,9 +2222,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const dropoffOffset = getRomeOffsetForDate(extendData.new_return_date)
       const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00${dropoffOffset}`)
 
-      // Calculate new total
-      const additionalAmount = parseFloat(extendData.additional_amount) || 0
-      const newTotal = extendingBooking.price_total + (additionalAmount * 100) // price_total is in cents
+      // Calculate new total — use eurToCents (string-based) to avoid float drift
+      const additionalAmountCents = eurToCents(extendData.additional_amount || '0')
+      const additionalAmount = additionalAmountCents / 100
+      const newTotal = Math.round(extendingBooking.price_total + additionalAmountCents)
 
       // Resolve new vehicle if car change requested
       let newVehicle: Vehicle | null = null
@@ -3593,7 +3618,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             revenue_base_price: revenueSuggestion.selectedBaseRateEur,
             revenue_mode: revenueSuggestion.mode,
             revenue_base_source: revenueSuggestion.selectedBaseRateSource,
-            operator_override: Math.abs(parseFloat(formData.total_amount || '0') - revenueSuggestion.finalTotalEur) > 0.01
+            operator_override: Math.abs(eurToCents(formData.total_amount || '0') - Math.round(revenueSuggestion.finalTotalEur * 100)) > 1
           } : {})
         }
       }
@@ -3645,9 +3670,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Generate Nexi Pay by Link if payment method is Nexi AND not already paid
       if (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid' && insertedBooking) {
         try {
-          const totalEur = parseFloat(formData.total_amount || '0')
-            + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-            + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+          // Use cents-based addition to avoid float drift, then convert to EUR
+          const totalCents = eurToCents(formData.total_amount || '0')
+            + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
+            + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+          const totalEur = totalCents / 100
 
           const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
             method: 'POST',
@@ -3714,7 +3741,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             returnTime: formData.return_time,
             pickupLocation: pickupLocationLabel,
             returnLocation: dropoffLocationLabel,
-            totalPrice: parseFloat(formData.total_amount),
+            totalPrice: eurToCents(formData.total_amount) / 100,
             bookingId: insertedBooking?.id?.substring(0, 8)
           })
         })
@@ -3844,8 +3871,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const dropoffDt = new Date(returnDateTime)
           const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
           const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
-          const depositEur = parseFloat(formData.deposit) || 0
-          const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
+          const depositCents = eurToCents(formData.deposit || '0')
+          const depositLabel = depositCents > 0 ? `€${centsToEurStr(depositCents)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
           let kmLabel = '-'
           if (formData.unlimited_km) {
             kmLabel = 'Illimitati'
@@ -3865,7 +3892,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
           const bookingNotes = formData.notes || insertedBooking?.booking_details?.notes || ''
 
-          const totalEur = insertedBooking?.price_total ? (insertedBooking.price_total / 100).toFixed(2) : parseFloat(formData.total_amount).toFixed(2)
+          const totalEur = insertedBooking?.price_total ? centsToEurStr(Math.round(insertedBooking.price_total)) : centsToEurStr(eurToCents(formData.total_amount))
 
           let custMsg = editingId
             ? `Salve ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
@@ -4487,9 +4514,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     min={editingId ? undefined : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })}
                     value={formData.pickup_date}
-                    onChange={(e) => {
-                      setFormData({ ...formData, pickup_date: e.target.value })
-                    }}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, pickup_date: v })) }}
                   />
                   <Select
                     label="Ora Ritiro"
@@ -4498,7 +4523,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     onChange={(e) => {
                       const pickupTime = e.target.value
                       const returnTime = calculateReturnTime(pickupTime)
-                      setFormData({ ...formData, pickup_time: pickupTime, return_time: returnTime })
+                      setFormData(prev => ({ ...prev, pickup_time: pickupTime, return_time: returnTime }))
                     }}
                     options={TIME_OPTIONS}
                   />
@@ -4508,7 +4533,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Luogo Ritiro"
                   required
                   value={formData.pickup_location}
-                  onChange={(e) => setFormData({ ...formData, pickup_location: e.target.value })}
+                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, pickup_location: v })) }}
                   options={LOCATIONS}
                 />
                 <div className="space-y-3">
@@ -4518,13 +4543,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     min={formData.pickup_date}
                     value={formData.return_date}
-                    onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, return_date: v })) }}
                   />
                   <Select
                     label="Ora Riconsegna"
                     required
                     value={formData.return_time}
-                    onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, return_time: v })) }}
                     options={TIME_OPTIONS}
                   />
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
@@ -4534,7 +4559,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Luogo Riconsegna"
                   required
                   value={formData.dropoff_location}
-                  onChange={(e) => setFormData({ ...formData, dropoff_location: e.target.value })}
+                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, dropoff_location: v })) }}
                   options={LOCATIONS}
                 />
               </div>
@@ -4553,7 +4578,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label={`Veicolo (${vehiclesForDropdown.length} ${showAllVehicles ? 'totali' : 'disponibili'})`}
                       required
                       value={formData.vehicle_id}
-                      onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
+                      onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, vehicle_id: v })) }}
                       options={[
                         { value: '', label: 'Seleziona veicolo...' },
                         ...vehiclesForDropdown.map((v: Vehicle) => {
@@ -4594,7 +4619,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   type="checkbox"
                   id="has_second_driver"
                   checked={formData.has_second_driver}
-                  onChange={(e) => setFormData({ ...formData, has_second_driver: e.target.checked })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, has_second_driver: e.target.checked }))}
                   className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
                 />
                 <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
@@ -4629,25 +4654,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         label="Nome *"
                         required
                         value={formData.second_driver_name}
-                        onChange={(e) => setFormData({ ...formData, second_driver_name: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_name: e.target.value }))}
                       />
                       <Input
                         label="Cognome *"
                         required
                         value={formData.second_driver_surname}
-                        onChange={(e) => setFormData({ ...formData, second_driver_surname: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_surname: e.target.value }))}
                       />
                       <Input
                         label="Codice Fiscale *"
                         required
                         value={formData.second_driver_codice_fiscale}
-                        onChange={(e) => setFormData({ ...formData, second_driver_codice_fiscale: e.target.value.toUpperCase() })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_codice_fiscale: e.target.value.toUpperCase() }))}
                       />
                       <Select
                         label="Sesso *"
                         required
                         value={formData.second_driver_sesso}
-                        onChange={(e) => setFormData({ ...formData, second_driver_sesso: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_sesso: e.target.value }))}
                         options={[
                           { value: '', label: 'Seleziona...' },
                           { value: 'M', label: 'Maschio' },
@@ -4658,25 +4683,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         label="Indirizzo *"
                         required
                         value={formData.second_driver_indirizzo}
-                        onChange={(e) => setFormData({ ...formData, second_driver_indirizzo: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_indirizzo: e.target.value }))}
                       />
                       <Input
                         label="CAP *"
                         required
                         value={formData.second_driver_cap}
-                        onChange={(e) => setFormData({ ...formData, second_driver_cap: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_cap: e.target.value }))}
                       />
                       <Input
                         label="Città *"
                         required
                         value={formData.second_driver_citta}
-                        onChange={(e) => setFormData({ ...formData, second_driver_citta: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_citta: e.target.value }))}
                       />
                       <Input
                         label="Provincia *"
                         required
                         value={formData.second_driver_provincia}
-                        onChange={(e) => setFormData({ ...formData, second_driver_provincia: e.target.value.toUpperCase() })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_provincia: e.target.value.toUpperCase() }))}
                         maxLength={2}
                       />
                       <Input
@@ -4684,19 +4709,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         type="date"
                         required
                         value={formData.second_driver_birth_date}
-                        onChange={(e) => setFormData({ ...formData, second_driver_birth_date: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_date: e.target.value }))}
                       />
                       <Input
                         label="Città di Nascita *"
                         required
                         value={formData.second_driver_birth_place}
-                        onChange={(e) => setFormData({ ...formData, second_driver_birth_place: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_place: e.target.value }))}
                       />
                       <Input
                         label="Provincia di Nascita *"
                         required
                         value={formData.second_driver_birth_provincia}
-                        onChange={(e) => setFormData({ ...formData, second_driver_birth_provincia: e.target.value.toUpperCase() })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_provincia: e.target.value.toUpperCase() }))}
                         maxLength={2}
                       />
                       <Input
@@ -4704,14 +4729,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         type="tel"
                         required
                         value={formData.second_driver_phone}
-                        onChange={(e) => setFormData({ ...formData, second_driver_phone: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_phone: e.target.value }))}
                       />
                       <Input
                         label="E-mail *"
                         type="email"
                         required
                         value={formData.second_driver_email}
-                        onChange={(e) => setFormData({ ...formData, second_driver_email: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_email: e.target.value }))}
                       />
 
                       {/* License Details */}
@@ -4722,20 +4747,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             label="Tipo di Patente *"
                             required
                             value={formData.second_driver_license_type}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_type: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_type: e.target.value }))}
                             placeholder="es. B"
                           />
                           <Input
                             label="Numero Patente *"
                             required
                             value={formData.second_driver_license_number}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_number: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_number: e.target.value }))}
                           />
                           <Input
                             label="Emessa da *"
                             required
                             value={formData.second_driver_license_issued_by}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_issued_by: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issued_by: e.target.value }))}
                             placeholder="es. Motorizzazione Civile"
                           />
                           <Input
@@ -4743,14 +4768,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             type="date"
                             required
                             value={formData.second_driver_license_issue_date}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_issue_date: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issue_date: e.target.value }))}
                           />
                           <Input
                             label="Scadenza Patente *"
                             type="date"
                             required
                             value={formData.second_driver_license_expiry}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_expiry: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_expiry: e.target.value }))}
                           />
                         </div>
                       </div>
@@ -4788,12 +4813,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Cauzione (€)"
                       type="number"
                       value={formData.deposit}
-                      onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
+                      onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, deposit: v })) }}
                     />
                     <Select
                       label="Stato Cauzione"
                       value={formData.deposit_status}
-                      onChange={(e) => setFormData({ ...formData, deposit_status: e.target.value as 'da_incassare' | 'incassata' })}
+                      onChange={(e) => { const v = e.target.value as 'da_incassare' | 'incassata'; setFormData(prev => ({ ...prev, deposit_status: v })) }}
                       options={[
                         { value: 'da_incassare', label: 'Da incassare' },
                         { value: 'incassata', label: 'Incassata' },
@@ -4839,7 +4864,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <Input
                           label="Targa Veicolo Cauzione *"
                           value={formData.cauzione_targa}
-                          onChange={(e) => setFormData({ ...formData, cauzione_targa: e.target.value.toUpperCase() })}
+                          onChange={(e) => setFormData(prev => ({ ...prev, cauzione_targa: e.target.value.toUpperCase() }))}
                           placeholder="es. AB123CD"
                         />
                       </div>
@@ -4913,19 +4938,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                         {newGaranteMode ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData({ ...formData, garante_nome: e.target.value })} />
-                            <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData({ ...formData, garante_cognome: e.target.value })} />
-                            <Input label="Codice Fiscale *" required value={formData.garante_codice_fiscale} onChange={(e) => setFormData({ ...formData, garante_codice_fiscale: e.target.value.toUpperCase() })} />
-                            <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData({ ...formData, garante_sesso: e.target.value })} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
-                            <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData({ ...formData, garante_indirizzo: e.target.value })} />
-                            <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData({ ...formData, garante_cap: e.target.value })} maxLength={5} />
-                            <Input label="Città" value={formData.garante_citta} onChange={(e) => setFormData({ ...formData, garante_citta: e.target.value })} />
-                            <Input label="Provincia" value={formData.garante_provincia} onChange={(e) => setFormData({ ...formData, garante_provincia: e.target.value.toUpperCase() })} maxLength={2} />
-                            <Input label="Data di Nascita" type="date" value={formData.garante_birth_date} onChange={(e) => setFormData({ ...formData, garante_birth_date: e.target.value })} />
-                            <Input label="Luogo di Nascita" value={formData.garante_birth_place} onChange={(e) => setFormData({ ...formData, garante_birth_place: e.target.value })} />
-                            <Input label="Provincia di Nascita" value={formData.garante_birth_provincia} onChange={(e) => setFormData({ ...formData, garante_birth_provincia: e.target.value.toUpperCase() })} maxLength={2} />
-                            <Input label="Telefono" value={formData.garante_phone} onChange={(e) => setFormData({ ...formData, garante_phone: e.target.value })} />
-                            <Input label="Email" type="email" value={formData.garante_email} onChange={(e) => setFormData({ ...formData, garante_email: e.target.value })} />
+                            <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData(prev => ({ ...prev, garante_nome: e.target.value }))} />
+                            <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData(prev => ({ ...prev, garante_cognome: e.target.value }))} />
+                            <Input label="Codice Fiscale *" required value={formData.garante_codice_fiscale} onChange={(e) => setFormData(prev => ({ ...prev, garante_codice_fiscale: e.target.value.toUpperCase() }))} />
+                            <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData(prev => ({ ...prev, garante_sesso: e.target.value }))} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
+                            <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData(prev => ({ ...prev, garante_indirizzo: e.target.value }))} />
+                            <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData(prev => ({ ...prev, garante_cap: e.target.value }))} maxLength={5} />
+                            <Input label="Città" value={formData.garante_citta} onChange={(e) => setFormData(prev => ({ ...prev, garante_citta: e.target.value }))} />
+                            <Input label="Provincia" value={formData.garante_provincia} onChange={(e) => setFormData(prev => ({ ...prev, garante_provincia: e.target.value.toUpperCase() }))} maxLength={2} />
+                            <Input label="Data di Nascita" type="date" value={formData.garante_birth_date} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_date: e.target.value }))} />
+                            <Input label="Luogo di Nascita" value={formData.garante_birth_place} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_place: e.target.value }))} />
+                            <Input label="Provincia di Nascita" value={formData.garante_birth_provincia} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_provincia: e.target.value.toUpperCase() }))} maxLength={2} />
+                            <Input label="Telefono" value={formData.garante_phone} onChange={(e) => setFormData(prev => ({ ...prev, garante_phone: e.target.value }))} />
+                            <Input label="Email" type="email" value={formData.garante_email} onChange={(e) => setFormData(prev => ({ ...prev, garante_email: e.target.value }))} />
                           </div>
                         ) : (
                           <div>
@@ -4979,21 +5004,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Via e numero civico *"
                       required
                       value={formData.delivery_street}
-                      onChange={(e) => setFormData({ ...formData, delivery_street: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_street: e.target.value }))}
                       placeholder="es. Via Roma, 15"
                     />
                     <Input
                       label="Città *"
                       required
                       value={formData.delivery_city}
-                      onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_city: e.target.value }))}
                       placeholder="es. Cagliari"
                     />
                     <Input
                       label="CAP *"
                       required
                       value={formData.delivery_zip}
-                      onChange={(e) => setFormData({ ...formData, delivery_zip: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_zip: e.target.value }))}
                       placeholder="es. 09131"
                       maxLength={5}
                     />
@@ -5001,7 +5026,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Provincia *"
                       required
                       value={formData.delivery_province}
-                      onChange={(e) => setFormData({ ...formData, delivery_province: e.target.value.toUpperCase() })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_province: e.target.value.toUpperCase() }))}
                       placeholder="es. CA"
                       maxLength={2}
                     />
@@ -5009,7 +5034,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <Input
                         label="Note / istruzioni"
                         value={formData.delivery_notes}
-                        onChange={(e) => setFormData({ ...formData, delivery_notes: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, delivery_notes: e.target.value }))}
                         placeholder="es. Citofono 3, secondo piano"
                       />
                     </div>
@@ -5021,7 +5046,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     min="0"
                     required
                     value={formData.delivery_fee}
-                    onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, delivery_fee: v })) }}
                     placeholder="0.00"
                   />
                 </div>
@@ -5061,21 +5086,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Via e numero civico *"
                       required
                       value={formData.pickup_street}
-                      onChange={(e) => setFormData({ ...formData, pickup_street: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_street: e.target.value }))}
                       placeholder="es. Via Roma, 15"
                     />
                     <Input
                       label="Città *"
                       required
                       value={formData.pickup_city}
-                      onChange={(e) => setFormData({ ...formData, pickup_city: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_city: e.target.value }))}
                       placeholder="es. Cagliari"
                     />
                     <Input
                       label="CAP *"
                       required
                       value={formData.pickup_zip}
-                      onChange={(e) => setFormData({ ...formData, pickup_zip: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_zip: e.target.value }))}
                       placeholder="es. 09131"
                       maxLength={5}
                     />
@@ -5083,7 +5108,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Provincia *"
                       required
                       value={formData.pickup_province}
-                      onChange={(e) => setFormData({ ...formData, pickup_province: e.target.value.toUpperCase() })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_province: e.target.value.toUpperCase() }))}
                       placeholder="es. CA"
                       maxLength={2}
                     />
@@ -5091,7 +5116,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <Input
                         label="Note / istruzioni"
                         value={formData.pickup_notes}
-                        onChange={(e) => setFormData({ ...formData, pickup_notes: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, pickup_notes: e.target.value }))}
                         placeholder="es. Citofono 3, secondo piano"
                       />
                     </div>
@@ -5103,7 +5128,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     min="0"
                     required
                     value={formData.pickup_fee}
-                    onChange={(e) => setFormData({ ...formData, pickup_fee: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, pickup_fee: v })) }}
                     placeholder="0.00"
                   />
                 </div>
@@ -5121,11 +5146,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   // Auto-update amount_paid based on status
                   if (newStatus === 'paid') {
-                    // Full payment = base + delivery fee + pickup fee
-                    const fullTotal = parseFloat(formData.total_amount || '0')
-                      + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-                      + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                    newAmountPaid = fullTotal.toFixed(2)
+                    // Full payment = base + delivery fee + pickup fee (cents-based to avoid float drift)
+                    const fullTotalCents = eurToCents(formData.total_amount || '0')
+                      + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
+                      + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+                    newAmountPaid = centsToEurStr(fullTotalCents)
                   } else if (newStatus === 'unpaid') {
                     newAmountPaid = '0' // No payment
                   }
@@ -5209,7 +5234,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <span className={`text-lg font-bold ${
                           revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
                         }`}>
-                          EUR {revenueSuggestion.finalTotalEur.toFixed(2)}
+                          EUR {centsToEurStr(Math.round(revenueSuggestion.finalTotalEur * 100))}
                         </span>
                         {revenueSuggestion.mode !== 'auto_apply' && (
                           <button
@@ -5217,7 +5242,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             onClick={() => {
                               setFormData(prev => ({
                                 ...prev,
-                                total_amount: revenueSuggestion.finalTotalEur.toFixed(2)
+                                total_amount: centsToEurStr(Math.round(revenueSuggestion.finalTotalEur * 100))
                               }))
                             }}
                             className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
@@ -5231,7 +5256,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   {revenueSuggestion && (
                     <>
                       <div className="text-xs text-theme-text-muted">
-                        EUR {revenueSuggestion.finalDailyRateEur.toFixed(2)}/giorno x {revenueSuggestion.rentalDays} giorni
+                        EUR {centsToEurStr(Math.round(revenueSuggestion.finalDailyRateEur * 100))}/giorno x {revenueSuggestion.rentalDays} giorni
                         {' '}({revenueSuggestion.selectedBaseRateSource === 'vehicle_override' ? 'override veicolo' :
                               revenueSuggestion.selectedBaseRateSource === 'category_override' ? 'override categoria' : 'tariffa base'})
                         {revenueSuggestion.minHit && ' | Min raggiunto'}
@@ -5248,7 +5273,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div className="space-y-1 pt-1 border-t border-theme-border">
                           <div className="flex justify-between text-xs">
                             <span className="text-theme-text-muted">Base selezionata</span>
-                            <span className="text-theme-text-primary">EUR {revenueSuggestion.selectedBaseRateEur.toFixed(2)}/g</span>
+                            <span className="text-theme-text-primary">EUR {centsToEurStr(Math.round(revenueSuggestion.selectedBaseRateEur * 100))}/g</span>
                           </div>
                           {revenueSuggestion.breakdown.map((item, i) => (
                             <div key={i} className="flex justify-between text-xs">
@@ -5273,11 +5298,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 onChange={(e) => {
                   const newTotal = e.target.value
                   setFormData(prev => {
-                    // If currently paid, update paid amount to match new total (including delivery/pickup fees)
-                    const fullTotal = parseFloat(newTotal || '0')
-                      + (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
-                      + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
-                    const newPaid = prev.payment_status === 'paid' ? fullTotal.toFixed(2) : prev.amount_paid
+                    // If currently paid, update paid amount to match new total (cents-based to avoid float drift)
+                    const fullTotalCents = eurToCents(newTotal || '0')
+                      + (prev.delivery_enabled ? eurToCents(prev.delivery_fee || '0') : 0)
+                      + (prev.pickup_enabled ? eurToCents(prev.pickup_fee || '0') : 0)
+                    const newPaid = prev.payment_status === 'paid' ? centsToEurStr(fullTotalCents) : prev.amount_paid
                     return { ...prev, total_amount: newTotal, amount_paid: newPaid }
                   })
                 }}
@@ -5287,7 +5312,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 type="number"
                 step="0.01"
                 value={formData.km_overage_fee}
-                onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_overage_fee: v })) }}
                 placeholder="es. 0.50"
                 disabled={formData.unlimited_km}
               />
@@ -5309,7 +5334,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 label="Limite KM Personale"
                 type="number"
                 value={formData.km_limit}
-                onChange={(e) => setFormData({ ...formData, km_limit: e.target.value })}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_limit: v })) }}
                 placeholder="es. 150 (Lascia vuoto se Illimitati)"
                 disabled={formData.unlimited_km}
               />
@@ -5346,7 +5371,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <Input
                 label="Valuta"
                 value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, currency: v })) }}
               />
             </div>
 
@@ -5355,7 +5380,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>
               <textarea
                 value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, notes: v })) }}
                 placeholder="Note interne sulla prenotazione..."
                 rows={2}
                 className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold text-sm resize-none"
@@ -5369,29 +5394,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between items-center">
                     <span className="text-theme-text-muted">Noleggio base</span>
-                    <span className="font-mono text-theme-text-primary">€{parseFloat(formData.total_amount || '0').toFixed(2)}</span>
+                    <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.total_amount || '0'))}</span>
                   </div>
                   {formData.delivery_enabled && (
                     <div className="flex justify-between items-center">
                       <span className="text-theme-text-muted">Consegna a domicilio</span>
-                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.delivery_fee || '0').toFixed(2)}</span>
+                      <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.delivery_fee || '0'))}</span>
                     </div>
                   )}
                   {formData.pickup_enabled && (
                     <div className="flex justify-between items-center">
                       <span className="text-theme-text-muted">Ritiro a domicilio</span>
-                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.pickup_fee || '0').toFixed(2)}</span>
+                      <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.pickup_fee || '0'))}</span>
                     </div>
                   )}
                   <div className="border-t border-theme-border/50 pt-2 mt-2">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-dr7-gold">Totale da saldare</span>
                       <span className="font-mono text-xl font-bold text-dr7-gold">
-                        €{(
-                          parseFloat(formData.total_amount || '0') +
-                          (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0) +
-                          (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                        ).toFixed(2)}
+                        €{centsToEurStr(
+                          eurToCents(formData.total_amount || '0') +
+                          (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0) +
+                          (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+                        )}
                       </span>
                     </div>
                   </div>
