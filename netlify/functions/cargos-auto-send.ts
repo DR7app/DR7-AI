@@ -44,9 +44,12 @@ const ISTAT_CODES: Record<string, string> = {
 }
 
 const PAYMENT_TYPE_MAP: Record<string, string> = {
-    'cash': 'C', 'contanti': 'C', 'card': 'K', 'carta': 'K',
-    'credit_card': 'K', 'nexi': 'K', 'transfer': 'B', 'bonifico': 'B',
-    'wallet': 'K', 'credits': 'K',
+    'cash': 'C', 'contanti': 'C', 'card': 'C', 'carta': 'C',
+    'credit_card': 'C', 'nexi': 'C', 'nexi pay by link': 'C',
+    'carta di credito / bancomat': 'C', 'carta di credito': 'C',
+    'transfer': 'B', 'bonifico': 'B',
+    'wallet': 'C', 'credits': 'C', 'credit wallet': 'C',
+    'paypal': 'C',
 }
 
 const DOC_TYPE_MAP: Record<string, string> = {
@@ -249,7 +252,8 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
 
         // Payment type
         const payMethod = bd.payment_method || bd.paymentMethod || ''
-        const paymentType = PAYMENT_TYPE_MAP[payMethod.toLowerCase()] || 'K'
+        const paymentType = PAYMENT_TYPE_MAP[payMethod.toLowerCase()] || 'C'
+        console.log(`[cargos-auto-send] Payment method: "${payMethod}" → type: "${paymentType}"`)
 
         // Second driver
         const driver2 = bd.second_driver || bd.secondDriver || null
