@@ -1592,6 +1592,45 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
+  async function handleResendContract(booking: Booking) {
+    if (!booking.id) return
+    try {
+      toast.loading('Rinvio contratto...', { id: 'resend-contract' })
+
+      // Find the contract
+      const { data: contract } = await supabase
+        .from('contracts')
+        .select('id, pdf_url, signed_pdf_url')
+        .eq('booking_id', booking.id)
+        .single()
+
+      if (!contract) {
+        toast.dismiss('resend-contract')
+        toast.error('Contratto non trovato. Genera prima il contratto.')
+        return
+      }
+
+      // Send signing link via signature-init
+      const sigRes = await fetch('/.netlify/functions/signature-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contractId: contract.id, bookingId: booking.id })
+      })
+      const sigData = await sigRes.json()
+
+      toast.dismiss('resend-contract')
+      if (sigRes.ok) {
+        toast.success('Link firma contratto rinviato via WhatsApp!')
+        logAdminAction('resend_contract', 'booking', booking.id)
+      } else {
+        toast.error('Errore rinvio: ' + (sigData.error || 'Errore'))
+      }
+    } catch (err: any) {
+      toast.dismiss('resend-contract')
+      toast.error('Errore: ' + err.message)
+    }
+  }
+
   async function handleGenerateInvoice(booking: Booking) {
     if (!booking.id) return
 
@@ -5524,6 +5563,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         >
                           Contratto
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleResendContract(booking) }}
+                          className="px-3 py-1 min-h-[44px] bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap flex items-center gap-1"
+                          title="Rinvia link firma contratto via WhatsApp"
+                        >
+                          Rinvia
+                        </button>
                         {/* Fattura Button (Mobile) */}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
@@ -5901,6 +5947,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       className="flex-1 px-4 py-3 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary transition-colors font-medium disabled:opacity-50"
                     >
                       {!selectedBooking.contract_url && generatingContract ? 'Generazione in corso...' : selectedBooking.contract_url ? 'Scarica Contratto' : 'Genera Contratto'}
+                    </button>
+                  )}
+                  {selectedBooking.contract_url && (
+                    <button
+                      onClick={() => handleResendContract(selectedBooking)}
+                      className="flex-1 px-4 py-3 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary transition-colors font-medium"
+                    >
+                      Rinvia Contratto
                     </button>
                   )}
                   {selectedBooking.status !== 'cancelled' && selectedBooking.booking_details?.deposit && selectedBooking.booking_details.deposit > 0 && (
