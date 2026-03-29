@@ -5744,6 +5744,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               >
                                 Cancella
                               </button>
+                              {booking.contract_url && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleResendContract(booking) }}
+                                  className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
+                                >
+                                  Rinvia Contratto
+                                </button>
+                              )}
                               {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
