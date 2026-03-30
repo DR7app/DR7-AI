@@ -144,15 +144,39 @@ export function isResidentByCity(cityName: string): boolean {
   return false
 }
 
-// Reverse lookup: given a city name, return its province code (or null if not found)
+// Reverse lookup: given a city name, return its province code (with fuzzy matching)
 export function getProvinciaByCity(cityName?: string): string | null {
   if (!cityName) return null
   const normalized = cityName.trim().toLowerCase()
+
+  // Exact match
   for (const prov of SARDEGNA_PROVINCE) {
     if (prov.comuni.some(c => c.toLowerCase() === normalized)) {
       return prov.code
     }
   }
+
+  // Starts-with match
+  for (const prov of SARDEGNA_PROVINCE) {
+    if (prov.comuni.some(c => c.toLowerCase().startsWith(normalized) || normalized.startsWith(c.toLowerCase()))) {
+      return prov.code
+    }
+  }
+
+  // Fuzzy match
+  let bestScore = 0
+  let bestProv: string | null = null
+  for (const prov of SARDEGNA_PROVINCE) {
+    for (const comune of prov.comuni) {
+      const score = similarity(cityName.trim(), comune)
+      if (score > bestScore) {
+        bestScore = score
+        bestProv = prov.code
+      }
+    }
+  }
+  if (bestScore >= 0.6 && bestProv) return bestProv
+
   return null
 }
 
@@ -203,17 +227,54 @@ const CAP_MAP: Record<string, string> = {
   'Campobasso': '86100', 'Isernia': '86170', 'Matera': '75100',
 }
 
+// Simple similarity score (0-1) between two strings
+function similarity(a: string, b: string): number {
+  const al = a.toLowerCase(), bl = b.toLowerCase()
+  if (al === bl) return 1
+  if (al.length < 2 || bl.length < 2) return 0
+  // Bigram similarity
+  const bigramsA = new Set<string>()
+  for (let i = 0; i < al.length - 1; i++) bigramsA.add(al.substring(i, i + 2))
+  let matches = 0
+  for (let i = 0; i < bl.length - 1; i++) {
+    if (bigramsA.has(bl.substring(i, i + 2))) matches++
+  }
+  return (2 * matches) / (al.length - 1 + bl.length - 1)
+}
+
 /**
- * Get CAP (postal code) by city name. Case-insensitive.
- * Returns null if city not found.
+ * Get CAP (postal code) by city name. Case-insensitive with fuzzy matching.
+ * Handles typos like "Algerho" → "Alghero", "Quartu" → "Quartu Sant'Elena".
+ * Returns null if no good match found.
  */
 export function getCAPByCity(cityName?: string): string | null {
   if (!cityName) return null
   const trimmed = cityName.trim()
-  // Exact match (case-insensitive)
+  const lower = trimmed.toLowerCase()
+
+  // 1. Exact match (case-insensitive)
   for (const [city, cap] of Object.entries(CAP_MAP)) {
-    if (city.toLowerCase() === trimmed.toLowerCase()) return cap
+    if (city.toLowerCase() === lower) return cap
   }
+
+  // 2. Starts-with match (e.g. "Quartu" → "Quartu Sant'Elena")
+  for (const [city, cap] of Object.entries(CAP_MAP)) {
+    if (city.toLowerCase().startsWith(lower) || lower.startsWith(city.toLowerCase())) return cap
+  }
+
+  // 3. Fuzzy match — find best similarity score (handles typos)
+  let bestScore = 0
+  let bestCap: string | null = null
+  for (const [city, cap] of Object.entries(CAP_MAP)) {
+    const score = similarity(trimmed, city)
+    if (score > bestScore) {
+      bestScore = score
+      bestCap = cap
+    }
+  }
+  // Threshold: 0.6 = decent match (e.g., "Algerho"↔"Alghero" ≈ 0.7)
+  if (bestScore >= 0.6 && bestCap) return bestCap
+
   return null
 }
 
